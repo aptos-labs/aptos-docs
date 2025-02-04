@@ -1,0 +1,63 @@
+---
+import type { Operation } from 'starlight-openapi/libs/operation'
+import { getBaseLink, slug } from 'starlight-openapi/libs/path'
+import type { Schema } from 'starlight-openapi/libs/schema'
+import { getSecurityRequirements } from 'starlight-openapi/libs/security'
+import Section from '../Section.astro'
+import Tags from '../Tags.astro'
+
+interface Props {
+  operation: Operation
+  schema: Schema
+}
+
+const { operation, schema } = Astro.props
+
+const requirements = getSecurityRequirements(schema, operation)
+---
+
+{
+  requirements && requirements.length > 0 ? (
+    <Section level={2} title="Authorizations">
+      <ul>
+        {requirements.map((requirement) => {
+          const schemes = Object.keys(requirement)
+
+          if (schemes.length === 0) {
+            return (
+              <li>
+                <strong>None</strong>
+              </li>
+            )
+          }
+
+          return Object.entries(requirement).map(([scheme, scopes]) => {
+            return (
+              <li class="scheme not-content">
+                <strong>
+                  <a href={`${getBaseLink(schema.config)}#${slug(scheme)}`}>{scheme}</a>
+                </strong>
+                {scopes.length > 0 ? <Tags tags={[...scopes]} /> : null}
+              </li>
+            )
+          })
+        })}
+      </ul>
+    </Section>
+  ) : null
+}
+
+<style>
+  .scheme a {
+    color: var(--sl-color-text-accent);
+  }
+
+  .scheme a:hover {
+    color: var(--sl-color-white);
+  }
+
+  .scheme > :global(.tags) {
+    display: inline-flex;
+    margin-left: 0.5rem;
+  }
+</style>

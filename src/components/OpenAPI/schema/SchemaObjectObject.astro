@@ -1,0 +1,90 @@
+---
+import { getProperties, isAdditionalPropertiesWithSchemaObject, type SchemaObject } from 'starlight-openapi/libs/schemaObject'
+import Key from '../Key.astro'
+import Tags from '../Tags.astro'
+
+import Schema from './SchemaObject.astro'
+import SchemaObjectAllOf from './SchemaObjectAllOf.astro'
+import SchemaObjectObjectProperties from './SchemaObjectObjectProperties.astro'
+
+interface Props {
+  nested: boolean
+  parents?: SchemaObject[]
+  schemaObject: SchemaObject
+}
+
+const { nested, parents = [], schemaObject } = Astro.props
+
+const properties = getProperties(schemaObject)
+---
+
+<details class:list={[!nested && 'root']} open={!nested}>
+  <summary>
+    <span class="type">object</span>
+  </summary>
+  <Tags
+    tags={[
+      schemaObject.minProperties && `>= ${schemaObject.minProperties} properties`,
+      schemaObject.maxProperties && `<= ${schemaObject.maxProperties} properties`,
+    ]}
+  />
+  <SchemaObjectObjectProperties parents={[...parents, schemaObject]} {properties} required={schemaObject.required} />
+  <SchemaObjectAllOf {nested} {parents} {schemaObject} />
+  {
+    schemaObject.additionalProperties && (
+      <Key additional name="key">
+        {schemaObject.additionalProperties === true ? (
+          <div class="any">any</div>
+        ) : isAdditionalPropertiesWithSchemaObject(schemaObject.additionalProperties) ? (
+          <Schema parents={[...parents, schemaObject]} schemaObject={schemaObject.additionalProperties} />
+        ) : null}
+      </Key>
+    )
+  }
+</details>
+
+<style>
+  details {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+  }
+
+  details details {
+    border-inline-start: 1px solid var(--sl-color-gray-4);
+    padding-inline-start: 0.8rem;
+  }
+
+  summary {
+    align-items: center;
+    cursor: pointer;
+    display: flex;
+    list-style-type: none;
+    user-select: none;
+  }
+
+  summary:hover {
+    color: var(--sl-color-gray-2);
+  }
+
+  details.root > summary {
+    display: none;
+  }
+
+  summary::marker,
+  summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .type {
+    color: var(--sl-color-text-accent);
+    font-weight: 600;
+    margin-inline-end: 0.3rem;
+  }
+
+  .any {
+    color: var(--sl-color-text-accent);
+    font-weight: 600;
+    margin-inline-end: 0.3rem;
+  }
+</style>

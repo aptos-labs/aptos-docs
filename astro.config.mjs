@@ -27,7 +27,9 @@ export default defineConfig({
 								schema: './aptos-spec.json',
 								sidebarMethodBadges: true,
 							},
-						]),
+						], {
+                            routeEntrypoint: './src/components/OpenAPI/Route.astro'
+                        }),
 					],
           sidebar: [
               {

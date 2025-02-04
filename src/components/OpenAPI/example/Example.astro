@@ -1,0 +1,73 @@
+---
+import { Code } from '@astrojs/starlight/components'
+
+import type { ExampleV3 } from 'starlight-openapi/libs/example'
+import Md from '../Md.astro'
+import Text from '../Text.astro'
+
+interface Props {
+  example?: ExampleV3
+  raw?: ExampleV3['value']
+  type?: string
+}
+
+const { example, raw, type } = Astro.props
+
+const exampleToRender = raw === undefined ? example : { value: raw }
+
+function getExampleValue(value: unknown): string {
+  switch (typeof value) {
+    case 'string': {
+      return value
+    }
+    case 'boolean':
+    case 'number': {
+      return value.toString()
+    }
+    default: {
+      return JSON.stringify(value, null, 2)
+    }
+  }
+}
+
+function getExampleLang(type: string | undefined) {
+  switch (type) {
+    case 'application/json': {
+      return 'json'
+    }
+    default: {
+      return 'plaintext'
+    }
+  }
+}
+
+const code = exampleToRender ? getExampleValue(exampleToRender.value).trim() : ''
+---
+
+{
+  exampleToRender && (
+    <>
+      <Text>{exampleToRender.summary}</Text>
+      <Md text={exampleToRender.description} />
+      {exampleToRender.externalValue && (
+        <Text>
+          <a href={exampleToRender.externalValue}>{exampleToRender.externalValue}</a>
+        </Text>
+      )}
+      {code.length > 0 && <Code {code} lang={getExampleLang(type)} />}
+    </>
+  )
+}
+
+<style>
+  :global(div.expressive-code .frame pre) {
+    background-color: var(--sl-color-gray-5);
+    border: 1px solid var(--sl-color-gray-4);
+    margin-block: 0.5rem;
+  }
+
+  :global(div.expressive-code pre > code) {
+    text-wrap: wrap;
+    word-break: break-all;
+  }
+</style>

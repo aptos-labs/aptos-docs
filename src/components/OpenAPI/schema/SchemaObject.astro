@@ -1,0 +1,53 @@
+---
+import {
+  getNullable,
+  getSchemaObjects,
+  isSchemaObject,
+  isSchemaObjectAllOf,
+  isSchemaObjectObject,
+  type SchemaObject,
+} from 'starlight-openapi/libs/schemaObject'
+import Example from '../example/Example.astro'
+import ExternalDocs from '../ExternalDocs.astro'
+import Items from '../Items.astro'
+import Md from '../Md.astro'
+
+import SchemaObjectAllOf from './SchemaObjectAllOf.astro'
+import SchemaObjectObject from './SchemaObjectObject.astro'
+import SchemaObjects from './SchemaObjects.astro'
+
+interface Props {
+  hideExample?: boolean | undefined
+  negated?: boolean
+  nested?: boolean
+  parents?: SchemaObject[]
+  schemaObject: SchemaObject
+}
+
+const { hideExample = false, negated, nested = false, parents = [], schemaObject } = Astro.props
+
+const schemaObjects = getSchemaObjects(schemaObject)
+
+const hasMany = schemaObjects !== undefined
+---
+
+{
+  hasMany ? (
+    <SchemaObjects {parents} discriminator={schemaObject.discriminator} {nested} {schemaObjects} />
+  ) : isSchemaObject(schemaObject.not) ? (
+    <Astro.self negated schemaObject={schemaObject.not} />
+  ) : (
+    <>
+      <Md text={schemaObject.description} />
+      <ExternalDocs docs={schemaObject.externalDocs} />
+      {isSchemaObjectObject(schemaObject) ? (
+        <SchemaObjectObject {parents} {nested} {schemaObject} />
+      ) : isSchemaObjectAllOf(schemaObject) ? (
+        <SchemaObjectAllOf {nested} {parents} {schemaObject} />
+      ) : (
+        <Items {parents} items={schemaObject} {negated} nullable={getNullable(schemaObject)} />
+      )}
+      {!hideExample && schemaObject.example && <Example raw={schemaObject.example} />}
+    </>
+  )
+}

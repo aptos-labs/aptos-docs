@@ -1,0 +1,63 @@
+diff --git a/index.ts b/index.ts
+index 787b9ba1ec4c7b873f450a08e3b2975e01be3ef0..00b8f9499645f5cc0ad1239bab84f7cb9aefaa8a 100644
+--- a/index.ts
++++ b/index.ts
+@@ -7,7 +7,11 @@ import { getSidebarFromSchemas, getSidebarGroupsPlaceholder } from './libs/starl
+ 
+ export const openAPISidebarGroups = getSidebarGroupsPlaceholder()
+ 
+-export default function starlightOpenAPIPlugin(userConfig: StarlightOpenAPIUserConfig): StarlightPlugin {
++type StarlightOpenAPIOptions = {
++  routeEntrypoint?: string
++}
++
++export default function starlightOpenAPIPlugin(schemaConfigs: StarlightOpenAPIUserConfig, options?: StarlightOpenAPIOptions): StarlightPlugin {
+   return {
+     name: 'starlight-openapi-plugin',
+     hooks: {
+@@ -16,10 +20,10 @@ export default function starlightOpenAPIPlugin(userConfig: StarlightOpenAPIUserC
+           return
+         }
+ 
+-        const config = validateConfig(logger, userConfig)
++        const config = validateConfig(logger, schemaConfigs)
+         const schemas = await Promise.all(config.map((schemaConfig) => parseSchema(logger, schemaConfig)))
+ 
+-        addIntegration(starlightOpenAPIIntegration(schemas))
++        addIntegration(starlightOpenAPIIntegration(schemas, options?.routeEntrypoint))
+ 
+         const sidebar = getSidebarFromSchemas(starlightConfig.sidebar, schemas)
+ 
+diff --git a/libs/integration.ts b/libs/integration.ts
+index 9d8f0839108aafd6df38052baf3a39e01cabc142..32b288519713a349681cadbe690ec38589d30c0e 100644
+--- a/libs/integration.ts
++++ b/libs/integration.ts
+@@ -3,13 +3,14 @@ import type { AstroIntegration } from 'astro'
+ import type { Schema } from './schema'
+ import { vitePluginStarlightOpenAPISchemas } from './vite'
+ 
+-export function starlightOpenAPIIntegration(schemas: Schema[]): AstroIntegration {
++export function starlightOpenAPIIntegration(schemas: Schema[], entrypoint?: string): AstroIntegration {
+   const starlightOpenAPI: AstroIntegration = {
+     name: 'starlight-openapi',
+     hooks: {
+       'astro:config:setup': ({ injectRoute, updateConfig }) => {
++        // pageComponent
+         injectRoute({
+-          entrypoint: 'starlight-openapi/route',
++          entrypoint: entrypoint ?? 'starlight-openapi/route',
+           pattern: `[...openAPISlug]`,
+           prerender: true,
+         })
+diff --git a/package.json b/package.json
+index 3a530e4b26b2282b0de918b002b2a6e64b2969ae..1974b335a91b28c068385fedb649e4b71664b761 100644
+--- a/package.json
++++ b/package.json
+@@ -7,6 +7,7 @@
+   "type": "module",
+   "exports": {
+     ".": "./index.ts",
++    "./libs/*": "./libs/*.ts",
+     "./route": "./components/Route.astro",
+     "./styles": "./styles.css",
+     "./package.json": "./package.json"

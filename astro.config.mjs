@@ -11,7 +11,23 @@ export default defineConfig({
   site: "https://aptos.dev",
   integrations: [
     starlight({
-      title: "Aptos Docs",
+      title: "Aptos Developer Docs",
+      logo: {
+        light: "~/assets/aptos-logomark-light.svg",
+        dark: "~/assets/aptos-logomark-dark.svg",
+        replacesTitle: true,
+      },
+      expressiveCode: {
+        shiki: {
+          // Define langs for shiki syntax highlighting
+          langAlias: {
+            Move: "move",
+            move: "move",
+            PowerShell: "powershell",
+            terraform: "terraform",
+          },
+        },
+      },
       defaultLocale: "root", // optional
       locales: {
         root: {
@@ -36,8 +52,8 @@ export default defineConfig({
         starlightOpenAPI(
           [
             {
-              base: "api",
-              label: "API",
+              base: "api-reference",
+              label: "API Reference",
               schema: "./aptos-spec.json",
               sidebarMethodBadges: true,
             },
@@ -48,17 +64,28 @@ export default defineConfig({
         ),
       ],
       sidebar: [
+        // {
+        //   label: "Guides",
+        //   items: [
+        //     // Each item here is one entry in the navigation menu.
+        //     { label: "Example Guide", slug: "guides/example" },
+        //   ],
+        // },
+        // {
+        //   label: "Reference",
+        //   autogenerate: { directory: "reference" },
+        // },
         {
-          label: "Guides",
-          items: [
-            // Each item here is one entry in the navigation menu.
-            { label: "Example Guide", slug: "guides/example" },
-          ],
+          label: "Build",
+          collapsed: true,
+          autogenerate: { directory: "build" },
         },
         {
-          label: "Reference",
-          autogenerate: { directory: "reference" },
+          label: "Network",
+          collapsed: true,
+          autogenerate: { directory: "network" },
         },
+
         ...openAPISidebarGroups,
       ],
       customCss: ["./src/globals.css"],

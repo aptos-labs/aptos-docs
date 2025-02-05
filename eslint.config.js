@@ -26,6 +26,7 @@ const config = [
       "**/package-lock.json",
       "**/pnpm-lock.yaml",
       "**/public",
+      "**/scripts/migration",
     ],
   },
 

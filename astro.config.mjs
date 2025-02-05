@@ -5,6 +5,7 @@ import tailwindcss from "@tailwindcss/vite";
 import starlightOpenAPI, { openAPISidebarGroups } from "starlight-openapi";
 
 import vercel from "@astrojs/vercel";
+import svelte from "@astrojs/svelte";
 
 // https://astro.build/config
 export default defineConfig({
@@ -93,6 +94,7 @@ export default defineConfig({
       ],
       customCss: ["./src/globals.css"],
     }),
+    svelte(),
   ],
   adapter: vercel(),
   vite: {

@@ -27,6 +27,7 @@ const config = [
       "**/pnpm-lock.yaml",
       "**/public",
       "**/scripts/migration",
+      "**/nextra-migration",
     ],
   },
 

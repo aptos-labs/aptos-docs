@@ -92,7 +92,7 @@ export default defineConfig({
 
         ...openAPISidebarGroups,
       ],
-      customCss: ["./src/globals.css"],
+      customCss: ["./src/globals.css", "@speed-highlight/core/themes/github-light.css"],
     }),
     svelte(),
   ],

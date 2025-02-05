@@ -9,12 +9,13 @@ import vercel from "@astrojs/vercel";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import { loadEnv } from "vite";
-
 import rehypeRaw from "rehype-raw";
 import sitemap from "@astrojs/sitemap";
 import partytown from "@astrojs/partytown";
+import svelte from "@astrojs/svelte";
 import { getEnvsSchema } from "./src/lib/og-image/schema.mjs";
 import { SUPPORTED_LANGUAGES } from "./src/config/locales";
+
 // import rehypeAddDebug from './src/plugins/rehype-add-debug.js';
 
 const env = loadEnv(process.env.NODE_ENV || "development", process.cwd(), "");
@@ -150,6 +151,7 @@ export default defineConfig({
         forward: ["dataLayer.push", "gtag"],
       },
     }),
+    svelte(),
   ],
   adapter: vercel(),
   vite: {

@@ -16,6 +16,7 @@ import { program } from "commander";
 import { CalloutTransformer } from "./transformers/callout.js";
 import { TitleTransformer } from "./transformers/title.js";
 import { ImportTransformer } from "./transformers/import.js";
+import { FrontmatterTransformer } from "./transformers/frontmatter.js";
 import type { TransformerOptions } from "./types/index.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -37,9 +38,15 @@ async function processFile(filePath: string, options: TransformerOptions): Promi
 
   // Apply transformations in specific order:
   // 1. Title transformer (handle frontmatter and headings)
-  // 2. Other transformers (like callouts)
-  // 3. Import transformer (ensure imports are after frontmatter)
-  const transformers = [new TitleTransformer(), new CalloutTransformer(), new ImportTransformer()];
+  // 2. Frontmatter transformer (modify frontmatter properties)
+  // 3. Other transformers (like callouts)
+  // 4. Import transformer (ensure imports are after frontmatter)
+  const transformers = [
+    new TitleTransformer(),
+    new FrontmatterTransformer(),
+    new CalloutTransformer(),
+    new ImportTransformer(),
+  ];
 
   for (const transformer of transformers) {
     transformer.transform(ast, options);

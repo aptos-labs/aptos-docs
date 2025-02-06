@@ -16,6 +16,7 @@ import { CalloutTransformer } from "./transformers/callout.js";
 import { TitleTransformer } from "./transformers/title.js";
 import { ImportTransformer } from "./transformers/import.js";
 import { FrontmatterTransformer } from "./transformers/frontmatter.js";
+import { CardsTransformer } from "./transformers/cards.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, "../../..");
 async function processFile(filePath, options) {
@@ -39,6 +40,7 @@ async function processFile(filePath, options) {
     new TitleTransformer(),
     new FrontmatterTransformer(),
     new CalloutTransformer(),
+    new CardsTransformer(),
     new ImportTransformer(),
   ];
   for (const transformer of transformers) {

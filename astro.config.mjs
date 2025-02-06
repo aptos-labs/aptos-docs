@@ -23,6 +23,7 @@ export default defineConfig({
       },
       lastUpdated: true,
       expressiveCode: {
+        themes: ["github-dark-default"],
         shiki: {
           // Define langs for shiki syntax highlighting
           langAlias: {
@@ -92,7 +93,7 @@ export default defineConfig({
 
         ...openAPISidebarGroups,
       ],
-      customCss: ["./src/globals.css", "@speed-highlight/core/themes/github-light.css"],
+      customCss: ["./src/globals.css"],
     }),
     svelte(),
   ],

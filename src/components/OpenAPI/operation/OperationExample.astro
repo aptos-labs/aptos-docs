@@ -1,0 +1,57 @@
+---
+import { Code } from "@astrojs/starlight/components";
+import { snippetz, type ClientId, type TargetId } from "@scalar/snippetz";
+import { ensureNonNullable } from "~/lib/ensureNonNullable";
+
+export interface ExampleData {
+  baseUrl: string;
+  prefix: string;
+  operationPath: string;
+}
+
+interface Props<T extends TargetId> {
+  target: T;
+  client: ClientId<T>;
+  isActive: boolean;
+  example: ExampleData;
+}
+
+const {
+  target,
+  client,
+  isActive,
+  example: { baseUrl, prefix, operationPath },
+}: Props<TargetId> = Astro.props;
+
+const snippet = ensureNonNullable(
+  snippetz().print(target, client, { url: `${baseUrl}${prefix}${operationPath}` }),
+  "Could not generate example code",
+);
+const codeLang = (() => {
+  if (target === "node") {
+    return "js";
+  }
+
+  return target;
+})();
+---
+
+<div
+  class="operation-example"
+  data-active={isActive}
+  data-target={target}
+  data-client={client}
+  data-theme="github-dark-default"
+>
+  <Code code={snippet} lang={codeLang} frame="none" />
+</div>
+
+<style>
+  .operation-example:not([data-active="true"]) {
+    display: none;
+  }
+
+  .operation-example :global(.expressive-code .frame pre) {
+    background: var(--code-background);
+  }
+</style>

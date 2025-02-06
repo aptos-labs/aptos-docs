@@ -1,4 +1,12 @@
-import type { Root, RootContent, Parent, BlockContent, DefinitionContent } from "mdast";
+import type {
+  Root,
+  RootContent,
+  Parent,
+  BlockContent,
+  DefinitionContent,
+  Yaml,
+  Paragraph,
+} from "mdast";
 import type { Program, ImportDeclaration as ESTreeImportDeclaration } from "estree";
 export interface TransformerOptions {
   /** Use component syntax instead of ::: syntax for asides/callouts */
@@ -17,10 +25,15 @@ export interface MdxJsxAttribute {
   name: string;
   value: MdxJsxAttributeValue;
 }
+export interface MdxJsxExpressionAttribute {
+  type: "mdxJsxExpressionAttribute";
+  value: string;
+}
+export type MdxJsxAttributeNode = MdxJsxAttribute | MdxJsxExpressionAttribute;
 export interface MdxJsxFlowElement {
   type: "mdxJsxFlowElement";
   name: string;
-  attributes: MdxJsxAttribute[];
+  attributes: MdxJsxAttributeNode[];
   children: (BlockContent | DefinitionContent)[];
 }
 export interface CalloutNode extends Omit<MdxJsxFlowElement, "name"> {
@@ -51,10 +64,28 @@ export interface ContainerDirective extends Parent {
     };
   };
 }
-export type RootContentWithMdx = RootContent | MdxjsEsm | MdxJsxFlowElement | ContainerDirective;
+export interface YamlNode extends Yaml {
+  type: "yaml";
+  value: string;
+}
+export interface ParagraphNode extends Paragraph {
+  type: "paragraph";
+  children: [];
+}
+export type RootContentWithMdx =
+  | RootContent
+  | MdxjsEsm
+  | MdxJsxFlowElement
+  | ContainerDirective
+  | YamlNode
+  | ParagraphNode;
 declare module "mdast" {
   interface Root {
     children: RootContentWithMdx[];
   }
 }
-export type NodeVisitor<T> = (node: T, index?: number, parent?: Root | Parent) => void;
+export type NodeVisitor<T extends RootContentWithMdx> = (
+  node: T,
+  index: number,
+  parent: Root | Parent | null,
+) => void;

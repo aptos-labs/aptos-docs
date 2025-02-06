@@ -8,8 +8,8 @@ import type {
   Transformer,
   ContainerDirective,
   MdxJsxFlowElement,
-  RootContentWithMdx,
-  NodeVisitor,
+  MdxJsxAttribute,
+  MdxJsxAttributeNode,
 } from "../types/index.js";
 
 export class CalloutTransformer implements Transformer {
@@ -44,25 +44,34 @@ export class CalloutTransformer implements Transformer {
     });
   }
 
+  private findAttribute(
+    attributes: MdxJsxAttributeNode[],
+    name: string,
+  ): MdxJsxAttribute | undefined {
+    return attributes.find(
+      (attr): attr is MdxJsxAttribute => attr.type === "mdxJsxAttribute" && attr.name === name,
+    );
+  }
+
   private transformCallouts(ast: Root, options: TransformerOptions): void {
     visit(ast, "mdxJsxFlowElement", (node, index, parent) => {
       if ("name" in node && node.name === "Callout" && parent && typeof index === "number") {
         const calloutNode = node as CalloutNode;
-        const typeAttr = calloutNode.attributes?.find((attr) => attr.name === "type");
+        const typeAttr = this.findAttribute(calloutNode.attributes, "type");
         const type = this.mapCalloutType(typeAttr?.value?.toString() || "default");
 
-        const titleAttr = calloutNode.attributes?.find((attr) => attr.name === "title");
+        const titleAttr = this.findAttribute(calloutNode.attributes, "title");
         const title = titleAttr?.value?.toString();
 
         if (options.useComponentSyntax) {
           // Transform to Starlight Aside component
           calloutNode.name = "Aside";
           calloutNode.attributes = (calloutNode.attributes || []).filter(
-            (attr) => !["emoji"].includes(attr.name),
+            (attr) => !(attr.type === "mdxJsxAttribute" && attr.name === "emoji"),
           );
 
           // Update type attribute if it exists
-          const existingType = calloutNode.attributes.find((attr) => attr.name === "type");
+          const existingType = this.findAttribute(calloutNode.attributes, "type");
           if (existingType) {
             existingType.value = type;
           } else {

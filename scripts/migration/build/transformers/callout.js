@@ -26,22 +26,25 @@ export class CalloutTransformer {
       ast.children.splice(index, 1);
     });
   }
+  findAttribute(attributes, name) {
+    return attributes.find((attr) => attr.type === "mdxJsxAttribute" && attr.name === name);
+  }
   transformCallouts(ast, options) {
     visit(ast, "mdxJsxFlowElement", (node, index, parent) => {
       if ("name" in node && node.name === "Callout" && parent && typeof index === "number") {
         const calloutNode = node;
-        const typeAttr = calloutNode.attributes?.find((attr) => attr.name === "type");
+        const typeAttr = this.findAttribute(calloutNode.attributes, "type");
         const type = this.mapCalloutType(typeAttr?.value?.toString() || "default");
-        const titleAttr = calloutNode.attributes?.find((attr) => attr.name === "title");
+        const titleAttr = this.findAttribute(calloutNode.attributes, "title");
         const title = titleAttr?.value?.toString();
         if (options.useComponentSyntax) {
           // Transform to Starlight Aside component
           calloutNode.name = "Aside";
           calloutNode.attributes = (calloutNode.attributes || []).filter(
-            (attr) => !["emoji"].includes(attr.name),
+            (attr) => !(attr.type === "mdxJsxAttribute" && attr.name === "emoji"),
           );
           // Update type attribute if it exists
-          const existingType = calloutNode.attributes.find((attr) => attr.name === "type");
+          const existingType = this.findAttribute(calloutNode.attributes, "type");
           if (existingType) {
             existingType.value = type;
           } else {

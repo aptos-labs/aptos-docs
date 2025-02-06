@@ -4,12 +4,18 @@ import { mdxFromMarkdown, mdxToMarkdown } from "mdast-util-mdx";
 import { mdxjs } from "micromark-extension-mdxjs";
 import { directive } from "micromark-extension-directive";
 import { directiveFromMarkdown, directiveToMarkdown } from "mdast-util-directive";
+import { frontmatter } from "micromark-extension-frontmatter";
+import { frontmatterFromMarkdown, frontmatterToMarkdown } from "mdast-util-frontmatter";
+import { gfm } from "micromark-extension-gfm";
+import { gfmFromMarkdown, gfmToMarkdown } from "mdast-util-gfm";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { program } from "commander";
 
 import { CalloutTransformer } from "./transformers/callout.js";
+import { TitleTransformer } from "./transformers/title.js";
+import { ImportTransformer } from "./transformers/import.js";
 import type { TransformerOptions } from "./types/index.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -20,12 +26,20 @@ async function processFile(filePath: string, options: TransformerOptions): Promi
 
   // Parse MDX content into AST
   const ast = fromMarkdown(content, {
-    extensions: [mdxjs(), directive()],
-    mdastExtensions: [mdxFromMarkdown(), directiveFromMarkdown()],
+    extensions: [mdxjs(), directive(), frontmatter(["yaml"]), gfm()],
+    mdastExtensions: [
+      mdxFromMarkdown(),
+      directiveFromMarkdown(),
+      frontmatterFromMarkdown(["yaml"]),
+      gfmFromMarkdown(),
+    ],
   });
 
-  // Apply transformations
-  const transformers = [new CalloutTransformer()];
+  // Apply transformations in specific order:
+  // 1. Title transformer (handle frontmatter and headings)
+  // 2. Other transformers (like callouts)
+  // 3. Import transformer (ensure imports are after frontmatter)
+  const transformers = [new TitleTransformer(), new CalloutTransformer(), new ImportTransformer()];
 
   for (const transformer of transformers) {
     transformer.transform(ast, options);
@@ -33,7 +47,13 @@ async function processFile(filePath: string, options: TransformerOptions): Promi
 
   // Convert AST back to MDX
   const newContent = toMarkdown(ast, {
-    extensions: [mdxToMarkdown(), directiveToMarkdown()],
+    extensions: [
+      mdxToMarkdown(),
+      directiveToMarkdown(),
+      frontmatterToMarkdown(["yaml"]),
+      gfmToMarkdown(),
+    ],
+    listItemIndent: "one",
   });
 
   // Calculate the new file path

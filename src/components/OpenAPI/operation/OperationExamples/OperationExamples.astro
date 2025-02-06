@@ -1,0 +1,33 @@
+---
+import { snippetz } from "@scalar/snippetz";
+import OperationExample, { type ExampleData } from "./OperationExample.astro";
+import OperationExamplesControls from "./OperationExamplesControls.svelte";
+import { INITIAL_TARGET, INITIAL_CLIENT } from "./constants";
+
+type Props = ExampleData;
+
+const example: Props = Astro.props;
+const targets = snippetz().clients();
+---
+
+<div class="operation-examples not-content">
+  <OperationExamplesControls
+    client:load
+    targets={targets}
+    initialTarget={INITIAL_TARGET}
+    initialClient={INITIAL_CLIENT}
+  >
+    {
+      targets.flatMap((target) =>
+        target.clients.map((client) => (
+          <OperationExample
+            example={example}
+            target={target.key}
+            client={client.client}
+            isActive={target.key === INITIAL_TARGET && client.client === INITIAL_CLIENT}
+          />
+        )),
+      )
+    }
+  </OperationExamplesControls>
+</div>

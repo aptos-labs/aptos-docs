@@ -37,21 +37,37 @@ const codeLang = (() => {
 ---
 
 <div
-  class="operation-example"
+  data-operation-example
   data-active={isActive}
   data-target={target}
   data-client={client}
+  aria-hidden={isActive}
   data-theme="github-dark-default"
 >
   <Code code={snippet} lang={codeLang} frame="none" />
 </div>
 
 <style>
-  .operation-example:not([data-active="true"]) {
+  [data-operation-example]:not([data-active="true"]) {
     display: none;
   }
 
-  .operation-example :global(.expressive-code .frame pre) {
+  [data-operation-example] :global(.expressive-code .frame pre) {
     background: var(--code-background);
   }
 </style>
+<script>
+  import type { ClientId, TargetId } from "@scalar/snippetz";
+  import { emitter } from "./events";
+
+  emitter.on("activateExample", activateExample);
+
+  function activateExample<T extends TargetId>(target: T, client: ClientId<T>) {
+    document.querySelectorAll<HTMLDivElement>(`[data-operation-example]`).forEach((el) => {
+      const isActive = el.dataset.target === target && el.dataset.client === client;
+
+      el.setAttribute("data-active", isActive ? "true" : "false");
+      el.setAttribute("aria-hidden", isActive ? "false" : "true");
+    });
+  }
+</script>

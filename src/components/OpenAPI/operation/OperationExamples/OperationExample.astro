@@ -1,11 +1,13 @@
 ---
 import { Code } from "@astrojs/starlight/components";
 import { snippetz, type ClientId, type TargetId } from "@scalar/snippetz";
+import type { OperationHttpMethod } from "starlight-openapi/libs/operation";
 import { ensureNonNullable } from "~/lib/ensureNonNullable";
 
 export interface ExampleData {
   baseUrl: string;
   prefix: string;
+  method: OperationHttpMethod;
   operationPath: string;
 }
 
@@ -20,11 +22,11 @@ const {
   target,
   client,
   isActive,
-  example: { baseUrl, prefix, operationPath },
+  example: { baseUrl, prefix, method, operationPath },
 }: Props<TargetId> = Astro.props;
 
 const snippet = ensureNonNullable(
-  snippetz().print(target, client, { url: `${baseUrl}${prefix}${operationPath}` }),
+  snippetz().print(target, client, { url: `${baseUrl}${prefix}${operationPath}`, method }),
   "Could not generate example code",
 );
 const codeLang = (() => {

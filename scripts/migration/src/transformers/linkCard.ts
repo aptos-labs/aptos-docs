@@ -17,46 +17,55 @@ export class LinkCardTransformer implements Transformer {
     let title = "";
     let description = "";
 
-    // Helper to extract text from a node's children
-    const extractText = (node: any): string => {
-      let text = "";
-      visit(node, (child: any) => {
-        // Handle text nodes
-        if (child.type === "text") {
-          text = child.value || "";
-          return false; // Stop after finding text
-        }
-        // Handle paragraph nodes
-        if (child.type === "paragraph" && child.children) {
-          text = child.children
-            .filter((c: any) => c.type === "text")
-            .map((c: any) => c.value || "")
-            .join("");
-          return false; // Stop after finding paragraph text
-        }
-      });
-      return text.trim();
+    // Helper to extract text from a node or its children
+    const getNodeText = (n: any): string => {
+      if (!n) return "";
+      // Direct text node
+      if (n.type === "text") return n.value || "";
+      // Node with children
+      if (n.children?.length > 0) {
+        return n.children.map(getNodeText).join("");
+      }
+      return "";
     };
 
-    // Find all Card.Title and Card.Description elements
-    visit(node, (node: any) => {
-      if (!("name" in node)) return;
+    // Helper to find elements in a paragraph
+    const processChildren = (children: any[]): void => {
+      children.forEach((child) => {
+        // Handle mdxJsxTextElement (inline elements)
+        if (child.type === "mdxJsxTextElement") {
+          if (child.name === "Card.Title") {
+            title = getNodeText(child);
+          } else if (child.name === "Card.Description") {
+            description = getNodeText(child);
+          }
+        }
+        // Handle nested paragraphs
+        if (child.type === "paragraph" && child.children) {
+          processChildren(child.children);
+        }
+      });
+    };
 
-      if (node.name === "Card.Title") {
-        title = extractText(node);
-        console.log("Found Card.Title:", title);
-      } else if (node.name === "Card.Description") {
-        description = extractText(node);
-        console.log("Found Card.Description:", description);
+    // Process direct children first (for flow elements)
+    node.children?.forEach((child: any) => {
+      if (child.type === "mdxJsxFlowElement") {
+        if (child.name === "Card.Title") {
+          title = getNodeText(child);
+        } else if (child.name === "Card.Description") {
+          description = getNodeText(child);
+        }
+      }
+      // Handle paragraph wrapping
+      if (child.type === "paragraph" && child.children) {
+        processChildren(child.children);
       }
     });
 
-    console.log("Found elements:", { title, description });
     return { title, description };
   }
 
   private transformLinkCards(ast: Root): void {
-    // First transform all Cards to LinkCards
     visit(ast, "mdxJsxFlowElement", (node) => {
       if ("name" in node && node.name === "Card") {
         const mdxNode = node as MdxJsxFlowElement;
@@ -78,8 +87,6 @@ export class LinkCardTransformer implements Transformer {
         title = extractedTitle;
         description = extractedDescription;
 
-        console.log("Final extracted values:", { href, title, description });
-
         // Transform to LinkCard
         mdxNode.name = "LinkCard";
         mdxNode.children = [];
@@ -92,38 +99,19 @@ export class LinkCardTransformer implements Transformer {
         ];
       }
     });
-
-    // Then clean up CardGrid nodes
-    visit(ast, "mdxJsxFlowElement", (node) => {
-      if ("name" in node && node.name === "CardGrid") {
-        // Keep only LinkCard elements with no spacing
-        node.children = node.children.filter(
-          (child: any) => child.type === "mdxJsxFlowElement" && child.name === "LinkCard",
-        );
-      }
-    });
   }
 
   private ensureLinkCardImport(ast: Root): void {
-    // Find existing imports from @astrojs/starlight/components
-    const existingImport = ast.children.find(
-      (node): node is MdxjsEsm =>
+    const hasImport = ast.children.some(
+      (node) =>
         node.type === "mdxjsEsm" &&
         "value" in node &&
         typeof node.value === "string" &&
-        node.value.includes("@astrojs/starlight/components"),
+        node.value.includes("@astrojs/starlight/components") &&
+        node.value.includes("LinkCard"),
     );
 
-    if (existingImport) {
-      // If import exists but doesn't include LinkCard, add it
-      if (!existingImport.value.includes("LinkCard")) {
-        existingImport.value = existingImport.value.replace(
-          /import {([^}]*)} from '@astrojs\/starlight\/components'/,
-          (match, imports) => `import {${imports}, LinkCard} from '@astrojs/starlight/components'`,
-        );
-      }
-    } else {
-      // Add new import if none exists
+    if (!hasImport) {
       const importNode: MdxjsEsm = {
         type: "mdxjsEsm",
         value: "import { LinkCard } from '@astrojs/starlight/components';",
@@ -142,8 +130,14 @@ export class LinkCardTransformer implements Transformer {
                 specifiers: [
                   {
                     type: "ImportSpecifier",
-                    imported: { type: "Identifier", name: "LinkCard" },
-                    local: { type: "Identifier", name: "LinkCard" },
+                    imported: {
+                      type: "Identifier",
+                      name: "LinkCard",
+                    },
+                    local: {
+                      type: "Identifier",
+                      name: "LinkCard",
+                    },
                   },
                 ],
                 importKind: "value",
@@ -153,6 +147,7 @@ export class LinkCardTransformer implements Transformer {
           },
         },
       };
+
       ast.children.unshift(importNode);
     }
   }

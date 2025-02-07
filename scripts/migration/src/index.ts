@@ -19,6 +19,7 @@ import { ImportTransformer } from "./transformers/import.js";
 import { FrontmatterTransformer } from "./transformers/frontmatter.js";
 import { CardsTransformer } from "./transformers/cards.js";
 import { LinkCardTransformer } from "./transformers/linkCard.js";
+import { TabsTransformer } from "./transformers/tabs.js";
 import type { TransformerOptions } from "./types/index.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -49,6 +50,7 @@ async function processFile(filePath: string, options: TransformerOptions): Promi
     new CalloutTransformer(),
     new CardsTransformer(),
     new LinkCardTransformer(),
+    new TabsTransformer(),
     new ImportTransformer(),
   ];
 

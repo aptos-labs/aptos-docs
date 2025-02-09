@@ -50,16 +50,14 @@ export class FileTreeTransformer implements Transformer {
       // Transform children into list items
       const rootItems = this.transformFileTreeChildren(mdxNode.children);
 
-      // Create the root list
-      const rootList: List = {
+      // Instead of wrapping everything in a single root list,
+      // we create a separate list node for each root item.
+      mdxNode.children = rootItems.map((item) => ({
         type: "list",
         ordered: false,
         spread: false,
-        children: rootItems,
-      };
-
-      // Set the children to the list
-      mdxNode.children = [rootList];
+        children: [item],
+      }));
 
       console.log("\nFinal structure:", JSON.stringify(mdxNode, null, 2));
     });
@@ -79,7 +77,8 @@ export class FileTreeTransformer implements Transformer {
         // Create the text node for the file/folder name
         const text: Text = {
           type: "text",
-          value: name + (child.name === "FileTree.Folder" ? "/" : ""),
+          // value: name + (child.name === "FileTree.Folder" ? "/" : ""),
+          value: name,
         };
 
         // Create the paragraph

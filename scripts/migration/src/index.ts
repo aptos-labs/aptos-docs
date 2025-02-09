@@ -70,10 +70,16 @@ async function processFile(filePath: string, options: TransformerOptions): Promi
       frontmatterToMarkdown(["yaml"]),
       gfmToMarkdown(),
     ],
-    bullet: "-", // Use - for bullets
+    bullet: "-",
     listItemIndent: "one",
-    bulletOther: "*", // Use * for nested lists
+    bulletOther: "*",
     tightDefinitions: true,
+    fences: true,
+    handlers: {
+      text(node) {
+        return node.value.replace(/\\_/g, "_"); // Unescape underscores
+      },
+    },
   });
 
   // Calculate the new file path

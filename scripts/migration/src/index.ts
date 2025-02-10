@@ -22,6 +22,7 @@ import { LinkCardTransformer } from "./transformers/linkCard.js";
 import { TabsTransformer } from "./transformers/tabs.js";
 import { StepsTransformer } from "./transformers/steps.js";
 import { FileTreeTransformer } from "./transformers/fileTree.js";
+import { CustomComponentTransformer } from "./transformers/custom-components.js";
 import type { TransformerOptions } from "./types/index.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -74,9 +75,10 @@ async function processFile(filePath: string, options: TransformerOptions): Promi
   const transformers = [
     new TitleTransformer(),
     new FrontmatterTransformer(),
+    new CustomComponentTransformer(), // Comment out custom components before other transformations
     new CalloutTransformer(),
     ...componentTransformers,
-    new ImportTransformer(componentMappings), // Move import transformer to the end
+    new ImportTransformer(componentMappings),
   ];
 
   for (const transformer of transformers) {

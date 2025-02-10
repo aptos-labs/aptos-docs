@@ -19,6 +19,10 @@ export class ImportTransformer implements Transformer {
     this.componentMappings = componentMappings;
   }
 
+  private isCustomComponentImport(source: string): boolean {
+    return source.includes("@components/index") || source.includes("components/index");
+  }
+
   transform(ast: Root, options: TransformerOptions): void {
     // Find used components recursively
     const usedComponents = new Set<string>();
@@ -56,9 +60,9 @@ export class ImportTransformer implements Transformer {
     ast.children.forEach((node) => {
       if (node.type === "mdxjsEsm") {
         const parsed = this.parseImport(node.value);
-        if (parsed) {
-          // Skip nextra and @components/index imports as we'll replace them
-          if (!parsed.source.includes("nextra") && !parsed.source.includes("@components/index")) {
+        if (parsed && parsed.source && parsed.source !== "''" && parsed.source !== '""') {
+          // Skip nextra and components/index imports as we'll replace them
+          if (!parsed.source.includes("nextra") && !this.isCustomComponentImport(parsed.source)) {
             const existingImports = importsBySource.get(parsed.source) || new Set<string>();
             parsed.specifiers.forEach((spec) => existingImports.add(spec));
             importsBySource.set(parsed.source, existingImports);
@@ -121,17 +125,23 @@ export class ImportTransformer implements Transformer {
       children: [],
     };
 
-    // Remove all existing imports
+    // Remove all imports and empty nodes
     const contentWithoutImports = ast.children.filter((node) => {
       if (node.type === "mdxjsEsm") {
-        const parsed = this.parseImport(node.value);
-        // Keep non-nextra and non-@components/index imports that we haven't consolidated
-        return (
-          parsed &&
-          !parsed.source.includes("nextra") &&
-          !parsed.source.includes("@components/index") &&
-          !importsBySource.has(parsed.source)
-        );
+        const value = node.value.trim();
+        // Remove empty imports, imports with empty source, nextra imports, and custom component imports
+        if (
+          value === "" ||
+          value.includes('from ""') ||
+          value.includes("from ''") ||
+          value.includes("nextra") ||
+          this.isCustomComponentImport(value)
+        ) {
+          return false;
+        }
+        const parsed = this.parseImport(value);
+        // Keep only non-consolidated imports
+        return parsed && !importsBySource.has(parsed.source);
       }
       return true;
     });

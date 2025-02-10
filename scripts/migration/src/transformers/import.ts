@@ -57,8 +57,8 @@ export class ImportTransformer implements Transformer {
       if (node.type === "mdxjsEsm") {
         const parsed = this.parseImport(node.value);
         if (parsed) {
-          // Skip nextra imports as we'll replace them with starlight imports
-          if (!parsed.source.includes("nextra")) {
+          // Skip nextra and @components/index imports as we'll replace them
+          if (!parsed.source.includes("nextra") && !parsed.source.includes("@components/index")) {
             const existingImports = importsBySource.get(parsed.source) || new Set<string>();
             parsed.specifiers.forEach((spec) => existingImports.add(spec));
             importsBySource.set(parsed.source, existingImports);
@@ -125,8 +125,13 @@ export class ImportTransformer implements Transformer {
     const contentWithoutImports = ast.children.filter((node) => {
       if (node.type === "mdxjsEsm") {
         const parsed = this.parseImport(node.value);
-        // Keep non-nextra imports that we haven't consolidated
-        return parsed && !parsed.source.includes("nextra") && !importsBySource.has(parsed.source);
+        // Keep non-nextra and non-@components/index imports that we haven't consolidated
+        return (
+          parsed &&
+          !parsed.source.includes("nextra") &&
+          !parsed.source.includes("@components/index") &&
+          !importsBySource.has(parsed.source)
+        );
       }
       return true;
     });

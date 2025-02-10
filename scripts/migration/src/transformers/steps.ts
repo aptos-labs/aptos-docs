@@ -1,65 +1,32 @@
 import { visit } from "unist-util-visit";
-import type { Root, Heading } from "mdast";
-import type { MdxJsxAttribute, MdxJsxFlowElement } from "mdast-util-mdx-jsx";
-import type { Transformer, TransformerOptions, MdxjsEsm } from "../types/index.js";
+import type { Root, Heading, ListItem, List, Paragraph, Text } from "mdast";
+import type { MdxJsxFlowElement } from "mdast-util-mdx-jsx";
+import type { TransformerOptions } from "../types/index.js";
+import { BaseTransformer } from "./base.js";
 
-export class StepsTransformer implements Transformer {
-  transform(ast: Root, options: TransformerOptions): void {
-    // Remove old Nextra Steps imports
-    this.removeNextraStepsImports(ast);
+export class StepsTransformer extends BaseTransformer {
+  protected componentNames = ["Steps"];
+  protected oldImportPath = "nextra/components";
+  protected newImportPath = "@astrojs/starlight/components";
 
-    // Transform Steps components
-    this.transformSteps(ast);
-
-    // Ensure Starlight Steps imports are present
-    this.ensureStarlightStepsImport(ast);
+  getComponentMap(): Map<string, string> {
+    return new Map();
   }
 
-  private removeNextraStepsImports(ast: Root): void {
-    const toRemove: number[] = [];
-
-    visit(ast, "mdxjsEsm", (node) => {
-      if (
-        "value" in node &&
-        typeof node.value === "string" &&
-        node.value.includes("nextra/components") &&
-        node.value.includes("Steps")
-      ) {
-        const index = ast.children.indexOf(node);
-        if (index !== -1) {
-          toRemove.push(index);
-        }
-      }
-    });
-
-    // Remove imports from bottom to top to avoid index shifting
-    toRemove.reverse().forEach((index) => {
-      ast.children.splice(index, 1);
-    });
-  }
-
-  private transformSteps(ast: Root): void {
+  protected transformComponents(ast: Root, options: TransformerOptions): void {
     visit(ast, "mdxJsxFlowElement", (node) => {
       if (!("name" in node) || node.name !== "Steps") return;
 
-      console.log("\n=== Found Steps Component ===");
-      console.log("Node structure:", JSON.stringify(node, null, 2));
-
       const mdxNode = node as MdxJsxFlowElement;
-      console.log("\nChildren:", JSON.stringify(mdxNode.children, null, 2));
-
-      const newChildren = [];
+      const listItems: ListItem[] = [];
       let stepNumber = 1;
 
       // Process children to convert headings to list items
       for (let i = 0; i < mdxNode.children.length; i++) {
         const child = mdxNode.children[i];
 
-        console.log("\nProcessing child:", JSON.stringify(child, null, 2));
-
         if (child.type === "heading" && (child as Heading).depth === 3) {
-          console.log("Found heading level 3");
-          // Convert heading to list item
+          // Convert heading to list item text
           const heading = child as Heading;
           const headingText = heading.children
             .map((child) => {
@@ -68,7 +35,7 @@ export class StepsTransformer implements Transformer {
               return "";
             })
             .join("");
-          console.log("Heading text:", headingText);
+
           // Collect content until next heading
           const contentChildren = [];
           i++;
@@ -83,15 +50,15 @@ export class StepsTransformer implements Transformer {
           }
 
           // Create list item with heading text and following content
-          const listItem = {
-            type: "listItem" as const,
-            spread: false,
+          const listItem: ListItem = {
+            type: "listItem",
+            spread: true, // Set spread to true to add spacing between items
             children: [
               {
-                type: "paragraph" as const,
+                type: "paragraph",
                 children: [
                   {
-                    type: "text" as const,
+                    type: "text",
                     value: headingText,
                   },
                 ],
@@ -100,81 +67,28 @@ export class StepsTransformer implements Transformer {
             ],
           };
 
-          console.log("\nCreated list item:", JSON.stringify(listItem, null, 2));
-          newChildren.push(listItem);
+          listItems.push(listItem);
           stepNumber++;
         } else if (child.type !== "heading") {
           // Preserve non-heading content at the root level
-          newChildren.push(child);
+          if (listItems.length > 0) {
+            // Add to the last list item if we have one
+            listItems[listItems.length - 1].children.push(child);
+          }
         }
       }
 
-      // Create ordered list to wrap the items
-      const orderedList = {
-        type: "list" as const,
+      // Create ordered list
+      const orderedList: List = {
+        type: "list",
         ordered: true,
         start: 1,
-        spread: false,
-        children: newChildren.filter((child) => child.type === "listItem"),
+        spread: true, // Set spread to true to add spacing between items
+        children: listItems,
       };
-
-      console.log("\nFinal ordered list:", JSON.stringify(orderedList, null, 2));
 
       // Replace children with the new structure
       mdxNode.children = [orderedList];
-
-      console.log("\nFinal node structure:", JSON.stringify(mdxNode, null, 2));
     });
-  }
-
-  private ensureStarlightStepsImport(ast: Root): void {
-    const hasImport = ast.children.some(
-      (node) =>
-        node.type === "mdxjsEsm" &&
-        "value" in node &&
-        typeof node.value === "string" &&
-        node.value.includes("@astrojs/starlight/components") &&
-        node.value.includes("Steps"),
-    );
-
-    if (!hasImport) {
-      const importNode: MdxjsEsm = {
-        type: "mdxjsEsm",
-        value: "import { Steps } from '@astrojs/starlight/components';",
-        data: {
-          estree: {
-            type: "Program",
-            sourceType: "module",
-            body: [
-              {
-                type: "ImportDeclaration",
-                source: {
-                  type: "Literal",
-                  value: "@astrojs/starlight/components",
-                  raw: "'@astrojs/starlight/components'",
-                },
-                specifiers: [
-                  {
-                    type: "ImportSpecifier",
-                    imported: {
-                      type: "Identifier",
-                      name: "Steps",
-                    },
-                    local: {
-                      type: "Identifier",
-                      name: "Steps",
-                    },
-                  },
-                ],
-                importKind: "value",
-              },
-            ],
-            comments: [],
-          },
-        },
-      };
-
-      ast.children.unshift(importNode);
-    }
   }
 }

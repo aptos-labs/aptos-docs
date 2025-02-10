@@ -41,25 +41,46 @@ async function processFile(filePath: string, options: TransformerOptions): Promi
     ],
   });
 
+  // Add filePath to options for transformers
+  const transformerOptions = {
+    ...options,
+    filePath,
+  };
+
   // Apply transformations in specific order:
   // 1. Title transformer (handle frontmatter and headings)
   // 2. Frontmatter transformer (modify frontmatter properties)
   // 3. Other transformers (like callouts)
   // 4. Import transformer (ensure imports are after frontmatter)
-  const transformers = [
-    new TitleTransformer(),
-    new FrontmatterTransformer(),
-    new CalloutTransformer(),
+  // Create component transformers first so we can get their mappings
+  const componentTransformers = [
     new CardsTransformer(),
     new LinkCardTransformer(),
     new TabsTransformer(),
     new StepsTransformer(),
     new FileTreeTransformer(),
-    new ImportTransformer(),
+  ];
+
+  // Get all component mappings
+  const componentMappings = new Map<string, string>();
+  componentTransformers.forEach((transformer) => {
+    const map = transformer.getComponentMap();
+    map.forEach((targetComp: string, sourceComp: string) => {
+      componentMappings.set(sourceComp, targetComp);
+    });
+  });
+
+  // Create all transformers in order
+  const transformers = [
+    new TitleTransformer(),
+    new FrontmatterTransformer(),
+    new CalloutTransformer(),
+    ...componentTransformers,
+    new ImportTransformer(componentMappings), // Move import transformer to the end
   ];
 
   for (const transformer of transformers) {
-    transformer.transform(ast, options);
+    transformer.transform(ast, transformerOptions);
   }
 
   // Convert AST back to MDX
@@ -73,7 +94,7 @@ async function processFile(filePath: string, options: TransformerOptions): Promi
     bullet: "-",
     listItemIndent: "one",
     bulletOther: "*",
-    tightDefinitions: true,
+    tightDefinitions: false,
     fences: true,
     handlers: {
       text(node) {
@@ -97,15 +118,25 @@ async function processFile(filePath: string, options: TransformerOptions): Promi
 }
 
 async function processDirectory(dirPath: string, options: TransformerOptions): Promise<void> {
+  console.log(`Processing directory: ${dirPath}`);
   const entries = await fs.readdir(dirPath, { withFileTypes: true });
+  console.log(`Found ${entries.length} entries in ${dirPath}`);
 
   for (const entry of entries) {
     const fullPath = path.join(dirPath, entry.name);
 
     if (entry.isDirectory()) {
+      console.log(`Found directory: ${entry.name}`);
       await processDirectory(fullPath, options);
     } else if (entry.isFile() && /\.mdx?$/.test(entry.name)) {
-      await processFile(fullPath, options);
+      console.log(`Found MDX file: ${entry.name}`);
+      try {
+        await processFile(fullPath, options);
+      } catch (error) {
+        console.error(`Error processing file ${fullPath}:`, error);
+      }
+    } else {
+      console.log(`Skipping non-MDX file: ${entry.name}`);
     }
   }
 }
@@ -119,6 +150,17 @@ async function main() {
 
   try {
     const sourcePath = path.join(projectRoot, "nextra-migration");
+    console.log(`Starting migration from ${sourcePath}`);
+
+    // Check if source directory exists
+    try {
+      await fs.access(sourcePath);
+      console.log("Source directory exists");
+    } catch (error) {
+      console.error("Source directory does not exist:", sourcePath);
+      process.exit(1);
+    }
+
     await processDirectory(sourcePath, {
       useComponentSyntax: !options.useDirectiveSyntax, // Default to component syntax
     });

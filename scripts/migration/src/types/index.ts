@@ -14,6 +14,8 @@ import type { Program, ImportDeclaration as ESTreeImportDeclaration } from "estr
 export interface TransformerOptions {
   /** Use component syntax instead of ::: syntax for asides/callouts */
   useComponentSyntax?: boolean;
+  /** Current file path being processed */
+  filePath?: string;
 }
 
 export interface FileTransformResult {
@@ -22,7 +24,8 @@ export interface FileTransformResult {
 }
 
 export interface Transformer {
-  transform: (ast: Root, options: TransformerOptions) => void;
+  transform(ast: Root, options: TransformerOptions): void;
+  getComponentMap(): Map<string, string>;
 }
 
 export type MdxJsxAttributeValue = string | number | boolean | null;
@@ -109,9 +112,3 @@ declare module "mdast" {
     children: RootContentWithMdx[];
   }
 }
-
-export type NodeVisitor<T extends RootContentWithMdx> = (
-  node: T,
-  index: number,
-  parent: Root | Parent | null,
-) => void;

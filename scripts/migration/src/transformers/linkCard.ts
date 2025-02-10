@@ -1,16 +1,69 @@
 import { visit } from "unist-util-visit";
 import type { Root } from "mdast";
-import type {
-  Transformer,
-  TransformerOptions,
-  MdxjsEsm,
-  MdxJsxFlowElement,
-} from "../types/index.js";
+import type { MdxJsxFlowElement } from "mdast-util-mdx-jsx";
+import type { TransformerOptions } from "../types/index.js";
+import { BaseTransformer } from "./base.js";
 
-export class LinkCardTransformer implements Transformer {
-  transform(ast: Root, options: TransformerOptions): void {
-    this.ensureLinkCardImport(ast);
-    this.transformLinkCards(ast);
+export class LinkCardTransformer extends BaseTransformer {
+  protected componentNames = ["LinkCard"];
+  protected oldImportPath = "nextra/components";
+  protected newImportPath = "@astrojs/starlight/components";
+
+  getComponentMap(): Map<string, string> {
+    return new Map([["Card", "LinkCard"]]);
+  }
+
+  protected transformComponents(ast: Root, options: TransformerOptions): void {
+    visit(ast, "mdxJsxFlowElement", (node) => {
+      if ("name" in node && node.name === "Card") {
+        const mdxNode = node as MdxJsxFlowElement;
+        let title = "";
+        let description = "";
+        let href = "";
+        let isExternal = false;
+
+        // Extract href from attributes
+        const hrefAttr = mdxNode.attributes.find(
+          (attr) => attr.type === "mdxJsxAttribute" && attr.name === "href",
+        );
+        if (hrefAttr && "value" in hrefAttr && typeof hrefAttr.value === "string") {
+          href = hrefAttr.value;
+        }
+
+        // Check for linkType="external"
+        const linkTypeAttr = mdxNode.attributes.find(
+          (attr) =>
+            attr.type === "mdxJsxAttribute" &&
+            attr.name === "linkType" &&
+            attr.value === "external",
+        );
+        if (linkTypeAttr) {
+          isExternal = true;
+        }
+
+        // Process all nodes to find Card.Title and Card.Description
+        const { title: extractedTitle, description: extractedDescription } =
+          this.findCardElements(mdxNode);
+        title = extractedTitle;
+        description = extractedDescription;
+
+        // Transform to LinkCard if needed
+        if (node.name === "Card") {
+          mdxNode.name = "LinkCard";
+        }
+        mdxNode.children = [];
+        mdxNode.attributes = [
+          { type: "mdxJsxAttribute" as const, name: "href", value: href },
+          ...(title ? [{ type: "mdxJsxAttribute" as const, name: "title", value: title }] : []),
+          ...(description
+            ? [{ type: "mdxJsxAttribute" as const, name: "description", value: description }]
+            : []),
+          ...(isExternal || href.startsWith("http")
+            ? [{ type: "mdxJsxAttribute" as const, name: "target", value: "_blank" }]
+            : []),
+        ];
+      }
+    });
   }
 
   private findCardElements(node: any): { title: string; description: string } {
@@ -63,92 +116,5 @@ export class LinkCardTransformer implements Transformer {
     });
 
     return { title, description };
-  }
-
-  private transformLinkCards(ast: Root): void {
-    visit(ast, "mdxJsxFlowElement", (node) => {
-      if ("name" in node && node.name === "Card") {
-        const mdxNode = node as MdxJsxFlowElement;
-        let title = "";
-        let description = "";
-        let href = "";
-
-        // Extract href from attributes
-        const hrefAttr = mdxNode.attributes.find(
-          (attr) => attr.type === "mdxJsxAttribute" && attr.name === "href",
-        );
-        if (hrefAttr && "value" in hrefAttr && typeof hrefAttr.value === "string") {
-          href = hrefAttr.value;
-        }
-
-        // Process all nodes to find Card.Title and Card.Description
-        const { title: extractedTitle, description: extractedDescription } =
-          this.findCardElements(mdxNode);
-        title = extractedTitle;
-        description = extractedDescription;
-
-        // Transform to LinkCard
-        mdxNode.name = "LinkCard";
-        mdxNode.children = [];
-        mdxNode.attributes = [
-          { type: "mdxJsxAttribute" as const, name: "href", value: href },
-          ...(title ? [{ type: "mdxJsxAttribute" as const, name: "title", value: title }] : []),
-          ...(description
-            ? [{ type: "mdxJsxAttribute" as const, name: "description", value: description }]
-            : []),
-        ];
-      }
-    });
-  }
-
-  private ensureLinkCardImport(ast: Root): void {
-    const hasImport = ast.children.some(
-      (node) =>
-        node.type === "mdxjsEsm" &&
-        "value" in node &&
-        typeof node.value === "string" &&
-        node.value.includes("@astrojs/starlight/components") &&
-        node.value.includes("LinkCard"),
-    );
-
-    if (!hasImport) {
-      const importNode: MdxjsEsm = {
-        type: "mdxjsEsm",
-        value: "import { LinkCard } from '@astrojs/starlight/components';",
-        data: {
-          estree: {
-            type: "Program",
-            sourceType: "module",
-            body: [
-              {
-                type: "ImportDeclaration",
-                source: {
-                  type: "Literal",
-                  value: "@astrojs/starlight/components",
-                  raw: "'@astrojs/starlight/components'",
-                },
-                specifiers: [
-                  {
-                    type: "ImportSpecifier",
-                    imported: {
-                      type: "Identifier",
-                      name: "LinkCard",
-                    },
-                    local: {
-                      type: "Identifier",
-                      name: "LinkCard",
-                    },
-                  },
-                ],
-                importKind: "value",
-              },
-            ],
-            comments: [],
-          },
-        },
-      };
-
-      ast.children.unshift(importNode);
-    }
   }
 }

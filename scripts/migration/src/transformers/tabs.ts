@@ -1,45 +1,24 @@
 import { visit } from "unist-util-visit";
 import type { Root } from "mdast";
-import type { MdxJsxAttribute, MdxJsxFlowElement } from "mdast-util-mdx-jsx";
-import type { Transformer, TransformerOptions, MdxjsEsm } from "../types/index.js";
+import type { MdxJsxFlowElement } from "mdast-util-mdx-jsx";
+import type { TransformerOptions } from "../types/index.js";
+import { BaseTransformer } from "./base.js";
 
-export class TabsTransformer implements Transformer {
-  transform(ast: Root, options: TransformerOptions): void {
-    // Remove old Nextra Tabs imports
-    this.removeNextraTabsImports(ast);
+export class TabsTransformer extends BaseTransformer {
+  protected componentNames = ["Tabs", "TabItem", "Tabs.Tab"];
+  protected oldImportPath = "nextra/components";
+  protected newImportPath = "@astrojs/starlight/components";
 
-    // Transform Tabs components
-    this.transformTabs(ast);
-
-    // Ensure Starlight Tabs imports are present
-    this.ensureStarlightTabsImport(ast);
+  getComponentMap(): Map<string, string> {
+    return new Map([
+      ["Tabs.Tab", "TabItem"],
+      ["Tab", "TabItem"],
+    ]);
   }
 
-  private removeNextraTabsImports(ast: Root): void {
-    const toRemove: number[] = [];
-
-    visit(ast, "mdxjsEsm", (node) => {
-      if (
-        "value" in node &&
-        typeof node.value === "string" &&
-        node.value.includes("nextra/components") &&
-        node.value.includes("Tabs")
-      ) {
-        const index = ast.children.indexOf(node);
-        if (index !== -1) {
-          toRemove.push(index);
-        }
-      }
-    });
-
-    // Remove imports from bottom to top to avoid index shifting
-    toRemove.reverse().forEach((index) => {
-      ast.children.splice(index, 1);
-    });
-  }
-
-  private transformTabs(ast: Root): void {
-    visit(ast, "mdxJsxFlowElement", (node, index, parent) => {
+  protected transformComponents(ast: Root, options: TransformerOptions): void {
+    // First pass: Transform Tabs components and extract their items
+    visit(ast, "mdxJsxFlowElement", (node) => {
       if (!("name" in node) || node.name !== "Tabs") return;
 
       const mdxNode = node as MdxJsxFlowElement;
@@ -57,112 +36,59 @@ export class TabsTransformer implements Transformer {
           typeof attr.value.value === "string",
       );
 
-      if (!itemsAttr?.value || typeof itemsAttr.value !== "object" || !("value" in itemsAttr.value))
-        return;
-      const valueExpr = itemsAttr.value.value;
+      if (itemsAttr?.value && typeof itemsAttr.value === "object" && "value" in itemsAttr.value) {
+        const valueExpr = itemsAttr.value.value;
+        const arrayMatch = valueExpr.match(/\[(.*?)\]/);
+        if (arrayMatch) {
+          const items = arrayMatch[1]
+            .split(",")
+            .map((item: string) => item.trim().replace(/['"]/g, ""))
+            .filter(Boolean);
 
-      // Extract array content from the expression
-      const arrayMatch = valueExpr.match(/\[(.*?)\]/);
-      if (!arrayMatch) return;
+          if (items.length > 0) {
+            // Remove all attributes from Tabs
+            mdxNode.attributes = [];
 
-      const items = arrayMatch[1]
-        .split(",")
-        .map((item: string) => item.trim().replace(/['"]/g, ""))
-        .filter(Boolean);
+            // Transform Tabs.Tab children to TabItem with corresponding labels
+            let tabIndex = 0;
+            const newChildren = [];
 
-      if (!items.length) return;
+            for (const child of mdxNode.children) {
+              if (
+                child.type === "mdxJsxFlowElement" &&
+                "name" in child &&
+                (child.name === "Tabs.Tab" || child.name === "Tab")
+              ) {
+                if (tabIndex < items.length) {
+                  const label = items[tabIndex++];
+                  const flowChild = child as MdxJsxFlowElement;
+                  flowChild.name = "TabItem";
+                  flowChild.attributes = [
+                    {
+                      type: "mdxJsxAttribute" as const,
+                      name: "label",
+                      value: label,
+                    },
+                  ];
+                  newChildren.push(flowChild);
+                }
+              } else {
+                newChildren.push(child);
+              }
+            }
 
-      // Remove all attributes from Tabs
-      mdxNode.attributes = [];
-
-      // Transform Tabs.Tab children to TabItem with corresponding labels
-      let tabIndex = 0;
-      const newChildren = [];
-
-      for (const child of mdxNode.children) {
-        if (child.type === "mdxJsxFlowElement" && "name" in child && child.name === "Tabs.Tab") {
-          if (tabIndex < items.length) {
-            const label = items[tabIndex++];
-            const flowChild = child as MdxJsxFlowElement;
-            flowChild.name = "TabItem";
-            flowChild.attributes = [
-              {
-                type: "mdxJsxAttribute" as const,
-                name: "label",
-                value: label,
-              },
-            ];
-            newChildren.push(flowChild);
+            mdxNode.children = newChildren;
           }
-        } else {
-          newChildren.push(child);
         }
       }
-
-      mdxNode.children = newChildren;
     });
-  }
 
-  private ensureStarlightTabsImport(ast: Root): void {
-    const hasImport = ast.children.some(
-      (node) =>
-        node.type === "mdxjsEsm" &&
-        "value" in node &&
-        typeof node.value === "string" &&
-        node.value.includes("@astrojs/starlight/components") &&
-        node.value.includes("Tabs") &&
-        node.value.includes("TabItem"),
-    );
-
-    if (!hasImport) {
-      const importNode: MdxjsEsm = {
-        type: "mdxjsEsm",
-        value: "import { Tabs, TabItem } from '@astrojs/starlight/components';",
-        data: {
-          estree: {
-            type: "Program",
-            sourceType: "module",
-            body: [
-              {
-                type: "ImportDeclaration",
-                source: {
-                  type: "Literal",
-                  value: "@astrojs/starlight/components",
-                  raw: "'@astrojs/starlight/components'",
-                },
-                specifiers: [
-                  {
-                    type: "ImportSpecifier",
-                    imported: {
-                      type: "Identifier",
-                      name: "Tabs",
-                    },
-                    local: {
-                      type: "Identifier",
-                      name: "Tabs",
-                    },
-                  },
-                  {
-                    type: "ImportSpecifier",
-                    imported: {
-                      type: "Identifier",
-                      name: "TabItem",
-                    },
-                    local: {
-                      type: "Identifier",
-                      name: "TabItem",
-                    },
-                  },
-                ],
-                importKind: "value",
-              },
-            ],
-            comments: [],
-          },
-        },
-      };
-
-      ast.children.unshift(importNode);
-    }
+    // Second pass: Transform any remaining Tabs.Tab components to TabItem
+    visit(ast, "mdxJsxFlowElement", (node) => {
+      if ("name" in node && (node.name === "Tabs.Tab" || node.name === "Tab")) {
+        const mdxNode = node as MdxJsxFlowElement;
+        mdxNode.name = "TabItem";
+      }
+    });
   }
 }

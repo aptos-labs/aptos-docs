@@ -1,173 +1,52 @@
 import { visit } from "unist-util-visit";
-import type { Root, Parent } from "mdast";
-import type {
-  CalloutNode,
-  CalloutType,
-  MdxjsEsm,
-  TransformerOptions,
-  Transformer,
-  ContainerDirective,
-  MdxJsxFlowElement,
-  MdxJsxAttribute,
-  MdxJsxAttributeNode,
-} from "../types/index.js";
+import type { Root } from "mdast";
+import type { TransformerOptions, CalloutNode } from "../types/index.js";
+import type { Transformer } from "../types/index.js";
 
-export class CalloutTransformer implements Transformer {
-  transform(ast: Root, options: TransformerOptions): void {
-    // Remove Nextra component imports
-    this.removeNextraImports(ast);
-
-    // Transform Callout components
-    this.transformCallouts(ast, options);
-  }
-
-  private removeNextraImports(ast: Root): void {
-    const toRemove: number[] = [];
-
-    visit(ast, "mdxjsEsm", (node) => {
-      if (
-        "value" in node &&
-        typeof node.value === "string" &&
-        node.value.includes("nextra/components") &&
-        node.value.includes("Callout")
-      ) {
-        const index = ast.children.indexOf(node);
-        if (index !== -1) {
-          toRemove.push(index);
-        }
-      }
-    });
-
-    // Remove imports from bottom to top to avoid index shifting
-    toRemove.reverse().forEach((index) => {
-      ast.children.splice(index, 1);
-    });
-  }
-
-  private findAttribute(
-    attributes: MdxJsxAttributeNode[],
-    name: string,
-  ): MdxJsxAttribute | undefined {
-    return attributes.find(
-      (attr): attr is MdxJsxAttribute => attr.type === "mdxJsxAttribute" && attr.name === name,
-    );
-  }
-
-  private transformCallouts(ast: Root, options: TransformerOptions): void {
-    visit(ast, "mdxJsxFlowElement", (node, index, parent) => {
-      if ("name" in node && node.name === "Callout" && parent && typeof index === "number") {
-        const calloutNode = node as CalloutNode;
-        const typeAttr = this.findAttribute(calloutNode.attributes, "type");
-        const type = this.mapCalloutType(typeAttr?.value?.toString() || "default");
-
-        const titleAttr = this.findAttribute(calloutNode.attributes, "title");
-        const title = titleAttr?.value?.toString();
-
-        if (options.useComponentSyntax) {
-          // Transform to Starlight Aside component
-          calloutNode.name = "Aside";
-          calloutNode.attributes = (calloutNode.attributes || []).filter(
-            (attr) => !(attr.type === "mdxJsxAttribute" && attr.name === "emoji"),
-          );
-
-          // Update type attribute if it exists
-          const existingType = this.findAttribute(calloutNode.attributes, "type");
-          if (existingType) {
-            existingType.value = type;
-          } else {
-            calloutNode.attributes.push({
-              type: "mdxJsxAttribute",
-              name: "type",
-              value: type,
-            });
-          }
-
-          // Add import statement if not already present
-          this.ensureAsideImport(ast);
-        } else {
-          // Transform to ::: syntax
-          const replacement: ContainerDirective = {
-            type: "containerDirective",
-            name: type,
-            children: calloutNode.children || [],
-          };
-
-          if (title) {
-            replacement.data = {
-              hName: "div",
-              hProperties: {
-                className: [`starlight-aside ${type}`],
-                "data-title": title,
-              },
-            };
-          }
-
-          parent.children[index] = replacement;
-        }
-      }
-    });
-  }
-
-  private ensureAsideImport(ast: Root): void {
-    const hasImport = ast.children.some(
-      (node) =>
-        node.type === "mdxjsEsm" &&
-        "value" in node &&
-        typeof node.value === "string" &&
-        node.value.includes("@astrojs/starlight/components") &&
-        node.value.includes("Aside"),
-    );
-
-    if (!hasImport) {
-      const importNode: MdxjsEsm = {
-        type: "mdxjsEsm",
-        value: "import { Aside } from '@astrojs/starlight/components';",
-        data: {
-          estree: {
-            type: "Program",
-            sourceType: "module",
-            body: [
-              {
-                type: "ImportDeclaration",
-                source: {
-                  type: "Literal",
-                  value: "@astrojs/starlight/components",
-                  raw: "'@astrojs/starlight/components'",
-                },
-                specifiers: [
-                  {
-                    type: "ImportSpecifier",
-                    imported: {
-                      type: "Identifier",
-                      name: "Aside",
-                    },
-                    local: {
-                      type: "Identifier",
-                      name: "Aside",
-                    },
-                  },
-                ],
-                importKind: "value",
-              },
-            ],
-            comments: [],
-          },
-        },
-      };
-
-      ast.children.unshift(importNode);
-    }
-  }
-
-  private mapCalloutType(type: string = "default"): CalloutType {
-    const mappedType = type.toLowerCase();
-    return mappedType in CALLOUT_TYPE_MAP ? CALLOUT_TYPE_MAP[mappedType] : CALLOUT_TYPE_MAP.default;
-  }
-}
-
-const CALLOUT_TYPE_MAP: Record<string, CalloutType> = {
+const CALLOUT_TYPE_MAP: Record<string, string> = {
   warning: "caution",
   info: "note",
   error: "danger",
   default: "note",
 };
+
+export class CalloutTransformer implements Transformer {
+  transform(ast: Root, options: TransformerOptions): void {
+    visit(ast, "mdxJsxFlowElement", (node) => {
+      if ("name" in node && (node.name === "Callout" || node.name === "Aside")) {
+        const calloutNode = node as CalloutNode;
+
+        // Find type attribute
+        const typeAttr = calloutNode.attributes.find(
+          (attr) => attr.type === "mdxJsxAttribute" && attr.name === "type",
+        );
+
+        // Map type to Starlight equivalent
+        const type = typeAttr?.value
+          ? CALLOUT_TYPE_MAP[typeAttr.value.toString().toLowerCase()] || CALLOUT_TYPE_MAP.default
+          : CALLOUT_TYPE_MAP.default;
+
+        // Update type attribute
+        if (typeAttr) {
+          typeAttr.value = type;
+        } else {
+          calloutNode.attributes.push({
+            type: "mdxJsxAttribute",
+            name: "type",
+            value: type,
+          });
+        }
+
+        // Update component name to Aside
+        calloutNode.name = "Aside";
+      }
+    });
+  }
+
+  getComponentMap(): Map<string, string> {
+    return new Map([
+      ["Callout", "Aside"],
+      ["Aside", "Aside"],
+    ]);
+  }
+}

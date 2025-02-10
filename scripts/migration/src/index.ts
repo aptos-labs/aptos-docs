@@ -48,11 +48,6 @@ async function processFile(filePath: string, options: TransformerOptions): Promi
     filePath,
   };
 
-  // Apply transformations in specific order:
-  // 1. Title transformer (handle frontmatter and headings)
-  // 2. Frontmatter transformer (modify frontmatter properties)
-  // 3. Other transformers (like callouts)
-  // 4. Import transformer (ensure imports are after frontmatter)
   // Create component transformers first so we can get their mappings
   const componentTransformers = [
     new CardsTransformer(),
@@ -75,7 +70,7 @@ async function processFile(filePath: string, options: TransformerOptions): Promi
   const transformers = [
     new TitleTransformer(),
     new FrontmatterTransformer(),
-    new CustomComponentTransformer(), // Comment out custom components before other transformations
+    new CustomComponentTransformer(),
     new CalloutTransformer(),
     ...componentTransformers,
     new ImportTransformer(componentMappings),
@@ -100,7 +95,12 @@ async function processFile(filePath: string, options: TransformerOptions): Promi
     fences: true,
     handlers: {
       text(node) {
-        return node.value.replace(/\\_/g, "_"); // Unescape underscores
+        // Preserve HTML entities while unescaping underscores
+        const text = node.value.replace(/\\_/g, "_");
+        // Don't convert HTML entities to their character equivalents
+        return text.replace(/[<>]/g, (match: string) => {
+          return match === "<" ? "&lt;" : "&gt;";
+        });
       },
     },
   });

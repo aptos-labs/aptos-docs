@@ -21,17 +21,21 @@ export class TitleTransformer implements Transformer {
     // First pass: find frontmatter and first h1
     let frontmatterNode: YamlNode | undefined;
     let frontmatterTitle: string | undefined;
+    let capitalTitle: string | undefined;
     let headingIndex = -1;
 
     ast.children.forEach((node, index) => {
       if (node.type === "yaml") {
         frontmatterNode = node as YamlNode;
         // Extract title from frontmatter, case insensitive
-        const match = /^(title|Title):\s*["']?([^"'\n]+)["']?/im.exec(node.value);
-        if (match) {
-          frontmatterTitle = match[2].trim();
-          // Normalize frontmatter to use lowercase "title"
-          frontmatterNode.value = frontmatterNode.value.replace(/^(title|Title):/im, "title:");
+        const titleMatch = /^title:\s*["']?([^"'\n]+)["']?/im.exec(node.value);
+        if (titleMatch) {
+          frontmatterTitle = titleMatch[1].trim();
+        }
+        // Extract Title (capital T) from frontmatter
+        const capitalTitleMatch = /^Title:\s*["']?([^"'\n]+)["']?/m.exec(node.value);
+        if (capitalTitleMatch) {
+          capitalTitle = capitalTitleMatch[1].trim();
         }
       } else if (node.type === "heading" && (node as Heading).depth === 1 && headingIndex === -1) {
         headingIndex = index;
@@ -48,58 +52,18 @@ export class TitleTransformer implements Transformer {
         .trim();
     }
 
-    // Handle different cases
-    if (h1Title) {
-      if (!frontmatterNode) {
-        // No frontmatter exists, create it with title from h1
-        frontmatterNode = {
-          type: "yaml",
-          value: `title: "${h1Title}"`,
-        };
+    // Determine the final title to use
+    let finalTitle = capitalTitle || frontmatterTitle || h1Title;
+    if (!finalTitle) {
+      finalTitle = this.getTitleFromFilename(options.filePath || "");
+    }
 
-        // Create blank line node
-        const blankLine: ParagraphNode = {
-          type: "paragraph",
-          children: [],
-        };
-
-        // Add frontmatter at the beginning
-        ast.children.unshift(blankLine);
-        ast.children.unshift(frontmatterNode);
-
-        // Remove the original heading
-        ast.children.splice(headingIndex + 2, 1); // +2 because we added two nodes at the start
-      } else if (!frontmatterTitle) {
-        // Frontmatter exists but no title, add title from h1
-        frontmatterNode.value = frontmatterNode.value.trim();
-        if (frontmatterNode.value) {
-          frontmatterNode.value += "\n";
-        }
-        frontmatterNode.value += `title: "${h1Title}"`;
-
-        // Remove the original heading
-        ast.children.splice(headingIndex, 1);
-      } else if (h1Title === frontmatterTitle) {
-        // Both exist and match, remove duplicate h1
-        ast.children.splice(headingIndex, 1);
-      } else {
-        // Both exist but don't match, convert h1 to h2
-        (ast.children[headingIndex] as Heading).depth = 2;
-      }
-    } else if (!frontmatterTitle && frontmatterNode) {
-      // No h1 but frontmatter exists without title
-      const title = this.getTitleFromFilename(options.filePath || "");
-      frontmatterNode.value = frontmatterNode.value.trim();
-      if (frontmatterNode.value) {
-        frontmatterNode.value += "\n";
-      }
-      frontmatterNode.value += `title: "${title}"`;
-    } else if (!frontmatterNode) {
-      // No frontmatter and no h1 - create minimal frontmatter with filename-based title
-      const title = this.getTitleFromFilename(options.filePath || "");
+    // Create or update frontmatter
+    if (!frontmatterNode) {
+      // No frontmatter exists, create it
       frontmatterNode = {
         type: "yaml",
-        value: `title: "${title}"`,
+        value: `title: "${finalTitle}"`,
       };
 
       // Create blank line node
@@ -111,6 +75,30 @@ export class TitleTransformer implements Transformer {
       // Add frontmatter at the beginning
       ast.children.unshift(blankLine);
       ast.children.unshift(frontmatterNode);
+
+      // Adjust heading index if it exists
+      if (headingIndex !== -1) {
+        headingIndex += 2;
+      }
+    } else {
+      // Update existing frontmatter
+      let frontmatterLines = frontmatterNode.value.split("\n");
+
+      // Remove old title and Title lines
+      frontmatterLines = frontmatterLines.filter(
+        (line) => !line.match(/^title:/i) && !line.match(/^Title:/),
+      );
+
+      // Add new title line
+      frontmatterLines.push(`title: "${finalTitle}"`);
+
+      // Update frontmatter
+      frontmatterNode.value = frontmatterLines.join("\n");
+    }
+
+    // Remove the h1 heading since we're using the title from frontmatter
+    if (headingIndex !== -1) {
+      ast.children.splice(headingIndex, 1);
     }
   }
 

@@ -5,6 +5,8 @@ import tailwindcss from "@tailwindcss/vite";
 import starlightOpenAPI, { openAPISidebarGroups } from "starlight-openapi";
 
 import vercel from "@astrojs/vercel";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
 
 // https://astro.build/config
 export default defineConfig({
@@ -91,11 +93,15 @@ export default defineConfig({
 
         ...openAPISidebarGroups,
       ],
-      customCss: ["./src/globals.css"],
+      customCss: ["./src/globals.css", "katex/dist/katex.min.css"],
     }),
   ],
   adapter: vercel(),
   vite: {
     plugins: [tailwindcss()],
+  },
+  markdown: {
+    remarkPlugins: [remarkMath],
+    rehypePlugins: [rehypeKatex],
   },
 });

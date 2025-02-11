@@ -23,6 +23,7 @@ import { TabsTransformer } from "./transformers/tabs.js";
 import { StepsTransformer } from "./transformers/steps.js";
 import { FileTreeTransformer } from "./transformers/fileTree.js";
 import { CustomComponentTransformer } from "./transformers/custom-components.js";
+import { CodeTransformer } from "./transformers/code.js";
 import type { TransformerOptions } from "./types/index.js";
 import type { Handle, State } from "mdast-util-to-markdown";
 
@@ -73,6 +74,7 @@ async function processFile(filePath: string, options: TransformerOptions): Promi
     new FrontmatterTransformer(),
     new CustomComponentTransformer(),
     new CalloutTransformer(),
+    new CodeTransformer(),
     ...componentTransformers,
     new ImportTransformer(componentMappings),
   ];
@@ -95,20 +97,9 @@ async function processFile(filePath: string, options: TransformerOptions): Promi
     tightDefinitions: false,
     fences: true,
     handlers: {
-      text: ((node) => {
-        // Preserve HTML entities while unescaping underscores
-        const text = node.value.replace(/\\_/g, "_");
-        // Don't convert HTML entities to their character equivalents
-        return text.replace(/[&<>'"]/g, (match: string) => {
-          const entities: { [key: string]: string } = {
-            "&": "&amp;",
-            "<": "&lt;",
-            ">": "&gt;",
-            "'": "&apos;",
-            '"': "&quot;",
-          };
-          return entities[match];
-        });
+      inlineCode: ((node) => {
+        // Return the value directly without escaping backticks
+        return "`" + node.value + "`";
       }) as Handle,
       mdxJsxFlowElement: ((node, parent, context: State) => {
         if (node.name === "FileTree" || node.name === "Steps") {

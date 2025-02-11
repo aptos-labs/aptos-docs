@@ -24,6 +24,7 @@ import { StepsTransformer } from "./transformers/steps.js";
 import { FileTreeTransformer } from "./transformers/fileTree.js";
 import { CustomComponentTransformer } from "./transformers/custom-components.js";
 import type { TransformerOptions } from "./types/index.js";
+import type { Handle, State } from "mdast-util-to-markdown";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, "../../..");
@@ -94,14 +95,38 @@ async function processFile(filePath: string, options: TransformerOptions): Promi
     tightDefinitions: false,
     fences: true,
     handlers: {
-      text(node) {
+      text: ((node) => {
         // Preserve HTML entities while unescaping underscores
         const text = node.value.replace(/\\_/g, "_");
         // Don't convert HTML entities to their character equivalents
-        return text.replace(/[<>]/g, (match: string) => {
-          return match === "<" ? "&lt;" : "&gt;";
+        return text.replace(/[&<>'"]/g, (match: string) => {
+          const entities: { [key: string]: string } = {
+            "&": "&amp;",
+            "<": "&lt;",
+            ">": "&gt;",
+            "'": "&apos;",
+            '"': "&quot;",
+          };
+          return entities[match];
         });
-      },
+      }) as Handle,
+      mdxJsxFlowElement: ((node, parent, context: State) => {
+        if (node.name === "FileTree" || node.name === "Steps") {
+          const exit = context.enter("mdxJsxFlowElement");
+          const nodeContent = node.children
+            .map((child: any) =>
+              context.handle(child, node, context, {
+                after: "",
+                before: "",
+                lineShift: 0,
+                now: { line: 1, column: 1 },
+              }),
+            )
+            .join("\n");
+          exit();
+          return `<${node.name}>\n\n${nodeContent}\n\n</${node.name}>`;
+        }
+      }) as Handle,
     },
   });
 

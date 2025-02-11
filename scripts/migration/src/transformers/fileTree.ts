@@ -41,7 +41,7 @@ export class FileTreeTransformer extends BaseTransformer {
         };
 
         // Set the children to the newline and list
-        mdxNode.children = [newlinePara, list];
+        mdxNode.children = [list];
       } else {
         // For empty FileTree, just add a newline
         mdxNode.children = [

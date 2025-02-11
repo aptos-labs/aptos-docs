@@ -97,10 +97,6 @@ async function processFile(filePath: string, options: TransformerOptions): Promi
     tightDefinitions: false,
     fences: true,
     handlers: {
-      inlineCode: ((node) => {
-        // Return the value directly without escaping backticks
-        return "`" + node.value + "`";
-      }) as Handle,
       mdxJsxFlowElement: ((node, parent, context: State) => {
         if (node.name === "FileTree" || node.name === "Steps") {
           const exit = context.enter("mdxJsxFlowElement");

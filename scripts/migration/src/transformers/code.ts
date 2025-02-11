@@ -10,8 +10,9 @@ export class CodeTransformer {
         node.type = "inlineCode";
         // Get the original content
         const content = node.children?.[0]?.value || "";
-        // Convert any pipe characters to HTML entities
-        node.value = content.replace(/\|/g, "&#124;");
+        // Disabled - Convert any pipe characters to HTML entities (won't render / displays as raw text)
+        // node.value = content.replace(/\|/g, "'\|'");
+        node.value = content;
       }
       // Recursively visit all children
       if (node.children) {

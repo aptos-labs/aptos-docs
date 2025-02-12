@@ -44,6 +44,20 @@ async function processFile(filePath: string, options: TransformerOptions): Promi
     ],
   });
 
+  // Log the AST structure for debugging
+  console.log("\nAST for file:", filePath);
+  console.log(
+    JSON.stringify(
+      ast,
+      (key, value) => {
+        // Filter out some noisy properties
+        if (key === "position" || key === "data") return undefined;
+        return value;
+      },
+      2,
+    ),
+  );
+
   // Add filePath to options for transformers
   const transformerOptions = {
     ...options,
@@ -98,11 +112,29 @@ async function processFile(filePath: string, options: TransformerOptions): Promi
     emphasis: "_",
     strong: "*",
     handlers: {
+      strong: ((node, _parent, context) => {
+        const exit = context.enter("strong");
+        const value = node.children
+          .map((child: any) => {
+            if (child.type === "text" && (child.value === "{" || child.value === "}")) {
+              return "\\" + child.value;
+            }
+            return context.handle(child, node, context, {
+              before: "",
+              after: "",
+              now: { line: 1, column: 1 },
+              lineShift: 0,
+            });
+          })
+          .join("");
+        exit();
+        return `**${value}**`;
+      }) as Handle,
       text: ((node) => {
-        // Don't escape underscores in text nodes
-        const text = node.value.replace(/\\_/g, "_");
-        // Don't convert HTML entities to their character equivalents
-        return text.replace(/[&<>'"]/g, (match: string) => {
+        let text = node.value;
+
+        // Step 1: Handle HTML entities
+        text = text.replace(/[&<>'"]/g, (match: string) => {
           const entities: { [key: string]: string } = {
             "&": "&amp;",
             "<": "&lt;",
@@ -112,6 +144,13 @@ async function processFile(filePath: string, options: TransformerOptions): Promi
           };
           return entities[match];
         });
+
+        // Step 2: Preserve escaped characters
+        text = text.replace(/\\([{}\\])/g, (match: string, char: string) => {
+          return "\\" + char;
+        });
+
+        return text;
       }) as Handle,
       mdxJsxFlowElement: ((node, parent, context: State) => {
         if (node.name === "FileTree" || node.name === "Steps") {

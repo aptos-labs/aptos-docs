@@ -12,6 +12,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { program } from "commander";
+import { exec } from "node:child_process";
 
 import { CalloutTransformer } from "./transformers/callout.js";
 import { TitleTransformer } from "./transformers/title.js";
@@ -25,12 +26,16 @@ import { FileTreeTransformer } from "./transformers/fileTree.js";
 import { CustomComponentTransformer } from "./transformers/custom-components.js";
 import { CodeTransformer } from "./transformers/code.js";
 import type { TransformerOptions } from "./types/index.js";
+
+interface ExtendedTransformerOptions extends TransformerOptions {
+  sourcePath?: string;
+}
 import type { Handle, State } from "mdast-util-to-markdown";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, "../../..");
 
-async function processFile(filePath: string, options: TransformerOptions): Promise<void> {
+async function processFile(filePath: string, options: ExtendedTransformerOptions): Promise<void> {
   const content = await fs.readFile(filePath, "utf-8");
 
   // Parse MDX content into AST
@@ -181,8 +186,10 @@ async function processFile(filePath: string, options: TransformerOptions): Promi
   });
 
   // Calculate the new file path
-  const relativePath = path.relative(path.join(projectRoot, "nextra-migration"), filePath);
-
+  if (!options.sourcePath) {
+    throw new Error("Source path not provided in options");
+  }
+  const relativePath = path.relative(options.sourcePath, filePath);
   const newPath = path.join(projectRoot, "src/content/docs", relativePath);
 
   // Ensure the directory exists
@@ -194,7 +201,55 @@ async function processFile(filePath: string, options: TransformerOptions): Promi
   console.log(`Processed: ${relativePath}`);
 }
 
-async function processDirectory(dirPath: string, options: TransformerOptions): Promise<void> {
+async function getSourcePath(): Promise<string> {
+  const localPath = path.join(projectRoot, "nextra-migration");
+
+  try {
+    await fs.access(localPath);
+    // Check if directory has any .mdx files
+    const entries = await fs.readdir(localPath, { withFileTypes: true, recursive: true });
+    const hasMdxFiles = entries.some((entry) => entry.isFile() && /\.mdx?$/.test(entry.name));
+
+    if (hasMdxFiles) {
+      console.log("Using local nextra-migration directory");
+      return localPath;
+    }
+  } catch (error) {
+    console.log("Local nextra-migration directory not found or empty");
+  }
+
+  // Fall back to GitHub repository
+  const tempDir = path.join(projectRoot, "temp-nextra-docs");
+  console.log("Cloning Aptos developer docs repository...");
+
+  try {
+    // Remove temp directory if it exists
+    await fs.rm(tempDir, { recursive: true, force: true });
+
+    // Clone the repository
+    await new Promise<void>((resolve, reject) => {
+      exec(
+        `git clone --depth 1 "https://github.com/aptos-labs/developer-docs.git" "${tempDir}"`,
+        (error: Error | null) => {
+          if (error) reject(error);
+          else resolve();
+        },
+      );
+    });
+
+    const sourcePath = path.join(tempDir, "apps", "nextra", "pages", "en");
+    console.log(`Using GitHub repository source: ${sourcePath}`);
+    return sourcePath;
+  } catch (error) {
+    console.error("Failed to clone repository:", error);
+    throw error;
+  }
+}
+
+async function processDirectory(
+  dirPath: string,
+  options: ExtendedTransformerOptions,
+): Promise<void> {
   console.log(`Processing directory: ${dirPath}`);
   const entries = await fs.readdir(dirPath, { withFileTypes: true });
   console.log(`Found ${entries.length} entries in ${dirPath}`);
@@ -226,21 +281,18 @@ async function main() {
   const options = program.opts();
 
   try {
-    const sourcePath = path.join(projectRoot, "nextra-migration");
+    const sourcePath = await getSourcePath();
     console.log(`Starting migration from ${sourcePath}`);
-
-    // Check if source directory exists
-    try {
-      await fs.access(sourcePath);
-      console.log("Source directory exists");
-    } catch (error) {
-      console.error("Source directory does not exist:", sourcePath);
-      process.exit(1);
-    }
 
     await processDirectory(sourcePath, {
       useComponentSyntax: !options.useDirectiveSyntax, // Default to component syntax
+      sourcePath,
     });
+
+    // Clean up temp directory if it exists
+    const tempDir = path.join(projectRoot, "temp-nextra-docs");
+    await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+
     console.log("Migration completed successfully!");
   } catch (error) {
     console.error("Error during migration:", error);

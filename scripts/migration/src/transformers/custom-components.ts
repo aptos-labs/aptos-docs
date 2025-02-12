@@ -16,6 +16,7 @@ export class CustomComponentTransformer extends BaseTransformer {
     "DynamicApiReference",
     "fetchApiReference",
     "Faucet",
+    "YouTube",
   ];
   protected oldImportPath = "@components/index";
   protected newImportPath = "";

@@ -112,6 +112,7 @@ async function processFile(filePath: string, options: TransformerOptions): Promi
     emphasis: "_",
     strong: "*",
     handlers: {
+      // Custom handler to preserve escaped characters in Strong nodes
       strong: ((node, _parent, context) => {
         const exit = context.enter("strong");
         const value = node.children
@@ -130,6 +131,8 @@ async function processFile(filePath: string, options: TransformerOptions): Promi
         exit();
         return `**${value}**`;
       }) as Handle,
+
+      // Custom handler to preserve html entities and escaped characters in Text nodes
       text: ((node) => {
         let text = node.value;
 
@@ -152,23 +155,28 @@ async function processFile(filePath: string, options: TransformerOptions): Promi
 
         return text;
       }) as Handle,
-      mdxJsxFlowElement: ((node, parent, context: State) => {
-        if (node.name === "FileTree" || node.name === "Steps") {
-          const exit = context.enter("mdxJsxFlowElement");
-          const nodeContent = node.children
-            .map((child: any) =>
-              context.handle(child, node, context, {
-                after: "",
-                before: "",
-                lineShift: 0,
-                now: { line: 1, column: 1 },
-              }),
-            )
-            .join("\n");
-          exit();
-          return `<${node.name}>\n\n${nodeContent}\n\n</${node.name}>`;
-        }
-      }) as Handle,
+
+      // Custom handler to prevent root child indentation of FileTree and Steps components.
+      // Unfortunately this messes with all other components and will not render them correctly despite the conditional statement.
+
+      // mdxJsxFlowElement: ((node, parent, context: State) => {
+      //   if (node.name === "FileTree" || node.name === "Steps") {
+      //     const exit = context.enter("mdxJsxFlowElement");
+      //     const nodeContent = node.children
+      //       .map((child: any) =>
+      //         context.handle(child, node, context, {
+      //           after: "",
+      //           before: "",
+      //           lineShift: 0,
+      //           now: { line: 1, column: 1 },
+      //         }),
+      //       )
+      //       .join("\n");
+      //     exit();
+      //     return `<${node.name}>\n\n${nodeContent}\n\n</${node.name}>`;
+      //   }
+      //   return null;
+      // }) as Handle,
     },
   });
 

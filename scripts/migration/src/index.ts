@@ -1,6 +1,7 @@
 import { fromMarkdown } from "mdast-util-from-markdown";
 import { toMarkdown } from "mdast-util-to-markdown";
 import { mdxFromMarkdown, mdxToMarkdown } from "mdast-util-mdx";
+import { mdxJsxToMarkdown } from "mdast-util-mdx-jsx";
 import { mdxjs } from "micromark-extension-mdxjs";
 import { directive } from "micromark-extension-directive";
 import { directiveFromMarkdown, directiveToMarkdown } from "mdast-util-directive";
@@ -108,6 +109,11 @@ async function processFile(filePath: string, options: ExtendedTransformerOptions
   }
 
   // Convert AST back to MDX
+  const defaultMdxJsxFlowElement = mdxJsxToMarkdown().handlers?.mdxJsxFlowElement;
+  if (!defaultMdxJsxFlowElement) {
+    throw new Error("Default handler for mdxJsxFlowElement not found");
+  }
+
   const newContent = toMarkdown(ast, {
     extensions: [
       mdxToMarkdown(),
@@ -166,27 +172,25 @@ async function processFile(filePath: string, options: ExtendedTransformerOptions
         return text;
       }) as Handle,
 
-      // Custom handler to prevent root child indentation of FileTree and Steps components.
-      // Unfortunately this messes with all other components and will not render them correctly despite the conditional statement.
+      mdxJsxFlowElement: (node, parent, context, info) => {
+        if (node.name === "FileTree" || node.name === "Steps") {
+          const exit = context.enter("mdxJsxFlowElement");
+          const nodeContent = node.children
+            .map((child: any) =>
+              context.handle(child, node, context, {
+                after: "",
+                before: "",
+                lineShift: 0,
+                now: { line: 1, column: 1 },
+              }),
+            )
+            .join("\n");
+          exit();
+          return `<${node.name}>\n\n${nodeContent}\n\n</${node.name}>`;
+        }
 
-      // mdxJsxFlowElement: ((node, parent, context: State) => {
-      //   if (node.name === "FileTree" || node.name === "Steps") {
-      //     const exit = context.enter("mdxJsxFlowElement");
-      //     const nodeContent = node.children
-      //       .map((child: any) =>
-      //         context.handle(child, node, context, {
-      //           after: "",
-      //           before: "",
-      //           lineShift: 0,
-      //           now: { line: 1, column: 1 },
-      //         }),
-      //       )
-      //       .join("\n");
-      //     exit();
-      //     return `<${node.name}>\n\n${nodeContent}\n\n</${node.name}>`;
-      //   }
-      //   return null;
-      // }) as Handle,
+        return defaultMdxJsxFlowElement(node, parent, context, info);
+      },
     },
   });
 

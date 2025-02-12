@@ -6,6 +6,7 @@ import type {
   RootContentWithMdx,
   ParagraphNode,
 } from "../types/index.js";
+import { logger } from "../utils/logger.js";
 
 export abstract class BaseTransformer {
   // Component names to look for (e.g., ["FileTree"] or ["Tabs", "TabItem"])
@@ -49,8 +50,11 @@ export abstract class BaseTransformer {
   transform(ast: Root, options: TransformerOptions): void {
     const usedComponents = new Set<string>();
 
+    logger.log(this.constructor.name, "Starting base transformation");
+
     // Check which components are used in the document
     const checkNode = (node: any) => {
+      logger.log(this.constructor.name, "Checking node type:", node.type);
       const components = this.getUsedComponents(node);
       components.forEach((comp) => usedComponents.add(comp));
 
@@ -63,12 +67,21 @@ export abstract class BaseTransformer {
     ast.children.forEach(checkNode);
 
     if (usedComponents.size > 0) {
+      logger.log(
+        this.constructor.name,
+        "Found components to transform:",
+        Array.from(usedComponents).join(", "),
+      );
       // Only process if components are present
       this.removeOldImports(ast);
       this.transformComponents(ast, options);
       this.ensureNewImport(ast, Array.from(usedComponents));
       this.addSpacingAroundComponents(ast);
+    } else {
+      logger.log(this.constructor.name, "No components found to transform");
     }
+
+    logger.log(this.constructor.name, "Finished base transformation");
   }
 
   protected removeOldImports(ast: Root): void {

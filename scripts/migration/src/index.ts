@@ -14,10 +14,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { program } from "commander";
 import { exec } from "node:child_process";
+import { logger } from "./utils/logger.js";
 
 import { CalloutTransformer } from "./transformers/callout.js";
 import { TitleTransformer } from "./transformers/title.js";
 import { ImportTransformer } from "./transformers/import.js";
+import { HrefTransformer } from "./transformers/href.js";
 import { FrontmatterTransformer } from "./transformers/frontmatter.js";
 import { CardsTransformer } from "./transformers/cards.js";
 import { LinkCardTransformer } from "./transformers/linkCard.js";
@@ -29,7 +31,7 @@ import { CodeTransformer } from "./transformers/code.js";
 import type { TransformerOptions } from "./types/index.js";
 
 interface ExtendedTransformerOptions extends TransformerOptions {
-  sourcePath?: string;
+  sourcePath: string; // Make sourcePath required
 }
 import type { Handle, State } from "mdast-util-to-markdown";
 
@@ -56,8 +58,10 @@ async function processFile(filePath: string, options: ExtendedTransformerOptions
   });
 
   // Log the AST structure for debugging
-  console.log("\nAST for file:", filePath);
-  console.log(
+  logger.log("Migration", "Processing AST for file:", filePath);
+  logger.log(
+    "Migration",
+    "AST structure:",
     JSON.stringify(
       ast,
       (key, value) => {
@@ -69,10 +73,11 @@ async function processFile(filePath: string, options: ExtendedTransformerOptions
     ),
   );
 
-  // Add filePath to options for transformers
-  const transformerOptions = {
+  // Add filePath and ensure sourcePath for transformers
+  const transformerOptions: ExtendedTransformerOptions = {
     ...options,
     filePath,
+    sourcePath: options.sourcePath,
   };
 
   // Create component transformers first so we can get their mappings
@@ -102,11 +107,17 @@ async function processFile(filePath: string, options: ExtendedTransformerOptions
     new CodeTransformer(),
     ...componentTransformers,
     new ImportTransformer(componentMappings),
+    new HrefTransformer(),
   ];
 
+  logger.log("Migration", "Starting transformers");
+
   for (const transformer of transformers) {
+    logger.log("Migration", "Running transformer:", transformer.constructor.name);
     transformer.transform(ast, transformerOptions);
   }
+
+  logger.log("Migration", "Finished all transformers");
 
   // Convert AST back to MDX
   const defaultMdxJsxFlowElement = mdxJsxToMarkdown().handlers?.mdxJsxFlowElement;
@@ -207,7 +218,7 @@ async function processFile(filePath: string, options: ExtendedTransformerOptions
   // Write the transformed content
   await fs.writeFile(newPath, newContent, "utf-8");
 
-  console.log(`Processed: ${relativePath}`);
+  logger.log("Migration", "Processed:", relativePath);
 }
 
 async function getSourcePath(): Promise<string> {
@@ -220,16 +231,16 @@ async function getSourcePath(): Promise<string> {
     const hasMdxFiles = entries.some((entry) => entry.isFile() && /\.mdx?$/.test(entry.name));
 
     if (hasMdxFiles) {
-      console.log("Using local nextra-migration directory");
+      logger.log("Migration", "Using local nextra-migration directory");
       return localPath;
     }
   } catch (error) {
-    console.log("Local nextra-migration directory not found or empty");
+    logger.log("Migration", "Local nextra-migration directory not found or empty");
   }
 
   // Fall back to GitHub repository
   const tempDir = path.join(projectRoot, "temp-nextra-docs");
-  console.log("Cloning Aptos developer docs repository...");
+  logger.log("Migration", "Cloning Aptos developer docs repository...");
 
   try {
     // Remove temp directory if it exists
@@ -247,10 +258,10 @@ async function getSourcePath(): Promise<string> {
     });
 
     const sourcePath = path.join(tempDir, "apps", "nextra", "pages", "en");
-    console.log(`Using GitHub repository source: ${sourcePath}`);
+    logger.log("Migration", "Using GitHub repository source:", sourcePath);
     return sourcePath;
   } catch (error) {
-    console.error("Failed to clone repository:", error);
+    logger.log("Migration", "Failed to clone repository:", error);
     throw error;
   }
 }
@@ -260,18 +271,18 @@ async function processDirectory(
   options: ExtendedTransformerOptions,
   config: MigrationConfig,
 ): Promise<void> {
-  console.log(`Processing directory: ${dirPath}`);
+  logger.log("Migration", "Processing directory:", dirPath);
   const entries = await fs.readdir(dirPath, { withFileTypes: true });
-  console.log(`Found ${entries.length} entries in ${dirPath}`);
+  logger.log("Migration", `Found ${entries.length} entries in ${dirPath}`);
 
   for (const entry of entries) {
     const fullPath = path.join(dirPath, entry.name);
 
     if (entry.isDirectory()) {
-      console.log(`Found directory: ${entry.name}`);
+      logger.log("Migration", "Found directory:", entry.name);
       // Check if this directory should be ignored
       if (config.ignoredFolders.includes(entry.name)) {
-        console.log(`Skipping ignored directory: ${entry.name}`);
+        logger.log("Migration", "Skipping ignored directory:", entry.name);
         continue;
       }
       await processDirectory(fullPath, options, config);
@@ -279,17 +290,17 @@ async function processDirectory(
       // Skip root index.mdx file
       const relativePath = path.relative(options.sourcePath || "", fullPath);
       if (relativePath === "index.mdx") {
-        console.log(`Skipping root index file: ${entry.name}`);
+        logger.log("Migration", "Skipping root index file:", entry.name);
         continue;
       }
-      console.log(`Found MDX file: ${entry.name}`);
+      logger.log("Migration", "Found MDX file:", entry.name);
       try {
         await processFile(fullPath, options);
       } catch (error) {
-        console.error(`Error processing file ${fullPath}:`, error);
+        logger.log("Migration", "Error processing file:", fullPath, error);
       }
     } else {
-      console.log(`Skipping non-MDX file: ${entry.name}`);
+      logger.log("Migration", "Skipping non-MDX file:", entry.name);
     }
   }
 }
@@ -310,8 +321,8 @@ async function main() {
 
   try {
     const sourcePath = await getSourcePath();
-    console.log(`Starting migration from ${sourcePath}`);
-    console.log("Ignored folders:", config.ignoredFolders);
+    logger.log("Migration", "Starting migration from:", sourcePath);
+    logger.log("Migration", "Ignored folders:", config.ignoredFolders);
 
     await processDirectory(
       sourcePath,
@@ -326,9 +337,9 @@ async function main() {
     const tempDir = path.join(projectRoot, "temp-nextra-docs");
     await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
 
-    console.log("Migration completed successfully!");
+    logger.log("Migration", "Migration completed successfully!");
   } catch (error) {
-    console.error("Error during migration:", error);
+    logger.log("Migration", "Error during migration:", error);
     process.exit(1);
   }
 }

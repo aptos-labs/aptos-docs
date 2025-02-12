@@ -32,6 +32,11 @@ interface ExtendedTransformerOptions extends TransformerOptions {
 }
 import type { Handle, State } from "mdast-util-to-markdown";
 
+interface MigrationConfig {
+  ignoredFolders: string[];
+  useComponentSyntax: boolean;
+}
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, "../../..");
 
@@ -249,6 +254,7 @@ async function getSourcePath(): Promise<string> {
 async function processDirectory(
   dirPath: string,
   options: ExtendedTransformerOptions,
+  config: MigrationConfig,
 ): Promise<void> {
   console.log(`Processing directory: ${dirPath}`);
   const entries = await fs.readdir(dirPath, { withFileTypes: true });
@@ -259,7 +265,12 @@ async function processDirectory(
 
     if (entry.isDirectory()) {
       console.log(`Found directory: ${entry.name}`);
-      await processDirectory(fullPath, options);
+      // Check if this directory should be ignored
+      if (config.ignoredFolders.includes(entry.name)) {
+        console.log(`Skipping ignored directory: ${entry.name}`);
+        continue;
+      }
+      await processDirectory(fullPath, options, config);
     } else if (entry.isFile() && /\.mdx?$/.test(entry.name)) {
       console.log(`Found MDX file: ${entry.name}`);
       try {
@@ -276,18 +287,30 @@ async function processDirectory(
 async function main() {
   program
     .option("--use-directive-syntax", "Use ::: syntax instead of component syntax")
+    .option("--ignore <folders>", "Comma-separated list of folders to ignore")
     .parse(process.argv);
 
   const options = program.opts();
 
+  // Setup migration configuration
+  const config: MigrationConfig = {
+    ignoredFolders: options.ignore ? options.ignore.split(",") : ["developer-platforms"],
+    useComponentSyntax: !options.useDirectiveSyntax,
+  };
+
   try {
     const sourcePath = await getSourcePath();
     console.log(`Starting migration from ${sourcePath}`);
+    console.log("Ignored folders:", config.ignoredFolders);
 
-    await processDirectory(sourcePath, {
-      useComponentSyntax: !options.useDirectiveSyntax, // Default to component syntax
+    await processDirectory(
       sourcePath,
-    });
+      {
+        useComponentSyntax: config.useComponentSyntax,
+        sourcePath,
+      },
+      config,
+    );
 
     // Clean up temp directory if it exists
     const tempDir = path.join(projectRoot, "temp-nextra-docs");

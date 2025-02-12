@@ -15,12 +15,13 @@ export class CustomComponentTransformer extends BaseTransformer {
     "MoveReference",
     "DynamicApiReference",
     "fetchApiReference",
+    "Faucet",
   ];
   protected oldImportPath = "@components/index";
   protected newImportPath = "";
 
   private isCustomComponentImport(value: string): boolean {
-    return value.includes("@components/index") || value.includes("components/index");
+    return value.includes("@components");
   }
 
   getComponentMap(): Map<string, string> {

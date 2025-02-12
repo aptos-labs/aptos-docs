@@ -99,7 +99,18 @@ async function processFile(filePath: string, options: TransformerOptions): Promi
     handlers: {
       text: ((node) => {
         // Don't escape underscores in text nodes
-        return node.value.replace(/\\_/g, "_");
+        const text = node.value.replace(/\\_/g, "_");
+        // Don't convert HTML entities to their character equivalents
+        return text.replace(/[&<>'"]/g, (match: string) => {
+          const entities: { [key: string]: string } = {
+            "&": "&amp;",
+            "<": "&lt;",
+            ">": "&gt;",
+            "'": "&apos;",
+            '"': "&quot;",
+          };
+          return entities[match];
+        });
       }) as Handle,
       mdxJsxFlowElement: ((node, parent, context: State) => {
         if (node.name === "FileTree" || node.name === "Steps") {

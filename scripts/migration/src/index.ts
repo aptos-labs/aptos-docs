@@ -6,8 +6,8 @@ import { directive } from "micromark-extension-directive";
 import { directiveFromMarkdown, directiveToMarkdown } from "mdast-util-directive";
 import { frontmatter } from "micromark-extension-frontmatter";
 import { frontmatterFromMarkdown, frontmatterToMarkdown } from "mdast-util-frontmatter";
-import { gfm } from "micromark-extension-gfm";
-import { gfmFromMarkdown, gfmToMarkdown } from "mdast-util-gfm";
+import { gfmTable } from "micromark-extension-gfm-table";
+import { gfmTableFromMarkdown, gfmTableToMarkdown } from "mdast-util-gfm-table";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -35,12 +35,12 @@ async function processFile(filePath: string, options: TransformerOptions): Promi
 
   // Parse MDX content into AST
   const ast = fromMarkdown(content, {
-    extensions: [mdxjs(), directive(), frontmatter(["yaml"]), gfm()],
+    extensions: [mdxjs(), directive(), frontmatter(["yaml"]), gfmTable()],
     mdastExtensions: [
       mdxFromMarkdown(),
       directiveFromMarkdown(),
       frontmatterFromMarkdown(["yaml"]),
-      gfmFromMarkdown(),
+      gfmTableFromMarkdown(),
     ],
   });
 
@@ -89,13 +89,14 @@ async function processFile(filePath: string, options: TransformerOptions): Promi
       mdxToMarkdown(),
       directiveToMarkdown(),
       frontmatterToMarkdown(["yaml"]),
-      gfmToMarkdown(),
+      gfmTableToMarkdown(),
     ],
     bullet: "-",
     listItemIndent: "one",
-    bulletOther: "*",
     tightDefinitions: false,
     fences: true,
+    emphasis: "_",
+    strong: "*",
     handlers: {
       text: ((node) => {
         // Don't escape underscores in text nodes

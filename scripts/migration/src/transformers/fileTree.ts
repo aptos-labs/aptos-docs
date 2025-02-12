@@ -68,9 +68,16 @@ export class FileTreeTransformer extends BaseTransformer {
         if (!name) return null;
 
         // Create the text node for the file/folder name
+        let value = name + (child.name === "FileTree.Folder" ? "/" : "");
+
+        // If the value contains curly braces, wrap it in backticks
+        if (value.includes("{") && value.includes("}")) {
+          value = `\`${value}\``;
+        }
+
         const text: Text = {
           type: "text",
-          value: name + (child.name === "FileTree.Folder" ? "/" : ""),
+          value,
         };
 
         // Create the paragraph

@@ -1,4 +1,4 @@
-import { visit } from "unist-util-visit";
+import { visit, SKIP } from "unist-util-visit";
 import type { Root, ListItem, List, Paragraph, Text } from "mdast";
 import type { MdxJsxAttribute, MdxJsxFlowElement } from "mdast-util-mdx-jsx";
 import type { TransformerOptions } from "../types/index.js";
@@ -10,47 +10,49 @@ export class FileTreeTransformer extends BaseTransformer {
   protected newImportPath = "@astrojs/starlight/components";
 
   protected transformComponents(ast: Root, options: TransformerOptions): void {
-    visit(ast, "mdxJsxFlowElement", (node) => {
-      if (!("name" in node) || node.name !== "FileTree") return;
+    visit(ast, "mdxJsxFlowElement", (node, index, parent) => {
+      if (!("name" in node) || node.name !== "FileTree" || !parent || typeof index !== "number")
+        return;
 
       const mdxNode = node as MdxJsxFlowElement;
 
-      // Only process if there are children
-      if (mdxNode.children.length > 0) {
-        // Transform children into list items
-        const items = this.transformFileTreeChildren(mdxNode.children);
+      // Check if there are any actual file/folder nodes
+      const items = this.transformFileTreeChildren(mdxNode.children);
 
-        // Create a text node with just a newline
-        const newline: Text = {
-          type: "text",
-          value: "\n",
-        };
-
-        // Create a paragraph for the newline
-        const newlinePara: Paragraph = {
-          type: "paragraph",
-          children: [newline],
-        };
-
-        // Create the root list
-        const list: List = {
-          type: "list",
-          ordered: false,
-          spread: false,
-          children: items,
-        };
-
-        // Set the children to the newline and list
-        mdxNode.children = [list];
-      } else {
-        // For empty FileTree, just add a newline
-        mdxNode.children = [
-          {
-            type: "paragraph",
-            children: [{ type: "text", value: "\n" }],
-          },
-        ];
+      if (items.length === 0) {
+        // For empty FileTree or one with no valid children, remove the node from parent
+        parent.children.splice(index, 1);
+        return [SKIP, index];
       }
+
+      // Create the root list
+      const list: List = {
+        type: "list",
+        ordered: false,
+        spread: false,
+        children: items,
+      };
+
+      // Set the children to just the list
+      mdxNode.children = [list];
+
+      // Remove empty text nodes before and after
+      const removeEmptyTextNodes = (idx: number, direction: 1 | -1) => {
+        while (idx >= 0 && idx < parent.children.length) {
+          const sibling = parent.children[idx];
+          if (sibling.type === "text" && /^\s*$/.test(sibling.value)) {
+            parent.children.splice(idx, 1);
+            idx += direction;
+          } else {
+            break;
+          }
+        }
+      };
+
+      // Remove empty text nodes before
+      removeEmptyTextNodes(index - 1, -1);
+      // Remove empty text nodes after
+      removeEmptyTextNodes(index + 1, 1);
     });
   }
 

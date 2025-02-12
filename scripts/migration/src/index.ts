@@ -272,6 +272,12 @@ async function processDirectory(
       }
       await processDirectory(fullPath, options, config);
     } else if (entry.isFile() && /\.mdx?$/.test(entry.name)) {
+      // Skip root index.mdx file
+      const relativePath = path.relative(options.sourcePath || "", fullPath);
+      if (relativePath === "index.mdx") {
+        console.log(`Skipping root index file: ${entry.name}`);
+        continue;
+      }
       console.log(`Found MDX file: ${entry.name}`);
       try {
         await processFile(fullPath, options);

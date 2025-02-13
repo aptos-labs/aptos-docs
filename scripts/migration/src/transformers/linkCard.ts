@@ -82,38 +82,32 @@ export class LinkCardTransformer extends BaseTransformer {
       return "";
     };
 
-    // Helper to find elements in a paragraph
+    // Helper to find elements recursively
     const processChildren = (children: any[]): void => {
       children.forEach((child) => {
         // Handle mdxJsxTextElement (inline elements)
-        if (child.type === "mdxJsxTextElement") {
+        if (child.type === "mdxJsxTextElement" || child.type === "mdxJsxFlowElement") {
           if (child.name === "Card.Title") {
             title = getNodeText(child);
           } else if (child.name === "Card.Description") {
             description = getNodeText(child);
           }
+          // Recursively process children of any element
+          if (child.children) {
+            processChildren(child.children);
+          }
         }
-        // Handle nested paragraphs
-        if (child.type === "paragraph" && child.children) {
+        // Handle nested paragraphs and divs
+        if ((child.type === "paragraph" || child.type === "mdxJsxFlowElement") && child.children) {
           processChildren(child.children);
         }
       });
     };
 
-    // Process direct children first (for flow elements)
-    node.children?.forEach((child: any) => {
-      if (child.type === "mdxJsxFlowElement") {
-        if (child.name === "Card.Title") {
-          title = getNodeText(child);
-        } else if (child.name === "Card.Description") {
-          description = getNodeText(child);
-        }
-      }
-      // Handle paragraph wrapping
-      if (child.type === "paragraph" && child.children) {
-        processChildren(child.children);
-      }
-    });
+    // Process all children recursively
+    if (node.children) {
+      processChildren(node.children);
+    }
 
     return { title, description };
   }

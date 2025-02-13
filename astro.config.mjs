@@ -51,6 +51,7 @@ export default defineConfig({
       },
       components: {
         Head: "./src/starlight-overrides/Head.astro",
+        PageTitle: "./src/starlight-overrides/PageTitle.astro",
       },
       plugins: [
         // Generate the OpenAPI documentation pages.

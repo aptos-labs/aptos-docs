@@ -52,13 +52,11 @@ export class HrefTransformer extends BaseTransformer {
       }
       // Handle relative paths starting with ./
       else if (href.startsWith("./")) {
-        // Get the current directory from relativePath
-        const currentDir = relativePath.split(path.sep).pop();
-        if (currentDir) {
-          // Remove ./ and transform to absolute path with current directory
-          result = `/${currentDir}/${href.slice(2)}`;
-          logger.log("HrefTransformer", "Transformed ./ path to:", result);
-        }
+        // Use the full relative path instead of just the last directory
+        const normalizedPath = relativePath.split(path.sep).join("/");
+        // Remove ./ and transform to absolute path with full path
+        result = `/${normalizedPath}/${href.slice(2)}`;
+        logger.log("HrefTransformer", "Transformed ./ path to:", result);
       }
       // Handle parent directory paths ../
       else if (href.startsWith("../")) {
@@ -86,10 +84,10 @@ export class HrefTransformer extends BaseTransformer {
       }
       // Handle paths without special prefixes (treat as relative to current directory)
       else if (!href.startsWith("/")) {
-        // Get the current directory
-        const currentDir = relativePath.split(path.sep).pop();
-        if (currentDir) {
-          result = `/${currentDir}/${href}`;
+        // Use the full relative path
+        const normalizedPath = relativePath.split(path.sep).join("/");
+        if (normalizedPath) {
+          result = `/${normalizedPath}/${href}`;
           logger.log("HrefTransformer", "Transformed relative path to:", result);
         } else {
           // Handle files at the root

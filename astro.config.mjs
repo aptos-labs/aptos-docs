@@ -3,10 +3,19 @@ import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
 import tailwindcss from "@tailwindcss/vite";
 import starlightOpenAPI, { openAPISidebarGroups } from "starlight-openapi";
+import starlightDocSearch from "@astrojs/starlight-docsearch";
 
 import vercel from "@astrojs/vercel";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
+import { loadEnv } from "vite";
+
+const env = loadEnv(process.env.NODE_ENV || "development", process.cwd(), "");
+const ALGOLIA_APP_ID = env.ALGOLIA_APP_ID;
+const ALGOLIA_SEARCH_API_KEY = env.ALGOLIA_SEARCH_API_KEY;
+const ALGOLIA_INDEX_NAME = env.ALGOLIA_INDEX_NAME;
+
+const hasAlgoliaConfig = ALGOLIA_APP_ID && ALGOLIA_SEARCH_API_KEY && ALGOLIA_INDEX_NAME;
 
 // https://astro.build/config
 export default defineConfig({
@@ -54,6 +63,15 @@ export default defineConfig({
         PageTitle: "./src/starlight-overrides/PageTitle.astro",
       },
       plugins: [
+        ...(hasAlgoliaConfig
+          ? [
+              starlightDocSearch({
+                appId: ALGOLIA_APP_ID,
+                apiKey: ALGOLIA_SEARCH_API_KEY,
+                indexName: ALGOLIA_INDEX_NAME,
+              }),
+            ]
+          : []),
         // Generate the OpenAPI documentation pages.
         starlightOpenAPI(
           [

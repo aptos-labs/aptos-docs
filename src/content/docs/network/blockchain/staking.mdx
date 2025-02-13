@@ -1,0 +1,279 @@
+---
+title: "Staking"
+---
+
+<Aside type="note">
+  We strongly recommend that you read the consensus section of [Aptos Blockchain Deep Dive](/network/blockchain/blockchain-deep-dive.mdx#consensus) before proceeding further.
+</Aside>
+
+
+
+import { Aside } from '@astrojs/starlight/components';
+
+
+
+In a distributed system like blockchain, executing a transaction is distinct from updating the state of the ledger and persisting the results in storage. An agreement, i.e., consensus, must be reached by a quorum of validators on the ordering of transactions and their execution results before these results are persisted in storage and the state of the ledger is updated.
+
+Anyone can participate in the Aptos consensus process, if they stake sufficient utility coin, i.e., place their utility coin into escrow. To encourage validators to participate in the consensus process, each validator&apos;s vote weight is proportional to the amount of validator&apos;s stake. In exchange, the validator is rewarded proportionally to the amount staked. Hence, the performance of the blockchain is aligned with the validator&apos;s interest, i.e., rewards.
+
+<Aside type="note">
+  Currently, slashing is not implemented.
+</Aside>
+
+The current on-chain data can be found in [`staking_config::StakingConfig`](https://api.mainnet.aptoslabs.com/v1/accounts/0x1/resource/0x1::staking_config::StakingConfig). The configuration set is defined in [`staking_config.move`](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/configs/staking_config.move).
+
+The rest of this document presents how staking works on the Aptos blockchain. See [Supporting documentation](#supporting-documentation) at the bottom for related resources.
+
+## Staking on the Aptos blockchain
+
+Below is a summary flow diagram of how staking on the Aptos blockchain works. The sections following the summary describe it in detail.
+
+{/* <ThemedImage alt="Staking Flow" sources={"type":"mdxJsxAttributeValueExpression","value":"{\n  light: '/docs/staking-light.svg',\n  dark: '/docs/staking-dark.svg',\n}","data":{"estree":{"type":"Program","start":1976,"end":2055,"body":[{"type":"ExpressionStatement","expression":{"type":"ObjectExpression","start":1976,"end":2055,"loc":{"start":{"line":32,"column":11,"offset":1976},"end":{"line":35,"column":3,"offset":2055}},"properties":[{"type":"Property","start":1982,"end":2014,"loc":{"start":{"line":33,"column":4,"offset":1982},"end":{"line":33,"column":36,"offset":2014}},"method":false,"shorthand":false,"computed":false,"key":{"type":"Identifier","start":1982,"end":1987,"loc":{"start":{"line":33,"column":4,"offset":1982},"end":{"line":33,"column":9,"offset":1987}},"name":"light","range":[1982,1987]},"value":{"type":"Literal","start":1989,"end":2014,"loc":{"start":{"line":33,"column":11,"offset":1989},"end":{"line":33,"column":36,"offset":2014}},"value":"/docs/staking-light.svg","raw":"'/docs/staking-light.svg'","range":[1989,2014]},"kind":"init","range":[1982,2014]},{"type":"Property","start":2020,"end":2050,"loc":{"start":{"line":34,"column":4,"offset":2020},"end":{"line":34,"column":34,"offset":2050}},"method":false,"shorthand":false,"computed":false,"key":{"type":"Identifier","start":2020,"end":2024,"loc":{"start":{"line":34,"column":4,"offset":2020},"end":{"line":34,"column":8,"offset":2024}},"name":"dark","range":[2020,2024]},"value":{"type":"Literal","start":2026,"end":2050,"loc":{"start":{"line":34,"column":10,"offset":2026},"end":{"line":34,"column":34,"offset":2050}},"value":"/docs/staking-dark.svg","raw":"'/docs/staking-dark.svg'","range":[2026,2050]},"kind":"init","range":[2020,2050]}],"range":[1976,2055]},"start":1976,"end":2055,"loc":{"start":{"line":32,"column":11,"offset":1976},"end":{"line":35,"column":3,"offset":2055}},"range":[1976,2055]}],"sourceType":"module","comments":[],"loc":{"start":{"line":32,"column":11,"offset":1976},"end":{"line":35,"column":3,"offset":2055}},"range":[1976,2055]}}}></ThemedImage> */}
+
+The Aptos staking module defines a capability that represents ownership.
+
+<Aside type="note">
+  See the `OwnerCapability` defined in [stake.move](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/stake.move).
+</Aside>
+
+The `OwnerCapability` resource can be used to control the stake pool. Three personas are supported:
+
+- Owner
+- Operator
+- Voter
+
+Using this owner-operator-voter model, a custodian can assume the owner persona and stake on the Aptos blockchain and participate in the Aptos governance. This model allows delegations and staking services to be built as it separates the account that is in control of the funds from the other accounts (operator, voter), hence allows secure delegations of responsibilities.
+
+This section describes how this works, using Bob and Alice in the example.
+
+### Owner
+
+The owner is the owner of the funds. For example, Bob creates an account on the Aptos blockchain. Now Bob has the `OwnerCapability` resource. Bob can assign his account’s operator address to the account of Alice, a trusted node operator, to appoint Alice as a validator.
+
+As an owner:
+
+- Bob owns the funds that will be used for staking.
+- Only Bob can add, unlock or withdraw funds.
+- Only Bob can extend the lockup period.
+- Bob can change the node operator Alice to some other node operator anytime Bob wishes to do so.
+- Bob can set the operator commission percentage.
+- The reward will be deposited into Bob&apos;s (owner&apos;s) account.
+
+### Operator
+
+A node operator is assigned by the fund owner to run the validator node and receives commission as set by the owner. The two personas, the owner and the operator, can be two separate entities or the same. For example, Alice (operator) runs the validator node, operating at the behest of Bob, the fund owner.
+
+As an operator:
+
+- Alice has permissions only to join or leave the validator set.
+- As a validator, Alice will perform the validating function.
+- Alice has the permissions to change the consensus key and network addresses. The consensus key is used by Alice to participate in the validator consensus process, i.e., to vote and propose a block. Alice is allowed to change (&quot;rotate&quot;) this key in case this key is compromised.
+- However, Alice cannot move funds (unless Alice is the owner, i.e., Alice has the `OwnerCapability` resource).
+- The operator commission is deducted from the staker (owner) rewards and deposited into the operator account.
+
+### Voter
+
+An owner can designate a voter. This enables the voter to participate in governance. The voter will use the voter key to sign the governance votes in the transactions.
+
+<Aside type="note">
+  This document describes staking. See [Governance](/network/blockchain/governance) for how to participate in the Aptos on-chain governance using the owner-voter model.
+</Aside>
+
+## Validation on the Aptos blockchain
+
+Throughout the duration of an epoch, the following flow of events occurs several times (thousands of times):
+
+- A validator leader is selected by a deterministic formula based on the validator reputation determined by validator&apos;s performance (including whether the validator has voted in the past or not) and stake. **This leader selection is not done by voting.**
+- The selected leader sends a proposal containing the collected quorum votes of the previous proposal and the leader&apos;s proposed order of transactions for the new block.
+- All the validators from the validator set will vote on the leader&apos;s proposal for the new block. Once consensus is reached, the block can be finalized. Hence, the actual list of votes to achieve consensus is a subset of all the validators in the validator set. This leader validator is rewarded. **Rewards are given only to the leader validator, not to the voter validators.**
+- The above flow repeats with the selection of another validator leader and repeating the steps for the next new block. Rewards are given at the end of the epoch.
+
+## Validator state and stake state
+
+States are defined for a validator and the stake.
+
+- **Validator state:** A validator can be in any one of these four states. Moreover, the validator can go from inactive (not tracked in the validator set anywhere) state to any one of the other three states:
+  - inactive
+  - pending_active.
+  - active.
+  - pending_inactive.
+- **Stake state:** A validator in pending_inactive or active state, can have their stake in either of these four states:
+
+  - inactive.
+  - pending_active.
+  - active.
+  - pending_inactive.
+
+  These stake states are applicable for the existing validators in the validator set adding or removing their stake.
+
+### Validator states
+
+{/* <ThemedImage alt="Signed Transaction Flow" sources={"type":"mdxJsxAttributeValueExpression","value":"{\n  light: '/docs/validator-state.svg',\n  dark: '/docs/validator-state-dark.svg',\n}","data":{"estree":{"type":"Program","start":6754,"end":6843,"body":[{"type":"ExpressionStatement","expression":{"type":"ObjectExpression","start":6754,"end":6843,"loc":{"start":{"line":118,"column":11,"offset":6754},"end":{"line":121,"column":3,"offset":6843}},"properties":[{"type":"Property","start":6760,"end":6794,"loc":{"start":{"line":119,"column":4,"offset":6760},"end":{"line":119,"column":38,"offset":6794}},"method":false,"shorthand":false,"computed":false,"key":{"type":"Identifier","start":6760,"end":6765,"loc":{"start":{"line":119,"column":4,"offset":6760},"end":{"line":119,"column":9,"offset":6765}},"name":"light","range":[6760,6765]},"value":{"type":"Literal","start":6767,"end":6794,"loc":{"start":{"line":119,"column":11,"offset":6767},"end":{"line":119,"column":38,"offset":6794}},"value":"/docs/validator-state.svg","raw":"'/docs/validator-state.svg'","range":[6767,6794]},"kind":"init","range":[6760,6794]},{"type":"Property","start":6800,"end":6838,"loc":{"start":{"line":120,"column":4,"offset":6800},"end":{"line":120,"column":42,"offset":6838}},"method":false,"shorthand":false,"computed":false,"key":{"type":"Identifier","start":6800,"end":6804,"loc":{"start":{"line":120,"column":4,"offset":6800},"end":{"line":120,"column":8,"offset":6804}},"name":"dark","range":[6800,6804]},"value":{"type":"Literal","start":6806,"end":6838,"loc":{"start":{"line":120,"column":10,"offset":6806},"end":{"line":120,"column":42,"offset":6838}},"value":"/docs/validator-state-dark.svg","raw":"'/docs/validator-state-dark.svg'","range":[6806,6838]},"kind":"init","range":[6800,6838]}],"range":[6754,6843]},"start":6754,"end":6843,"loc":{"start":{"line":118,"column":11,"offset":6754},"end":{"line":121,"column":3,"offset":6843}},"range":[6754,6843]}],"sourceType":"module","comments":[],"loc":{"start":{"line":118,"column":11,"offset":6754},"end":{"line":121,"column":3,"offset":6843}},"range":[6754,6843]}}}></ThemedImage> */}
+
+There are two edge cases to call out:
+
+1. If a validator&apos;s stake drops below the required [minimum](#minimum-and-maximum-stake), that validator will be moved from active state directly to the inactive state during an epoch change. This happens only during an epoch change.
+2. Aptos governance can also directly remove validators from the active set. **Note that governance proposals will always trigger an epoch change.**
+
+### Stake state
+
+The state of stake has more granularity than that of the validator; additional stake can be added and a portion of stake removed from an active validator.
+
+{/* <ThemedImage alt="Signed Transaction Flow" sources={"type":"mdxJsxAttributeValueExpression","value":"{\n  light: '/docs/stake-state.svg',\n  dark: '/docs/stake-state-dark.svg',\n}","data":{"estree":{"type":"Program","start":7501,"end":7582,"body":[{"type":"ExpressionStatement","expression":{"type":"ObjectExpression","start":7501,"end":7582,"loc":{"start":{"line":135,"column":11,"offset":7501},"end":{"line":138,"column":3,"offset":7582}},"properties":[{"type":"Property","start":7507,"end":7537,"loc":{"start":{"line":136,"column":4,"offset":7507},"end":{"line":136,"column":34,"offset":7537}},"method":false,"shorthand":false,"computed":false,"key":{"type":"Identifier","start":7507,"end":7512,"loc":{"start":{"line":136,"column":4,"offset":7507},"end":{"line":136,"column":9,"offset":7512}},"name":"light","range":[7507,7512]},"value":{"type":"Literal","start":7514,"end":7537,"loc":{"start":{"line":136,"column":11,"offset":7514},"end":{"line":136,"column":34,"offset":7537}},"value":"/docs/stake-state.svg","raw":"'/docs/stake-state.svg'","range":[7514,7537]},"kind":"init","range":[7507,7537]},{"type":"Property","start":7543,"end":7577,"loc":{"start":{"line":137,"column":4,"offset":7543},"end":{"line":137,"column":38,"offset":7577}},"method":false,"shorthand":false,"computed":false,"key":{"type":"Identifier","start":7543,"end":7547,"loc":{"start":{"line":137,"column":4,"offset":7543},"end":{"line":137,"column":8,"offset":7547}},"name":"dark","range":[7543,7547]},"value":{"type":"Literal","start":7549,"end":7577,"loc":{"start":{"line":137,"column":10,"offset":7549},"end":{"line":137,"column":38,"offset":7577}},"value":"/docs/stake-state-dark.svg","raw":"'/docs/stake-state-dark.svg'","range":[7549,7577]},"kind":"init","range":[7543,7577]}],"range":[7501,7582]},"start":7501,"end":7582,"loc":{"start":{"line":135,"column":11,"offset":7501},"end":{"line":138,"column":3,"offset":7582}},"range":[7501,7582]}],"sourceType":"module","comments":[],"loc":{"start":{"line":135,"column":11,"offset":7501},"end":{"line":138,"column":3,"offset":7582}},"range":[7501,7582]}}}></ThemedImage> */}
+
+### Validator rules
+
+The below rules is applicable during the changes of state:
+
+- Voting power can change (increase or decrease) only on epoch boundary.
+- A validator’s consensus key and the validator and validator fullnode network addresses can change only on epoch boundary.
+- Pending inactive stake cannot be moved into inactive (and thus withdrawable) until before lockup expires.
+- No validators in the active validator set can have their stake below the minimum required stake.
+
+## Validator flow
+
+<Aside type="note">
+  See [Staking pool operations](/network/nodes/validator-node/connect-nodes/staking-pool-operations) for the correct sequence of commands to run for the below flow.
+</Aside>
+
+1. Owner initializes the stake pool with `aptos stake create-staking-contract`.
+2. When the owner is ready to deposit the stake (or have funds assigned by a staking service in exchange for ownership capability), owner calls `aptos stake add-stake`.
+3. When the validator node is ready, the operator can call `aptos node join-validator-set` to join the active validator set. Changes will be effective in the next epoch.
+4. Validator validates (proposes blocks as a leader-validator) and gains rewards. The stake will automatically be locked up for a fixed duration (set by governance) and automatically renewed at expiration.
+5. At any point, if the operator wants to update the consensus key or validator network addresses, they can call `aptos node update-consensus-key` or `aptos node update-validator-network-addresses`. Similar to changes to stake, the changes to consensus key or validator network addresses are only effective in the next epoch.
+6. Validator can request to unlock their stake at any time. However, their stake will only become withdrawable when their current lockup expires. This can be at most as long as the fixed lockup duration.
+7. After exiting, the validator can either explicitly leave the validator set by calling `aptos node leave-validator-set` or if their stake drops below the min required, they would get removed at the end of the epoch.
+8. Validator can always rejoin the validator set by going through steps 2-3 again.
+9. An owner can always switch operators by calling `aptos stake set-operator`.
+10. An owner can always switch designated voter by calling `aptos stake set-delegated-voter`.
+
+## Joining the validator set
+
+Participating as a validator node on the Aptos network works like this:
+
+1. Operator runs a validator node and configures the on-chain validator network addresses and rotates the consensus key.
+2. Owner deposits her Aptos coins funds as stake, or have funds assigned by a staking service. The stake must be at least the minimum amount required.
+3. **The validator node cannot sync until the stake pool becomes active.**
+4. Operator validates and gains rewards.
+5. The staked pool is automatically be locked up for a fixed duration (set by the Aptos governance) and will be automatically renewed at expiration. You cannot withdraw any of your staked amount until your lockup period expires. See [stake.move#L728](https://github.com/aptos-labs/aptos-core/blob/00a234cc233b01f1a7e1680f81b72214a7af91a9/aptos-move/framework/aptos-framework/sources/stake.move#L728).
+6. Operator must wait until the new epoch starts before their validator becomes active.
+
+<Aside type="note">
+  For step-by-step instructions on how to join the validator set, see: [Joining Validator Set](/network/nodes/validator-node/connect-nodes/connect-to-aptos-network.mdx#join-the-validator-set).
+</Aside>
+
+### Minimum and maximum stake
+
+You must stake the required minimum amount to join the validator set. Moreover, you can only stake up to the maximum stake amount. The current required minimum for staking is 1M APT tokens and the maximum is 50M APT tokens.
+
+If at any time after joining the validator set, your current staked amount exceeds the maximum allowed stake (for example as the rewards are added to your staked amount), then your voting power and the rewards will be calculated only using the maximum allowed stake amount, and not your current staked amount.
+
+The owner can withdraw part of the stake and leave their balance below the required minimum. In such case, their stake pool will be removed from the validator set when the next epoch starts.
+
+### Automatic lockup duration
+
+When you join the validator set, your stake will automatically be locked up for a fixed duration that is set by the Aptos governance.
+
+### Automatic lockup renewal
+
+When your lockup period expires, it will be automatically renewed, so that you can continue to validate and receive the rewards.
+
+### Unlocking your stake
+
+You can request to unlock your stake at any time. However, your stake will only become withdrawable when your current lockup expires. This can be at most as long as the fixed lockup duration. You will continue earning rewards on your stake until it becomes withdrawable.
+
+The principal amount is updated when any of the following actions occur:
+
+1. Operator [requests commission unlock](/network/nodes/validator-node/connect-nodes/staking-pool-operations.mdx#requesting-commission)
+2. Staker (owner) withdraws funds
+3. Staker (owner) switches operators
+
+When the staker unlocks stake, this also triggers a commission unlock. The full commission amount for any staking rewards earned is unlocked. This is not proportional to the unlock stake amount. Commission is distributed to the operator after the lockup ends when `request commission` is called a second time or when staker withdraws (distributes) the unlocked stake.
+
+### Resetting the lockup
+
+When the lockup period expires, it is automatically renewed by the network. However, the owner can explicitly reset the lockup.
+
+<Aside type="note">
+  The lockup duration is decided by the Aptos governance, i.e., by the covenants that the Aptos community members vote on, and not by any special entity like the Aptos Labs.
+</Aside>
+
+## Epoch
+
+An epoch in the Aptos blockchain is defined as a duration of time, in seconds, during which a number of blocks are voted on by the validators, the validator set is updated, and the rewards are distributed to the validators.
+
+<Aside type="note">
+  The Aptos mainnet epoch is set as 7200 seconds (two hours).
+</Aside>
+
+### Triggers at the epoch start
+
+<Aside type="note">
+  See the [Triggers at epoch boundary section of `stake.move`](https://github.com/aptos-labs/aptos-core/blob/256618470f2ad7d89757263fbdbae38ac7085317/aptos-move/framework/aptos-framework/sources/stake.move#L1036) for the full code.
+</Aside>
+
+At the start of each epoch, the following key events are triggered:
+
+- Update the validator set by adding the pending active validators to the active validators set and by removing the pending inactive validators from the active validators set.
+- Move any pending active stake to active stake, and any pending inactive stake to inactive stake.
+- The staking pool&apos;s voting power in this new epoch is updated to the total active stake.
+- Automatically renew a validator&apos;s lockup for the validators who will still be in the validator set in the next epoch.
+- The voting power of each validator in the validator set is updated to be the corresponding staking pool&apos;s voting power.
+- Rewards are distributed to the validators that participated in the previous epoch.
+
+## Rewards
+
+Rewards for staking are calculated by using:
+
+1. The `rewards_rate`, an annual percentage yield (APY), i.e., rewards accrue as a compound interest on your current staked amount.
+2. Your staked amount.
+3. Your proposer performance in the Aptos governance.
+
+<Aside type="note">
+  The `rewards_rate` is set by the Aptos governance. Also see [Validation on the Aptos blockchain](#validation-on-the-aptos-blockchain).
+</Aside>
+
+### Rewards formula
+
+See below the formula used to calculate rewards to the validator:
+
+```text filename="Staking Rewards Formula"
+Reward = staked_amount * rewards_rate per epoch * (Number of successful proposals by the validator / Total number of proposals made by the validator)
+```
+
+### Rewards paid every epoch
+
+Rewards are paid every epoch. Any reward you (i.e., validator) earned at the end of current epoch is added to your staked amount. The reward at the end of the next epoch is calculated based on your increased staked amount (i.e., original staked amount plus the added reward), and so on.
+
+### Rewards based on the proposer performance
+
+The validator rewards calculation uses the validator&apos;s proposer performance. Once you are in the validator set, you can propose in every epoch. The more successfully you propose, i.e., your proposals pass, the more rewards you will receive.
+
+Note that rewards are given only to the **leader-validators**, i.e., validators who propose the new block, and not to the **voter-validators** who vote on the leader&apos;s proposal for the new block. See [Validation on the Aptos blockchain](#validation-on-the-aptos-blockchain).
+
+<Aside type="note">
+  All the validator rewards are also subject to lockup period as they are added to the original staked amount.
+</Aside>
+
+## Leaving the validator set
+
+<Aside type="note">
+  See the Aptos Stake module in the Move language at [stake.move](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/stake.move).
+</Aside>
+
+- At any time you can call the following sequence of functions to leave the validator set:
+  - Call `Stake::unlock` to unlock your stake amount, and
+  - Either call `Stake::withdraw` to withdraw your staked amount at the next epoch, or call `Stake::leave_validator_set`.
+
+## Rejoining the validator set
+
+When you leave a validator set, you can rejoin by depositing the minimum required stake amount.
+
+## Supporting documentation
+
+- [Current on-chain data](https://api.mainnet.aptoslabs.com/v1/accounts/0x1/resource/0x1::staking_config::StakingConfig)
+- [Staking Pool Operations](/network/nodes/validator-node/connect-nodes/staking-pool-operations)
+- [Delegation Pool Operations](/network/nodes/validator-node/connect-nodes/delegation-pool-operations)
+- [Configuration file `staking_config.move`](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/configs/staking_config.move)
+- [Contract file `staking_contract.move`](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/staking_contract.move) covering requesting commissions
+- [All staking-related `.move files](https://github.com/aptos-labs/aptos-core/tree/main/aptos-move/framework/aptos-framework/sources)

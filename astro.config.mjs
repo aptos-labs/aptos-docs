@@ -19,7 +19,12 @@ const hasAlgoliaConfig = ALGOLIA_APP_ID && ALGOLIA_SEARCH_API_KEY && ALGOLIA_IND
 
 // https://astro.build/config
 export default defineConfig({
-  site: "https://aptos.dev",
+  site:
+    process.env.VERCEL_ENV === "production"
+      ? "https://aptos-docs-astro.vercel.app"
+      : process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : "http://localhost:4321",
   integrations: [
     starlight({
       title: "Aptos Developer Docs",

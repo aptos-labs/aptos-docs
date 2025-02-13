@@ -30,6 +30,7 @@ import { StepsTransformer } from "./transformers/steps.js";
 import { FileTreeTransformer } from "./transformers/fileTree.js";
 import { CustomComponentTransformer } from "./transformers/custom-components.js";
 import { CodeTransformer } from "./transformers/code.js";
+import { ImageTransformer } from "./transformers/image.js";
 import type { TransformerOptions } from "./types/index.js";
 
 interface ExtendedTransformerOptions extends TransformerOptions {
@@ -111,6 +112,7 @@ async function processFile(filePath: string, options: ExtendedTransformerOptions
     ...componentTransformers,
     new ImportTransformer(componentMappings),
     new HrefTransformer(),
+    new ImageTransformer(),
   ];
 
   logger.log("Migration", "Starting transformers");
@@ -358,6 +360,84 @@ async function processDirectory(
   }
 }
 
+async function copyDirectory(source: string, destination: string): Promise<void> {
+  logger.log("Migration", `Copying directory from ${source} to ${destination}`);
+
+  // Create destination directory
+  await fs.mkdir(destination, { recursive: true });
+
+  // Read source directory
+  const entries = await fs.readdir(source, { withFileTypes: true });
+
+  for (const entry of entries) {
+    const sourcePath = path.join(source, entry.name);
+    const destPath = path.join(destination, entry.name);
+
+    if (entry.isDirectory()) {
+      // Recursively copy subdirectories
+      await copyDirectory(sourcePath, destPath);
+    } else {
+      // Copy files
+      await fs.copyFile(sourcePath, destPath);
+      logger.log("Migration", `Copied file: ${entry.name}`);
+    }
+  }
+}
+
+async function copyImages(sourcePath: string): Promise<void> {
+  const imagesDestPath = path.join(projectRoot, "public", "images");
+  const tempDir = path.join(projectRoot, "temp-nextra-docs");
+
+  try {
+    // Create the public/images directory if it doesn't exist
+    await fs.mkdir(imagesDestPath, { recursive: true });
+
+    // Find the extracted directory (same as used in getSourcePath)
+    const entries = await fs.readdir(tempDir);
+    const extractedDir = entries.find((entry) => entry.startsWith("aptos-labs-developer-docs-"));
+    if (!extractedDir) {
+      throw new Error("Could not find extracted repository directory");
+    }
+
+    const extractedPath = path.join(tempDir, extractedDir);
+    const docsSourcePath = path.join(extractedPath, "apps", "nextra", "public", "docs");
+    const screenshotsSourcePath = path.join(
+      extractedPath,
+      "apps",
+      "nextra",
+      "public",
+      "screenshots",
+    );
+
+    logger.log("Migration", "Copying docs images from:", docsSourcePath);
+    logger.log("Migration", "Copying screenshots from:", screenshotsSourcePath);
+
+    // Copy docs folder contents
+    try {
+      await fs.access(docsSourcePath);
+      await copyDirectory(docsSourcePath, imagesDestPath);
+      logger.log("Migration", "Successfully copied docs images");
+    } catch (error) {
+      logger.log("Migration", "Error copying docs images:", error);
+    }
+
+    // Copy screenshots folder
+    const screenshotsDestPath = path.join(imagesDestPath, "screenshots");
+    try {
+      await fs.access(screenshotsSourcePath);
+      await copyDirectory(screenshotsSourcePath, screenshotsDestPath);
+      logger.log("Migration", "Successfully copied screenshots");
+    } catch (error) {
+      logger.log("Migration", "Error copying screenshots:", error);
+    }
+
+    logger.log("Migration", "Finished image migration");
+  } catch (error) {
+    logger.log("Migration", "Error during image migration:", error);
+    throw error;
+  }
+}
+
 async function main() {
   program
     .option("--use-directive-syntax", "Use ::: syntax instead of component syntax")
@@ -394,6 +474,10 @@ async function main() {
       },
       config,
     );
+
+    // Copy images after processing MDX files
+    logger.log("Migration", "Starting image migration");
+    await copyImages(sourcePath);
 
     // Clean up temp directory if it exists
     const tempDir = path.join(projectRoot, "temp-nextra-docs");

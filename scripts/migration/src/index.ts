@@ -13,8 +13,10 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { program } from "commander";
-import { exec } from "node:child_process";
 import { logger } from "./utils/logger.js";
+import { progress } from "./utils/progress.js";
+import { downloadWithProgress } from "./utils/download.js";
+import extract from "extract-zip";
 
 import { CalloutTransformer } from "./transformers/callout.js";
 import { TitleTransformer } from "./transformers/title.js";
@@ -38,6 +40,7 @@ import type { Handle, State } from "mdast-util-to-markdown";
 interface MigrationConfig {
   ignoredFolders: string[];
   useComponentSyntax: boolean;
+  shouldSkipFile: (relativePath: string) => boolean;
 }
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -111,9 +114,12 @@ async function processFile(filePath: string, options: ExtendedTransformerOptions
   ];
 
   logger.log("Migration", "Starting transformers");
+  progress.updateTransformer("Starting...");
 
   for (const transformer of transformers) {
-    logger.log("Migration", "Running transformer:", transformer.constructor.name);
+    const name = transformer.constructor.name;
+    logger.log("Migration", "Running transformer:", name);
+    progress.updateTransformer(name);
     transformer.transform(ast, transformerOptions);
   }
 
@@ -219,6 +225,7 @@ async function processFile(filePath: string, options: ExtendedTransformerOptions
   await fs.writeFile(newPath, newContent, "utf-8");
 
   logger.log("Migration", "Processed:", relativePath);
+  progress.updateFile(relativePath);
 }
 
 async function getSourcePath(): Promise<string> {
@@ -246,24 +253,70 @@ async function getSourcePath(): Promise<string> {
     // Remove temp directory if it exists
     await fs.rm(tempDir, { recursive: true, force: true });
 
-    // Clone the repository
-    await new Promise<void>((resolve, reject) => {
-      exec(
-        `git clone --depth 1 "https://github.com/aptos-labs/developer-docs.git" "${tempDir}"`,
-        (error: Error | null) => {
-          if (error) reject(error);
-          else resolve();
-        },
-      );
-    });
+    // Download the repository zip
+    const repoUrl = "https://api.github.com/repos/aptos-labs/developer-docs/zipball";
+    const zipPath = path.join(tempDir, "repo.zip");
 
-    const sourcePath = path.join(tempDir, "apps", "nextra", "pages", "en");
+    // Create temp directory
+    await fs.mkdir(tempDir, { recursive: true });
+
+    // Download with progress
+    await downloadWithProgress(repoUrl, zipPath);
+
+    // Extract the zip
+    progress.updateDownloadProgress(0, 100, "Extracting repository...");
+    await extract(zipPath, {
+      dir: tempDir,
+      onEntry: () => {
+        // Update progress for each file extracted
+        progress.updateDownloadProgress(50, 100, "Extracting repository...");
+      },
+    });
+    progress.resetDownload();
+
+    // Clean up zip file
+    await fs.unlink(zipPath);
+
+    // Find the extracted directory (it will have a prefix like aptos-labs-developer-docs-hash)
+    const entries = await fs.readdir(tempDir);
+    const extractedDir = entries.find((entry) => entry.startsWith("aptos-labs-developer-docs-"));
+    if (!extractedDir) {
+      throw new Error("Could not find extracted repository directory");
+    }
+
+    const sourcePath = path.join(tempDir, extractedDir, "apps", "nextra", "pages", "en");
     logger.log("Migration", "Using GitHub repository source:", sourcePath);
     return sourcePath;
   } catch (error) {
     logger.log("Migration", "Failed to clone repository:", error);
     throw error;
   }
+}
+
+async function countMdxFiles(
+  dirPath: string,
+  ignoredFolders: string[],
+  config: MigrationConfig,
+): Promise<number> {
+  let count = 0;
+  const entries = await fs.readdir(dirPath, { withFileTypes: true });
+
+  for (const entry of entries) {
+    const fullPath = path.join(dirPath, entry.name);
+
+    if (entry.isDirectory()) {
+      if (!ignoredFolders.includes(entry.name)) {
+        count += await countMdxFiles(fullPath, ignoredFolders, config);
+      }
+    } else if (entry.isFile() && /\.mdx?$/.test(entry.name)) {
+      const relativePath = path.relative(dirPath, fullPath);
+      if (!config.shouldSkipFile(relativePath)) {
+        count++;
+      }
+    }
+  }
+
+  return count;
 }
 
 async function processDirectory(
@@ -287,10 +340,9 @@ async function processDirectory(
       }
       await processDirectory(fullPath, options, config);
     } else if (entry.isFile() && /\.mdx?$/.test(entry.name)) {
-      // Skip root index.mdx file
       const relativePath = path.relative(options.sourcePath || "", fullPath);
-      if (relativePath === "index.mdx") {
-        logger.log("Migration", "Skipping root index file:", entry.name);
+      if (config.shouldSkipFile(relativePath)) {
+        logger.log("Migration", "Skipping file:", entry.name);
         continue;
       }
       logger.log("Migration", "Found MDX file:", entry.name);
@@ -298,6 +350,7 @@ async function processDirectory(
         await processFile(fullPath, options);
       } catch (error) {
         logger.log("Migration", "Error processing file:", fullPath, error);
+        progress.addFailedFile(relativePath);
       }
     } else {
       logger.log("Migration", "Skipping non-MDX file:", entry.name);
@@ -317,12 +370,21 @@ async function main() {
   const config: MigrationConfig = {
     ignoredFolders: options.ignore ? options.ignore.split(",") : ["developer-platforms"],
     useComponentSyntax: !options.useDirectiveSyntax,
+    shouldSkipFile: (relativePath: string) => {
+      // Add any file skip conditions here
+      return relativePath === "index.mdx";
+    },
   };
 
   try {
     const sourcePath = await getSourcePath();
+    // Count total files first
+    const totalFiles = await countMdxFiles(sourcePath, config.ignoredFolders, config);
+    progress.setTotalFiles(totalFiles);
+
     logger.log("Migration", "Starting migration from:", sourcePath);
     logger.log("Migration", "Ignored folders:", config.ignoredFolders);
+    logger.log("Migration", "Total files to process:", totalFiles);
 
     await processDirectory(
       sourcePath,
@@ -337,9 +399,11 @@ async function main() {
     const tempDir = path.join(projectRoot, "temp-nextra-docs");
     await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
 
-    logger.log("Migration", "Migration completed successfully!");
+    progress.complete();
   } catch (error) {
-    logger.log("Migration", "Error during migration:", error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.log("Migration", "Error during migration:", errorMessage);
+    progress.error(errorMessage);
     process.exit(1);
   }
 }

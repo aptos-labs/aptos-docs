@@ -20,4 +20,5 @@ export default Object.freeze({
       return getFacetFilters();
     },
   },
+  insights: true,
 } satisfies DocSearchClientOptions);

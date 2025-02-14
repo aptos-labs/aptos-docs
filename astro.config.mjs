@@ -1,5 +1,5 @@
 // @ts-check
-import { defineConfig } from "astro/config";
+import { defineConfig, envField } from "astro/config";
 import starlight from "@astrojs/starlight";
 import tailwindcss from "@tailwindcss/vite";
 import starlightOpenAPI, { openAPISidebarGroups } from "starlight-openapi";
@@ -71,9 +71,7 @@ export default defineConfig({
         ...(hasAlgoliaConfig
           ? [
               starlightDocSearch({
-                appId: ALGOLIA_APP_ID,
-                apiKey: ALGOLIA_SEARCH_API_KEY,
-                indexName: ALGOLIA_INDEX_NAME,
+                clientOptionsModule: "./src/config/docsearch.ts",
               }),
             ]
           : []),
@@ -127,5 +125,15 @@ export default defineConfig({
   markdown: {
     remarkPlugins: [remarkMath],
     rehypePlugins: [rehypeKatex],
+  },
+  env: {
+    schema: {
+      ALGOLIA_APP_ID: envField.string({ context: "client", access: "public" }),
+      ALGOLIA_SEARCH_API_KEY: envField.string({
+        context: "client",
+        access: "public",
+      }),
+      ALGOLIA_INDEX_NAME: envField.string({ context: "client", access: "public" }),
+    },
   },
 });

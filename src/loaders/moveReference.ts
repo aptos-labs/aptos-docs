@@ -71,6 +71,7 @@ export function moveReferenceLoader(config: GitHubConfig): Loader {
             digest,
             rendered: {
               html: rendered.code,
+              metadata: rendered.metadata,
             },
           });
         }),

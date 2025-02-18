@@ -10,6 +10,10 @@ import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import { loadEnv } from "vite";
 
+import rehypeRaw from "rehype-raw";
+import rehypeConvertCodeBlocks from "./src/plugins/rehype-convert-codeblocks.js";
+// import rehypeAddDebug from './src/plugins/rehype-add-debug.js';
+
 const env = loadEnv(process.env.NODE_ENV || "development", process.cwd(), "");
 const ALGOLIA_APP_ID = env.ALGOLIA_APP_ID;
 const ALGOLIA_SEARCH_API_KEY = env.ALGOLIA_SEARCH_API_KEY;
@@ -112,7 +116,7 @@ export default defineConfig({
           collapsed: true,
           autogenerate: { directory: "network" },
         },
-
+        { label: "Move Reference", link: "/move-reference/" },
         ...openAPISidebarGroups,
       ],
       customCss: ["./src/globals.css", "katex/dist/katex.min.css"],
@@ -124,7 +128,7 @@ export default defineConfig({
   },
   markdown: {
     remarkPlugins: [remarkMath],
-    rehypePlugins: [rehypeKatex],
+    rehypePlugins: [rehypeRaw, rehypeKatex, rehypeConvertCodeBlocks],
   },
   env: {
     schema: {
@@ -134,6 +138,10 @@ export default defineConfig({
         access: "public",
       }),
       ALGOLIA_INDEX_NAME: envField.string({ context: "client", access: "public" }),
+      GITHUB_TOKEN: envField.string({
+        context: "server",
+        access: "secret",
+      }),
     },
   },
 });

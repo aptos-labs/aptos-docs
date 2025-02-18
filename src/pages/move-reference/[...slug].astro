@@ -1,0 +1,29 @@
+---
+import { getCollection, render } from "astro:content";
+import StarlightPage from "@astrojs/starlight/components/StarlightPage.astro";
+
+export async function getStaticPaths() {
+  const moveReferenceEntries = await getCollection("moveReference");
+
+  return moveReferenceEntries.map((entry) => ({
+    params: { slug: entry.id },
+    props: { entry },
+  }));
+}
+
+const { entry } = Astro.props;
+const { Content } = await render(entry);
+
+// TOC structure to match `MarkdownHeading[]`
+const placeholderToc = [
+  { depth: 2, slug: "introduction", text: "Introduction" },
+  { depth: 2, slug: "how-it-works", text: "How it Works" },
+  { depth: 3, slug: "step-1", text: "Step 1" },
+  { depth: 3, slug: "step-2", text: "Step 2" },
+  { depth: 2, slug: "conclusion", text: "Conclusion" },
+];
+---
+
+<StarlightPage frontmatter={{ title: "Move Reference" }} headings={placeholderToc}>
+  <Content />
+</StarlightPage>

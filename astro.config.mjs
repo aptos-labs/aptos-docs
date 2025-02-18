@@ -12,6 +12,7 @@ import { loadEnv } from "vite";
 
 import rehypeRaw from "rehype-raw";
 import rehypeConvertCodeBlocks from "./src/plugins/rehype-convert-codeblocks.js";
+import rehypeRemoveAnchorLinks from "./src/plugins/rehype-remove-anchor-links.js";
 // import rehypeAddDebug from './src/plugins/rehype-add-debug.js';
 
 const env = loadEnv(process.env.NODE_ENV || "development", process.cwd(), "");
@@ -128,7 +129,7 @@ export default defineConfig({
   },
   markdown: {
     remarkPlugins: [remarkMath],
-    rehypePlugins: [rehypeRaw, rehypeKatex, rehypeConvertCodeBlocks],
+    rehypePlugins: [rehypeRaw, rehypeKatex, rehypeConvertCodeBlocks, rehypeRemoveAnchorLinks],
   },
   env: {
     schema: {

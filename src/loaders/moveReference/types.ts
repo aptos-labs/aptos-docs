@@ -39,3 +39,18 @@ export interface ContentEntry {
     metadata: Record<string, unknown>;
   };
 }
+
+export interface ProcessingStats {
+  totalMdFiles: number; // Total .md files across all branches/modules
+  totalFiles: number; // Files processed this run
+  processedFiles: number; // Successfully processed
+  skippedFiles: number; // No content
+  errorFiles: number; // Processing errors
+  cachedModules: number; // Modules using cached content
+}
+
+export interface ModuleStatus {
+  framework: string;
+  isCached: boolean;
+  filesCount: number;
+}

@@ -1,4 +1,5 @@
 import type { LoaderContext } from "astro/loaders";
+import { blue, dim, green } from "kleur/colors";
 import { octokit } from "../../../lib/octokit.js";
 import type {
   GitHubConfig,
@@ -9,13 +10,29 @@ import type {
 } from "../types.js";
 
 export class GitHubFetcher {
+  private cachedFileCounts: Map<string, number>;
+
   constructor(
     private config: GitHubConfig,
     private context: LoaderContext,
-  ) {}
+  ) {
+    this.cachedFileCounts = new Map();
+  }
 
-  private getMetaKey(branch: string, framework: string, type: "folder-etag"): string {
+  private getMetaKey(
+    branch: string,
+    framework: string,
+    type: "folder-etag" | "file-count",
+  ): string {
     return `${branch}-${framework}-${type}`;
+  }
+
+  private getModuleKey(branch: string, framework: string): string {
+    return `${branch}/${framework}`;
+  }
+
+  private formatTreeLog(branch: string, framework: string, message: string): string {
+    return `${blue("├─")} ${dim(`${branch}/${framework}`)} ${message}`;
   }
 
   async getFolderContent(
@@ -25,6 +42,8 @@ export class GitHubFetcher {
   ): Promise<GitHubFileContent[]> {
     const { store, logger, meta } = this.context;
     const metaKey = this.getMetaKey(branch.name, module.framework, "folder-etag");
+    const fileCountKey = this.getMetaKey(branch.name, module.framework, "file-count");
+    const moduleKey = this.getModuleKey(branch.name, module.framework);
     const storePrefix = `${branch.name}/${module.framework}/`;
     const hasContent = store.entries().some(([id]) => id.startsWith(storePrefix));
 
@@ -49,9 +68,10 @@ export class GitHubFetcher {
 
       // If we have content and get a 304, use the cached content
       if (hasContent && folderResponse.status === 304) {
-        logger.info(
-          `Content not modified for ${branch.name}/${module.framework}, using existing content`,
-        );
+        // Get the cached file count
+        const cachedCount = Number(meta.get(fileCountKey) ?? "0");
+        this.cachedFileCounts.set(moduleKey, cachedCount);
+        logger.info(this.formatTreeLog(branch.name, module.framework, green("✓ (cached)")));
         return [];
       }
 
@@ -63,19 +83,29 @@ export class GitHubFetcher {
 
       // Validate response data
       if (!Array.isArray(folderResponse.data)) {
-        logger.warn(`No content found at ${module.folder} for ${branch.name}/${module.framework}`);
+        logger.warn(this.formatTreeLog(branch.name, module.framework, "⚠ (no content)"));
         return [];
       }
 
-      return folderResponse.data;
+      // Store the file count for future reference
+      const mdFiles = folderResponse.data.filter((file) => file.name.endsWith(".md"));
+      const fileCount = mdFiles.length;
+      meta.set(fileCountKey, String(fileCount));
+      this.cachedFileCounts.set(moduleKey, fileCount);
+
+      logger.info(
+        this.formatTreeLog(branch.name, module.framework, `✓ (${String(fileCount)} files)`),
+      );
+      return mdFiles;
     } catch (error) {
       // Handle GitHub API errors
       if (error instanceof Error) {
         // If we get a 304 and have content, use the cached content
         if (error.message === "Not modified" && hasContent) {
-          logger.info(
-            `Content not modified for ${branch.name}/${module.framework}, using existing content`,
-          );
+          // Get the cached file count
+          const cachedCount = Number(meta.get(fileCountKey) ?? "0");
+          this.cachedFileCounts.set(moduleKey, cachedCount);
+          logger.info(this.formatTreeLog(branch.name, module.framework, green("✓ (cached)")));
           return [];
         }
 
@@ -83,26 +113,24 @@ export class GitHubFetcher {
         if (error.message === "Not modified" && !hasContent) {
           // Only clear the ETag if we don't have content
           meta.delete(metaKey);
-          logger.info(
-            `No content in store for ${branch.name}/${module.framework}, forcing refresh`,
-          );
+          logger.info(this.formatTreeLog(branch.name, module.framework, "⟳ (refreshing)"));
           return this.getFolderContent(branch, module, retryCount + 1);
         }
 
         // For other errors, log and rethrow
-        logger.error(
-          `Error fetching folder content for ${branch.name}/${module.framework}: ${error.message}`,
-        );
+        logger.error(this.formatTreeLog(branch.name, module.framework, `✗ (${error.message})`));
         throw error;
       }
 
       // For non-Error objects, convert to string
       const message = String(error);
-      logger.error(
-        `Error fetching folder content for ${branch.name}/${module.framework}: ${message}`,
-      );
+      logger.error(this.formatTreeLog(branch.name, module.framework, `✗ (${message})`));
       throw new Error(message);
     }
+  }
+
+  getCachedFileCount(branch: string, framework: string): number {
+    return this.cachedFileCounts.get(this.getModuleKey(branch, framework)) ?? 0;
   }
 
   async getFileContent(
@@ -127,7 +155,7 @@ export class GitHubFetcher {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.context.logger.error(
-        `Error fetching file content for ${branch.name}/${module.framework}/${fileName}: ${message}`,
+        this.formatTreeLog(branch.name, module.framework, `✗ (${message})`),
       );
       return null;
     }

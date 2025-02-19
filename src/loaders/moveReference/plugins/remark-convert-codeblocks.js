@@ -12,7 +12,16 @@ export default function remarkConvertCodeBlocks() {
     visit(tree, "html", (node, index, parent) => {
       const match = node.value.match(/<pre><code>([\s\S]*?)<\/code><\/pre>/);
       if (match) {
-        let codeContent = match[1]
+        // First trim the content to check if it's empty
+        let codeContent = match[1].trim();
+
+        // If the code block is empty, remove it by returning null
+        if (!codeContent) {
+          parent.children.splice(index, 1);
+          return;
+        }
+
+        codeContent = codeContent
           // Remove <b>, <strong>, <i> while keeping their content
           .replace(/<\/?(b|strong|i)>/g, "")
           // Remove <a> tags but keep the text inside

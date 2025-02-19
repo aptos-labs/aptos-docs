@@ -1,8 +1,18 @@
+export interface ModuleConfig {
+  framework: string;
+  folder: string;
+}
+
+export interface BranchConfig {
+  name: string;
+  ref: string;
+  modules: ModuleConfig[];
+}
+
 export interface GitHubConfig {
   owner: string;
   repo: string;
-  ref: string;
-  folder: string;
+  branches: BranchConfig[];
 }
 
 export interface GitHubFileContent {

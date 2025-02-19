@@ -1,6 +1,7 @@
 ---
 import { getCollection, render } from "astro:content";
 import StarlightPage from "@astrojs/starlight/components/StarlightPage.astro";
+import type { CollectionEntry } from "astro:content";
 
 export async function getStaticPaths() {
   const moveReferenceEntries = await getCollection("moveReference");
@@ -11,10 +12,48 @@ export async function getStaticPaths() {
   }));
 }
 
+interface Props {
+  entry: CollectionEntry<"moveReference">;
+}
+
 const { entry } = Astro.props;
 const { Content, headings } = await render(entry);
+
+// Extract branch and framework from the entry ID
+const [branch, framework] = entry.id.split("/");
+
+// Create a title that includes branch and framework info
+const title = `${entry.data.title || entry.id.split("/").pop()} | ${framework} (${branch})`;
 ---
 
-<StarlightPage frontmatter={{ title: "Move Reference" }} headings={headings}>
+<StarlightPage frontmatter={{ title }} headings={headings}>
+  <div class="metadata">
+    <span class="branch">{branch}</span>
+    <span class="framework">{framework}</span>
+  </div>
   <Content />
 </StarlightPage>
+
+<style>
+  .metadata {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+  .branch,
+  .framework {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 999px;
+    font-size: var(--sl-text-sm);
+    font-weight: 500;
+  }
+  .branch {
+    background-color: var(--sl-color-blue-high);
+    color: var(--sl-color-white);
+  }
+  .framework {
+    background-color: var(--sl-color-gray-5);
+    color: var(--sl-color-gray-1);
+  }
+</style>

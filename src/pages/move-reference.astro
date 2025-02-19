@@ -2,16 +2,80 @@
 import { getCollection } from "astro:content";
 import StarlightPage from "@astrojs/starlight/components/StarlightPage.astro";
 import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+import type { CollectionEntry } from "astro:content";
 
 const moveReferenceEntries = await getCollection("moveReference");
+
+type MoveReferenceEntry = CollectionEntry<"moveReference">;
+type GroupedEntries = Record<string, Record<string, MoveReferenceEntry[]>>;
+
+// Group entries by branch and framework
+const groupedEntries = moveReferenceEntries.reduce((acc, entry) => {
+  const branch = entry.data.branch as string;
+  const framework = entry.data.framework as string;
+
+  if (!acc[branch]) {
+    acc[branch] = {};
+  }
+  if (!acc[branch][framework]) {
+    acc[branch][framework] = [];
+  }
+
+  acc[branch][framework].push(entry);
+  return acc;
+}, {} as GroupedEntries);
+
+// Sort branches to ensure consistent order
+const sortedBranches = Object.keys(groupedEntries).sort((a, b) => {
+  const order = ["mainnet", "testnet", "devnet", "main"];
+  return order.indexOf(a) - order.indexOf(b);
+});
+
+// Get entries for a specific framework
+const getFrameworkEntries = (branch: string): [string, MoveReferenceEntry[]][] => {
+  const entries = groupedEntries[branch];
+  return Object.entries(entries || {});
+};
 ---
 
 <StarlightPage frontmatter={{ title: "Move Reference" }}>
-  <CardGrid>
-    {
-      moveReferenceEntries.map((entry) => (
-        <LinkCard href={`/move-reference/${entry.id}`} title={entry.data.title || entry.id} />
-      ))
-    }
-  </CardGrid>
+  {
+    sortedBranches.map((branch) => (
+      <section>
+        <h2>{branch}</h2>
+        {getFrameworkEntries(branch).map(([framework, entries]) => (
+          <div class="framework-section">
+            <h3>{framework}</h3>
+            <CardGrid>
+              {entries.map((entry) => (
+                <LinkCard
+                  href={`/move-reference/${entry.id}`}
+                  title={entry.data.title || entry.id.split("/").pop()}
+                />
+              ))}
+            </CardGrid>
+          </div>
+        ))}
+      </section>
+    ))
+  }
 </StarlightPage>
+
+<style>
+  section {
+    margin-bottom: 2rem;
+  }
+  .framework-section {
+    margin: 1.5rem 0;
+  }
+  h2 {
+    font-size: var(--sl-text-2xl);
+    color: var(--sl-color-white);
+    margin-bottom: 1rem;
+  }
+  h3 {
+    font-size: var(--sl-text-xl);
+    color: var(--sl-color-gray-2);
+    margin: 0.5rem 0;
+  }
+</style>

@@ -8,6 +8,7 @@ import { visit } from "unist-util-visit";
  */
 export default function remarkConvertCodeBlocks() {
   return (tree) => {
+    // Convert HTML code blocks
     visit(tree, "html", (node, index, parent) => {
       const match = node.value.match(/<pre><code>([\s\S]*?)<\/code><\/pre>/);
       if (match) {
@@ -29,6 +30,13 @@ export default function remarkConvertCodeBlocks() {
           lang: "move",
           value: codeContent,
         };
+      }
+    });
+
+    // Add 'move' language to existing fenced code blocks that don't have a language specified
+    visit(tree, "code", (node) => {
+      if (!node.lang) {
+        node.lang = "move";
       }
     });
   };

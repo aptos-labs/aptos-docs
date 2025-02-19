@@ -18,6 +18,9 @@ export default function remarkConvertCodeBlocks() {
           .replace(/<a [^>]*>(.*?)<\/a>/g, "$1")
           // Remove any other residual HTML tags
           .replace(/<\/?[^>]+(>|$)/g, "")
+          // Decode HTML entities
+          .replace(/&lt;/g, "<")
+          .replace(/&gt;/g, ">")
           .trim();
 
         // Replace the HTML node with a fenced code block node

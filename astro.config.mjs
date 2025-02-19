@@ -11,9 +11,6 @@ import rehypeKatex from "rehype-katex";
 import { loadEnv } from "vite";
 
 import rehypeRaw from "rehype-raw";
-import rehypeConvertCodeBlocks from "./src/plugins/rehype-convert-codeblocks.js";
-import rehypeRemoveAnchorLinks from "./src/plugins/rehype-remove-anchor-links.js";
-import remarkGroupMoveDefinitions from "./src/plugins/remark-group-move-definitions.js";
 // import rehypeAddDebug from './src/plugins/rehype-add-debug.js';
 
 const env = loadEnv(process.env.NODE_ENV || "development", process.cwd(), "");
@@ -129,21 +126,8 @@ export default defineConfig({
     plugins: [tailwindcss()],
   },
   markdown: {
-    remarkPlugins: [
-      remarkMath,
-      [
-        remarkGroupMoveDefinitions,
-        {
-          definitionTypes: [
-            { prefix: "Function", groupHeading: "Functions" },
-            { prefix: "Resource", groupHeading: "Resources" },
-            { prefix: "Struct", groupHeading: "Structs" },
-            { prefix: "Constant", groupHeading: "Constants" },
-          ],
-        },
-      ],
-    ],
-    rehypePlugins: [rehypeRaw, rehypeKatex, rehypeConvertCodeBlocks, rehypeRemoveAnchorLinks],
+    remarkPlugins: [remarkMath],
+    rehypePlugins: [rehypeRaw, rehypeKatex],
   },
   env: {
     schema: {

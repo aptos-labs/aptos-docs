@@ -1,7 +1,11 @@
 import type { Loader, LoaderContext } from "astro/loaders";
+import type { AstroMarkdownOptions } from "@astrojs/markdown-remark";
 import { createMarkdownProcessor } from "@astrojs/markdown-remark";
 import matter from "gray-matter";
-import { octokit } from "../lib/octokit";
+import { octokit } from "../../lib/octokit.js";
+import remarkRemoveAnchorLinks from "./plugins/remark-remove-anchor-links.js";
+import remarkGroupMoveDefinitions from "./plugins/remark-group-move-definitions.js";
+import remarkConvertCodeBlocks from "./plugins/remark-convert-codeblocks.js";
 
 interface GitHubConfig {
   owner: string;
@@ -33,8 +37,30 @@ export function moveReferenceLoader(config: GitHubConfig): Loader {
       // Clear existing store before loading new content TODO: implement header-based cache control to avoid clearing store as seen here: https://astro.build/blog/content-layer-deep-dive/
       store.clear();
 
-      // Create the Markdown processor
-      const processor = await createMarkdownProcessor(context.config.markdown);
+      // Create the Markdown processor with Move-specific plugins
+      const baseConfig = context.config.markdown;
+      const moveMarkdownConfig: AstroMarkdownOptions = {
+        ...baseConfig,
+        remarkPlugins: [
+          ...baseConfig.remarkPlugins,
+          remarkConvertCodeBlocks,
+          remarkRemoveAnchorLinks,
+          [
+            remarkGroupMoveDefinitions,
+            {
+              definitionTypes: [
+                { prefix: "Function", groupHeading: "Functions" },
+                { prefix: "Resource", groupHeading: "Resources" },
+                { prefix: "Struct", groupHeading: "Structs" },
+                { prefix: "Constant", groupHeading: "Constants" },
+              ],
+            },
+          ],
+        ],
+        rehypePlugins: [...baseConfig.rehypePlugins],
+      } as const;
+
+      const processor = await createMarkdownProcessor(moveMarkdownConfig);
 
       // Process each file in the folder
       await Promise.all(

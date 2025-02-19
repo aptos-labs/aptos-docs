@@ -18,7 +18,6 @@ const BRANCHES: Omit<BranchConfig, "modules">[] = [
   { name: "mainnet", ref: "mainnet" },
   { name: "testnet", ref: "testnet" },
   { name: "devnet", ref: "devnet" },
-  { name: "main", ref: "main" },
 ];
 
 // Helper to create the full module config with the folder path

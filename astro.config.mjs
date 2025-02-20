@@ -129,6 +129,7 @@ export default defineConfig({
     remarkPlugins: [remarkMath],
     rehypePlugins: [rehypeRaw, rehypeKatex],
   },
+  prefetch: true,
   env: {
     schema: {
       ALGOLIA_APP_ID: envField.string({ context: "client", access: "public" }),

@@ -3,7 +3,20 @@ import { getCollection } from "astro:content";
 import StarlightPage from "@astrojs/starlight/components/StarlightPage.astro";
 import { CardGrid, LinkCard } from "@astrojs/starlight/components";
 import type { CollectionEntry } from "astro:content";
+import { SUPPORTED_LANGUAGES } from "../../config/locales";
 
+export async function getStaticPaths() {
+  return SUPPORTED_LANGUAGES.map(({ code }) => ({
+    params: { lang: code === "en" ? undefined : code },
+    props: { lang: code },
+  }));
+}
+
+interface Props {
+  lang: string;
+}
+
+const { lang } = Astro.props;
 const moveReferenceEntries = await getCollection("moveReference");
 
 type MoveReferenceEntry = CollectionEntry<"moveReference">;
@@ -43,7 +56,11 @@ const getFrameworkEntries = (branch: string): [string, MoveReferenceEntry[]][] =
             <CardGrid>
               {entries.map((entry) => (
                 <LinkCard
-                  href={`/move-reference/${entry.id}`}
+                  href={
+                    lang === "en"
+                      ? `/move-reference/${entry.id}`
+                      : `/${lang}/move-reference/${entry.id}`
+                  }
                   title={entry.data.title || entry.id.split("/").pop()}
                 />
               ))}

@@ -11,6 +11,7 @@ import rehypeKatex from "rehype-katex";
 import { loadEnv } from "vite";
 
 import rehypeRaw from "rehype-raw";
+import { SUPPORTED_LANGUAGES } from "./src/config/locales";
 // import rehypeAddDebug from './src/plugins/rehype-add-debug.js';
 
 const env = loadEnv(process.env.NODE_ENV || "development", process.cwd(), "");
@@ -22,6 +23,16 @@ const hasAlgoliaConfig = ALGOLIA_APP_ID && ALGOLIA_SEARCH_API_KEY && ALGOLIA_IND
 
 // https://astro.build/config
 export default defineConfig({
+  // i18n: {
+  //   defaultLocale: "en",
+  //   locales: ["en", "zh"],
+  //   fallback: { zh: "en" },
+  //   routing: {
+  //     prefixDefaultLocale: false,
+  //     redirectToDefaultLocale: true,
+  //     fallbackType: "rewrite",
+  //   },
+  // },
   site:
     process.env.VERCEL_ENV === "production"
       ? "https://aptos-docs-astro.vercel.app"
@@ -52,17 +63,12 @@ export default defineConfig({
         },
       },
       defaultLocale: "root", // optional
-      locales: {
-        root: {
-          label: "English",
-          lang: "en", // lang is required for root locales
-        },
-        // Simplified Chinese docs in `src/content/docs/zh/`
-        zh: {
-          label: "简体中文",
-          lang: "zh",
-        },
-      },
+      locales: Object.fromEntries(
+        SUPPORTED_LANGUAGES.map(({ code, label }) => [
+          code === "en" ? "root" : code, // Use "root" for English
+          { label, lang: code },
+        ]),
+      ),
       social: {
         github: "https://github.com/aptos-labs/",
       },

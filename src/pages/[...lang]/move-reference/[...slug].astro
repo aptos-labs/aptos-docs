@@ -2,14 +2,20 @@
 import { getCollection, render } from "astro:content";
 import StarlightPage from "@astrojs/starlight/components/StarlightPage.astro";
 import type { CollectionEntry } from "astro:content";
+import { SUPPORTED_LANGUAGES } from "../../../config/locales";
 
 export async function getStaticPaths() {
   const moveReferenceEntries = await getCollection("moveReference");
 
-  return moveReferenceEntries.map((entry) => ({
-    params: { slug: entry.id },
-    props: { entry },
-  }));
+  return moveReferenceEntries.flatMap((entry) =>
+    SUPPORTED_LANGUAGES.map(({ code }) => ({
+      params: {
+        lang: code === "en" ? undefined : code,
+        slug: entry.id,
+      },
+      props: { entry },
+    })),
+  );
 }
 
 interface Props {

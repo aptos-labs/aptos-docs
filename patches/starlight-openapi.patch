@@ -1,5 +1,5 @@
 diff --git a/index.ts b/index.ts
-index 787b9ba1ec4c7b873f450a08e3b2975e01be3ef0..00b8f9499645f5cc0ad1239bab84f7cb9aefaa8a 100644
+index df4f67b89bf15cfd1b2d7a4184a295f7001a1757..63e49debd4477cc4bd6bb63781098753d2e5b37e 100644
 --- a/index.ts
 +++ b/index.ts
 @@ -7,7 +7,11 @@ import { getSidebarFromSchemas, getSidebarGroupsPlaceholder } from './libs/starl
@@ -49,8 +49,192 @@ index 9d8f0839108aafd6df38052baf3a39e01cabc142..32b288519713a349681cadbe690ec385
            pattern: `[...openAPISlug]`,
            prerender: true,
          })
+diff --git a/libs/route.ts b/libs/route.ts
+index 0523e35827706420b820790f4e1755ec98d7d6cd..4337ec37db75931537b14ddf48de00e3b9281ed5 100644
+--- a/libs/route.ts
++++ b/libs/route.ts
+@@ -1,4 +1,5 @@
+-import schemas from 'virtual:starlight-openapi-schemas'
++import schemas from "virtual:starlight-openapi-schemas";
++import config from "virtual:starlight/user-config";
+ 
+ import {
+   getOperationsByTag,
+@@ -6,29 +7,63 @@ import {
+   isMinimalOperationTag,
+   type OperationTag,
+   type PathItemOperation,
+-} from './operation'
+-import { getBasePath, slug, stripLeadingAndTrailingSlashes } from './path'
+-import type { Schema } from './schema'
++} from "./operation";
++import { getBasePath, slug, stripLeadingAndTrailingSlashes } from "./path";
++import type { Schema } from "./schema";
++
++const DEFAULT_LOCALE = config.defaultLocale.lang ?? "en";
+ 
+ export function getSchemaStaticPaths(): StarlighOpenAPIRoute[] {
+-  return Object.values(schemas).flatMap((schema) => [
++  const routes = Object.values(schemas).flatMap<StarlighOpenAPIRoute>((schema) => [
+     {
+       params: {
+         openAPISlug: stripLeadingAndTrailingSlashes(getBasePath(schema.config)),
+       },
+       props: {
+         schema,
+-        type: 'overview',
++        lang: DEFAULT_LOCALE,
++        type: "overview",
+       },
+     },
+     ...getPathItemStaticPaths(schema),
+     ...getWebhooksStaticPaths(schema),
+-  ])
++  ]);
++  // Avoid infinite loop during building fallbacks
++  const routesCopy = [...routes];
++
++  // It is the same code by idea as in the starlight: https://github.com/withastro/starlight/blob/5a7e831aa36adb37545e66a9f014d8d98ec0ff64/packages/starlight/utils/routing/index.ts#L59-L87
++  if (config.isMultilingual) {
++    for (const key in config.locales) {
++      if (key === config.defaultLocale.locale) continue;
++      const localeConfig = config.locales[key];
++      if (!localeConfig) continue;
++      const locale = key === "root" ? undefined : key;
++
++      for (const nonLocalizedRoute of routesCopy) {
++        const fallbackRoute = {
++          ...nonLocalizedRoute,
++          params: {
++            ...nonLocalizedRoute.params,
++            openAPISlug: `${locale}/${nonLocalizedRoute.params.openAPISlug}`,
++          },
++          props: {
++            ...nonLocalizedRoute.props,
++            lang: DEFAULT_LOCALE,
++            isFallback: true,
++          },
++        } as StarlighOpenAPIRoute;
++
++        routes.push(fallbackRoute);
++      }
++    }
++  }
++
++  return routes;
+ }
+ 
+ function getPathItemStaticPaths(schema: Schema): StarlighOpenAPIRoute[] {
+-  const baseLink = getBasePath(schema.config)
+-  const operations = getOperationsByTag(schema.document)
++  const baseLink = getBasePath(schema.config);
++  const operations = getOperationsByTag(schema.document);
+ 
+   return [...operations.entries()].flatMap(([, operations]) => {
+     const paths: StarlighOpenAPIRoute[] = operations.entries.map((operation) => {
+@@ -39,31 +74,35 @@ function getPathItemStaticPaths(schema: Schema): StarlighOpenAPIRoute[] {
+         props: {
+           operation,
+           schema,
+-          type: 'operation',
++          lang: DEFAULT_LOCALE,
++          type: "operation",
+         },
+-      }
+-    })
++      };
++    });
+ 
+     if (!isMinimalOperationTag(operations.tag)) {
+       paths.unshift({
+         params: {
+-          openAPISlug: stripLeadingAndTrailingSlashes(`${baseLink}operations/tags/${slug(operations.tag.name)}`),
++          openAPISlug: stripLeadingAndTrailingSlashes(
++            `${baseLink}operations/tags/${slug(operations.tag.name)}`,
++          ),
+         },
+         props: {
+           schema,
++          lang: DEFAULT_LOCALE,
+           tag: operations.tag,
+-          type: 'operation-tag',
++          type: "operation-tag",
+         },
+-      })
++      });
+     }
+ 
+-    return paths
+-  })
++    return paths;
++  });
+ }
+ 
+ function getWebhooksStaticPaths(schema: Schema): StarlighOpenAPIRoute[] {
+-  const baseLink = getBasePath(schema.config)
+-  const operations = getWebhooksOperations(schema.document)
++  const baseLink = getBasePath(schema.config);
++  const operations = getWebhooksOperations(schema.document);
+ 
+   return operations.map((operation) => ({
+     params: {
+@@ -72,31 +111,41 @@ function getWebhooksStaticPaths(schema: Schema): StarlighOpenAPIRoute[] {
+     props: {
+       operation,
+       schema,
+-      type: 'operation',
++      lang: DEFAULT_LOCALE,
++      type: "operation",
+     },
+-  }))
++  }));
+ }
+ 
+ interface StarlighOpenAPIRoute {
+   params: {
+-    openAPISlug: string
+-  }
+-  props: StarlighOpenAPIRouteOverviewProps | StarlighOpenAPIRouteOperationProps | StarlighOpenAPIRouteOperationTagProps
++    openAPISlug: string;
++  };
++  props:
++    | StarlighOpenAPIRouteOverviewProps
++    | StarlighOpenAPIRouteOperationProps
++    | StarlighOpenAPIRouteOperationTagProps;
+ }
+ 
+ interface StarlighOpenAPIRouteOverviewProps {
+-  schema: Schema
+-  type: 'overview'
++  schema: Schema;
++  lang: string;
++  isFallback?: true;
++  type: "overview";
+ }
+ 
+ interface StarlighOpenAPIRouteOperationProps {
+-  operation: PathItemOperation
+-  schema: Schema
+-  type: 'operation'
++  operation: PathItemOperation;
++  schema: Schema;
++  lang: string;
++  isFallback?: true;
++  type: "operation";
+ }
+ 
+ interface StarlighOpenAPIRouteOperationTagProps {
+-  schema: Schema
+-  tag: OperationTag
+-  type: 'operation-tag'
++  schema: Schema;
++  tag: OperationTag;
++  lang: string;
++  isFallback?: true;
++  type: "operation-tag";
+ }
 diff --git a/package.json b/package.json
-index 3a530e4b26b2282b0de918b002b2a6e64b2969ae..1974b335a91b28c068385fedb649e4b71664b761 100644
+index becd80b6014c1a6227d69e4ae8328fe1b9099e6b..a17bedc22881ec71f710e744d016c545bfc3c0af 100644
 --- a/package.json
 +++ b/package.json
 @@ -7,6 +7,7 @@

@@ -1,7 +1,6 @@
 ---
 import { getCollection, render } from "astro:content";
 import StarlightPage from "@astrojs/starlight/components/StarlightPage.astro";
-import { Tabs, TabItem } from "@astrojs/starlight/components";
 import type { CollectionEntry } from "astro:content";
 import { SUPPORTED_LANGUAGES } from "../../../config/locales";
 
@@ -26,57 +25,16 @@ const { Content, headings } = await render(entry);
 const [branch, framework] = entry.id.split("/");
 const moduleTitle = entry.data.title || entry.id.split("/").pop();
 
-// Get all entries for the current branch to show other frameworks
-const allEntries = await getCollection("moveReference");
-const branchEntries = allEntries.filter(e => e.data.branch === branch);
-
-// Group entries by framework
-const frameworkEntries = branchEntries.reduce((acc, e) => {
-  const fw = e.data.framework as string;
-  if (!acc[fw]) acc[fw] = [];
-  acc[fw].push(e);
-  return acc;
-}, {} as Record<string, CollectionEntry<"moveReference">[]>);
-
-// Create title that includes branch info
-const title = `${moduleTitle} (${branch})`;
+// Create title that includes branch and framework info
+const title = `${moduleTitle} | ${framework} (${branch})`;
 ---
 
-<StarlightPage frontmatter={{ title }} headings={headings}>
-  <div class="metadata">
+<StarlightPage frontmatter={{ title, tableOfContents: false }} headings={headings}>
+  <!-- <div class="metadata">
     <span class="branch">{branch}</span>
-  </div>
-  
-  <Tabs>
-    {Object.entries(frameworkEntries).map(([fw, entries]) => {
-      const currentEntry = entries.find(e => 
-        e.data.title === moduleTitle || e.id.split("/").pop() === moduleTitle
-      );
-      
-      return (
-        <TabItem 
-          label={fw} 
-          icon={fw === framework ? "star" : undefined}
-        >
-          {currentEntry ? (
-            <Content />
-          ) : (
-            <p class="not-available">
-              This module is not available in the {fw} framework.
-              {entries.length > 0 && (
-                <span>
-                  {" "}View available{" "}
-                  <a href={`/move-reference/${branch}/${fw}`}>
-                    {fw} modules
-                  </a>.
-                </span>
-              )}
-            </p>
-          )}
-        </TabItem>
-      );
-    })}
-  </Tabs>
+    <span class="framework">{framework}</span>
+  </div> -->
+  <Content />
 </StarlightPage>
 
 <style>
@@ -85,24 +43,20 @@ const title = `${moduleTitle} (${branch})`;
     gap: 1rem;
     margin-bottom: 2rem;
   }
-  .branch {
+  .branch,
+  .framework {
     display: inline-block;
     padding: 0.25rem 0.75rem;
     border-radius: 999px;
     font-size: var(--sl-text-sm);
     font-weight: 500;
+  }
+  .branch {
     background-color: var(--sl-color-blue-high);
     color: var(--sl-color-white);
   }
-  .not-available {
-    color: var(--sl-color-gray-3);
-    font-style: italic;
-  }
-  .not-available a {
-    color: var(--sl-color-accent);
-    text-decoration: none;
-  }
-  .not-available a:hover {
-    text-decoration: underline;
+  .framework {
+    background-color: var(--sl-color-gray-5);
+    color: var(--sl-color-gray-1);
   }
 </style>

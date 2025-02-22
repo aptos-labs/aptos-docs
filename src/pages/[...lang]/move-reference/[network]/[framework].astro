@@ -1,0 +1,99 @@
+---
+import { getCollection } from "astro:content";
+import StarlightPage from "@astrojs/starlight/components/StarlightPage.astro";
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+import type { CollectionEntry } from "astro:content";
+import { SUPPORTED_LANGUAGES } from "../../../../config/locales";
+
+type MoveReferenceEntry = CollectionEntry<"moveReference">;
+
+export async function getStaticPaths() {
+  const moveReferenceEntries = await getCollection("moveReference");
+
+  // Get unique network/framework combinations
+  const combinations = new Set<string>();
+  moveReferenceEntries.forEach((entry) => {
+    const [branch, framework] = entry.id.split("/");
+    combinations.add(`${branch}/${framework}`);
+  });
+
+  return Array.from(combinations).flatMap((combo) => {
+    const [network, framework] = combo.split("/");
+    return SUPPORTED_LANGUAGES.map(({ code }) => ({
+      params: {
+        lang: code === "en" ? undefined : code,
+        network,
+        framework,
+      },
+      props: {
+        lang: code,
+        network,
+        framework,
+      },
+    }));
+  });
+}
+
+const { lang, network, framework } = Astro.props as {
+  lang: string;
+  network: string;
+  framework: string;
+};
+
+// Get all entries for this network/framework combination
+const allEntries = await getCollection("moveReference");
+const entries = allEntries.filter((entry): entry is MoveReferenceEntry =>
+  entry.id.startsWith(`${network}/${framework}/`),
+);
+
+// Sort entries by module name
+const sortedEntries = entries.sort((a, b) => {
+  const aName = a.data.title || a.id.split("/").pop() || "";
+  const bName = b.data.title || b.id.split("/").pop() || "";
+  return aName.localeCompare(bName);
+});
+---
+
+<StarlightPage frontmatter={{ title: `${framework} Modules (${network})`, tableOfContents: false }}>
+  <!-- <div class="metadata">
+    <span class="branch">{network}</span>
+    <span class="framework">{framework}</span>
+  </div> -->
+
+  <CardGrid>
+    {
+      sortedEntries.map((entry) => (
+        <LinkCard
+          href={
+            lang === "en" ? `/move-reference/${entry.id}` : `/${lang}/move-reference/${entry.id}`
+          }
+          title={entry.data.title || entry.id.split("/").pop()}
+        />
+      ))
+    }
+  </CardGrid>
+</StarlightPage>
+
+<style>
+  .metadata {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+  .branch,
+  .framework {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 999px;
+    font-size: var(--sl-text-sm);
+    font-weight: 500;
+  }
+  .branch {
+    background-color: var(--sl-color-blue-high);
+    color: var(--sl-color-white);
+  }
+  .framework {
+    background-color: var(--sl-color-gray-5);
+    color: var(--sl-color-gray-1);
+  }
+</style>

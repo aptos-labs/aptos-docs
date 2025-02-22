@@ -1,0 +1,100 @@
+---
+import { getCollection } from "astro:content";
+import StarlightPage from "@astrojs/starlight/components/StarlightPage.astro";
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+import type { CollectionEntry } from "astro:content";
+import { SUPPORTED_LANGUAGES } from "../../../../config/locales";
+
+export async function getStaticPaths() {
+  const networks = ["mainnet", "testnet", "devnet"] as const;
+  return networks.flatMap((network) =>
+    SUPPORTED_LANGUAGES.map(({ code }) => ({
+      params: {
+        lang: code === "en" ? undefined : code,
+        network,
+      },
+      props: {
+        lang: code,
+        network,
+      },
+    })),
+  );
+}
+
+const { lang, network } = Astro.props as {
+  lang: string;
+  network: "mainnet" | "testnet" | "devnet";
+};
+
+// Get all entries for this network
+const allEntries = await getCollection("moveReference");
+const networkEntries = allEntries.filter(
+  (entry): entry is CollectionEntry<"moveReference"> => entry.data.branch === network,
+);
+
+// Get unique frameworks for this network
+const frameworks = [...new Set(networkEntries.map((entry) => entry.data.framework))]
+  .filter((fw): fw is string => typeof fw === "string")
+  .sort();
+
+// Group entries by framework
+const frameworkEntries = frameworks.reduce(
+  (acc, fw) => {
+    acc[fw] = networkEntries.filter((entry) => entry.data.framework === fw);
+    return acc;
+  },
+  {} as Record<string, CollectionEntry<"moveReference">[]>,
+);
+
+// Capitalize first letter of network name for title
+const networkName = network.charAt(0).toUpperCase() + network.slice(1);
+---
+
+<StarlightPage frontmatter={{ title: `${networkName} Move Modules`, tableOfContents: false }}>
+  <!-- <div class="metadata">
+    <span class="branch">{network}</span>
+  </div> -->
+
+  <CardGrid>
+    {
+      frameworks.map((framework) => (
+        <LinkCard
+          href={
+            lang === "en"
+              ? `/move-reference/${network}/${framework}`
+              : `/${lang}/move-reference/${network}/${framework}`
+          }
+          title={`${framework}`}
+          description={`${frameworkEntries[framework]?.length ?? 0} modules available`}
+        />
+      ))
+    }
+  </CardGrid>
+</StarlightPage>
+
+<style>
+  .metadata {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+  .branch {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 999px;
+    font-size: var(--sl-text-sm);
+    font-weight: 500;
+    background-color: var(--sl-color-blue-high);
+    color: var(--sl-color-white);
+  }
+  .framework-sections {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+  }
+  .framework-section h2 {
+    font-size: var(--sl-text-xl);
+    color: var(--sl-color-white);
+    margin-bottom: 1rem;
+  }
+</style>

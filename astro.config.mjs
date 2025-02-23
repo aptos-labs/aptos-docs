@@ -138,12 +138,13 @@ export default defineConfig({
   prefetch: true,
   env: {
     schema: {
-      ALGOLIA_APP_ID: envField.string({ context: "client", access: "public" }),
+      ALGOLIA_APP_ID: envField.string({ context: "client", access: "public", optional: true }),
       ALGOLIA_SEARCH_API_KEY: envField.string({
         context: "client",
         access: "public",
+        optional: true,
       }),
-      ALGOLIA_INDEX_NAME: envField.string({ context: "client", access: "public" }),
+      ALGOLIA_INDEX_NAME: envField.string({ context: "client", access: "public", optional: true }),
       GITHUB_TOKEN: envField.string({
         context: "server",
         access: "secret",

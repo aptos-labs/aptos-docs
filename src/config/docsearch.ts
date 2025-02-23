@@ -12,9 +12,9 @@ const getEnvVar = (key: string, value: string | undefined): string => {
 };
 
 export default Object.freeze({
-  appId: getEnvVar("ALGOLIA_APP_ID", ALGOLIA_APP_ID as string | undefined),
-  apiKey: getEnvVar("ALGOLIA_SEARCH_API_KEY", ALGOLIA_SEARCH_API_KEY as string | undefined),
-  indexName: getEnvVar("ALGOLIA_INDEX_NAME", ALGOLIA_INDEX_NAME as string | undefined),
+  appId: getEnvVar("ALGOLIA_APP_ID", ALGOLIA_APP_ID),
+  apiKey: getEnvVar("ALGOLIA_SEARCH_API_KEY", ALGOLIA_SEARCH_API_KEY),
+  indexName: getEnvVar("ALGOLIA_INDEX_NAME", ALGOLIA_INDEX_NAME),
   searchParameters: {
     get facetFilters() {
       return getFacetFilters();

@@ -60,8 +60,16 @@ export function moveReferenceLoader(config: GitHubConfig): Loader {
                   framework: module.framework,
                 };
 
-                store.set(entry);
-                stats.processedFiles++;
+                try {
+                  store.set(entry);
+                  stats.processedFiles++;
+                } catch (storeError) {
+                  const message =
+                    storeError instanceof Error ? storeError.message : String(storeError);
+                  logger.error(`Error storing entry ${entryId}: ${message}`);
+                  stats.errorFiles++;
+                  continue;
+                }
               } catch (error) {
                 const message = error instanceof Error ? error.message : String(error);
                 logger.error(`Error processing file ${file.name}: ${message}`);

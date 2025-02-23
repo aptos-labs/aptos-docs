@@ -11,6 +11,7 @@ import rehypeKatex from "rehype-katex";
 import { loadEnv } from "vite";
 
 import rehypeRaw from "rehype-raw";
+import sitemap from "@astrojs/sitemap";
 import { SUPPORTED_LANGUAGES } from "./src/config/locales";
 // import rehypeAddDebug from './src/plugins/rehype-add-debug.js';
 
@@ -39,6 +40,7 @@ export default defineConfig({
       : process.env.VERCEL_URL
         ? `https://${process.env.VERCEL_URL}`
         : "http://localhost:4321",
+  trailingSlash: "never",
   integrations: [
     starlight({
       title: "Aptos Developer Docs",
@@ -125,6 +127,19 @@ export default defineConfig({
         ...openAPISidebarGroups,
       ],
       customCss: ["./src/globals.css", "katex/dist/katex.min.css"],
+    }),
+    sitemap({
+      serialize(item) {
+        item.lastmod = new Date().toISOString();
+        return item;
+      },
+      i18n: {
+        defaultLocale: "en",
+        locales: {
+          en: "en",
+          zh: "zh",
+        },
+      },
     }),
   ],
   adapter: vercel(),

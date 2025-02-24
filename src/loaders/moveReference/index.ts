@@ -22,8 +22,8 @@ export function moveReferenceLoader(config: GitHubConfig): Loader {
     const currentHash = await getPluginHash();
     const storedHash = meta.get("plugin-version");
 
-    if (currentHash !== storedHash) {
-      // Plugins changed - clear all ETags to force refresh
+    // Only clear cache if we had a previous hash that's different
+    if (storedHash !== undefined && currentHash !== storedHash) {
       logger.info(`${red("▼")} Plugin changes detected, clearing cache...`);
 
       // Clear all entries from store
@@ -43,10 +43,11 @@ export function moveReferenceLoader(config: GitHubConfig): Loader {
         meta.delete(key);
       });
 
-      // Store new hash
-      meta.set("plugin-version", currentHash);
       logger.info(`${green("▼")} Cache and store cleared, will reload all content`);
     }
+
+    // Always store the current hash
+    meta.set("plugin-version", currentHash);
 
     // Initialize services
     const githubFetcher = new GitHubFetcher(config, context);

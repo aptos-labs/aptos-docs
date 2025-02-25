@@ -1,6 +1,6 @@
 import { defineCollection } from "astro:content";
-import { docsLoader } from "@astrojs/starlight/loaders";
-import { docsSchema } from "@astrojs/starlight/schema";
+import { docsLoader, i18nLoader } from "@astrojs/starlight/loaders";
+import { docsSchema, i18nSchema } from "@astrojs/starlight/schema";
 import { moveReferenceLoader } from "./loaders/moveReference";
 import type { BranchConfig, ModuleConfig } from "./loaders/moveReference/types";
 
@@ -34,6 +34,7 @@ const createBranchConfig = (branch: Omit<BranchConfig, "modules">): BranchConfig
 
 export const collections = {
   docs: defineCollection({ loader: docsLoader(), schema: docsSchema() }),
+  i18n: defineCollection({ loader: i18nLoader(), schema: i18nSchema() }),
   moveReference: defineCollection({
     type: "content_layer",
     loader: moveReferenceLoader({

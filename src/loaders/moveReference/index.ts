@@ -87,12 +87,12 @@ export function moveReferenceLoader(config: GitHubConfig): Loader {
                 const entry = await markdownProcessor.processContent(entryId, fileContent);
 
                 // Add branch and framework metadata
-                entry.data = {
-                  ...entry.data,
+                Object.assign(entry.data, {
                   network: branch.name,
                   framework: module.framework,
                   title: baseFilename,
-                };
+                });
+                Object.assign(entry, { digest: context.generateDigest(entry.data) });
 
                 try {
                   store.set(entry);

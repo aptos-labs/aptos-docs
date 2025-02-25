@@ -150,6 +150,13 @@ export function moveReferenceLoader(config: GitHubConfig): Loader {
 
   return {
     name: "move-reference",
-    load: (context) => loadContent(context),
+    load: async (context) => {
+      if (process.env.GITHUB_ACTIONS) {
+        context.logger.warn(`${context.collection} loader is disabled in GITHUB CI`);
+        return;
+      }
+
+      return loadContent(context);
+    },
   };
 }

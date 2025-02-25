@@ -76,8 +76,9 @@ export default defineConfig({
       },
       components: {
         Head: "./src/starlight-overrides/Head.astro",
-        PageTitle: "./src/starlight-overrides/PageTitle.astro",
+        PageFrame: "./src/starlight-overrides/PageFrame.astro",
         PageSidebar: "./src/starlight-overrides/PageSidebar.astro",
+        PageTitle: "./src/starlight-overrides/PageTitle.astro",
       },
       plugins: [
         ...(hasAlgoliaConfig

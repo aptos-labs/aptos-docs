@@ -8,16 +8,16 @@ const FRAMEWORK_BASE_PATH = "aptos-move/framework";
 
 const MODULES: Omit<ModuleConfig, "folder">[] = [
   { framework: "move-stdlib" },
-  { framework: "aptos-stdlib" },
-  { framework: "aptos-framework" },
-  { framework: "aptos-token" },
-  { framework: "aptos-token-objects" },
+  // { framework: "aptos-stdlib" },
+  // { framework: "aptos-framework" },
+  // { framework: "aptos-token" },
+  // { framework: "aptos-token-objects" },
 ];
 
 const BRANCHES: Omit<BranchConfig, "modules">[] = [
   { name: "mainnet", ref: "mainnet" },
-  { name: "testnet", ref: "testnet" },
-  { name: "devnet", ref: "devnet" },
+  // { name: "testnet", ref: "testnet" },
+  // { name: "devnet", ref: "devnet" },
 ];
 
 // Helper to create the full module config with the folder path

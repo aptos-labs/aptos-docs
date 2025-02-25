@@ -2,8 +2,8 @@
 import { getCollection } from "astro:content";
 import StarlightPage from "@astrojs/starlight/components/StarlightPage.astro";
 import { CardGrid, LinkCard, Tabs, TabItem } from "@astrojs/starlight/components";
-import type { CollectionEntry } from "astro:content";
 import { SUPPORTED_LANGUAGES } from "../../config/locales";
+import { MOVE_REFERENCE_BRANCHES, type MoveNetwork } from "../../content.config";
 
 export async function getStaticPaths() {
   return SUPPORTED_LANGUAGES.map(({ code }) => ({
@@ -12,45 +12,14 @@ export async function getStaticPaths() {
   }));
 }
 
-const { lang } = Astro.props as { lang: string };
+const { lang } = Astro.props;
 const moveReferenceEntries = await getCollection("moveReference");
 
-type MoveReferenceEntry = CollectionEntry<"moveReference">;
-// Map network names to their respective branches
-const NETWORK_BRANCHES = {
-  mainnet: "mainnet",
-  testnet: "testnet",
-  devnet: "devnet",
-} as const;
-
-type Network = keyof typeof NETWORK_BRANCHES;
-
-// Group entries by network and framework
-const groupedEntries = moveReferenceEntries.reduce(
-  (acc, entry) => {
-    const branch = entry.data.branch as string;
-    const framework = entry.data.framework as string;
-
-    // Only include entries for our defined networks
-    if (branch in NETWORK_BRANCHES) {
-      if (!acc[branch]) {
-        acc[branch] = {};
-      }
-      if (!acc[branch][framework]) {
-        acc[branch][framework] = [];
-      }
-      acc[branch][framework].push(entry);
-    }
-    return acc;
-  },
-  {} as Record<string, Record<string, MoveReferenceEntry[]>>,
-);
-
 // Get entries for a specific network
-const getNetworkFrameworks = (network: Network) => {
-  const branch = NETWORK_BRANCHES[network];
-  const entries = groupedEntries[branch] || {};
-  return Object.entries(entries);
+const getNetworkFrameworks = (network: MoveNetwork) => {
+  const networkEntries = moveReferenceEntries.filter((entry) => entry.data.network === network);
+
+  return Object.entries(Object.groupBy(networkEntries, (entry) => entry.data.framework));
 };
 ---
 
@@ -58,63 +27,27 @@ const getNetworkFrameworks = (network: Network) => {
   frontmatter={{ title: "Move Reference", tableOfContents: false, prev: false, next: false }}
 >
   <Tabs>
-    <TabItem label="Mainnet" icon="star">
-      <div class="framework-section">
-        <CardGrid>
-          {
-            getNetworkFrameworks("mainnet").map(([framework, entries]) => (
-              <LinkCard
-                href={
-                  lang === "en"
-                    ? `/move-reference/mainnet/${framework}`
-                    : `/${lang}/move-reference/mainnet/${framework}`
-                }
-                title={framework}
-                description={`${entries.length} modules available for Mainnet`}
-              />
-            ))
-          }
-        </CardGrid>
-      </div>
-    </TabItem>
-    <TabItem label="Testnet" icon="setting">
-      <div class="framework-section">
-        <CardGrid>
-          {
-            getNetworkFrameworks("testnet").map(([framework, entries]) => (
-              <LinkCard
-                href={
-                  lang === "en"
-                    ? `/move-reference/testnet/${framework}`
-                    : `/${lang}/move-reference/testnet/${framework}`
-                }
-                title={framework}
-                description={`${entries.length} modules available for Testnet`}
-              />
-            ))
-          }
-        </CardGrid>
-      </div>
-    </TabItem>
-    <TabItem label="Devnet" icon="rocket">
-      <div class="framework-section">
-        <CardGrid>
-          {
-            getNetworkFrameworks("devnet").map(([framework, entries]) => (
-              <LinkCard
-                href={
-                  lang === "en"
-                    ? `/move-reference/devnet/${framework}`
-                    : `/${lang}/move-reference/devnet/${framework}`
-                }
-                title={framework}
-                description={`${entries.length} modules available for Devnet`}
-              />
-            ))
-          }
-        </CardGrid>
-      </div>
-    </TabItem>
+    {
+      MOVE_REFERENCE_BRANCHES.map(({ label, icon, name, ref }) => (
+        <TabItem label={label} icon={icon}>
+          <div class="framework-section">
+            <CardGrid>
+              {getNetworkFrameworks(name).map(([framework, entries]) => (
+                <LinkCard
+                  href={
+                    lang === "en"
+                      ? `/move-reference/${ref}/${framework}`
+                      : `/${lang}/move-reference/${ref}/${framework}`
+                  }
+                  title={framework}
+                  description={`${entries.length} modules available for ${label}`}
+                />
+              ))}
+            </CardGrid>
+          </div>
+        </TabItem>
+      ))
+    }
   </Tabs>
 </StarlightPage>
 

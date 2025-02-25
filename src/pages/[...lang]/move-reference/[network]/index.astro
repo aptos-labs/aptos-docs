@@ -2,49 +2,37 @@
 import { getCollection } from "astro:content";
 import StarlightPage from "@astrojs/starlight/components/StarlightPage.astro";
 import { CardGrid, LinkCard } from "@astrojs/starlight/components";
-import type { CollectionEntry } from "astro:content";
 import { SUPPORTED_LANGUAGES } from "../../../../config/locales";
+import { MOVE_REFERENCE_BRANCHES } from "~/content.config";
 
 export async function getStaticPaths() {
-  const networks = ["mainnet", "testnet", "devnet"] as const;
-  return networks.flatMap((network) =>
+  return MOVE_REFERENCE_BRANCHES.flatMap((network) =>
     SUPPORTED_LANGUAGES.map(({ code }) => ({
       params: {
         lang: code === "en" ? undefined : code,
-        network,
+        network: network.name,
       },
       props: {
         lang: code,
-        network,
+        network: network.name,
       },
     })),
   );
 }
 
-const { lang, network } = Astro.props as {
-  lang: string;
-  network: "mainnet" | "testnet" | "devnet";
-};
+const { lang, network } = Astro.props;
 
 // Get all entries for this network
-const allEntries = await getCollection("moveReference");
-const networkEntries = allEntries.filter(
-  (entry): entry is CollectionEntry<"moveReference"> => entry.data.branch === network,
+const networkEntries = await getCollection(
+  "moveReference",
+  (entry) => entry.data.network === network,
 );
 
 // Get unique frameworks for this network
-const frameworks = [...new Set(networkEntries.map((entry) => entry.data.framework))]
-  .filter((fw): fw is string => typeof fw === "string")
-  .sort();
+const frameworks = [...new Set(networkEntries.map((entry) => entry.data.framework))].sort();
 
 // Group entries by framework
-const frameworkEntries = frameworks.reduce(
-  (acc, fw) => {
-    acc[fw] = networkEntries.filter((entry) => entry.data.framework === fw);
-    return acc;
-  },
-  {} as Record<string, CollectionEntry<"moveReference">[]>,
-);
+const frameworkEntries = Object.groupBy(networkEntries, (entry) => entry.data.framework);
 
 // Capitalize first letter of network name for title
 // const networkName = network.charAt(0).toUpperCase() + network.slice(1);

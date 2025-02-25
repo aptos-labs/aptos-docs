@@ -82,14 +82,16 @@ export function moveReferenceLoader(config: GitHubConfig): Loader {
 
               try {
                 // Generate the entry ID in the format: branch/framework/filename
-                const entryId = `${branch.name}/${module.framework}/${file.name.replace(/\.md$/, "")}`;
+                const baseFilename = file.name.replace(/\.md$/, "");
+                const entryId = `${branch.name}/${module.framework}/${baseFilename}`;
                 const entry = await markdownProcessor.processContent(entryId, fileContent);
 
                 // Add branch and framework metadata
                 entry.data = {
                   ...entry.data,
-                  branch: branch.name,
+                  network: branch.name,
                   framework: module.framework,
+                  title: baseFilename,
                 };
 
                 try {

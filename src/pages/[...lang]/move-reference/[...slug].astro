@@ -1,7 +1,6 @@
 ---
-import { getCollection, render } from "astro:content";
 import StarlightPage from "@astrojs/starlight/components/StarlightPage.astro";
-import type { CollectionEntry } from "astro:content";
+import { getCollection, render } from "astro:content";
 import { SUPPORTED_LANGUAGES } from "../../../config/locales";
 
 export async function getStaticPaths() {
@@ -18,16 +17,12 @@ export async function getStaticPaths() {
   );
 }
 
-const { entry } = Astro.props as { entry: CollectionEntry<"moveReference"> };
+const { entry } = Astro.props;
 const { Content, headings } = await render(entry);
-
-// Extract branch and framework from the entry ID
-const [branch] = entry.id.split("/");
-const moduleTitle = entry.data.title || entry.id.split("/").pop();
 
 // Create title in Move Module 0x1 format vs SEO-friendly format
 // const title = `Module 0x1::${moduleTitle}`; // e.g. "Module 0x1::bit_vector"
-const title = `${moduleTitle} - [${branch}]`; // e.g. "bit_vector - Move Module"
+const title = `${entry.data.title} - [${entry.data.network}]`; // e.g. "bit_vector - Move Module"
 ---
 
 <StarlightPage frontmatter={{ title }} headings={headings}>

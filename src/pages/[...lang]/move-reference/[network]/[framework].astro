@@ -2,56 +2,52 @@
 import { getCollection } from "astro:content";
 import StarlightPage from "@astrojs/starlight/components/StarlightPage.astro";
 import { LinkCard } from "@astrojs/starlight/components";
-import type { CollectionEntry } from "astro:content";
 import { SUPPORTED_LANGUAGES } from "../../../../config/locales";
-
-type MoveReferenceEntry = CollectionEntry<"moveReference">;
 
 export async function getStaticPaths() {
   const moveReferenceEntries = await getCollection("moveReference");
+  const uniqueCombinations = new Map(
+    moveReferenceEntries.map((entry) => [
+      `${entry.data.network}-${entry.data.framework}`,
+      entry.data,
+    ]),
+  );
 
-  // Get unique network/framework combinations
-  const combinations = new Set<string>();
-  moveReferenceEntries.forEach((entry) => {
-    const [branch, framework] = entry.id.split("/");
-    combinations.add(`${branch}/${framework}`);
-  });
-
-  return Array.from(combinations).flatMap((combo) => {
-    const [network, framework] = combo.split("/");
-    return SUPPORTED_LANGUAGES.map(({ code }) => ({
-      params: {
-        lang: code === "en" ? undefined : code,
-        network,
-        framework,
-      },
-      props: {
-        lang: code,
-        network,
-        framework,
-      },
-    }));
-  });
+  return uniqueCombinations
+    .values()
+    .flatMap(({ network, framework }) => {
+      return SUPPORTED_LANGUAGES.map(({ code }) => ({
+        params: {
+          lang: code === "en" ? undefined : code,
+          network,
+          framework,
+        },
+        props: {
+          lang: code,
+          network,
+          framework,
+        },
+      }));
+    })
+    .toArray();
 }
 
-const { lang, network, framework } = Astro.props as {
+interface Props {
   lang: string;
   network: string;
   framework: string;
-};
+}
+
+const { lang, network, framework } = Astro.props;
 
 // Get all entries for this network/framework combination
-const allEntries = await getCollection("moveReference");
-const entries = allEntries.filter((entry): entry is MoveReferenceEntry =>
-  entry.id.startsWith(`${network}/${framework}/`),
+const entries = await getCollection(
+  "moveReference",
+  (entry) => entry.data.network === network && entry.data.framework === framework,
 );
 
 // Sort entries by module name
-const sortedEntries = entries.sort((a, b) => {
-  const aName = a.data.title || a.id.split("/").pop() || "";
-  const bName = b.data.title || b.id.split("/").pop() || "";
-  return aName.localeCompare(bName);
-});
+const sortedEntries = entries.sort((a, b) => a.data.title.localeCompare(b.data.title));
 ---
 
 <StarlightPage
@@ -66,7 +62,7 @@ const sortedEntries = entries.sort((a, b) => {
     sortedEntries.map((entry) => (
       <LinkCard
         href={lang === "en" ? `/move-reference/${entry.id}` : `/${lang}/move-reference/${entry.id}`}
-        title={entry.data.title || entry.id.split("/").pop()}
+        title={entry.data.title}
       />
     ))
   }

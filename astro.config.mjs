@@ -25,16 +25,6 @@ const hasAlgoliaConfig = ALGOLIA_APP_ID && ALGOLIA_SEARCH_API_KEY && ALGOLIA_IND
 
 // https://astro.build/config
 export default defineConfig({
-  // i18n: {
-  //   defaultLocale: "en",
-  //   locales: ["en", "zh"],
-  //   fallback: { zh: "en" },
-  //   routing: {
-  //     prefixDefaultLocale: false,
-  //     redirectToDefaultLocale: true,
-  //     fallbackType: "rewrite",
-  //   },
-  // },
   site:
     process.env.VERCEL_ENV === "production"
       ? "https://aptos-docs-astro.vercel.app"
@@ -141,6 +131,7 @@ export default defineConfig({
         locales: {
           en: "en",
           zh: "zh",
+          ja: "ja",
         },
       },
     }),

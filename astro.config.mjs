@@ -12,6 +12,7 @@ import { loadEnv } from "vite";
 
 import rehypeRaw from "rehype-raw";
 import sitemap from "@astrojs/sitemap";
+import partytown from "@astrojs/partytown";
 import { SUPPORTED_LANGUAGES } from "./src/config/locales";
 // import rehypeAddDebug from './src/plugins/rehype-add-debug.js';
 
@@ -143,6 +144,11 @@ export default defineConfig({
         },
       },
     }),
+    partytown({
+      config: {
+        forward: ["dataLayer.push", "gtag"],
+      },
+    }),
   ],
   adapter: vercel(),
   vite: {
@@ -167,6 +173,7 @@ export default defineConfig({
         access: "secret",
         optional: !!process.env.CI,
       }),
+      GTAG_ID: envField.string({ context: "client", access: "public", optional: true }),
     },
   },
 });

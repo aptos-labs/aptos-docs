@@ -156,6 +156,7 @@ const config = [
       parserOptions: {
         extraFileExtensions: [".astro"],
         parser: pluginTypeScript.parser,
+        project: false,
         sourceType: "module",
       },
     },

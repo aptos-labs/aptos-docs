@@ -35,7 +35,9 @@ import type { TransformerOptions } from "./types/index.js";
 
 interface ExtendedTransformerOptions extends TransformerOptions {
   sourcePath: string; // Make sourcePath required
+  language?: string; // Add language option for determining output path
 }
+
 import type { Handle, State } from "mdast-util-to-markdown";
 
 interface MigrationConfig {
@@ -218,7 +220,13 @@ async function processFile(filePath: string, options: ExtendedTransformerOptions
     throw new Error("Source path not provided in options");
   }
   const relativePath = path.relative(options.sourcePath, filePath);
-  const newPath = path.join(projectRoot, "src/content/docs", relativePath);
+
+  // Determine the output path based on the language
+  const basePath = path.join(projectRoot, "src/content/docs");
+  const newPath =
+    options.language === "zh"
+      ? path.join(basePath, "zh", relativePath)
+      : path.join(basePath, relativePath);
 
   // Ensure the directory exists
   await fs.mkdir(path.dirname(newPath), { recursive: true });
@@ -230,7 +238,12 @@ async function processFile(filePath: string, options: ExtendedTransformerOptions
   progress.updateFile(relativePath);
 }
 
-async function getSourcePath(): Promise<string> {
+interface SourcePaths {
+  en: string;
+  zh: string;
+}
+
+async function getSourcePaths(): Promise<SourcePaths> {
   const localPath = path.join(projectRoot, "nextra-migration");
 
   try {
@@ -241,7 +254,10 @@ async function getSourcePath(): Promise<string> {
 
     if (hasMdxFiles) {
       logger.log("Migration", "Using local nextra-migration directory");
-      return localPath;
+      return {
+        en: localPath,
+        zh: localPath,
+      };
     }
   } catch (error) {
     logger.log("Migration", "Local nextra-migration directory not found or empty");
@@ -286,9 +302,14 @@ async function getSourcePath(): Promise<string> {
       throw new Error("Could not find extracted repository directory");
     }
 
-    const sourcePath = path.join(tempDir, extractedDir, "apps", "nextra", "pages", "en");
-    logger.log("Migration", "Using GitHub repository source:", sourcePath);
-    return sourcePath;
+    const basePath = path.join(tempDir, extractedDir, "apps", "nextra", "pages");
+    const paths = {
+      en: path.join(basePath, "en"),
+      zh: path.join(basePath, "zh"),
+    };
+
+    logger.log("Migration", "Using GitHub repository sources:", paths);
+    return paths;
   } catch (error) {
     logger.log("Migration", "Failed to clone repository:", error);
     throw error;
@@ -327,8 +348,23 @@ async function processDirectory(
   config: MigrationConfig,
 ): Promise<void> {
   logger.log("Migration", "Processing directory:", dirPath);
+  logger.log("Migration", "With options:", {
+    language: options.language,
+    sourcePath: options.sourcePath,
+    useComponentSyntax: options.useComponentSyntax,
+  });
+
   const entries = await fs.readdir(dirPath, { withFileTypes: true });
   logger.log("Migration", `Found ${entries.length} entries in ${dirPath}`);
+  logger.log(
+    "Migration",
+    "Directory entries:",
+    entries.map((entry) => ({
+      name: entry.name,
+      isDirectory: entry.isDirectory(),
+      isFile: entry.isFile(),
+    })),
+  );
 
   for (const entry of entries) {
     const fullPath = path.join(dirPath, entry.name);
@@ -349,9 +385,19 @@ async function processDirectory(
       }
       logger.log("Migration", "Found MDX file:", entry.name);
       try {
+        logger.log("Migration", "Processing file:", {
+          fullPath,
+          relativePath,
+          language: options.language,
+        });
         await processFile(fullPath, options);
+        logger.log("Migration", "Successfully processed file:", entry.name);
       } catch (error) {
-        logger.log("Migration", "Error processing file:", fullPath, error);
+        logger.log("Migration", "Error processing file:", {
+          file: fullPath,
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        });
         progress.addFailedFile(relativePath);
       }
     } else {
@@ -452,32 +498,73 @@ async function main() {
     useComponentSyntax: !options.useDirectiveSyntax,
     shouldSkipFile: (relativePath: string) => {
       // Add any file skip conditions here
-      return relativePath === "index.mdx";
+      return relativePath === "index.mdx" || relativePath.endsWith("_meta.tsx");
     },
   };
 
   try {
-    const sourcePath = await getSourcePath();
-    // Count total files first
-    const totalFiles = await countMdxFiles(sourcePath, config.ignoredFolders, config);
+    const sourcePaths = await getSourcePaths();
+
+    // Count total files from both English and Chinese content
+    logger.log("Migration", "Counting files to process...");
+    const enTotalFiles = await countMdxFiles(sourcePaths.en, config.ignoredFolders, config);
+    let zhTotalFiles = 0;
+
+    try {
+      await fs.access(sourcePaths.zh);
+      zhTotalFiles = await countMdxFiles(sourcePaths.zh, config.ignoredFolders, config);
+      logger.log("Migration", "Found Chinese files to process:", zhTotalFiles);
+    } catch (error) {
+      logger.log("Migration", "No Chinese content directory found");
+    }
+
+    // Set total files count for both languages
+    const totalFiles = enTotalFiles + zhTotalFiles;
     progress.setTotalFiles(totalFiles);
 
-    logger.log("Migration", "Starting migration from:", sourcePath);
-    logger.log("Migration", "Ignored folders:", config.ignoredFolders);
-    logger.log("Migration", "Total files to process:", totalFiles);
-
+    // Process English content first
+    logger.log("Migration", "Starting English content migration from:", sourcePaths.en);
     await processDirectory(
-      sourcePath,
+      sourcePaths.en,
       {
         useComponentSyntax: config.useComponentSyntax,
-        sourcePath,
+        sourcePath: sourcePaths.en,
+        language: "en",
       },
       config,
     );
 
+    // Process Chinese content if it exists
+    if (zhTotalFiles > 0) {
+      logger.log("Migration", "Starting Chinese content migration from:", sourcePaths.zh);
+
+      // Debug: List contents of Chinese directory
+      const zhContents = await fs.readdir(sourcePaths.zh, { withFileTypes: true });
+      logger.log(
+        "Migration",
+        "Chinese directory contents:",
+        zhContents.map((entry) => entry.name),
+      );
+
+      await processDirectory(
+        sourcePaths.zh,
+        {
+          useComponentSyntax: config.useComponentSyntax,
+          sourcePath: sourcePaths.zh,
+          language: "zh",
+        },
+        config,
+      );
+
+      // Debug: Verify Chinese content was copied
+      const zhDestPath = path.join(projectRoot, "src/content/docs/zh");
+      const zhDestContents = await fs.readdir(zhDestPath).catch(() => []);
+      logger.log("Migration", "Chinese destination contents:", zhDestContents);
+    }
+
     // Copy images after processing MDX files
     logger.log("Migration", "Starting image migration");
-    await copyImages(sourcePath);
+    await copyImages(sourcePaths.en); // Using English path as base for images
 
     // Clean up temp directory if it exists
     const tempDir = path.join(projectRoot, "temp-nextra-docs");

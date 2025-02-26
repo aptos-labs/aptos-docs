@@ -31,6 +31,7 @@ import { FileTreeTransformer } from "./transformers/fileTree.js";
 import { CustomComponentTransformer } from "./transformers/custom-components.js";
 import { CodeTransformer } from "./transformers/code.js";
 import { ImageTransformer } from "./transformers/image.js";
+import { PunctuationTransformer } from "./transformers/punctuation.js";
 import type { TransformerOptions } from "./types/index.js";
 
 interface ExtendedTransformerOptions extends TransformerOptions {
@@ -115,6 +116,7 @@ async function processFile(filePath: string, options: ExtendedTransformerOptions
     new ImportTransformer(componentMappings),
     new HrefTransformer(),
     new ImageTransformer(),
+    new PunctuationTransformer(),
   ];
 
   logger.log("Migration", "Starting transformers");

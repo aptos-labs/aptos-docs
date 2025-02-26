@@ -226,7 +226,9 @@ async function processFile(filePath: string, options: ExtendedTransformerOptions
   const newPath =
     options.language === "zh"
       ? path.join(basePath, "zh", relativePath)
-      : path.join(basePath, relativePath);
+      : options.language === "ja"
+        ? path.join(basePath, "ja", relativePath)
+        : path.join(basePath, relativePath);
 
   // Ensure the directory exists
   await fs.mkdir(path.dirname(newPath), { recursive: true });
@@ -241,6 +243,54 @@ async function processFile(filePath: string, options: ExtendedTransformerOptions
 interface SourcePaths {
   en: string;
   zh: string;
+  ja?: string;
+}
+
+async function getSourcePathsFromCommit(commit: string, language: string): Promise<string> {
+  const tempDir = path.join(projectRoot, `temp-nextra-docs-${language}`);
+  logger.log("Migration", `Cloning specific commit for ${language} content...`);
+
+  try {
+    // Remove temp directory if it exists
+    await fs.rm(tempDir, { recursive: true, force: true });
+
+    // Download the repository zip for specific commit
+    const repoUrl = `https://api.github.com/repos/aptos-labs/developer-docs/zipball/${commit}`;
+    const zipPath = path.join(tempDir, "repo.zip");
+
+    // Create temp directory
+    await fs.mkdir(tempDir, { recursive: true });
+
+    // Download with progress
+    await downloadWithProgress(repoUrl, zipPath);
+
+    // Extract the zip
+    progress.updateDownloadProgress(0, 100, "Extracting repository...");
+    await extract(zipPath, {
+      dir: tempDir,
+      onEntry: () => {
+        progress.updateDownloadProgress(50, 100, "Extracting repository...");
+      },
+    });
+    progress.resetDownload();
+
+    // Clean up zip file
+    await fs.unlink(zipPath);
+
+    // Find the extracted directory
+    const entries = await fs.readdir(tempDir);
+    const extractedDir = entries.find((entry) => entry.startsWith("aptos-labs-developer-docs-"));
+    if (!extractedDir) {
+      throw new Error("Could not find extracted repository directory");
+    }
+
+    const contentPath = path.join(tempDir, extractedDir, "apps", "nextra", "pages", language);
+    logger.log("Migration", `Using ${language} content from commit ${commit}:`, contentPath);
+    return contentPath;
+  } catch (error) {
+    logger.log("Migration", `Failed to get ${language} content from commit ${commit}:`, error);
+    throw error;
+  }
 }
 
 async function getSourcePaths(): Promise<SourcePaths> {
@@ -518,8 +568,24 @@ async function main() {
       logger.log("Migration", "No Chinese content directory found");
     }
 
-    // Set total files count for both languages
-    const totalFiles = enTotalFiles + zhTotalFiles;
+    // Get Japanese content from specific commit
+    logger.log("Migration", "Getting Japanese content from specific commit...");
+    let jaTotalFiles = 0;
+    let jaSourcePath: string | undefined;
+
+    try {
+      jaSourcePath = await getSourcePathsFromCommit(
+        "a84b622ec110313a79f4901b6a8a5119635c325d",
+        "ja",
+      );
+      jaTotalFiles = await countMdxFiles(jaSourcePath, config.ignoredFolders, config);
+      logger.log("Migration", "Found Japanese files to process:", jaTotalFiles);
+    } catch (error) {
+      logger.log("Migration", "No Japanese content found in specified commit");
+    }
+
+    // Set total files count for all languages
+    const totalFiles = enTotalFiles + zhTotalFiles + jaTotalFiles;
     progress.setTotalFiles(totalFiles);
 
     // Process English content first
@@ -562,13 +628,49 @@ async function main() {
       logger.log("Migration", "Chinese destination contents:", zhDestContents);
     }
 
+    // Process Japanese content if it exists
+    if (jaTotalFiles > 0 && jaSourcePath) {
+      logger.log("Migration", "Starting Japanese content migration from:", jaSourcePath);
+
+      // Debug: List contents of Japanese directory
+      const jaContents = await fs.readdir(jaSourcePath, { withFileTypes: true });
+      logger.log(
+        "Migration",
+        "Japanese directory contents:",
+        jaContents.map((entry) => entry.name),
+      );
+
+      await processDirectory(
+        jaSourcePath,
+        {
+          useComponentSyntax: config.useComponentSyntax,
+          sourcePath: jaSourcePath,
+          language: "ja",
+        },
+        config,
+      );
+
+      // Debug: Verify Japanese content was copied
+      const jaDestPath = path.join(projectRoot, "src/content/docs/ja");
+      const jaDestContents = await fs.readdir(jaDestPath).catch(() => []);
+      logger.log("Migration", "Japanese destination contents:", jaDestContents);
+    }
+
     // Copy images after processing MDX files
     logger.log("Migration", "Starting image migration");
     await copyImages(sourcePaths.en); // Using English path as base for images
 
-    // Clean up temp directory if it exists
-    const tempDir = path.join(projectRoot, "temp-nextra-docs");
-    await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+    // Clean up temp directories
+    const tempDirs = [
+      path.join(projectRoot, "temp-nextra-docs"),
+      path.join(projectRoot, "temp-nextra-docs-ja"),
+    ];
+
+    for (const dir of tempDirs) {
+      await fs.rm(dir, { recursive: true, force: true }).catch(() => {
+        logger.log("Migration", `Note: Could not remove temp directory ${dir} (it may not exist)`);
+      });
+    }
 
     progress.complete();
   } catch (error) {

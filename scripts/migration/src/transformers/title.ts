@@ -4,6 +4,14 @@ import type { TransformerOptions, YamlNode, ParagraphNode, Transformer } from ".
 import path from "node:path";
 
 export class TitleTransformer implements Transformer {
+  private isNonEnglish(text: string): boolean {
+    // Chinese: \u4e00-\u9fff
+    // Japanese Hiragana: \u3040-\u309f
+    // Japanese Katakana: \u30a0-\u30ff
+    // Japanese Kanji: \u4e00-\u9faf
+    return /[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff]/.test(text);
+  }
+
   private getTitleFromFilename(filePath: string): string {
     if (!filePath) return "Untitled";
 
@@ -53,9 +61,23 @@ export class TitleTransformer implements Transformer {
     }
 
     // Determine the final title to use
-    let finalTitle = capitalTitle || frontmatterTitle || h1Title;
-    if (!finalTitle) {
-      finalTitle = this.getTitleFromFilename(options.filePath || "");
+    let finalTitle: string;
+
+    // If we have an h1 with Chinese/Japanese characters and either:
+    // - there's no frontmatter title, or
+    // - the frontmatter title is English-only
+    if (
+      h1Title &&
+      this.isNonEnglish(h1Title) &&
+      (!frontmatterTitle || !this.isNonEnglish(frontmatterTitle))
+    ) {
+      finalTitle = h1Title;
+    } else {
+      finalTitle =
+        capitalTitle ||
+        frontmatterTitle ||
+        h1Title ||
+        this.getTitleFromFilename(options.filePath || "");
     }
 
     // Create or update frontmatter

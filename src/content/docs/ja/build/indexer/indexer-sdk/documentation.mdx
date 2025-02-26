@@ -1,0 +1,46 @@
+---
+title: "ドキュメント"
+---
+
+## Indexer SDKのアーキテクチャ
+
+
+
+
+
+Aptosのインデックススタックでは,プロセッサーはブロックチェーンから特定のデータのサブセットをインデックス化し,そのデータを外部データベースに書き込みます.
+
+各プロセッサーは以下の一般的なフローに従います:
+
+1. [トランザクションストリーム](/ja/build/indexer/txn-stream)からトランザクションのストリームを受信
+2. トランザクションから関連データを抽出し,標準化されたスキーマに変換
+3. 変換されたデータをデータベースに保存
+4. 処理済みのトランザクションバージョンを追跡
+
+Indexer SDKを使用すると,独立したステップの有向グラフとしてプロセッサーを記述できます.
+各`Step`には入力と出力があり,各`Step`の出力は[Kanalチャネル](https://github.com/fereidani/kanal)を介して次の`Step`の入力に接続されます.
+
+<center>
+  {/* <ThemedImage alt="Indexer SDKカスタムプロセッサーのアーキテクチャ" sources={"type":"mdxJsxAttributeValueExpression","value":"{\n    light: '/docs/indexer-custom-processor-light.svg',\n    dark: '/docs/indexer-custom-processor-dark.svg',\n  }","data":{"estree":{"type":"Program","start":586,"end":705,"body":[{"type":"ExpressionStatement","expression":{"type":"ObjectExpression","start":586,"end":705,"loc":{"start":{"line":25,"column":13,"offset":586},"end":{"line":28,"column":5,"offset":705}},"properties":[{"type":"Property","start":594,"end":643,"loc":{"start":{"line":26,"column":6,"offset":594},"end":{"line":26,"column":55,"offset":643}},"method":false,"shorthand":false,"computed":false,"key":{"type":"Identifier","start":594,"end":599,"loc":{"start":{"line":26,"column":6,"offset":594},"end":{"line":26,"column":11,"offset":599}},"name":"light","range":[594,599]},"value":{"type":"Literal","start":601,"end":643,"loc":{"start":{"line":26,"column":13,"offset":601},"end":{"line":26,"column":55,"offset":643}},"value":"/docs/indexer-custom-processor-light.svg","raw":"'/docs/indexer-custom-processor-light.svg'","range":[601,643]},"kind":"init","range":[594,643]},{"type":"Property","start":651,"end":698,"loc":{"start":{"line":27,"column":6,"offset":651},"end":{"line":27,"column":53,"offset":698}},"method":false,"shorthand":false,"computed":false,"key":{"type":"Identifier","start":651,"end":655,"loc":{"start":{"line":27,"column":6,"offset":651},"end":{"line":27,"column":10,"offset":655}},"name":"dark","range":[651,655]},"value":{"type":"Literal","start":657,"end":698,"loc":{"start":{"line":27,"column":12,"offset":657},"end":{"line":27,"column":53,"offset":698}},"value":"/docs/indexer-custom-processor-dark.svg","raw":"'/docs/indexer-custom-processor-dark.svg'","range":[657,698]},"kind":"init","range":[651,698]}],"range":[586,705]},"start":586,"end":705,"loc":{"start":{"line":25,"column":13,"offset":586},"end":{"line":28,"column":5,"offset":705}},"range":[586,705]}],"sourceType":"module","comments":[],"loc":{"start":{"line":25,"column":13,"offset":586},"end":{"line":28,"column":5,"offset":705}},"range":[586,705]}}}></ThemedImage> */}
+</center>
+
+## Indexer SDKを使用するタイミング
+
+Indexer SDKは,カスタムコントラクトをインデックス化したい場合や,[Indexer API](/ja/build/indexer/aptos-hosted)で利用できない新しい種類のデータが必要だと気付いた場合に役立ちます.
+
+Indexer SDKでカスタムプロセッサーを作成する一般的なフローは以下の通りです:
+
+1. データベーススキーマを定義する
+2. 新しいプロセッサーを作成する
+3. ストレージスキーマにデータを抽出·変換する`Step`を作成する
+4. ステップを追加·接続してプロセッサーをカスタマイズする
+5. プロセッサーを実行し,データベースにインデックス化されたデータを確認する
+
+## Indexer SDKのメリット
+
+Indexer SDKのアーキテクチャは,以下のような方法でカスタムプロセッサーの作成を簡素化します:
+
+1. プロセッサー間で`Step`の実装を再利用でき,一般的なデータ抽出ロジックの重複を減らすことができます.
+2. SDKは処理されたトランザクション数などの基本的なパフォーマンスメトリクスを各`Step`で収集し,プロセッサーのサブコンポーネントの可観測性を可能にします.
+3. 各`Step`は独立しているため,他の部分を壊すことなくプロセッサーの一部を安全にカスタマイズできます.
+   例えば,データの前処理/後処理やデータ書き込みのバッチ処理を行うための追加の`Step`を追加できます.また,各`Step`はプロセッサーの他の部分から独立してテストすることができます.

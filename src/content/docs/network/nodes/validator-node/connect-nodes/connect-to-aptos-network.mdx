@@ -111,7 +111,7 @@ If you used Terraform to deploy your nodes (e.g., for AWS, Azure or GCP), follow
 
 4. Find the IP/DNS for the monitoring load balancer, using:
 
-   ```bash filename="Terminal"
+   ```shellscript filename="Terminal"
    kubectl get svc ${WORKSPACE}-mon-aptos-monitoring --output jsonpath='{.status.loadBalancer.ingress[0]}'
    ```
 
@@ -125,11 +125,11 @@ If you used Terraform to deploy your nodes (e.g., for AWS, Azure or GCP), follow
 
 8. Recreate the secrets. Make sure the secret name matches your `era` number, e.g. if you have `era = 3`, then you should replace the secret name to be:
 
-```bash filename="Terminal"
+```shellscript filename="Terminal"
 ${WORKSPACE}-aptos-node-0-genesis-e3
 ```
 
-```bash filename="Terminal"
+```shellscript filename="Terminal"
 export WORKSPACE=<your workspace name>
 
 kubectl create secret generic ${WORKSPACE}-aptos-node-0-genesis-e2 \
@@ -157,7 +157,7 @@ under the entry `account_private_key`.
 
 Replace `<operator_account_private_key>` with the value from the file in the command below:
 
-```bash filename="Terminal"
+```shellscript filename="Terminal"
 aptos init --profile mainnet-operator \
    --network mainnet \
    --private-key <operator_account_private_key> \
@@ -169,7 +169,7 @@ aptos init --profile mainnet-operator \
 Next, make sure you have enough funds to pay for transaction gas on the network. You can check this using the CLI, by
 running the command below:
 
-```bash filename="Terminal"
+```shellscript filename="Terminal"
 aptos account list --profile mainnet-operator
 ```
 
@@ -187,7 +187,7 @@ Next, you will need to update the network addresses for your validator and VFN. 
 are able to connect to other peers in the network. First, fetch the pool address for your nodes, by running the command below.
 Note: the owner address is the address of the account that owns the stake pool, and was used to initialize the stake pool.
 
-```bash filename="Terminal"
+```shellscript filename="Terminal"
 aptos node get-stake-pool --owner-address <owner_address>
 ```
 
@@ -195,7 +195,7 @@ Using the pool address from the command above, you will need to update the netwo
 do this by running the command below. Note that it requires the `operator.yaml` file, which was created when you first
 deployed your nodes.
 
-```bash filename="Terminal"
+```shellscript filename="Terminal"
 aptos node update-validator-network-addresses  \
    --pool-address <pool-address> \
    --operator-config-file ~/$WORKSPACE/$USERNAME/operator.yaml \
@@ -215,7 +215,7 @@ Next, you will need to update the consensus key for your nodes. This is required
 participate in consensus. You can do this by running the command below. Note that it requires the pool address and
 the `operator.yaml` file (similar to above).
 
-```bash filename="Terminal"
+```shellscript filename="Terminal"
 aptos node update-consensus-key  \
    --pool-address <pool-address> \
    --operator-config-file ~/$WORKSPACE/$USERNAME/operator.yaml \
@@ -232,7 +232,7 @@ aptos node update-consensus-key  \
 
 Finally, you will need to join the validator set. You can do this by running the command below:
 
-```bash filename="Terminal"
+```shellscript filename="Terminal"
 aptos node join-validator-set \
    --pool-address <pool-address> \
    --profile mainnet-operator
@@ -251,14 +251,14 @@ validator node is able to join the validator set.
 When you execute the command to join the validator set, your validator will be in a &quot;Pending Active&quot; state until the
 next epoch occurs. You can run the command below to look for your validator in the `pending_active` list.
 
-```bash filename="Terminal"
+```shellscript filename="Terminal"
 aptos node show-validator-set --profile mainnet-operator | jq -r '.Result.pending_active' | grep <pool_address>
 ```
 
 When the next epoch occurs, the node will be moved into `active_validators` list. Run the command
 below to see your validator in the &quot;active_validators&quot; list:
 
-```bash filename="Terminal"
+```shellscript filename="Terminal"
 aptos node show-validator-set --profile mainnet-operator | jq -r '.Result.active_validators' | grep <pool_address>
 ```
 

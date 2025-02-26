@@ -139,7 +139,7 @@ const abstractedAccount = new AbstractedAccount({
    To deploy the module, you can use the following commands from the [Aptos CLI](/build/cli). We assume that you already have set up a workspace with `aptos init` and
    declared the named addresses in your `Move.toml` file.
 
-   ```bash
+   ```shellscript
    aptos move publish --named-addresses deployer=0x1234567890123456789012345678901234567890
    ```
 
@@ -147,7 +147,7 @@ const abstractedAccount = new AbstractedAccount({
 
    Once deployed, you can setup your environment. In this example, we will use Devnet and create an account named `alice` which will act as our user.
 
-   ```ts
+   ```typescript
    const DEPLOYER = "0x<hello_world_authenticator_deployer>"
 
    const aptos = new Aptos(new AptosConfig({ network: Network.DEVNET }));
@@ -162,7 +162,7 @@ const abstractedAccount = new AbstractedAccount({
    Before you ask them to enable account abstraction, you can check if the account has account abstraction enabled by calling the `isAccountAbstractionEnabled` function.
    This will return a boolean value indicating if the account has account abstraction enabled.
 
-   ```ts
+   ```typescript
    const accountAbstractionStatus = await aptos.account.isAccountAbstractionEnabled({
        accountAddress: alice.accountAddress,
        authenticationFunction,
@@ -177,7 +177,7 @@ const abstractedAccount = new AbstractedAccount({
    the `enableAccountAbstractionTransaction` function. This creates a raw transaction that needs to be signed and submitted to the network. In this example, `alice`
    will be the account that will be enabled.
 
-   ```ts
+   ```typescript
    const transaction = aptos.abstraction.enableAccountAbstractionTransaction({
      accountAddress: alice.accountAddress,
      authenticationFunction: `${deployer}::hello_world_authenticator:authenticate`,
@@ -235,7 +235,7 @@ const abstractedAccount = new AbstractedAccount({
    Once the authentication function is enabled, you can create an abstracted account object for signing transactions. You must provide the authentication function that will be used to verify the transaction
    and a `signer` function that will be used to sign the transaction. The `signer` function is responsible for generating the authenticator that will be passed to the authentication function.
 
-   ```ts
+   ```typescript
    const abstractedAccount = new AbstractedAccount({
      accountAddress: alice.accountAddress,
      signer: () => new TextEncoder().encode("hello world"),
@@ -248,7 +248,7 @@ const abstractedAccount = new AbstractedAccount({
    Once you have created the abstracted account, you can use it to sign transactions normally. It is important that the `sender` field in the transaction
    is the same as the abstracted account&apos;s address.
 
-   ```ts
+   ```typescript
    const coinTransferTransaction = await aptos.transaction.build.simple({
      sender: abstractedAccount.accountAddress,
      data: {
@@ -501,7 +501,7 @@ In this example, we will create an authenticator that allows users to permit cer
    To deploy the module, you can use the following commands from the [Aptos CLI](/build/cli). We assume that you already have set up a workspace with `aptos init` and
    declared the named addresses in your `Move.toml` file.
 
-   ```bash
+   ```shellscript
    aptos move publish --named-addresses deployer=0x1234567890123456789012345678901234567890
    ```
 
@@ -510,7 +510,7 @@ In this example, we will create an authenticator that allows users to permit cer
    Once deployed, you can setup your environment. In this example, we will use Devnet and create an account named `alice` as the user that will be authenticated on behalf of
    and `bob` as the user that will be permitted to sign transactions on behalf of `alice`.
 
-   ```ts
+   ```typescript
    const DEPLOYER = "0x<public_key_authenticator_deployer>"
 
    const aptos = new Aptos(new AptosConfig({ network: Network.DEVNET }));
@@ -526,7 +526,7 @@ In this example, we will create an authenticator that allows users to permit cer
    Before we enable the authentication function, we can check if the account has account abstraction enabled by calling the `isAccountAbstractionEnabled` function.
    This will return a boolean value indicating if the account has account abstraction enabled.
 
-   ```ts
+   ```typescript
    const accountAbstractionStatus = await aptos.account.isAccountAbstractionEnabled({
        accountAddress: alice.accountAddress,
        authenticationFunction,
@@ -541,7 +541,7 @@ In this example, we will create an authenticator that allows users to permit cer
    the `enableAccountAbstractionTransaction` function. This creates a raw transaction that needs to be signed and submitted to the network. In this example, `alice`
    will be the account that will be enabled.
 
-   ```ts
+   ```typescript
    const transaction = await aptos.abstraction.enableAccountAbstractionTransaction({
      accountAddress: alice.accountAddress,
      authenticationFunction,
@@ -561,7 +561,7 @@ In this example, we will create an authenticator that allows users to permit cer
 
    Now that we have enabled the authentication function, we can permit `bob`&apos;s public key to sign transactions on behalf of `alice`.
 
-   ```ts
+   ```typescript
    const enableBobPublicKeyTransaction = await aptos.transaction.build.simple({
        sender: alice.accountAddress,
        data: {
@@ -586,7 +586,7 @@ In this example, we will create an authenticator that allows users to permit cer
    Now that we have permitted `bob`&apos;s public key, we can create an abstracted account that will be used to sign transactions on behalf of `alice`.
    **Notice that the `signer` function uses `bob`&apos;s signer.**
 
-   ```ts
+   ```typescript
    const abstractedAccount = new AbstractedAccount({
      accountAddress: alice.accountAddress,
      signer: (digest) => {
@@ -604,7 +604,7 @@ In this example, we will create an authenticator that allows users to permit cer
    Now that we have created the abstracted account, we can use it to sign transactions normally. It is important that the `sender` field in the transaction
    is the same as the abstracted account&apos;s address.
 
-   ```ts
+   ```typescript
    const coinTransferTransaction = new aptos.transaction.build.simple({
      sender: abstractedAccount.accountAddress,
      data: {
@@ -640,7 +640,7 @@ In this example, we will create an authenticator that allows users to permit cer
 If you want to disable account abstraction for an account, you can use the `disableAccountAbstractionTransaction`. If you do not specify an authentication function,
 the transaction will disable all authentication functions for the account.
 
-```ts
+```typescript
 const transaction = aptos.abstraction.disableAccountAbstractionTransaction({
   accountAddress: alice.accountAddress,
   /**

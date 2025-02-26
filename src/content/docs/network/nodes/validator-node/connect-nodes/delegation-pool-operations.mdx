@@ -25,18 +25,18 @@ The operator address will receive the pool commission that was set at the initia
 Before initializing a delegation pool, you need to know the delegation pool address. You can use the following CLI commands to obtain the delegation pool address depending on where you are in the process:
 
 - Before you create the delegation pool:
-  ```bash filename="Terminal"
+  ```shellscript filename="Terminal"
   aptos account derive-resource-account-address --address <owner_address> --seed "aptos_framework::delegation_pool<SEED>" --seed-encoding utf8
   ```
   - The `<SEED>` is a number chosen by you to create the resource account address to host the delegation pool resource. Once you choose a seed, you should use the same value for all following usages.
 - After you create the delegation pool:
-  ```bash filename="Terminal"
+  ```shellscript filename="Terminal"
   aptos account derive-resource-account-address
   ```
 
 1. Run the command below, substitute in the profile you previously configured during initialization:
 
-   ```bash filename="Terminal"
+   ```shellscript filename="Terminal"
    aptos move run --profile <your-profile> \
       --function-id 0x1::delegation_pool::initialize_delegation_pool \
       --args u64:1000 string:00
@@ -61,7 +61,7 @@ This section describes the available operations that can be performed on this re
 
 - Add `amount` of coins to the delegation pool `pool_address` using the public entry method `add_stake(delegator: &signer, pool_address: address, amount u64)` and substituting your values into the command below before running it:
 
-  ```bash filename="Terminal"
+  ```shellscript filename="Terminal"
   aptos move run --profile delegator \
     --function-id 0x1::delegation_pool::add_stake \
     --args address:<pool_address> u64:<amount>
@@ -69,7 +69,7 @@ This section describes the available operations that can be performed on this re
 
 - Undelegate (unlock) the amount of funds from the delegator&apos;s active and pending active stake up to the limit of the active stake in the stake pool using public entry method `unlock(delegator: &signer, pool_address: address, amount: u64)` and substituting your values into the command below before running it:
 
-  ```bash filename="Terminal"
+  ```shellscript filename="Terminal"
   aptos move run --profile delegator \
     --function-id 0x1::delegation_pool::unlock \
     --args address:<pool_address> u64:<amount>
@@ -77,7 +77,7 @@ This section describes the available operations that can be performed on this re
 
 - Cancel undelegate (reactivate stake) `amount` of coins from `pending_inactive` state to `active state` using public entry method `reactivate_stake(delegator: &signer, pool_address: address, amount: u64)` with the command and your values:
 
-  ```bash filename="Terminal"
+  ```shellscript filename="Terminal"
   aptos move run --profile delegator \
     --function-id 0x1::delegation_pool::reactivate_stake \
     --args address:<pool_address> u64:<amount>
@@ -85,7 +85,7 @@ This section describes the available operations that can be performed on this re
 
 - Withdraw `amount` of owned inactive stake from the delegation pool at `pool_address` using the public entry method ` withdraw(delegator: &signer, pool_address: address, amount: u64)` and the command:
 
-  ```bash filename="Terminal"
+  ```shellscript filename="Terminal"
   aptos move run --profile delegator \
     --function-id 0x1::delegation_pool::withdraw \
     --args address:<pool_address> u64:<amount>
@@ -97,7 +97,7 @@ Delegation pool owners have access to specific methods designed for modifying th
 
 - Set the operator address for the delegation pool:
 
-  ```bash filename="Terminal"
+  ```shellscript filename="Terminal"
   aptos move run --profile delegation_pool_owner \
     --function-id 0x1::delegation_pool::set_operator \
     --args address:<new_operator_address>
@@ -107,7 +107,7 @@ Delegation pool owners can update the commission percentage for the delegation p
 
 - Update the commission percentage for the delegation pool; `<new_commission_percentage>` has two decimal points precision (e.g., 13.25% is represented as 1325):
 
-  ```bash filename="Terminal"
+  ```shellscript filename="Terminal"
   aptos move run --profile delegation_pool_owner \
     --function-id 0x1::delegation_pool::update_commission_percentage \
     --args u64:<new_commission_percentage>
@@ -119,14 +119,14 @@ Delegation pool operators can set beneficiary addresses to receive the operator 
 
 - The beneficiary addresses can be set by the operator using the following command:
 
-  ```bash filename="Terminal"
+  ```shellscript filename="Terminal"
   aptos move run --profile delegation_pool_operator \
     --function-id 0x1::delegation_pool::set_beneficiary_for_operator \
     --args address:<new_beneficiary_address>
   ```
 
 - To view the beneficiary address set for the operator, use the following command:
-  ```bash filename="Terminal"
+  ```shellscript filename="Terminal"
   aptos move view --url <REST API for the network> \
     --function-id 0x1::delegation_pool::beneficiary_for_operator \
     --args address:<operator_address>
@@ -158,7 +158,7 @@ Until the delegation pool has received 1 million APT and the validator has been 
 
 In the [Aptos TypeScript SDK](/build/sdks/ts-sdk), a View function request would resemble:
 
-```ts filename="view_function.ts"
+```typescript filename="view_function.ts"
 import { Aptos, AptosConfig } from "@aptos-labs/ts-sdk";
 
 const NODE_URL = "https://aptos-testnet.public.blastapi.io";
@@ -176,7 +176,7 @@ const NODE_URL = "https://aptos-testnet.public.blastapi.io";
 
 Alternatively, you can use Aptos CLI to call View functions.
 
-```bash filename="Terminal"
+```shellscript filename="Terminal"
 aptos move view [OPTIONS] --function-id <FUNCTION_ID>
 ```
 
@@ -211,21 +211,21 @@ Delegation pool owners can set an allowlist for their delegation pool. They can 
 
 - The delegation pool owner can enable allow listing and create an empty allowlist using the following command:
 
-  ```bash filename="Terminal"
+  ```shellscript filename="Terminal"
   aptos move run --profile delegation_pool_owner \
     --function-id 0x1::delegation_pool::enable_delegators_allowlisting
   ```
 
 - The delegation pool owner can disable allow listing and delete the existing allowlist using the following command:
 
-  ```bash filename="Terminal"
+  ```shellscript filename="Terminal"
   aptos move run --profile delegation_pool_owner \
     --function-id 0x1::delegation_pool::disable_delegators_allowlisting
   ```
 
 - The delegation pool owner can add an address to the allowlist using the following command:
 
-  ```bash filename="Terminal"
+  ```shellscript filename="Terminal"
   aptos move run --profile delegation_pool_owner \
     --function-id 0x1::delegation_pool::allowlist_delegator \
     --args address:<delegator_address>
@@ -233,7 +233,7 @@ Delegation pool owners can set an allowlist for their delegation pool. They can 
 
 - The delegation pool owner can remove an address from the allowlist using the following command:
 
-  ```bash filename="Terminal"
+  ```shellscript filename="Terminal"
   aptos move run --profile delegation_pool_owner \
     --function-id 0x1::delegation_pool::remove_delegator_from_allowlist \
     --args address:<delegator_address>
@@ -241,7 +241,7 @@ Delegation pool owners can set an allowlist for their delegation pool. They can 
 
 - The delegation pool owner can evict a delegator from the pool by unlocking their entire stake using the following command:
 
-  ```bash filename="Terminal"
+  ```shellscript filename="Terminal"
   aptos move run --profile delegation_pool_owner \
     --function-id 0x1::delegation_pool::evict_delegator \
     --args address:<delegator_address>
@@ -251,7 +251,7 @@ There are also view functions available to check the allowlist status and the ad
 
 - The following view function returns whether `pool` has allow listing enabled:
 
-  ```bash filename="Terminal"
+  ```shellscript filename="Terminal"
   aptos move view --url <REST API for the network> \
     --function-id 0x1::delegation_pool::allowlisting_enabled \
     --args address:<pool>
@@ -259,7 +259,7 @@ There are also view functions available to check the allowlist status and the ad
 
 - The following view function returns whether `delegator` is on the allowlist of `pool`:
 
-  ```bash filename="Terminal"
+  ```shellscript filename="Terminal"
   aptos move view --url <REST API for the network> \
     --function-id 0x1::delegation_pool::delegator_allowlisted \
     --args address:<pool> address:<delegator>
@@ -267,7 +267,7 @@ There are also view functions available to check the allowlist status and the ad
 
 - The following view function returns the allowlist defined on pool:
 
-  ```bash filename="Terminal"
+  ```shellscript filename="Terminal"
   aptos move view --url <REST API for the network> \
     --function-id 0x1::delegation_pool::get_delegators_allowlist \
     --args address:<pool>

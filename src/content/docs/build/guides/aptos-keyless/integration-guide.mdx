@@ -41,7 +41,7 @@ You can find an example app demonstrating basic Keyless integration with Google 
 
 2. Step 2. Install the Aptos TypeScript SDK
 
-   ```bash
+   ```shellscript
    # Keyless is supported in version 1.18.1 and above
    pnpm install @aptos-labs/ts-sdk
    ```
@@ -54,7 +54,7 @@ You can find an example app demonstrating basic Keyless integration with Google 
 
    1. In the background, we create an ephemeral key pair. Store this in local storage.
 
-      ```ts
+      ```typescript
       import {EphemeralKeyPair} from '@aptos-labs/ts-sdk';
 
       const ephemeralKeyPair = EphemeralKeyPair.generate();
@@ -62,7 +62,7 @@ You can find an example app demonstrating basic Keyless integration with Google 
 
    2. Save the `EphemeralKeyPair` in local storage, keyed by its `nonce`.
 
-      ```ts
+      ```typescript
       // This saves the EphemeralKeyPair in local storage
       storeEphemeralKeyPair(ephemeralKeyPair);
       ```
@@ -74,7 +74,7 @@ You can find an example app demonstrating basic Keyless integration with Google 
        This implementation is an example of how to store the `EphemeralKeyPair` in local storage. Different implementations may be used according to your application&apos;s needs.
      </Aside>
 
-     ```ts filename="ephemeral.ts"
+     ```typescript filename="ephemeral.ts"
 
      /**
       * Store the ephemeral key pair in localStorage.
@@ -127,7 +127,7 @@ You can find an example app demonstrating basic Keyless integration with Google 
 
    3. Prepare the URL params of the login URL. Set the `redirect_uri` and `client_id` to your configured values with the IdP. Set the `nonce` to the nonce of the `EphemeralKeyPair` from step 1.1.
 
-      ```ts
+      ```typescript
       const redirectUri = 'https://.../login/callback'
       const clientId = env.IDP_CLIENT_ID
       // Get the nonce associated with ephemeralKeyPair
@@ -136,7 +136,7 @@ You can find an example app demonstrating basic Keyless integration with Google 
 
    4. Construct the login URL for the user to authenticate with the IdP. Make sure the `openid` scope is set. Other scopes such as `email` and `profile` can be set based on your app’s needs.
 
-      ```ts
+      ```typescript
       const loginUrl = `https://accounts.google.com/o/oauth2/v2/auth?response_type=id_token&scope=openid+email+profile&nonce=${nonce}&redirect_uri=${redirectUri}&client_id=${clientId}`
       ```
 
@@ -146,7 +146,7 @@ You can find an example app demonstrating basic Keyless integration with Google 
 
    1. Once the user completes the login flow, they will be redirected to the `redirect_uri` set in step 1. The JWT will be set in the URL as a search parameter in a URL fragment, keyed by `id_token`. Extract the JWT from the `window` by doing the following:
 
-      ```ts
+      ```typescript
       const parseJWTFromURL = (url: string): string | null => {
         const urlObject = new URL(url);
         const fragment = urlObject.hash.substring(1);
@@ -160,7 +160,7 @@ You can find an example app demonstrating basic Keyless integration with Google 
 
    2. Decode the JWT and get the extract the nonce value from the payload.
 
-      ```ts
+      ```typescript
       import { jwtDecode } from 'jwt-decode';
 
       const payload = jwtDecode<{ nonce: string }>(jwt);
@@ -169,7 +169,7 @@ You can find an example app demonstrating basic Keyless integration with Google 
 
    3. Fetch the `EphemeralKeyPair` stored in step 1.2. Make sure to validate the nonce matches the decoded nonce and that the `EphemeralKeyPair` is not expired.
 
-      ```ts
+      ```typescript
       const ekp = getLocalEphemeralKeyPair();
 
       // Validate the EphemeralKeyPair
@@ -211,7 +211,7 @@ You can find an example app demonstrating basic Keyless integration with Google 
 
    1. After the account has been derived, store the `KeylessAccount` in local storage. This allows the user to return to the application without having to re-authenticate.
 
-      ```ts filename="keyless.ts"
+      ```typescript filename="keyless.ts"
       export const storeKeylessAccount = (account: KeylessAccount): void =>
         localStorage.setItem("@aptos/account", encodeKeylessAccount(account));
 
@@ -228,7 +228,7 @@ You can find an example app demonstrating basic Keyless integration with Google 
 
    2. Whenever the user returns back to the application, retrieve the `KeylessAccount` from local storage and use it to sign transactions.
 
-      ```ts filename="keyless.ts"
+      ```typescript filename="keyless.ts"
       export const getLocalKeylessAccount = (): KeylessAccount | undefined => {
         try {
           const encodedAccount = localStorage.getItem("@aptos/account");

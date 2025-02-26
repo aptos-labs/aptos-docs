@@ -26,7 +26,7 @@ For this example, Ace and Bee will conduct governance operations from a 2-of-2 &
 
 Since Ace&apos;s account was created during the [Arguments in JSON](/build/cli/working-with-move-contracts/arguments-in-json-tutorial) tutorial, start by mining a vanity address account for Bee too:
 
-```bash filename="Terminal"
+```shellscript filename="Terminal"
 aptos key generate \
     --vanity-prefix 0xbee \
     --output-file bee.key
@@ -35,7 +35,7 @@ aptos key generate \
 <details>
   <summary>Output</summary>
 
-  ```bash filename="Terminal"
+  ```shellscript filename="Terminal"
   {
     "Result": {
       "PublicKey Path": "bee.key.pub",
@@ -52,21 +52,21 @@ aptos key generate \
 
 Store Bee&apos;s address in a shell variable, so you can call it inline later on:
 
-```bash filename="Terminal"
+```shellscript filename="Terminal"
 # Your exact address should vary
 bee_addr=0xbeec980219d246581cef5166dc6ba5fb1e090c7a7786a5176d111a9029b16ddc
 ```
 
 Fund Bee&apos;s account using the faucet:
 
-```bash filename="Terminal"
+```shellscript filename="Terminal"
 aptos account fund-with-faucet --account $bee_addr
 ```
 
 <details>
   <summary>Output</summary>
 
-  ```bash filename="Terminal"
+  ```shellscript filename="Terminal"
   {
     "Result": "Added 100000000 Octas to account beec980219d246581cef5166dc6ba5fb1e090c7a7786a5176d111a9029b16ddc"
   }
@@ -75,7 +75,7 @@ aptos account fund-with-faucet --account $bee_addr
 
 Ace can now create a multisig account:
 
-```bash filename="Terminal"
+```shellscript filename="Terminal"
 aptos multisig create \
     --additional-owners $bee_addr \
     --num-signatures-required 2 \
@@ -86,7 +86,7 @@ aptos multisig create \
 <details>
   <summary>Output</summary>
 
-  ```bash filename="Terminal"
+  ```shellscript filename="Terminal"
   {
     "Result": {
       "multisig_address": "57478da34604655c68b1dcb89e4f4a9124b6c0ecc1c59a0931d58cc4e60ac5c5",
@@ -106,7 +106,7 @@ aptos multisig create \
 
 Store the multisig address in a shell variable:
 
-```bash filename="Terminal"
+```shellscript filename="Terminal"
 # Your address should vary
 multisig_addr=0x57478da34604655c68b1dcb89e4f4a9124b6c0ecc1c59a0931d58cc4e60ac5c5
 ```
@@ -115,7 +115,7 @@ multisig_addr=0x57478da34604655c68b1dcb89e4f4a9124b6c0ecc1c59a0931d58cc4e60ac5c5
 
 Use the assorted [`multisig_account.move` view functions](https://github.com/aptos-labs/aptos-core/blob/9fa0102c3e474d99ea35a0a85c6893604be41611/aptos-move/framework/aptos-framework/sources/multisig_account.move#L237) to inspect the multisig:
 
-```bash filename="Number of signatures required"
+```shellscript filename="Number of signatures required"
 aptos move view \
     --function-id 0x1::multisig_account::num_signatures_required \
     --args \
@@ -125,7 +125,7 @@ aptos move view \
 <details>
   <summary>Output</summary>
 
-  ```bash filename="Terminal"
+  ```shellscript filename="Terminal"
   {
     "Result": [
       "2"
@@ -134,7 +134,7 @@ aptos move view \
   ```
 </details>
 
-```bash filename="Owners"
+```shellscript filename="Owners"
 aptos move view \
     --function-id 0x1::multisig_account::owners \
     --args \
@@ -144,7 +144,7 @@ aptos move view \
 <details>
   <summary>Output</summary>
 
-  ```bash filename="Terminal"
+  ```shellscript filename="Terminal"
   {
     "Result": [
       [
@@ -156,7 +156,7 @@ aptos move view \
   ```
 </details>
 
-```bash filename="Last resolved sequence number"
+```shellscript filename="Last resolved sequence number"
 aptos move view \
     --function-id 0x1::multisig_account::last_resolved_sequence_number \
     --args \
@@ -166,7 +166,7 @@ aptos move view \
 <details>
   <summary>Output</summary>
 
-  ```bash filename="Terminal"
+  ```shellscript filename="Terminal"
   {
     "Result": [
       "0"
@@ -175,7 +175,7 @@ aptos move view \
   ```
 </details>
 
-```bash filename="Next sequence number"
+```shellscript filename="Next sequence number"
 aptos move view \
     --function-id 0x1::multisig_account::next_sequence_number \
     --args \
@@ -185,7 +185,7 @@ aptos move view \
 <details>
   <summary>Output</summary>
 
-  ```bash filename="Terminal"
+  ```shellscript filename="Terminal"
   {
     "Result": [
       "1"
@@ -199,7 +199,7 @@ aptos move view \
 The first multisig transaction enqueued will be a transaction for publication of the [`CliArgs` example package](https://github.com/aptos-labs/aptos-core/tree/main/aptos-move/move-examples/cli_args).
 First, generate a publication payload entry function JSON file:
 
-```bash filename="Command"
+```shellscript filename="Command"
 aptos move build-publish-payload \
     --named-addresses test_account=$multisig_addr \
     --json-output-file publication.json \
@@ -209,7 +209,7 @@ aptos move build-publish-payload \
 <details>
   <summary>Output</summary>
 
-  ```bash filename="Terminal"
+  ```shellscript filename="Terminal"
   {
     "Result": "Publication payload entry function JSON file saved to publication.json"
   }
@@ -218,7 +218,7 @@ aptos move build-publish-payload \
 
 Now have Ace propose publication of the package from the multisig account, storing only the payload hash on-chain:
 
-```bash filename="Command"
+```shellscript filename="Command"
 aptos multisig create-transaction \
     --multisig-address $multisig_addr \
     --json-file publication.json \
@@ -230,7 +230,7 @@ aptos multisig create-transaction \
 <details>
   <summary>Output</summary>
 
-  ```bash filename="Terminal"
+  ```shellscript filename="Terminal"
   {
     "Result": {
       "transaction_hash": "0x70c75903f8e1b1c0069f1e84ef9583ad8000f24124b33a746c88d2b031f7fe2c",
@@ -249,7 +249,7 @@ aptos multisig create-transaction \
 
 Note that the last resolved sequence number is still 0 because no transactions have been resolved:
 
-```bash filename="Last resolved sequence number"
+```shellscript filename="Last resolved sequence number"
 aptos move view \
     --function-id 0x1::multisig_account::last_resolved_sequence_number \
     --args \
@@ -259,7 +259,7 @@ aptos move view \
 <details>
   <summary>Output</summary>
 
-  ```bash filename="Terminal"
+  ```shellscript filename="Terminal"
   {
     "Result": [
       "0"
@@ -270,7 +270,7 @@ aptos move view \
 
 However, the next sequence number has been incremented because a transaction has been enqueued:
 
-```bash filename="Next sequence number"
+```shellscript filename="Next sequence number"
 aptos move view \
     --function-id 0x1::multisig_account::next_sequence_number \
     --args \
@@ -280,7 +280,7 @@ aptos move view \
 <details>
   <summary>Output</summary>
 
-  ```bash filename="Terminal"
+  ```shellscript filename="Terminal"
   {
     "Result": [
       "2"
@@ -291,7 +291,7 @@ aptos move view \
 
 The multisig transaction enqueued on-chain can now be inspected:
 
-```bash filename="Get transaction"
+```shellscript filename="Get transaction"
 aptos move view \
     --function-id 0x1::multisig_account::get_transaction \
     --args \
@@ -302,7 +302,7 @@ aptos move view \
 <details>
   <summary>Output</summary>
 
-  ```bash filename="Terminal"
+  ```shellscript filename="Terminal"
   {
     "Result": [
       {
@@ -336,7 +336,7 @@ Note from the above result that no payload is stored on-chain, and that Ace impl
 
 Now have Bee enqueue a governance parameter setter transaction, storing the entire transaction payload on-chain:
 
-```bash filename="Command"
+```shellscript filename="Command"
 aptos multisig create-transaction \
     --multisig-address $multisig_addr \
     --function-id $multisig_addr::cli_args::set_vals \
@@ -354,7 +354,7 @@ aptos multisig create-transaction \
 <details>
   <summary>Output</summary>
 
-  ```bash filename="Terminal"
+  ```shellscript filename="Terminal"
   {
     "Result": {
       "transaction_hash": "0xd0a348072d5bfc5a2e5d444f92f0ecc10b978dad720b174303bc6d91342f27ec",
@@ -373,7 +373,7 @@ aptos multisig create-transaction \
 
 Note the next sequence number has been incremented again:
 
-```bash filename="Next sequence number"
+```shellscript filename="Next sequence number"
 aptos move view \
     --function-id 0x1::multisig_account::next_sequence_number \
     --args \
@@ -383,7 +383,7 @@ aptos move view \
 <details>
   <summary>Output</summary>
 
-  ```bash filename="Terminal"
+  ```shellscript filename="Terminal"
   {
     "Result": [
       "3"
@@ -394,7 +394,7 @@ aptos move view \
 
 Now both the publication and parameter transactions are pending:
 
-```bash filename="Get pending transactions"
+```shellscript filename="Get pending transactions"
 aptos move view \
     --function-id 0x1::multisig_account::get_pending_transactions \
     --args \
@@ -404,7 +404,7 @@ aptos move view \
 <details>
   <summary>Output</summary>
 
-  ```bash filename="Terminal"
+  ```shellscript filename="Terminal"
   {
     "Result": [
       [
@@ -458,7 +458,7 @@ aptos move view \
 
 Since only Ace has voted on the publication transaction (which he implicitly approved upon proposing) the transaction can&apos;t be executed yet:
 
-```bash filename="Can be executed"
+```shellscript filename="Can be executed"
 aptos move view \
     --function-id 0x1::multisig_account::can_be_executed \
     --args \
@@ -469,7 +469,7 @@ aptos move view \
 <details>
   <summary>Output</summary>
 
-  ```bash filename="Terminal"
+  ```shellscript filename="Terminal"
   {
     "Result": [
       false
@@ -480,7 +480,7 @@ aptos move view \
 
 Before Bee votes, however, she verifies that the payload hash stored on-chain matches the publication entry function JSON file:
 
-```bash filename="Verifying transaction proposal"
+```shellscript filename="Verifying transaction proposal"
 aptos multisig verify-proposal \
     --multisig-address $multisig_addr \
     --json-file publication.json \
@@ -490,7 +490,7 @@ aptos multisig verify-proposal \
 <details>
   <summary>Output</summary>
 
-  ```bash filename="Terminal"
+  ```shellscript filename="Terminal"
   {
     "Result": {
       "Status": "Transaction match",
@@ -521,7 +521,7 @@ aptos multisig verify-proposal \
 
 Since Bee has verified that the on-chain payload hash checks out against her locally-compiled package publication JSON file, she votes yes:
 
-```bash filename="Approving transaction"
+```shellscript filename="Approving transaction"
 aptos multisig approve \
     --multisig-address $multisig_addr \
     --sequence-number 1 \
@@ -532,7 +532,7 @@ aptos multisig approve \
 <details>
   <summary>Output</summary>
 
-  ```bash filename="Terminal"
+  ```shellscript filename="Terminal"
   {
     "Result": {
       "transaction_hash": "0xa5fb49f1077de6aa6d976e6bcc05e4c50c6cd061f1c87e8f1ea74e7a04a06bd1",
@@ -551,7 +551,7 @@ aptos multisig approve \
 
 Now the transaction can be executed:
 
-```bash filename="Can be executed"
+```shellscript filename="Can be executed"
 aptos move view \
     --function-id 0x1::multisig_account::can_be_executed \
     --args \
@@ -562,7 +562,7 @@ aptos move view \
 <details>
   <summary>Output</summary>
 
-  ```bash filename="Terminal"
+  ```shellscript filename="Terminal"
   {
     "Result": [
       true
@@ -573,7 +573,7 @@ aptos move view \
 
 Now either Ace or Bee can invoke the publication transaction from the multisig account, passing the full transaction payload since only the hash was stored on-chain:
 
-```bash filename="Publication"
+```shellscript filename="Publication"
 aptos multisig execute-with-payload \
     --multisig-address $multisig_addr \
     --json-file publication.json \
@@ -596,7 +596,7 @@ aptos multisig execute-with-payload \
 
 Since only Bee has voted on the governance parameter transaction (which she implicitly approved upon proposing), the transaction can&apos;t be executed yet:
 
-```bash filename="Can be executed"
+```shellscript filename="Can be executed"
 aptos move view \
     --function-id 0x1::multisig_account::can_be_executed \
     --args \
@@ -607,7 +607,7 @@ aptos move view \
 <details>
   <summary>Output</summary>
 
-  ```bash filename="Terminal"
+  ```shellscript filename="Terminal"
   {
     "Result": [
       false
@@ -618,7 +618,7 @@ aptos move view \
 
 Before Ace votes, however, he verifies that the payload stored on-chain matches the function arguments he expects:
 
-```bash filename="Verifying transaction proposal"
+```shellscript filename="Verifying transaction proposal"
 aptos multisig verify-proposal \
     --multisig-address $multisig_addr \
     --function-id $multisig_addr::cli_args::set_vals \
@@ -635,7 +635,7 @@ aptos multisig verify-proposal \
 <details>
   <summary>Output</summary>
 
-  ```bash filename="Terminal"
+  ```shellscript filename="Terminal"
   {
     "Result": {
       "Status": "Transaction match",
@@ -666,7 +666,7 @@ aptos multisig verify-proposal \
 
 Note that the verification fails if he modifies even a single argument:
 
-```bash filename="Failed transaction verification with modified u8"
+```shellscript filename="Failed transaction verification with modified u8"
 aptos multisig verify-proposal \
     --multisig-address $multisig_addr \
     --function-id $multisig_addr::cli_args::set_vals \
@@ -683,7 +683,7 @@ aptos multisig verify-proposal \
 <details>
   <summary>Output</summary>
 
-  ```bash filename="Terminal"
+  ```shellscript filename="Terminal"
   {
     "Error": "Unexpected error: Transaction mismatch: The transaction you provided has a payload hash of 0xe494b0072d6f940317344967cf0e818c80082375833708c773b0275f3ad07e51, but the on-chain transaction proposal you specified has a payload hash of 0x070ed7c3f812f25f585461305d507b96a4e756f784e01c8c59901871267a1580. For more info, see https://aptos.dev/move/move-on-aptos/cli#multisig-governance"
   }
@@ -692,7 +692,7 @@ aptos multisig verify-proposal \
 
 Ace approves the transaction:
 
-```bash filename="Approving transaction"
+```shellscript filename="Approving transaction"
 aptos multisig approve \
     --multisig-address $multisig_addr \
     --sequence-number 2 \
@@ -703,7 +703,7 @@ aptos multisig approve \
 <details>
   <summary>Output</summary>
 
-  ```bash filename="Terminal"
+  ```shellscript filename="Terminal"
   {
     "Result": {
       "transaction_hash": "0x233427d95832234fa13dddad5e0b225d40168b4c2c6b84f5255eecc3e68401bf",
@@ -722,7 +722,7 @@ aptos multisig approve \
 
 Since the payload was stored on-chain, it is not required to execute the pending transaction:
 
-```bash filename="Execution"
+```shellscript filename="Execution"
 aptos multisig execute \
     --multisig-address $multisig_addr \
     --private-key-file ace.key \
@@ -733,7 +733,7 @@ aptos multisig execute \
 <details>
   <summary>Output</summary>
 
-  ```bash filename="Terminal"
+  ```shellscript filename="Terminal"
   {
     "Result": {
       "transaction_hash": "0xbc99f929708a1058b223aa880d04607a78ebe503367ec4dab23af4a3bdb541b2",

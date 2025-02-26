@@ -10,6 +10,11 @@ export class HrefTransformer extends BaseTransformer {
   protected oldImportPath: string = "";
   protected newImportPath: string = "";
 
+  private getLanguageFromPath(filePath: string): string | undefined {
+    const match = filePath.match(/[/\\](zh|ja)[/\\]/);
+    return match ? match[1] : undefined;
+  }
+
   // Override the base transform method since we don't need component checking
   transform(ast: Root, options: TransformerOptions): void {
     logger.log("HrefTransformer", "Starting href transformation");
@@ -47,7 +52,7 @@ export class HrefTransformer extends BaseTransformer {
 
       // Handle absolute paths
       if (href.startsWith("/")) {
-        logger.log("HrefTransformer", "Found absolute path, keeping as is");
+        logger.log("HrefTransformer", "Found absolute path");
         result = href;
       }
       // Handle relative paths starting with ./
@@ -101,6 +106,16 @@ export class HrefTransformer extends BaseTransformer {
         const oldResult = result;
         result = result.slice(0, -4);
         logger.log("HrefTransformer", `Removed .mdx extension: ${oldResult} -> ${result}`);
+      }
+
+      // Add language prefix for zh/ja content if path is absolute
+      // (at this point all paths should be absolute)
+      if (result.startsWith("/")) {
+        const language = this.getLanguageFromPath(options.filePath || "");
+        if (language) {
+          result = `/${language}${result}`;
+          logger.log("HrefTransformer", `Added language prefix: ${result}`);
+        }
       }
 
       logger.log("HrefTransformer", "Final transformed href:", result);

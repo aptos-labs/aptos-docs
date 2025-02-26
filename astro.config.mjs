@@ -171,7 +171,7 @@ export default defineConfig({
       GITHUB_TOKEN: envField.string({
         context: "server",
         access: "secret",
-        optional: !!process.env.CI,
+        optional: true,
       }),
       GTAG_ID: envField.string({ context: "client", access: "public", optional: true }),
     },

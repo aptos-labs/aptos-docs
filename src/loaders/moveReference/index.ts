@@ -32,7 +32,7 @@ export function moveReferenceLoader(config: GitHubConfig): Loader {
       }
 
       // Clear all meta data
-      const metaKeys = ["plugin-version"];
+      const metaKeys = ["plugin-version", "branch-cache"];
       for (const branch of config.branches) {
         for (const module of branch.modules) {
           metaKeys.push(`${branch.name}-${module.framework}-folder-etag`);
@@ -61,30 +61,17 @@ export function moveReferenceLoader(config: GitHubConfig): Loader {
         // Process each module in the branch
         for (const module of branch.modules) {
           try {
-            // Get folder content from GitHub
-            const files = await githubFetcher.getFolderContent(branch, module);
+            // Get module content
+            const contentMap = await githubFetcher.getModuleContent(branch, module);
+            stats.totalFiles += contentMap.size;
 
-            // Track fresh vs cached content
-            if (files.length > 0) {
-              stats.totalFiles += files.length;
-            } else {
-              stats.cachedModules++;
-            }
-
-            // Process each file in the folder
-            for (const file of files) {
-              const fileContent = await githubFetcher.getFileContent(branch, module, file.name);
-
-              if (!fileContent) {
-                stats.skippedFiles++;
-                continue;
-              }
-
+            // Process each file
+            for (const [fileName, content] of contentMap) {
               try {
                 // Generate the entry ID in the format: branch/framework/filename
-                const baseFilename = file.name.replace(/\.md$/, "");
+                const baseFilename = fileName.replace(/\.md$/, "");
                 const entryId = `${branch.name}/${module.framework}/${baseFilename}`;
-                const entry = await markdownProcessor.processContent(entryId, fileContent);
+                const entry = await markdownProcessor.processContent(entryId, content);
 
                 // Add branch and framework metadata
                 Object.assign(entry.data, {
@@ -102,11 +89,10 @@ export function moveReferenceLoader(config: GitHubConfig): Loader {
                     storeError instanceof Error ? storeError.message : String(storeError);
                   logger.error(`Error storing entry ${entryId}: ${message}`);
                   stats.errorFiles++;
-                  continue;
                 }
               } catch (error) {
                 const message = error instanceof Error ? error.message : String(error);
-                logger.error(`Error processing file ${file.name}: ${message}`);
+                logger.error(`Error processing file ${fileName}: ${message}`);
                 stats.errorFiles++;
               }
             }

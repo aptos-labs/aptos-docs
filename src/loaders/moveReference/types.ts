@@ -19,7 +19,8 @@ export interface GitHubFileContent {
   type: "file";
   name: string;
   path: string;
-  content: string;
+  content?: string;
+  sha?: string;
 }
 
 export interface GitHubResponse {
@@ -53,4 +54,22 @@ export interface ModuleStatus {
   framework: string;
   isCached: boolean;
   filesCount: number;
+}
+
+export interface TreeItem {
+  path: string;
+  mode: string;
+  type: string;
+  sha: string;
+  size?: number;
+  url: string;
+}
+
+export interface TreeResponse {
+  data: {
+    sha: string;
+    url: string;
+    tree: TreeItem[];
+    truncated: boolean;
+  };
 }

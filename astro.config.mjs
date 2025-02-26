@@ -48,10 +48,19 @@ export default defineConfig({
         shiki: {
           // Define langs for shiki syntax highlighting
           langAlias: {
-            Move: "move",
+            csharp: "csharp",
+            go: "go",
+            json: "json",
+            kotlin: "kotlin",
             move: "move",
-            PowerShell: "powershell",
+            powershell: "powershell",
+            python: "python",
+            rust: "rust",
+            swift: "swift",
             terraform: "terraform",
+            toml: "toml",
+            tsx: "tsx",
+            yaml: "yaml",
           },
         },
       },

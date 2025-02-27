@@ -1,0 +1,65 @@
+---
+import { snippetz } from "@scalar/snippetz";
+import OperationExample, { type ExampleData } from "./OperationExample.astro";
+import OperationExamplesController from "./OperationExamplesController.svelte";
+import { INITIAL_TARGET, INITIAL_CLIENT } from "./constants";
+import CustomSelect from "~/components/CustomSelect.astro";
+import { ensureNonNullable } from "~/lib/ensureNonNullable";
+
+type Props = ExampleData;
+
+const example: Props = Astro.props;
+const targets = snippetz().clients();
+
+// Prepare options for select components
+const targetOptions = targets.map((target) => ({
+  value: target.key,
+  label: target.title,
+}));
+const currentTargetOptions = ensureNonNullable(
+  targets.find((item) => item.key === INITIAL_TARGET),
+  "Target not found",
+);
+const currentClientOptions = currentTargetOptions.clients.map((client) => ({
+  value: client.client,
+  label: client.title,
+}));
+---
+
+<div class="operation-examples not-content">
+  <OperationExamplesController
+    client:load
+    targets={targets}
+    initialTarget={INITIAL_TARGET}
+    initialClient={INITIAL_CLIENT}
+  >
+    <CustomSelect
+      id="targetSelect"
+      label="Select target"
+      options={targetOptions}
+      value={INITIAL_TARGET}
+      slot="targetSelect"
+    />
+    <CustomSelect
+      id="clientSelect"
+      label="Select client"
+      options={currentClientOptions}
+      value={INITIAL_CLIENT}
+      slot="clientSelect"
+    />
+    <div slot="examples">
+      {
+        targets.flatMap((target) =>
+          target.clients.map((client) => (
+            <OperationExample
+              example={example}
+              target={target.key}
+              client={client.client}
+              isActive={target.key === INITIAL_TARGET && client.client === INITIAL_CLIENT}
+            />
+          )),
+        )
+      }
+    </div>
+  </OperationExamplesController>
+</div>

@@ -47,6 +47,7 @@ export default defineConfig({
       },
       lastUpdated: true,
       expressiveCode: {
+        themes: ["github-dark-default"],
         shiki: {
           // Define langs for shiki syntax highlighting
           langAlias: {

@@ -1,0 +1,203 @@
+---
+/**
+ * It is based on the @astrojs/starlight/components/Select.astro component
+ **/
+
+import { Icon } from "@astrojs/starlight/components";
+
+interface Option {
+  value: string;
+  label: string;
+}
+
+interface Props {
+  class?: string;
+  id?: string;
+  label: string;
+  value: string;
+  width?: string;
+  options: Option[];
+}
+
+const { class: className, id, label, value: initialValue, width, options } = Astro.props;
+---
+
+<custom-select id={id} value={initialValue} options={JSON.stringify(options)}>
+  <label style={`--sl-select-width: ${width}`}>
+    <span class="sr-only">{label}</span>
+    <select class={className} value={initialValue} autocomplete="off">
+      {
+        options.map(({ value, label }) => (
+          <option value={value} selected={value === initialValue}>
+            {label}
+          </option>
+        ))
+      }
+    </select>
+    <Icon name="down-caret" class="icon caret" />
+  </label>
+</custom-select>
+
+<script>
+  import { invariant } from "~/lib/invariant";
+
+  interface Option {
+    value: string;
+    label: string;
+  }
+
+  class CustomSelect extends HTMLElement {
+    private _selectElement: HTMLSelectElement | null = null;
+
+    private get selectElement() {
+      invariant(this._selectElement, "Select element not found");
+      return this._selectElement;
+    }
+
+    get value(): string {
+      return this.getAttribute("value") || "";
+    }
+
+    set value(newValue: string) {
+      this.setAttribute("value", newValue);
+    }
+
+    static get observedAttributes() {
+      return ["value", "options"];
+    }
+
+    constructor() {
+      super();
+
+      this.handleChange = this.handleChange.bind(this);
+    }
+
+    connectedCallback() {
+      this._selectElement = this.querySelector("select");
+
+      this.selectElement.addEventListener("change", this.handleChange);
+      this.updateOptions(this.getAttribute("options"));
+      this.selectElement.value = this.value;
+    }
+
+    disconnectedCallback() {
+      this.selectElement.removeEventListener("change", this.handleChange);
+    }
+
+    attributeChangedCallback(name: string, _oldValue: string, newValue: string) {
+      // Ignore before connectected
+      if (!this._selectElement) {
+        return;
+      }
+
+      switch (name) {
+        case "options":
+          this.updateOptions(newValue);
+          this.selectElement.dispatchEvent(new CustomEvent("change", { bubbles: true }));
+          break;
+        case "value":
+          this.updateValue(newValue);
+          break;
+      }
+    }
+
+    private updateOptions(optionsString: string | null) {
+      if (!optionsString) {
+        optionsString = "[]";
+      }
+
+      try {
+        const optionsAttr = this.getAttribute("options");
+        if (!optionsAttr) return;
+
+        const value = this.getAttribute("value");
+        const fragment = document.createDocumentFragment();
+        const options = JSON.parse(optionsString) as Option[];
+
+        for (const option of options) {
+          const optElement = document.createElement("option");
+          optElement.value = option.value;
+          optElement.textContent = option.label;
+          optElement.selected = option.value === value;
+          fragment.appendChild(optElement);
+        }
+
+        this.selectElement.innerHTML = "";
+        this.selectElement.appendChild(fragment);
+      } catch (e) {
+        console.error("Failed to parse options", e);
+      }
+    }
+
+    private updateValue(value?: string | null) {
+      this.selectElement.value = value ?? "";
+    }
+
+    private handleChange = (event: Event) => {
+      const target = event.target as HTMLSelectElement;
+      this.setAttribute("value", target.value);
+    };
+  }
+
+  // Register the custom element
+  customElements.define("custom-select", CustomSelect);
+</script>
+
+<style>
+  label {
+    --sl-label-icon-size: 0.875rem;
+    --sl-caret-size: 1.25rem;
+    --sl-inline-padding: 0.5rem;
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    color: var(--sl-color-gray-1);
+  }
+
+  label:hover {
+    color: var(--sl-color-gray-2);
+  }
+
+  .icon {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+  }
+
+  .label-icon {
+    font-size: var(--sl-label-icon-size);
+    inset-inline-start: 0;
+  }
+
+  .caret {
+    font-size: var(--sl-caret-size);
+    inset-inline-end: 0;
+  }
+
+  select {
+    border: 0;
+    padding-block: 0.625rem;
+    padding-inline: calc(var(--sl-label-icon-size) + var(--sl-inline-padding) + 0.25rem)
+      calc(var(--sl-caret-size) + var(--sl-inline-padding) + 0.25rem);
+    margin-inline: calc(var(--sl-inline-padding) * -1);
+    width: calc(var(--sl-select-width) + var(--sl-inline-padding) * 2);
+    background-color: transparent;
+    text-overflow: ellipsis;
+    color: inherit;
+    cursor: pointer;
+    appearance: none;
+  }
+
+  option {
+    background-color: var(--sl-color-bg-nav);
+    color: var(--sl-color-gray-1);
+  }
+
+  @media (min-width: 50rem) {
+    select {
+      font-size: var(--sl-text-sm);
+    }
+  }
+</style>

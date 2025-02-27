@@ -1,0 +1,79 @@
+---
+import { Code } from "@astrojs/starlight/components";
+import { snippetz, type ClientId, type TargetId } from "@scalar/snippetz";
+import type { OperationHttpMethod } from "starlight-openapi/libs/operation";
+import { ensureNonNullable } from "~/lib/ensureNonNullable";
+
+export interface ExampleData {
+  baseUrl: string;
+  prefix: string;
+  method: OperationHttpMethod;
+  operationPath: string;
+}
+
+interface Props<T extends TargetId> {
+  target: T;
+  client: ClientId<T>;
+  isActive: boolean;
+  example: ExampleData;
+}
+
+const {
+  target,
+  client,
+  isActive,
+  example: { baseUrl, prefix, method, operationPath },
+}: Props<TargetId> = Astro.props;
+
+const snippet = ensureNonNullable(
+  snippetz().print(target, client, { url: `${baseUrl}${prefix}${operationPath}`, method }),
+  "Could not generate example code",
+);
+const codeLang = (() => {
+  if (target === "node") {
+    return "js";
+  }
+
+  return target;
+})();
+---
+
+<operation-example
+  target={target}
+  client={client}
+  active={isActive ? "true" : "false"}
+  theme="github-dark-default"
+  aria-hidden={!isActive}
+>
+  <Code code={snippet} lang={codeLang} frame="none" />
+</operation-example>
+
+<style>
+  operation-example:not([active="true"]) {
+    display: none;
+  }
+
+  operation-example :global(.expressive-code .frame pre) {
+    background: var(--code-background);
+  }
+</style>
+
+<script>
+  class OperationExample extends HTMLElement {
+    static observedAttributes = ["active"];
+
+    attributeChangedCallback(name: string, oldValue: string, newValue: string) {
+      if (oldValue === newValue) {
+        return;
+      }
+
+      switch (name) {
+        case "active":
+          this.setAttribute("aria-hidden", newValue === "true" ? "false" : "true");
+          break;
+      }
+    }
+  }
+
+  customElements.define("operation-example", OperationExample);
+</script>

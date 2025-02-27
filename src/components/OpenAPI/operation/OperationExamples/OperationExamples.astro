@@ -1,0 +1,134 @@
+---
+import { snippetz } from "@scalar/snippetz";
+import OperationExample, { type ExampleData } from "./OperationExample.astro";
+import { INITIAL_TARGET, INITIAL_CLIENT } from "./constants";
+import { ensureNonNullable } from "~/lib/ensureNonNullable";
+import CustomSelect from "~/components/CustomSelect.astro";
+
+type Props = ExampleData;
+
+const example: Props = Astro.props;
+const targets = snippetz().clients();
+
+// Prepare options for select components
+const targetOptions = targets.map((target) => ({
+  value: target.key,
+  label: target.title,
+}));
+
+const currentTargetOptions = ensureNonNullable(
+  targets.find((item) => item.key === INITIAL_TARGET),
+  "Target not found",
+);
+const currentClientOptions = currentTargetOptions.clients.map((client) => ({
+  value: client.client,
+  label: client.title,
+}));
+
+const allClientOptionsByTarget = Object.fromEntries(
+  targets.map((target) => [
+    target.key,
+    target.clients.map((client) => ({ value: client.client, label: client.title })),
+  ]),
+);
+---
+
+<operation-examples client-options={JSON.stringify(allClientOptionsByTarget)}>
+  <div class="operation-examples not-content">
+    <div class="flex items-center gap-2">
+      <CustomSelect
+        id="targetSelect"
+        label="Select target"
+        options={targetOptions}
+        value={INITIAL_TARGET}
+      />
+      <CustomSelect
+        id="clientSelect"
+        label="Select client"
+        options={currentClientOptions}
+        value={INITIAL_CLIENT}
+      />
+    </div>
+    {
+      targets.flatMap((target) =>
+        target.clients.map((client) => (
+          <OperationExample
+            example={example}
+            target={target.key}
+            client={client.client}
+            isActive={target.key === INITIAL_TARGET && client.client === INITIAL_CLIENT}
+          />
+        )),
+      )
+    }
+  </div>
+</operation-examples>
+
+<script>
+  import { invariant } from "~/lib/invariant";
+
+  class OperationExamples extends HTMLElement {
+    _targetSelect: HTMLSelectElement | null = null;
+    _clientSelect: HTMLSelectElement | null = null;
+
+    get targetSelect() {
+      invariant(this._targetSelect, "Target select not found");
+      return this._targetSelect;
+    }
+
+    get clientSelect() {
+      invariant(this._clientSelect, "Client select not found");
+      return this._clientSelect;
+    }
+
+    get allClientOptions() {
+      return JSON.parse(this.getAttribute("client-options") || "{}");
+    }
+
+    constructor() {
+      super();
+      this.handleTargetChange = this.handleTargetChange.bind(this);
+      this.handleClientChange = this.handleClientChange.bind(this);
+    }
+
+    connectedCallback() {
+      this._targetSelect = this.querySelector("#targetSelect");
+      this._clientSelect = this.querySelector("#clientSelect");
+
+      this.targetSelect.addEventListener("change", this.handleTargetChange);
+      this.clientSelect.addEventListener("change", this.handleClientChange);
+    }
+
+    disconectedCallback() {
+      this.targetSelect.removeEventListener("change", this.handleTargetChange);
+      this.clientSelect.removeEventListener("change", this.handleClientChange);
+    }
+
+    handleTargetChange(event: Event) {
+      const targetValue = (event.target as HTMLSelectElement).value;
+      const targetClientOptions = this.allClientOptions[targetValue];
+
+      this.clientSelect.setAttribute("options", JSON.stringify(targetClientOptions));
+      // this.clientSelect.setAttribute("value", targetClientOptions[0].value);
+    }
+
+    handleClientChange(event: Event) {
+      this.updateVisibleExamples(
+        this.targetSelect.value,
+        (event.target as HTMLSelectElement).value,
+      );
+    }
+
+    updateVisibleExamples(target: string, client: string) {
+      const currentActiveExample = this.querySelector(`operation-example[active="true"]`);
+      const targetExample = this.querySelector(
+        `operation-example[target="${target}"][client="${client}"]`,
+      );
+
+      currentActiveExample?.setAttribute("active", "false");
+      targetExample?.setAttribute("active", "true");
+    }
+  }
+
+  customElements.define("operation-examples", OperationExamples);
+</script>

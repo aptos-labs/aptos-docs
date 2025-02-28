@@ -22,8 +22,10 @@ const env = loadEnv(process.env.NODE_ENV || "development", process.cwd(), "");
 const ALGOLIA_APP_ID = env.ALGOLIA_APP_ID;
 const ALGOLIA_SEARCH_API_KEY = env.ALGOLIA_SEARCH_API_KEY;
 const ALGOLIA_INDEX_NAME = env.ALGOLIA_INDEX_NAME;
+const ENABLE_API_REFERENCE = env.ENABLE_API_REFERENCE;
 
 const hasAlgoliaConfig = ALGOLIA_APP_ID && ALGOLIA_SEARCH_API_KEY && ALGOLIA_INDEX_NAME;
+const enableApiReference = ENABLE_API_REFERENCE === "true";
 
 // https://astro.build/config
 export default defineConfig({
@@ -90,33 +92,26 @@ export default defineConfig({
               }),
             ]
           : []),
-        // Generate the OpenAPI documentation pages.
-        starlightOpenAPI(
-          [
-            {
-              base: "api-reference",
-              label: "API Reference",
-              schema: "./aptos-spec.json",
-              sidebarMethodBadges: true,
-            },
-          ],
-          {
-            routeEntrypoint: "./src/components/OpenAPI/Route.astro",
-          },
-        ),
+        // Generate the OpenAPI documentation pages if enabled
+        ...(enableApiReference
+          ? [
+              starlightOpenAPI(
+                [
+                  {
+                    base: "api-reference",
+                    label: "API Reference",
+                    schema: "./aptos-spec.json",
+                    sidebarMethodBadges: true,
+                  },
+                ],
+                {
+                  routeEntrypoint: "./src/components/OpenAPI/Route.astro",
+                },
+              ),
+            ]
+          : []),
       ],
       sidebar: [
-        // {
-        //   label: "Guides",
-        //   items: [
-        //     // Each item here is one entry in the navigation menu.
-        //     { label: "Example Guide", slug: "guides/example" },
-        //   ],
-        // },
-        // {
-        //   label: "Reference",
-        //   autogenerate: { directory: "reference" },
-        // },
         {
           label: "Build",
           collapsed: true,
@@ -128,7 +123,7 @@ export default defineConfig({
           autogenerate: { directory: "network" },
         },
         { label: "Move Reference", link: "/move-reference/" },
-        ...openAPISidebarGroups,
+        ...(process.env.ENABLE_API_REFERENCE === "true" ? openAPISidebarGroups : []),
       ],
       customCss: ["./src/globals.css", "katex/dist/katex.min.css"],
     }),
@@ -192,6 +187,12 @@ export default defineConfig({
         optional: true,
       }),
       GTAG_ID: envField.string({ context: "client", access: "public", optional: true }),
+      ENABLE_API_REFERENCE: envField.string({
+        context: "server",
+        access: "public",
+        optional: true,
+        default: "false",
+      }),
     },
     validateSecrets: true,
   },

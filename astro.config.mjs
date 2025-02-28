@@ -9,14 +9,15 @@ import vercel from "@astrojs/vercel";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import { loadEnv } from "vite";
-
 import rehypeRaw from "rehype-raw";
 import sitemap from "@astrojs/sitemap";
 import partytown from "@astrojs/partytown";
 import node from "@astrojs/node";
+import solidJs from "@astrojs/solid-js";
 import { getEnvsSchema } from "./src/lib/og-image/schema.mjs";
 import { SUPPORTED_LANGUAGES } from "./src/config/locales";
 // import { isMoveReferenceEnabled } from "./src/utils/isMoveReferenceEnabled";
+
 // import rehypeAddDebug from './src/plugins/rehype-add-debug.js';
 
 const env = loadEnv(process.env.NODE_ENV || "development", process.cwd(), "");
@@ -50,6 +51,7 @@ export default defineConfig({
       },
       lastUpdated: true,
       expressiveCode: {
+        themes: ["github-dark-default"],
         shiki: {
           // Define langs for shiki syntax highlighting
           langAlias: {
@@ -147,6 +149,7 @@ export default defineConfig({
         forward: ["dataLayer.push", "gtag"],
       },
     }),
+    solidJs({ devtools: process.env.NODE_ENV !== "production" }),
   ],
   adapter: process.env.VERCEL
     ? vercel()

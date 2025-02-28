@@ -13,6 +13,7 @@ import { loadEnv } from "vite";
 import rehypeRaw from "rehype-raw";
 import sitemap from "@astrojs/sitemap";
 import partytown from "@astrojs/partytown";
+import node from "@astrojs/node";
 import { getEnvsSchema } from "./src/lib/og-image/schema.mjs";
 import { SUPPORTED_LANGUAGES } from "./src/config/locales";
 // import rehypeAddDebug from './src/plugins/rehype-add-debug.js';
@@ -151,7 +152,11 @@ export default defineConfig({
       },
     }),
   ],
-  adapter: vercel(),
+  adapter: process.env.VERCEL
+    ? vercel()
+    : node({
+        mode: "standalone",
+      }),
   vite: {
     plugins: [tailwindcss()],
     optimizeDeps: {

@@ -193,6 +193,12 @@ export default defineConfig({
         optional: true,
         default: "false",
       }),
+      ENABLE_MOVE_REFERENCE: envField.string({
+        context: "server",
+        access: "public",
+        optional: true,
+        default: "false",
+      }),
     },
     validateSecrets: true,
   },

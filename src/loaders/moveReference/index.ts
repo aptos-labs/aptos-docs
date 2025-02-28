@@ -1,5 +1,6 @@
 import type { Loader, LoaderContext } from "astro/loaders";
 import { blue, dim, bold, yellow, red, green } from "kleur/colors";
+import { ENABLE_MOVE_REFERENCE, GITHUB_TOKEN } from "astro:env/server";
 import { octokit } from "../../lib/octokit.js";
 import type { GitHubConfig, ProcessingStats } from "./types";
 import { GitHubFetcher } from "./services/github-fetcher";
@@ -139,8 +140,20 @@ export function moveReferenceLoader(config: GitHubConfig): Loader {
   return {
     name: "move-reference",
     load: async (context) => {
+      // Don't load Move Reference content in GITHUB CI
       if (process.env.GITHUB_ACTIONS) {
         context.logger.warn(`${context.collection} loader is disabled in GITHUB CI`);
+        return;
+      }
+
+      // Don't load Move Reference content if the feature is disabled
+      if (ENABLE_MOVE_REFERENCE === "false") {
+        return;
+      }
+
+      // Don't load Move Reference content if GITHUB_TOKEN is not set
+      if (ENABLE_MOVE_REFERENCE === "true" && GITHUB_TOKEN === undefined) {
+        context.logger.error("GITHUB_TOKEN is required to load Move Reference content");
         return;
       }
 

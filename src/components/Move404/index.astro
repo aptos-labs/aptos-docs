@@ -1,0 +1,29 @@
+---
+import { Code } from "@astrojs/starlight/components";
+import { SUPPORTED_LANGUAGES } from "../../config/locales";
+import defaultCode from "./code/404.move?raw";
+
+// Create a type from the supported language codes (excluding 'en' which uses default)
+type SupportedLang = Exclude<(typeof SUPPORTED_LANGUAGES)[number]["code"], "en">;
+
+// Dynamic imports for language-specific code
+const langImports = Object.fromEntries(
+  SUPPORTED_LANGUAGES.filter(({ code }) => code !== "en").map(({ code }) => [
+    code,
+    () => import(`./code/${code}/404.move?raw`),
+  ]),
+) as Record<SupportedLang, () => Promise<{ default: string }>>;
+
+// Load language-specific code or fallback to default
+const code = await (async () => {
+  const locale = Astro.currentLocale;
+  if (!locale || locale === "en" || !(locale in langImports)) {
+    return defaultCode;
+  }
+
+  const module = await langImports[locale as SupportedLang]?.().catch(() => null);
+  return module?.default ?? defaultCode;
+})();
+---
+
+<Code code={code} lang="move" title="404.move" />

@@ -3,61 +3,26 @@ import { snippetz } from "@scalar/snippetz";
 import OperationExample, { type ExampleData } from "./OperationExample.astro";
 import { OperationExamplesController } from "./OperationExamplesController";
 import { INITIAL_TARGET, INITIAL_CLIENT } from "./constants";
-import CustomSelect from "~/components/CustomSelect.astro";
-import { ensureNonNullable } from "~/lib/ensureNonNullable";
 
 type Props = ExampleData;
 
 const example: Props = Astro.props;
 const targets = snippetz().clients();
-
-// Prepare options for select components
-const targetOptions = targets.map((target) => ({
-  value: target.key,
-  label: target.title,
-}));
-const currentTargetOptions = ensureNonNullable(
-  targets.find((item) => item.key === INITIAL_TARGET),
-  "Target not found",
-);
-const currentClientOptions = currentTargetOptions.clients.map((client) => ({
-  value: client.client,
-  label: client.title,
-}));
 ---
 
 <div class="operation-examples not-content">
-  <OperationExamplesController
-    client:load
-    targets={targets}
-    initialTarget={INITIAL_TARGET}
-    initialClient={INITIAL_CLIENT}
-  >
-    <CustomSelect
-      slot="slotTargetSelect"
-      label="Select target"
-      options={targetOptions}
-      value={INITIAL_TARGET}
-    />
-    <CustomSelect
-      slot="slotClientSelect"
-      label="Select client"
-      options={currentClientOptions}
-      value={INITIAL_CLIENT}
-    />
-    <div slot="slotExamples">
-      {
-        targets.flatMap((target) =>
-          target.clients.map((client) => (
-            <OperationExample
-              example={example}
-              target={target.key}
-              client={client.client}
-              isActive={target.key === INITIAL_TARGET && client.client === INITIAL_CLIENT}
-            />
-          )),
-        )
-      }
-    </div>
+  <OperationExamplesController client:load>
+    {
+      targets.flatMap((target) =>
+        target.clients.map((client) => (
+          <OperationExample
+            example={example}
+            target={target.key}
+            client={client.client}
+            isActive={target.key === INITIAL_TARGET && client.client === INITIAL_CLIENT}
+          />
+        )),
+      )
+    }
   </OperationExamplesController>
 </div>

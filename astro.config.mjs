@@ -16,6 +16,7 @@ import partytown from "@astrojs/partytown";
 import node from "@astrojs/node";
 import { getEnvsSchema } from "./src/lib/og-image/schema.mjs";
 import { SUPPORTED_LANGUAGES } from "./src/config/locales";
+// import { isMoveReferenceEnabled } from "./src/utils/isMoveReferenceEnabled";
 // import rehypeAddDebug from './src/plugins/rehype-add-debug.js';
 
 const env = loadEnv(process.env.NODE_ENV || "development", process.cwd(), "");
@@ -201,5 +202,17 @@ export default defineConfig({
       }),
     },
     validateSecrets: true,
+  },
+  redirects: {
+    /**
+     * Development-only redirects when Move Reference is disabled
+     * NOTE: Use caution - 301 redirects may be cached by browsers
+     * TODO: Needs further testing
+     */
+    // ...isMoveReferenceEnabled() ? {} : {
+    //   "/move-reference/[network]": "/move-reference",
+    //   "/move-reference/[network]/[framework]": "/move-reference",
+    //   "/move-reference/[network]/[framework]/[slug]": "/move-reference",
+    // },
   },
 });

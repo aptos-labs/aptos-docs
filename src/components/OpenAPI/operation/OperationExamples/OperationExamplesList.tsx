@@ -1,26 +1,30 @@
-import type { ClientId, TargetId } from "@scalar/snippetz";
-import { createEffect } from "solid-js";
+import { createEffect, useContext, type JSX } from "solid-js";
+import { OperationExamplesContext } from "./OperationExamplesContext";
 
-interface Props<T extends TargetId> {
-  target: TargetId;
-  client: ClientId<T>;
-  children: string;
+interface OperationExamplesListProps {
+  children: JSX.Element[];
 }
 
-export function OperationExamplesList({ target, client, children }: Props<TargetId>) {
+export function OperationExamplesList({ children }: OperationExamplesListProps) {
+  const ctx = useContext(OperationExamplesContext);
+
   let containerRef: HTMLDivElement | undefined;
 
   createEffect(() => {
-    if (!containerRef) return;
+    if (!containerRef || !ctx) return;
 
     const currentActiveExample = containerRef.querySelector(`operation-example[active="true"]`);
     const targetExample = containerRef.querySelector(
-      `operation-example[target="${target}"][client="${client}"]`,
+      `operation-example[target="${ctx.target()}"][client="${ctx.client()}"]`,
     );
 
     currentActiveExample?.setAttribute("active", "false");
     targetExample?.setAttribute("active", "true");
   });
 
-  return <div ref={containerRef} innerHTML={children} />;
+  return (
+    <div ref={containerRef} class="contents">
+      {children}
+    </div>
+  );
 }

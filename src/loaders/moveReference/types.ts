@@ -33,7 +33,13 @@ export interface GitHubResponse {
 
 export interface ContentEntry {
   id: string;
-  data: Record<string, unknown>;
+  data: {
+    network?: string;
+    framework?: string;
+    title?: string;
+    description?: string;
+    [key: string]: unknown;
+  };
   body: string;
   rendered: {
     html: string;

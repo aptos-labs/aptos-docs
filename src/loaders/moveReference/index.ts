@@ -72,16 +72,33 @@ export function moveReferenceLoader(config: GitHubConfig): Loader {
                 // Generate the entry ID in the format: branch/framework/filename
                 const baseFilename = fileName.replace(/\.md$/, "");
                 const entryId = `${branch.name}/${module.framework}/${baseFilename}`;
-                const entry = await markdownProcessor.processContent(entryId, content);
+                // Pass the full path including framework and branch
+                const fullPath = `${branch.name}/${module.framework}/${fileName}`;
+                const entry = await markdownProcessor.processContent(fullPath, content);
 
                 // Add branch and framework metadata
+                Object.assign(entry, { id: entryId });
                 Object.assign(entry.data, {
                   network: branch.name,
                   framework: module.framework,
                   title: baseFilename,
+                  description:
+                    fileName === "overview.md"
+                      ? (() => {
+                          // Split by double newlines
+                          const paragraphs = content.split("\n\n");
+                          // Find the paragraph after the title (skip anchor and title)
+                          const description =
+                            paragraphs[2]?.trim() ??
+                            `Documentation for ${module.framework} modules`;
+                          console.log("Extracted description from overview.md:", description);
+                          return description;
+                        })()
+                      : undefined,
                 });
                 Object.assign(entry, { digest: context.generateDigest(entry.data) });
 
+                // Store all entries including overview.md so we can access its description
                 try {
                   store.set(entry);
                   stats.processedFiles++;

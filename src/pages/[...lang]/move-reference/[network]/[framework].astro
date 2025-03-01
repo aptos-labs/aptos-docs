@@ -14,7 +14,12 @@ export async function getStaticPaths() {
   const uniqueCombinations = new Map(
     moveReferenceEntries.map((entry) => [
       `${entry.data.network}-${entry.data.framework}`,
-      entry.data,
+      {
+        network: entry.data.network,
+        framework: entry.data.framework,
+        title: entry.data.title,
+        description: entry.data.description,
+      },
     ]),
   );
 
@@ -49,12 +54,24 @@ const entries = await getCollection(
 );
 
 // Sort entries by module name
-const sortedEntries = entries.sort((a, b) => a.data.title.localeCompare(b.data.title));
+// Filter out overview.md and sort remaining entries
+const sortedEntries = entries
+  .filter((entry) => entry.data.title !== "overview")
+  .sort((a, b) => a.data.title.localeCompare(b.data.title));
+
+const description =
+  entries.find((e) => e.data.description)?.data.description ??
+  `Documentation for ${framework} modules on ${network}`;
 ---
 
 <StarlightPage
-  frontmatter={{ title: `${framework} Modules - [${network}]`, tableOfContents: false }}
+  frontmatter={{
+    title: `${framework} Modules - [${network}]`,
+    description: description,
+    // tableOfContents: false
+  }}
 >
+  <p>{description}</p>
   <!-- <div class="metadata">
     <span class="branch">{network}</span>
     <span class="framework">{framework}</span>

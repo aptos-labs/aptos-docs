@@ -43,20 +43,22 @@ export class MarkdownProcessor {
 
   async processContent(fileName: string, content: string): Promise<ContentEntry> {
     const { data: frontmatter, content: markdownContent } = matter(content);
-    const id = fileName.replace(".md", "");
+    // Keep just the filename without extension for the ID
+    const id = fileName.split("/").pop()?.replace(".md", "") ?? "";
 
-    // Render Markdown
-    const rendered = await this.processor.render(markdownContent);
+    // Process with remark plugins
+    const processed = await this.processor.render(markdownContent);
 
     return {
       id,
-      data: frontmatter as Record<string, unknown>,
+      data: {
+        ...frontmatter,
+        ...processed.metadata,
+      } as Record<string, unknown>,
       body: markdownContent,
       rendered: {
-        html: rendered.code,
-        metadata: {
-          ...rendered.metadata,
-        },
+        html: processed.code,
+        metadata: processed.metadata,
       },
     };
   }

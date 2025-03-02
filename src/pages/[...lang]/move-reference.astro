@@ -1,11 +1,12 @@
 ---
 import { getCollection } from "astro:content";
 import StarlightPage from "@astrojs/starlight/components/StarlightPage.astro";
-import { CardGrid, LinkCard, Tabs, TabItem } from "@astrojs/starlight/components";
+import { Tabs, TabItem } from "@astrojs/starlight/components";
 import { SUPPORTED_LANGUAGES } from "../../config/locales";
 import { MOVE_REFERENCE_BRANCHES, type MoveNetwork } from "../../content.config";
 import { isMoveReferenceEnabled } from "~/utils/isMoveReferenceEnabled";
 import MoveReferenceDisabled from "~/components/MoveReferenceDisabled.astro";
+import LinkList from "~/components/LinkList.astro";
 
 export async function getStaticPaths() {
   return SUPPORTED_LANGUAGES.map(({ code }) => ({
@@ -20,38 +21,38 @@ const moveReferenceEntries = isMoveReferenceEnabled() ? await getCollection("mov
 
 // Get entries for a specific network
 const getNetworkFrameworks = (network: MoveNetwork) => {
-  const networkEntries = moveReferenceEntries.filter((entry) => entry.data.network === network);
+  const networkEntries = moveReferenceEntries
+    .filter((entry) => entry.data.network === network)
+    .sort((a, b) => a.data.framework.localeCompare(b.data.framework));
 
   return Object.entries(Object.groupBy(networkEntries, (entry) => entry.data.framework));
 };
 ---
 
-<StarlightPage
-  frontmatter={{ title: "Move Reference", tableOfContents: false, prev: false, next: false }}
->
+<StarlightPage frontmatter={{ title: "Move Reference", prev: false, next: false }}>
   {
     isMoveReferenceEnabled() ? (
-      <Tabs>
-        {MOVE_REFERENCE_BRANCHES.map(({ label, icon, name, ref }) => (
-          <TabItem label={label} icon={icon}>
-            <div class="framework-section">
-              <CardGrid>
-                {getNetworkFrameworks(name).map(([framework, entries]) => (
-                  <LinkCard
-                    href={
+      <>
+        <h2>Choose a framework</h2>
+        <Tabs>
+          {MOVE_REFERENCE_BRANCHES.map(({ label, icon, name, ref }) => (
+            <TabItem label={label} icon={icon}>
+              <div class="framework-section">
+                <LinkList
+                  items={getNetworkFrameworks(name).map(([framework, entries]) => ({
+                    href:
                       lang === "en"
                         ? `/move-reference/${ref}/${framework}`
-                        : `/${lang}/move-reference/${ref}/${framework}`
-                    }
-                    title={framework}
-                    description={`${entries.length} modules available for ${label}`}
-                  />
-                ))}
-              </CardGrid>
-            </div>
-          </TabItem>
-        ))}
-      </Tabs>
+                        : `/${lang}/move-reference/${ref}/${framework}`,
+                    label: framework,
+                    description: `${entries.length} modules`,
+                  }))}
+                />
+              </div>
+            </TabItem>
+          ))}
+        </Tabs>
+      </>
     ) : (
       <MoveReferenceDisabled />
     )

@@ -91,7 +91,7 @@ export function moveReferenceLoader(config: GitHubConfig): Loader {
                           const description =
                             paragraphs[2]?.trim() ??
                             `Documentation for ${module.framework} modules`;
-                          console.log("Extracted description from overview.md:", description);
+                          //console.log("Extracted description from overview.md:", description);
                           return description;
                         })()
                       : undefined,

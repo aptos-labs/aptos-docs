@@ -1,0 +1,46 @@
+---
+import type { HTMLAttributes } from "astro/types";
+
+export interface Props extends HTMLAttributes<"ul"> {
+  /**
+   * Items to display in the list
+   */
+  items: {
+    href: string;
+    label: string;
+    prefix?: string;
+    description?: string;
+  }[];
+}
+
+const { items, class: className, ...attrs } = Astro.props;
+
+// Merge provided classes with defaults
+const classList = ["list-none", "flex", "m-0", "!px-0", "not-content", "flex-col", className]
+  .filter(Boolean)
+  .join(" ");
+---
+
+<ul class={classList} {...attrs}>
+  {
+    items.map(({ href, label, prefix, description }) => (
+      <li class="flex items-center border-b-1 last-of-type:border-b-0 border-b-zinc-200 dark:border-b-zinc-800">
+        <a
+          href={href}
+          class="no-underline py-4 w-full text-base md:text-xl flex flex-col dark:text-zinc-200 dark:hover:text-white dark:hover:bg-white/0.75 hover:text-black hover:bg-black/[2%] px-2 md:px-4 font-medium"
+        >
+          <div class="flex items-center justify-between w-full">
+            <div>
+              {prefix && <span class="text-zinc-400 dark:text-zinc-600">{prefix}</span>}
+              {label}
+            </div>
+            <span>→</span>
+          </div>
+          <div class="flex-grow">
+            {description && <p class="text-zinc-400 dark:text-zinc-600 text-base">{description}</p>}
+          </div>
+        </a>
+      </li>
+    ))
+  }
+</ul>

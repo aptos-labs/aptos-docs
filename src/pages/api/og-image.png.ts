@@ -19,15 +19,7 @@ const FONTS = [
 export const prerender = false;
 export const GET: APIRoute = async ({ request }) => {
   const url = new URL(request.url);
-  const options = await parseTokenOptions(url.searchParams.get("token"), OPTIONS_SCHEMA);
-  const title = options?.title;
-
-  if (!options) {
-    return new Response("OG Image generation is disabled or token is invalid", {
-      status: 404,
-      statusText: "Not Found",
-    });
-  }
+  const { title } = await parseTokenOptions(url.searchParams.get("token"), OPTIONS_SCHEMA);
 
   return generateImage({
     width: 1200,

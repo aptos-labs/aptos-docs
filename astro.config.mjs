@@ -9,11 +9,11 @@ import vercel from "@astrojs/vercel";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import { loadEnv } from "vite";
-
 import rehypeRaw from "rehype-raw";
 import sitemap from "@astrojs/sitemap";
 import partytown from "@astrojs/partytown";
 import node from "@astrojs/node";
+import { ogImagesIntegration } from "./src/integrations/ogImages";
 import { getEnvsSchema } from "./src/lib/og-image/schema.mjs";
 import { SUPPORTED_LANGUAGES } from "./src/config/locales";
 // import { isMoveReferenceEnabled } from "./src/utils/isMoveReferenceEnabled";
@@ -38,6 +38,7 @@ export default defineConfig({
         : "http://localhost:4321",
   trailingSlash: "never",
   integrations: [
+    ogImagesIntegration(),
     starlight({
       title: "Aptos Developer Docs",
       logo: {

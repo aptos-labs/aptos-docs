@@ -1,15 +1,22 @@
 import type { z } from "astro:schema";
 import { jwtVerify } from "jose";
-import { invariant } from "../invariant";
 import { getOgImageSecret } from "./getOgImageSecret";
-import { OGImageError } from "./errors";
 
 export async function parseTokenOptions<Schema extends z.AnyZodObject>(
   signedJWTToken: string | null,
   schema: Schema,
-): Promise<z.infer<Schema>> {
-  invariant(signedJWTToken, new OGImageError("Token isn't specified"));
-  const verifiedJWT = await jwtVerify(signedJWTToken, getOgImageSecret());
+): Promise<z.infer<Schema> | null> {
+  const secret = getOgImageSecret();
+  // If secret is not available, OG image generation is disabled
+  if (!secret || !signedJWTToken) {
+    return null;
+  }
 
-  return schema.parse(verifiedJWT.payload);
+  try {
+    const verifiedJWT = await jwtVerify(signedJWTToken, secret);
+    return schema.parse(verifiedJWT.payload);
+  } catch {
+    // Return null for any verification or parsing errors
+    return null;
+  }
 }

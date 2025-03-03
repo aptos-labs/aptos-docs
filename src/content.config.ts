@@ -52,6 +52,7 @@ export const collections = {
       title: z.string(),
       description: z.string().optional(),
       editUrl: z.string(),
+      lastUpdated: z.string(),
     }),
   }),
 };

@@ -4,23 +4,32 @@ import { graphql } from "@octokit/graphql";
 import { GITHUB_TOKEN } from "astro:env/server";
 import type { GitHubConfig, BranchConfig, ModuleConfig } from "../types.js";
 
-interface TreeEntry {
-  name: string;
-  type: "blob" | "tree";
-  object?: {
-    text?: string;
-  };
-}
-
 interface GetFilesResponse {
   repository: {
     object: {
-      entries: TreeEntry[];
+      entries: {
+        name: string;
+        type: string;
+        path: string;
+        object?: {
+          text?: string;
+        };
+      }[];
     };
   };
 }
 
-type GraphQLClient = <T>(query: string, params?: Record<string, unknown>) => Promise<T>;
+interface GetCommitResponse {
+  repository: {
+    object: {
+      history: {
+        nodes: {
+          committedDate: string;
+        }[];
+      };
+    };
+  };
+}
 
 const GET_FILES_QUERY = `
   query getFiles($owner: String!, $repo: String!, $expression: String!) {
@@ -30,6 +39,7 @@ const GET_FILES_QUERY = `
           entries {
             name
             type
+            path
             object {
               ... on Blob {
                 text
@@ -42,8 +52,24 @@ const GET_FILES_QUERY = `
   }
 `;
 
+const GET_COMMIT_QUERY = `
+  query getCommit($owner: String!, $repo: String!, $ref: String!, $path: String!) {
+    repository(owner: $owner, name: $repo) {
+      object(expression: $ref) {
+        ... on Commit {
+          history(first: 1, path: $path) {
+            nodes {
+              committedDate
+            }
+          }
+        }
+      }
+    }
+  }
+`;
+
 export class GitHubFetcher {
-  private client: GraphQLClient;
+  private client: ReturnType<typeof graphql.defaults>;
 
   constructor(
     private config: GitHubConfig,
@@ -64,7 +90,10 @@ export class GitHubFetcher {
     return `${blue("├─")} ${dim(`${branch}/${framework}`)} ${message}`;
   }
 
-  async getModuleContent(branch: BranchConfig, module: ModuleConfig): Promise<Map<string, string>> {
+  async getModuleContent(
+    branch: BranchConfig,
+    module: ModuleConfig,
+  ): Promise<Map<string, { content: string; lastUpdated: string }>> {
     try {
       this.context.logger.info(
         this.formatTreeLog(branch.name, module.framework, `Fetching docs from ${module.folder}`),
@@ -77,12 +106,26 @@ export class GitHubFetcher {
       });
 
       const entries = data.repository.object.entries;
-      const contentMap = new Map<string, string>();
+      const contentMap = new Map<string, { content: string; lastUpdated: string }>();
 
       for (const entry of entries) {
         if (entry.type === "blob" && entry.name.endsWith(".md") && entry.object?.text) {
-          contentMap.set(entry.name, entry.object.text);
-          // this.context.logger.info(`Found file: ${entry.name}`);
+          // Get commit date for this specific file
+          const commitData = await this.client<GetCommitResponse>(GET_COMMIT_QUERY, {
+            owner: this.config.owner,
+            repo: this.config.repo,
+            ref: branch.ref,
+            path: `${module.folder}/${entry.name}`,
+          });
+
+          const lastUpdated =
+            commitData.repository.object.history.nodes[0]?.committedDate ??
+            new Date().toISOString();
+
+          contentMap.set(entry.name, {
+            content: entry.object.text,
+            lastUpdated,
+          });
         }
       }
 
@@ -96,7 +139,7 @@ export class GitHubFetcher {
       this.context.logger.error(
         this.formatTreeLog(branch.name, module.framework, red(`✗ (${message})`)),
       );
-      return new Map<string, string>();
+      return new Map<string, { content: string; lastUpdated: string }>();
     }
   }
 }

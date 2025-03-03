@@ -67,13 +67,14 @@ export function moveReferenceLoader(config: GitHubConfig): Loader {
             stats.totalFiles += contentMap.size;
 
             // Process each file
-            for (const [fileName, content] of contentMap) {
+            for (const [fileName, fileData] of contentMap) {
               try {
                 // Generate the entry ID in the format: branch/framework/filename
                 const baseFilename = fileName.replace(/\.md$/, "");
                 const entryId = `${branch.name}/${module.framework}/${baseFilename}`;
                 // Pass the full path including framework and branch
                 const fullPath = `${branch.name}/${module.framework}/${fileName}`;
+                const { content, lastUpdated } = fileData;
                 const entry = await markdownProcessor.processContent(fullPath, content);
 
                 // Add branch and framework metadata
@@ -96,6 +97,7 @@ export function moveReferenceLoader(config: GitHubConfig): Loader {
                           return description;
                         })()
                       : undefined,
+                  lastUpdated,
                 });
                 Object.assign(entry, { digest: context.generateDigest(entry.data) });
 

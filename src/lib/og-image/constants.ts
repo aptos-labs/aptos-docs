@@ -1,0 +1,1 @@
+export const OG_IMAGES_ENV_NAME = "OG_IMAGES_SECRET";

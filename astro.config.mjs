@@ -14,7 +14,6 @@ import partytown from "@astrojs/partytown";
 import node from "@astrojs/node";
 import { ENV } from "./src/lib/env";
 import { ogImagesIntegration } from "./src/integrations/ogImages";
-import { getEnvsSchema } from "./src/lib/og-image/schema.mjs";
 import { SUPPORTED_LANGUAGES } from "./src/config/locales";
 // import { isMoveReferenceEnabled } from "./src/utils/isMoveReferenceEnabled";
 // import rehypeAddDebug from './src/plugins/rehype-add-debug.js';
@@ -166,7 +165,6 @@ export default defineConfig({
   prefetch: true,
   env: {
     schema: {
-      ...getEnvsSchema(),
       ALGOLIA_APP_ID: envField.string({
         context: "client",
         access: "public",

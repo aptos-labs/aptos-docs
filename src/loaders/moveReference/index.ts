@@ -6,7 +6,7 @@ import type { GitHubConfig, ProcessingStats } from "./types";
 import { GitHubFetcher } from "./services/github-fetcher";
 import { MarkdownProcessor } from "./services/markdown-processor";
 import { getPluginHash } from "./utils/plugin-hash.js";
-import { IS_GITHUB_CI } from "~/lib/ci.mjs";
+import { IS_GITHUB_CI } from "~/lib/env";
 
 export function moveReferenceLoader(config: GitHubConfig): Loader {
   async function loadContent(context: LoaderContext): Promise<void> {

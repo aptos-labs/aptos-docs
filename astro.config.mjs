@@ -8,22 +8,21 @@ import starlightDocSearch from "@astrojs/starlight-docsearch";
 import vercel from "@astrojs/vercel";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
-import { loadEnv } from "vite";
 import rehypeRaw from "rehype-raw";
 import sitemap from "@astrojs/sitemap";
 import partytown from "@astrojs/partytown";
 import node from "@astrojs/node";
+import { ENV } from "./src/lib/env";
 import { ogImagesIntegration } from "./src/integrations/ogImages";
 import { getEnvsSchema } from "./src/lib/og-image/schema.mjs";
 import { SUPPORTED_LANGUAGES } from "./src/config/locales";
 // import { isMoveReferenceEnabled } from "./src/utils/isMoveReferenceEnabled";
 // import rehypeAddDebug from './src/plugins/rehype-add-debug.js';
 
-const env = loadEnv(process.env.NODE_ENV || "development", process.cwd(), "");
-const ALGOLIA_APP_ID = env.ALGOLIA_APP_ID;
-const ALGOLIA_SEARCH_API_KEY = env.ALGOLIA_SEARCH_API_KEY;
-const ALGOLIA_INDEX_NAME = env.ALGOLIA_INDEX_NAME;
-const ENABLE_API_REFERENCE = env.ENABLE_API_REFERENCE;
+const ALGOLIA_APP_ID = ENV.ALGOLIA_APP_ID;
+const ALGOLIA_SEARCH_API_KEY = ENV.ALGOLIA_SEARCH_API_KEY;
+const ALGOLIA_INDEX_NAME = ENV.ALGOLIA_INDEX_NAME;
+const ENABLE_API_REFERENCE = ENV.ENABLE_API_REFERENCE;
 
 const hasAlgoliaConfig = ALGOLIA_APP_ID && ALGOLIA_SEARCH_API_KEY && ALGOLIA_INDEX_NAME;
 const enableApiReference = ENABLE_API_REFERENCE === "true";
@@ -31,10 +30,10 @@ const enableApiReference = ENABLE_API_REFERENCE === "true";
 // https://astro.build/config
 export default defineConfig({
   site:
-    process.env.VERCEL_ENV === "production"
+    ENV.VERCEL_ENV === "production"
       ? "https://aptos-docs-astro.vercel.app"
-      : process.env.VERCEL_URL
-        ? `https://${process.env.VERCEL_URL}`
+      : ENV.VERCEL_URL
+        ? `https://${ENV.VERCEL_URL}`
         : "http://localhost:4321",
   trailingSlash: "never",
   integrations: [

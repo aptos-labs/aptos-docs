@@ -1,8 +1,7 @@
-import { loadEnv } from "vite";
-const env = loadEnv(process.env.NODE_ENV ?? "development", process.cwd(), "");
+import { ENV } from "~/lib/env";
 
-const ENABLE_MOVE_REFERENCE = env.ENABLE_MOVE_REFERENCE;
-const GITHUB_TOKEN = env.GITHUB_TOKEN;
+const ENABLE_MOVE_REFERENCE = ENV.ENABLE_MOVE_REFERENCE;
+const GITHUB_TOKEN = ENV.GITHUB_TOKEN;
 
 export const isMoveReferenceEnabled = () => {
   return (

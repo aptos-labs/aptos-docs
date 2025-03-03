@@ -82,6 +82,7 @@ export function moveReferenceLoader(config: GitHubConfig): Loader {
                   network: branch.name,
                   framework: module.framework,
                   title: baseFilename,
+                  editUrl: `https://github.com/${config.owner}/${config.repo}/edit/${branch.ref}/${module.folder}/${fileName}`,
                   description:
                     fileName === "overview.md"
                       ? (() => {

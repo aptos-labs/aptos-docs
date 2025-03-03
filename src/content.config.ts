@@ -51,6 +51,7 @@ export const collections = {
       framework: z.string().transform((v) => v as MoveFramework),
       title: z.string(),
       description: z.string().optional(),
+      editUrl: z.string(),
     }),
   }),
 };

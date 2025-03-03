@@ -18,6 +18,10 @@ export function moveReferenceLoader(config: GitHubConfig): Loader {
       skippedFiles: 0,
       errorFiles: 0,
       cachedModules: 0,
+      cacheHits: 0,
+      cacheMisses: 0,
+      unchangedModules: 0,
+      updatedModules: 0,
     };
 
     // Check if plugins have changed
@@ -63,17 +67,56 @@ export function moveReferenceLoader(config: GitHubConfig): Loader {
         // Process each module in the branch
         for (const module of branch.modules) {
           try {
-            // Get module content
-            const contentMap = await githubFetcher.getModuleContent(branch, module);
-            stats.totalFiles += contentMap.size;
+            // Get module content and metadata
+            const { contentMap, commitHash, filesCount } = await githubFetcher.getModuleContent(
+              branch,
+              module,
+            );
 
-            // Process each file
-            for (const [fileName, fileData] of contentMap) {
+            // Update stats based on cache status
+            if (contentMap.size === 0 && commitHash) {
+              // Count each file in the cached module
+              stats.cacheHits += filesCount;
+              stats.unchangedModules += filesCount; // Count each file as an unchanged module
+              stats.cachedModules++;
+              stats.totalFiles += filesCount;
+
+              // For cached entries, ensure Starlight properties are set
+              const prefix = `${branch.ref.toLowerCase()}/${module.framework.toLowerCase()}/`;
+              for (const [id, entry] of store.entries()) {
+                if (id.startsWith(prefix)) {
+                  const pathParts = id.split("/");
+                  const baseFilename = pathParts[pathParts.length - 1] ?? "";
+                  const fileName = `${baseFilename}.md`;
+
+                  // Create a new entry with updated data
+                  const updatedEntry = {
+                    ...entry,
+                    data: {
+                      ...entry.data,
+                      hidden: false,
+                      sidebar: {
+                        label: baseFilename,
+                        order: fileName === "overview.md" ? -1 : 0,
+                      },
+                    },
+                  };
+                  store.set(updatedEntry);
+                }
+              }
+              continue;
+            } else if (contentMap.size > 0) {
+              stats.cacheMisses += contentMap.size;
+              stats.updatedModules += contentMap.size; // Count each file as an updated module
+              stats.totalFiles += filesCount;
+            }
+
+            // Process each file if we have new content
+            for (const [fileName, fileData] of contentMap.entries()) {
               try {
-                // Generate the entry ID in the format: branch/framework/filename
-                const baseFilename = fileName.replace(/\.md$/, "");
-                const entryId = `${branch.name}/${module.framework}/${baseFilename}`;
-                // Pass the full path including framework and branch
+                // Generate the entry ID to match the URL path: /move-reference/[network]/[framework]/[filename]
+                const baseFilename = fileName.replace(/\.md$/, "").toLowerCase();
+                const entryId = `${branch.ref.toLowerCase()}/${module.framework.toLowerCase()}/${baseFilename}`;
                 const fullPath = `${branch.name}/${module.framework}/${fileName}`;
                 const { content, lastUpdated } = fileData;
                 const entry = await markdownProcessor.processContent(fullPath, content);
@@ -81,8 +124,8 @@ export function moveReferenceLoader(config: GitHubConfig): Loader {
                 // Add branch and framework metadata
                 Object.assign(entry, { id: entryId });
                 Object.assign(entry.data, {
-                  network: branch.name,
-                  framework: module.framework,
+                  network: branch.ref.toLowerCase(), // Use ref for network to match URL structure
+                  framework: module.framework.toLowerCase(),
                   title: baseFilename,
                   editUrl: `https://github.com/${config.owner}/${config.repo}/edit/${branch.ref}/${module.folder}/${fileName}`,
                   description:
@@ -94,11 +137,16 @@ export function moveReferenceLoader(config: GitHubConfig): Loader {
                           const description =
                             paragraphs[2]?.trim() ??
                             `Documentation for ${module.framework} modules`;
-                          //console.log("Extracted description from overview.md:", description);
                           return description;
                         })()
                       : undefined,
                   lastUpdated,
+                  // Required Starlight frontmatter properties
+                  hidden: false,
+                  sidebar: {
+                    label: baseFilename,
+                    order: fileName === "overview.md" ? -1 : 0,
+                  },
                 });
                 Object.assign(entry, { digest: context.generateDigest(entry.data) });
 
@@ -137,7 +185,10 @@ export function moveReferenceLoader(config: GitHubConfig): Loader {
       logger.info(`${blue("▼")} Content processing completed`);
       logger.info(`${blue("├─")} ${dim("Total .md files:")} ${String(stats.totalMdFiles)}`);
       logger.info(`${blue("├─")} ${dim("Files processed:")} ${String(stats.totalFiles)}`);
-      logger.info(`${blue("├─")} ${dim("Modules using cache:")} ${String(stats.cachedModules)}`);
+      logger.info(`${blue("├─")} ${dim("Cache hits:")} ${String(stats.cacheHits)}`);
+      logger.info(`${blue("├─")} ${dim("Cache misses:")} ${String(stats.cacheMisses)}`);
+      logger.info(`${blue("├─")} ${dim("Unchanged modules:")} ${String(stats.unchangedModules)}`);
+      logger.info(`${blue("├─")} ${dim("Updated modules:")} ${String(stats.updatedModules)}`);
       logger.info(
         `${blue("├─")} ${dim("Successfully processed:")} ${String(stats.processedFiles)}`,
       );

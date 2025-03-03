@@ -2,44 +2,16 @@ import type { LoaderContext } from "astro/loaders";
 import { blue, dim, red } from "kleur/colors";
 import { graphql } from "@octokit/graphql";
 import { GITHUB_TOKEN } from "astro:env/server";
-import type { GitHubConfig, BranchConfig, ModuleConfig } from "../types.js";
+import type { GitHubConfig, BranchConfig, ModuleConfig, GitHubGraphQLResponse } from "../types.js";
 
-interface GetFilesResponse {
-  repository: {
-    object: {
-      entries: {
-        name: string;
-        type: string;
-        path: string;
-        object?: {
-          text?: string;
-        };
-      }[];
-    };
-  };
-}
-
-interface GetCommitResponse {
-  repository: {
-    object: {
-      history: {
-        nodes: {
-          committedDate: string;
-        }[];
-      };
-    };
-  };
-}
-
-const GET_FILES_QUERY = `
-  query getFiles($owner: String!, $repo: String!, $expression: String!) {
+const GET_MODULE_CONTENT = `
+  query getModuleContent($owner: String!, $repo: String!, $expression: String!, $ref: String!, $path: String!) {
     repository(owner: $owner, name: $repo) {
       object(expression: $expression) {
         ... on Tree {
           entries {
             name
             type
-            path
             object {
               ... on Blob {
                 text
@@ -48,18 +20,14 @@ const GET_FILES_QUERY = `
           }
         }
       }
-    }
-  }
-`;
-
-const GET_COMMIT_QUERY = `
-  query getCommit($owner: String!, $repo: String!, $ref: String!, $path: String!) {
-    repository(owner: $owner, name: $repo) {
-      object(expression: $ref) {
-        ... on Commit {
-          history(first: 1, path: $path) {
-            nodes {
-              committedDate
+      ref(qualifiedName: $ref) {
+        target {
+          ... on Commit {
+            oid
+            history(first: 1, path: $path) {
+              nodes {
+                committedDate
+              }
             }
           }
         }
@@ -90,41 +58,84 @@ export class GitHubFetcher {
     return `${blue("├─")} ${dim(`${branch}/${framework}`)} ${message}`;
   }
 
+  private isValidModuleResponse(response: unknown): response is GitHubGraphQLResponse {
+    try {
+      return (
+        typeof response === "object" &&
+        response !== null &&
+        "repository" in response &&
+        typeof (response as GitHubGraphQLResponse).repository === "object"
+      );
+    } catch {
+      return false;
+    }
+  }
+
   async getModuleContent(
     branch: BranchConfig,
     module: ModuleConfig,
-  ): Promise<Map<string, { content: string; lastUpdated: string }>> {
+  ): Promise<{
+    contentMap: Map<string, { content: string; lastUpdated: string }>;
+    commitHash: string;
+    filesCount: number;
+  }> {
     try {
-      this.context.logger.info(
-        this.formatTreeLog(branch.name, module.framework, `Fetching docs from ${module.folder}`),
-      );
+      const cacheKey = `${branch.name}-${module.framework}-commit`;
+      const cachedHash = this.context.meta.get(cacheKey);
 
-      const data = await this.client<GetFilesResponse>(GET_FILES_QUERY, {
+      // Fetch module content and commit information in a single query
+      const moduleData = await this.client<GitHubGraphQLResponse>(GET_MODULE_CONTENT, {
         owner: this.config.owner,
         repo: this.config.repo,
         expression: `${branch.ref}:${module.folder}`,
+        ref: branch.ref,
+        path: module.folder,
       });
 
-      const entries = data.repository.object.entries;
-      const contentMap = new Map<string, { content: string; lastUpdated: string }>();
+      if (
+        !this.isValidModuleResponse(moduleData) ||
+        !moduleData.repository.ref?.target ||
+        !moduleData.repository.object
+      ) {
+        throw new Error(`Could not find module content for ${module.folder}`);
+      }
 
+      const tree = moduleData.repository.object;
+      const target = moduleData.repository.ref.target;
+      const currentHash = target.oid;
+      const entries = tree.entries;
+      const filesCount = entries.length;
+      const shortHash = currentHash.substring(0, 7);
+
+      // If commit hash matches cached version, we can skip fetching content
+      if (cachedHash === currentHash) {
+        this.context.logger.info(
+          this.formatTreeLog(branch.name, module.framework, `Using cached content (${shortHash})`),
+        );
+        return {
+          contentMap: new Map(),
+          commitHash: currentHash,
+          filesCount,
+        };
+      }
+
+      this.context.logger.info(
+        this.formatTreeLog(
+          branch.name,
+          module.framework,
+          `Fetching docs from ${module.folder} (${shortHash})`,
+        ),
+      );
+
+      const contentMap = new Map<string, { content: string; lastUpdated: string }>();
+      const lastCommitDate = target.history.nodes[0]?.committedDate ?? new Date().toISOString();
+
+      // Process all markdown files
       for (const entry of entries) {
         if (entry.type === "blob" && entry.name.endsWith(".md") && entry.object?.text) {
-          // Get commit date for this specific file
-          const commitData = await this.client<GetCommitResponse>(GET_COMMIT_QUERY, {
-            owner: this.config.owner,
-            repo: this.config.repo,
-            ref: branch.ref,
-            path: `${module.folder}/${entry.name}`,
-          });
-
-          const lastUpdated =
-            commitData.repository.object.history.nodes[0]?.committedDate ??
-            new Date().toISOString();
-
           contentMap.set(entry.name, {
             content: entry.object.text,
-            lastUpdated,
+            lastUpdated: lastCommitDate,
           });
         }
       }
@@ -133,13 +144,24 @@ export class GitHubFetcher {
         this.context.logger.error(red(`No markdown files found in ${branch.ref}:${module.folder}`));
       }
 
-      return contentMap;
+      // Store the new commit hash
+      this.context.meta.set(cacheKey, currentHash);
+
+      return {
+        contentMap,
+        commitHash: currentHash,
+        filesCount,
+      };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.context.logger.error(
         this.formatTreeLog(branch.name, module.framework, red(`✗ (${message})`)),
       );
-      return new Map<string, { content: string; lastUpdated: string }>();
+      return {
+        contentMap: new Map(),
+        commitHash: "",
+        filesCount: 0,
+      };
     }
   }
 }

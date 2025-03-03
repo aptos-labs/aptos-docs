@@ -47,19 +47,30 @@ export interface ContentEntry {
   };
 }
 
+export interface CacheMetadata {
+  commitHash: string;
+  lastFetch: string;
+  moduleEtag: string;
+}
+
 export interface ProcessingStats {
-  totalMdFiles: number; // Total .md files across all branches/modules
-  totalFiles: number; // Files processed this run
-  processedFiles: number; // Successfully processed
-  skippedFiles: number; // No content
-  errorFiles: number; // Processing errors
-  cachedModules: number; // Modules using cached content
+  totalMdFiles: number;
+  totalFiles: number;
+  processedFiles: number;
+  skippedFiles: number;
+  errorFiles: number;
+  cachedModules: number;
+  cacheHits: number;
+  cacheMisses: number;
+  unchangedModules: number;
+  updatedModules: number;
 }
 
 export interface ModuleStatus {
   framework: string;
   isCached: boolean;
   filesCount: number;
+  commitHash?: string;
 }
 
 export interface TreeItem {
@@ -77,5 +88,29 @@ export interface TreeResponse {
     url: string;
     tree: TreeItem[];
     truncated: boolean;
+  };
+}
+
+export interface GitHubGraphQLResponse {
+  repository: {
+    object: {
+      entries: {
+        name: string;
+        type: string;
+        object?: {
+          text?: string;
+        };
+      }[];
+    } | null;
+    ref?: {
+      target: {
+        oid: string;
+        history: {
+          nodes: {
+            committedDate: string;
+          }[];
+        };
+      };
+    };
   };
 }

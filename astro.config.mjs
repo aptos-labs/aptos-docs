@@ -12,6 +12,7 @@ import rehypeRaw from "rehype-raw";
 import sitemap from "@astrojs/sitemap";
 import partytown from "@astrojs/partytown";
 import node from "@astrojs/node";
+import react from "@astrojs/react";
 import { ENV } from "./src/lib/env";
 import { ogImagesIntegration } from "./src/integrations/ogImages";
 import { SUPPORTED_LANGUAGES } from "./src/config/locales";
@@ -147,6 +148,7 @@ export default defineConfig({
         forward: ["dataLayer.push", "gtag"],
       },
     }),
+    react(),
   ],
   adapter: process.env.VERCEL
     ? vercel()

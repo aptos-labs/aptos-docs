@@ -1,0 +1,28 @@
+---
+
+---
+
+{/* This is intentionally inlined to avoid FOUC. */}
+<script is:inline>
+  window.StarlightTextSizeProvider = (() => {
+    function setTextSize(size) {
+      document.documentElement.dataset.textSize = size;
+      document.documentElement.style.setProperty("--text-scale", size === "large" ? "1.2" : "1");
+      document.documentElement.style.fontSize = size === "large" ? "1.2rem" : "1rem";
+    }
+
+    const storedSize = typeof localStorage !== "undefined" && localStorage.getItem("text-size");
+    const textSize = storedSize || "normal";
+    setTextSize(textSize);
+
+    return {
+      updatePickers: function (size = storedSize || "normal") {
+        setTextSize(size);
+        document.querySelectorAll("starlight-text-size").forEach((picker) => {
+          const select = picker.querySelector("select");
+          if (select) select.value = size;
+        });
+      },
+    };
+  })();
+</script>

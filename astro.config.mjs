@@ -80,6 +80,7 @@ export default defineConfig({
       },
       components: {
         Head: "./src/starlight-overrides/Head.astro",
+        Header: "./src/starlight-overrides/Header.astro",
         PageFrame: "./src/starlight-overrides/PageFrame.astro",
         PageSidebar: "./src/starlight-overrides/PageSidebar.astro",
         PageTitle: "./src/starlight-overrides/PageTitle.astro",

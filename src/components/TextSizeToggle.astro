@@ -1,0 +1,71 @@
+---
+import Select from "@astrojs/starlight/components/Select.astro";
+---
+
+<starlight-text-size>
+  <Select
+    icon="seti:font"
+    label="Text size"
+    value="normal"
+    options={[
+      { label: "Normal", selected: true, value: "normal" },
+      { label: "Large", selected: false, value: "large" },
+    ]}
+    width="6.5em"
+  />
+</starlight-text-size>
+
+{/* Inlined to avoid FOUC. Uses global scope from `TextSizeProvider.astro` */}
+<script is:inline>
+  window.StarlightTextSizeProvider.updatePickers();
+</script>
+
+<script>
+  declare global {
+    interface Window {
+      StarlightTextSizeProvider: {
+        updatePickers: (size?: string) => void;
+      };
+    }
+  }
+
+  type TextSize = "normal" | "large";
+
+  /** Key in `localStorage` to store text size preference at. */
+  const storageKey = "text-size";
+
+  /** Get a typesafe text size string from any JS value (unknown values are coerced to `'normal'`). */
+  const parseTextSize = (size: unknown): TextSize =>
+    size === "normal" || size === "large" ? size : "normal";
+
+  /** Load the user's preference from `localStorage`. */
+  const loadTextSize = (): TextSize =>
+    parseTextSize(typeof localStorage !== "undefined" && localStorage.getItem(storageKey));
+
+  /** Store the user's preference in `localStorage`. */
+  function storeTextSize(size: TextSize): void {
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem(storageKey, size);
+    }
+  }
+
+  class StarlightTextSize extends HTMLElement {
+    constructor() {
+      super();
+      const select = this.querySelector("select");
+      if (!select) return;
+
+      // Set initial value
+      const storedSize = loadTextSize();
+      select.value = storedSize;
+
+      // Handle changes
+      select.addEventListener("change", () => {
+        const newSize = parseTextSize(select.value);
+        storeTextSize(newSize);
+        window.StarlightTextSizeProvider.updatePickers(newSize);
+      });
+    }
+  }
+  customElements.define("starlight-text-size", StarlightTextSize);
+</script>

@@ -16,6 +16,7 @@ import react from "@astrojs/react";
 import { ENV } from "./src/lib/env";
 import { ogImagesIntegration } from "./src/integrations/ogImages";
 import { SUPPORTED_LANGUAGES } from "./src/config/locales";
+import { firebaseIntegration } from "./src/integrations/firebase";
 // import { isMoveReferenceEnabled } from "./src/utils/isMoveReferenceEnabled";
 // import rehypeAddDebug from './src/plugins/rehype-add-debug.js';
 
@@ -38,6 +39,7 @@ export default defineConfig({
   trailingSlash: "never",
   integrations: [
     ogImagesIntegration(),
+    firebaseIntegration(),
     starlight({
       title: "Aptos Docs",
       logo: {

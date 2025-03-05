@@ -39,11 +39,11 @@ export default defineConfig({
   integrations: [
     ogImagesIntegration(),
     starlight({
-      title: "Aptos Developer Docs",
+      title: "Aptos Docs",
       logo: {
         light: "~/assets/aptos-logomark-light.svg",
         dark: "~/assets/aptos-logomark-dark.svg",
-        replacesTitle: true,
+        replacesTitle: false,
       },
       editLink: {
         baseUrl: "https://github.com/aptos-labs/developer-docs/edit/main/",

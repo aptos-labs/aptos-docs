@@ -148,7 +148,9 @@ export default defineConfig({
         forward: ["dataLayer.push", "gtag"],
       },
     }),
-    react(),
+    react({
+      experimentalReactChildren: true,
+    }),
   ],
   adapter: process.env.VERCEL
     ? vercel()

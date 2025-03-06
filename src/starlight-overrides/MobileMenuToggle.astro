@@ -1,0 +1,121 @@
+---
+const t = Astro.props.t || Astro.locals.t;
+---
+
+<starlight-menu-button class="print:hidden">
+  <button
+    aria-expanded="false"
+    aria-label={Astro.locals.t("menuButton.accessibleLabel")}
+    aria-controls="starlight__sidebar"
+    class="sl-flex md:sl-hidden"
+  >
+    <svg class="hamburger" xmlns="http://www.w3.org/2000/svg" width="34" height="34" fill="none">
+      <path
+        fill="currentColor"
+        fill-rule="evenodd"
+        d="M13.707 11.293a1 1 0 0 0-1.414 0l-1 1a3 3 0 0 1-2.121.879H6v-2h3.172a1 1 0 0 0 .707-.293l1-1a3 3 0 0 1 4.242 0l1 1a1 1 0 0 0 .707.293H28v2H16.828a3 3 0 0 1-2.12-.88l-1-1ZM28 23.172H6v-2h22v2Z"
+        clip-rule="evenodd"></path>
+    </svg>
+
+    <svg
+      class="x"
+      xmlns="http://www.w3.org/2000/svg"
+      width="34"
+      height="34"
+      fill="none"
+      class="close"
+    >
+      <path
+        fill="currentColor"
+        fill-rule="evenodd"
+        d="M15.586 17 7.293 8.707l1.414-1.414L17 15.586l8.293-8.293 1.414 1.414L18.414 17l8.293 8.293-1.414 1.414L17 18.414l-8.293 8.293-1.414-1.414L15.586 17Z"
+        clip-rule="evenodd"></path>
+    </svg>
+  </button>
+</starlight-menu-button>
+
+<script>
+  class StarlightMenuButton extends HTMLElement {
+    private btn: HTMLButtonElement;
+
+    constructor() {
+      super();
+      const button = this.querySelector("button");
+      if (!button) {
+        throw new Error("Button element not found in StarlightMenuButton");
+      }
+      this.btn = button;
+
+      // Toggle `aria-expanded` state when a user clicks the button.
+      this.btn.addEventListener("click", () => this.toggleExpanded());
+
+      // Close the menu when a user presses the escape key.
+      const parentNav = this.closest("nav");
+      if (parentNav) {
+        parentNav.addEventListener("keyup", (e) => this.closeOnEscape(e));
+      }
+    }
+
+    setExpanded(expanded: boolean) {
+      this.setAttribute("aria-expanded", String(expanded));
+      document.body.toggleAttribute("data-mobile-menu-expanded", expanded);
+    }
+
+    toggleExpanded() {
+      this.setExpanded(this.getAttribute("aria-expanded") !== "true");
+    }
+
+    closeOnEscape(e: KeyboardEvent) {
+      if (e.code === "Escape") {
+        this.setExpanded(false);
+        this.btn.focus();
+      }
+    }
+  }
+
+  customElements.define("starlight-menu-button", StarlightMenuButton);
+</script>
+
+<style>
+  button {
+    position: fixed;
+    top: calc((var(--sl-nav-height) - var(--sl-menu-button-size)) / 2);
+    inset-inline-end: var(--sl-nav-pad-x);
+    z-index: var(--sl-z-index-navbar);
+    border: 0;
+    width: var(--sl-menu-button-size);
+    height: var(--sl-menu-button-size);
+    padding: 0.5rem;
+    /* background-color: var(--sl-color-white); */
+    color: var(--sl-color-gray-1);
+    cursor: pointer;
+    padding: 0;
+  }
+
+  .x {
+    display: none;
+  }
+
+  [aria-expanded="true"] button {
+    /* background-color: var(--sl-color-gray-2); */
+    box-shadow: none;
+    .hamburger {
+      display: none;
+    }
+    .x {
+      display: block;
+    }
+  }
+</style>
+
+<style is:global>
+  [data-mobile-menu-expanded] {
+    overflow: hidden;
+  }
+
+  @media (min-width: 50rem) {
+    [data-mobile-menu-expanded] {
+      overflow: auto;
+    }
+  }
+</style>

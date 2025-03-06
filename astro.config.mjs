@@ -78,6 +78,10 @@ export default defineConfig({
       ),
       social: {
         github: "https://github.com/aptos-labs/",
+        "x.com": "https://x.com/aptos",
+        discord: "https://discord.com/invite/aptosnetwork",
+        reddit: "https://www.reddit.com/r/Aptos/",
+        telegram: "https://t.me/aptos",
       },
       components: {
         Head: "./src/starlight-overrides/Head.astro",

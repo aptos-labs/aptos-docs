@@ -156,6 +156,8 @@ export const GraphQLEditor: React.FC<GraphQLEditorProps> = ({
           shouldPersistHeaders={false}
           disableTabs={true}
           defaultTheme={theme} // Syncs with Starlight theme
+          defaultEditorToolsVisibility={false}
+          response={`/* Query will render here */`}
         >
           <GraphiQL.Logo>
             {/* Hide the default GraphiQL logo */}

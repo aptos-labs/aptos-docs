@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import type { FetcherParams, FetcherResult } from "@graphiql/toolkit";
 import { GraphiQL } from "graphiql";
 import GraphQLLogo from "./GraphQLLogo";
 import "graphiql/graphiql.min.css";
-import "src/styles/graphiql.css";
+import "./styles.css";
 
 interface GraphQLEditorProps {
   network?: "mainnet" | "testnet" | "devnet";

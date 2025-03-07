@@ -48,12 +48,16 @@ export function OperationExamplesIsland({
     <div className="operation-examples not-content">
       <div className="flex items-center gap-2">
         <Select
+          variant="bordered"
+          size="sm"
           label="Select target"
           options={targets.map((item) => ({ value: item.key, label: item.title }))}
           value={currentTarget}
           onChange={handleTargetChange}
         />
         <Select
+          variant="bordered"
+          size="sm"
           label="Select client"
           value={currentClient}
           onChange={setCurrentClient}

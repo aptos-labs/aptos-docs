@@ -1,6 +1,42 @@
 import { useCallback, type ChangeEvent, type CSSProperties } from "react";
-import { cx } from "class-variance-authority";
-interface CustomSelectProps<Value extends string> {
+import { type VariantProps, cva, cx } from "class-variance-authority";
+
+const selectStyles = cva("cursor-pointer appearance-none text-inherit truncate bg-transparent", {
+  variants: {
+    variant: {
+      ghost: cx("border-0"),
+      bordered: cx("border border-[var(--sl-color-gray-5)]"),
+    },
+    size: {
+      sm: "py-1 pl-3 pr-7 text-xs",
+      md: "py-2 pl-4 pr-7 text-sm",
+      lg: "py-2.5 px-7 text-sm",
+    },
+    iconOnly: {
+      true: "",
+    },
+  },
+  compoundVariants: [
+    {
+      size: "sm",
+      iconOnly: true,
+      class: "p-1.5 max-h-10 max-w-8",
+    },
+    {
+      size: "md",
+      iconOnly: true,
+      class: "p-2.5 max-h-10 max-w-10",
+    },
+    {
+      size: "lg",
+      iconOnly: true,
+      class: "p-3 max-h-10 max-w-12",
+    },
+  ],
+  defaultVariants: { variant: "ghost", size: "md" },
+});
+
+interface CustomSelectProps<Value extends string> extends VariantProps<typeof selectStyles> {
   className?: string;
   id?: string;
   label: string;
@@ -14,8 +50,9 @@ export function Select<Value extends string>({
   className,
   id,
   label,
+  variant,
+  size,
   value: currentValue,
-  width,
   options,
   onChange,
 }: CustomSelectProps<Value>) {
@@ -26,24 +63,11 @@ export function Select<Value extends string>({
     [onChange],
   );
 
-  // Calculate width-related classes based on width or use default
-  const widthStyle = width ? { "--sl-select-width": width } : {};
-
   return (
-    <label
-      className="relative inline-flex items-center gap-1 text-[var(--sl-color-gray-1)] hover:text-[var(--sl-color-gray-2)]"
-      style={widthStyle as CSSProperties}
-    >
+    <label className="relative inline-flex items-center gap-1 text-[var(--sl-color-gray-1)] hover:text-[var(--sl-color-gray-2)]">
       <span className="sr-only">{label}</span>
       <select
-        className={cx([
-          "border-0 py-2.5 cursor-pointer appearance-none bg-transparent text-inherit truncate",
-          "px-[calc(0.875rem+0.5rem+0.25rem)_calc(1.25rem+0.5rem+0.25rem)]",
-          "-mx-2",
-          "w-[calc(var(--sl-select-width,auto)+1rem)]",
-          "md:text-sm",
-          className,
-        ])}
+        className={cx(selectStyles({ variant, size }), className)}
         id={id}
         value={currentValue}
         autoComplete="off"

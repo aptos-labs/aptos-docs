@@ -95,18 +95,29 @@ export const GraphQLEditor: React.FC<GraphQLEditorProps> = ({
     <div className="graphiql-wrapper border border-[var(--sl-color-hairline)] rounded-[var(--global-radius)] bg-[var(--sl-color-bg)]">
       <div className="graphql-editor not-content">
         <div className="graphiql-header flex justify-end gap-4 py-2 items-center pr-2">
-          <select
-            value={network}
-            onChange={(e) => {
-              setNetwork(e.target.value as typeof network);
-            }}
-            className="graphiql-select"
-          >
-            <option value="mainnet">Mainnet</option>
-            <option value="testnet">Testnet</option>
-            <option value="devnet">Devnet</option>
-          </select>
-
+          <label className="flex items-center gap-1">
+            <select
+              value={network}
+              onChange={(e) => {
+                setNetwork(e.target.value as typeof network);
+              }}
+              className="graphiql-select"
+            >
+              <option value="mainnet">Mainnet</option>
+              <option value="testnet">Testnet</option>
+              <option value="devnet">Devnet</option>
+            </select>
+            <svg
+              aria-hidden="true"
+              className="icon caret"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+            >
+              <path d="M17 9.17a1 1 0 0 0-1.41 0L12 12.71 8.46 9.17a1 1 0 1 0-1.41 1.42l4.24 4.24a1.002 1.002 0 0 0 1.42 0L17 10.59a1.002 1.002 0 0 0 0-1.42Z"></path>
+            </svg>
+          </label>
           <button
             onClick={toggleFullscreen}
             className="graphiql-fullscreen-button text-[rgb(var(--color-neutral))] opacity-[var(--alpha-secondary)] hover:cursor-pointer"

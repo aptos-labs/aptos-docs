@@ -17,8 +17,9 @@ import { ENV } from "./src/lib/env";
 import { ogImagesIntegration } from "./src/integrations/ogImages";
 import { SUPPORTED_LANGUAGES } from "./src/config/locales";
 import { firebaseIntegration } from "./src/integrations/firebase";
+import { remarkClientOnly } from "./src/plugins";
 // import { isMoveReferenceEnabled } from "./src/utils/isMoveReferenceEnabled";
-// import rehypeAddDebug from './src/plugins/rehype-add-debug.js';
+// import { rehypeAddDebug } from "./src/plugins";
 
 const ALGOLIA_APP_ID = ENV.ALGOLIA_APP_ID;
 const ALGOLIA_SEARCH_API_KEY = ENV.ALGOLIA_SEARCH_API_KEY;
@@ -161,6 +162,7 @@ export default defineConfig({
     }),
     react({
       experimentalReactChildren: true,
+      include: ["**/GraphQLEditor.tsx"],
     }),
   ],
   adapter: process.env.VERCEL
@@ -175,7 +177,17 @@ export default defineConfig({
     },
   },
   markdown: {
-    remarkPlugins: [remarkMath],
+    remarkPlugins: [
+      remarkMath,
+      [
+        remarkClientOnly,
+        {
+          components: {
+            GraphQLEditor: "react",
+          },
+        },
+      ],
+    ],
     rehypePlugins: [rehypeRaw, rehypeKatex],
   },
   prefetch: true,

@@ -166,5 +166,3 @@ export const GraphQLEditor: React.FC<GraphQLEditorProps> = ({
     </div>
   );
 };
-
-export default GraphQLEditor;

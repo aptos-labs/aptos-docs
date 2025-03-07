@@ -1,38 +1,23 @@
-import type { ClientId, Target, TargetId } from "@scalar/snippetz";
+import { snippetz, type ClientId, type TargetId } from "@scalar/snippetz";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { CustomSelect } from "./CustomSelect";
+import { INITIAL_CLIENT, INITIAL_TARGET } from "./constants";
+import { CustomSelect } from "~/components/CustomSelect";
 import { invariant } from "~/lib/invariant";
 
-interface OperationExamplesControllerProps<T extends TargetId> {
-  targets: Target[];
-  initialTarget: T;
-  initialClient: ClientId<T>;
-  // These are marked as optional, because typechecker doesn't understand they are passed as Astro slots
-  slotTargetSelect?: ReactNode;
-  slotClientSelect?: ReactNode;
-  slotExamples?: ReactNode;
+interface OperationExamplesControllerProps {
+  examples: ReactNode;
 }
 
-export function OperationExamplesController({
-  targets,
-  initialTarget,
-  initialClient,
-  slotTargetSelect,
-  slotClientSelect,
-  slotExamples,
-}: OperationExamplesControllerProps<TargetId>) {
-  invariant(slotTargetSelect, "slotTargetSelect is not defined");
-  invariant(slotClientSelect, "slotClientSelect is not defined");
-  invariant(slotExamples, "slotExamples is not defined");
-
+export function OperationExamplesController({ examples }: OperationExamplesControllerProps) {
+  const targets = snippetz().clients();
   const listRef = useRef<HTMLDivElement>(null);
-  const [selectedTargetName, setSelectedTargetName] = useState(initialTarget);
-  const [selectedClientName, setSelectedClientName] = useState(initialClient);
+  const [selectedTargetName, setSelectedTargetName] = useState(INITIAL_TARGET);
+  const [selectedClientName, setSelectedClientName] = useState(INITIAL_CLIENT);
   const [clientOptions, setClientOptions] = useState<
     { value: ClientId<TargetId>; label: string }[]
-  >(getClientOptins(initialTarget));
+  >(getClientOptions(selectedTargetName));
 
-  function getClientOptins(target: TargetId) {
+  function getClientOptions(target: TargetId) {
     const updatedTarget = targets.find((item) => item.key === target);
     invariant(updatedTarget, `Target with key ${target} not found`);
     return updatedTarget.clients.map((client) => ({
@@ -43,7 +28,12 @@ export function OperationExamplesController({
 
   function handleTargetChange(target: TargetId) {
     setSelectedTargetName(target);
-    setClientOptions(getClientOptins(target));
+
+    const targetClientOptions = getClientOptions(target);
+    setClientOptions(targetClientOptions);
+    const client = targetClientOptions[0]?.value;
+    invariant(client, "No client options found");
+    setSelectedClientName(client);
   }
 
   useEffect(() => {
@@ -61,18 +51,20 @@ export function OperationExamplesController({
   return (
     <div className="operation-examples not-content">
       <div className="flex items-center gap-2">
-        <CustomSelect value={selectedTargetName} onChange={handleTargetChange}>
-          {slotTargetSelect}
-        </CustomSelect>
         <CustomSelect
+          label="Select target"
+          options={targets.map((item) => ({ value: item.key, label: item.title }))}
+          value={selectedTargetName}
+          onChange={handleTargetChange}
+        />
+        <CustomSelect
+          label="Select client"
           value={selectedClientName}
           onChange={setSelectedClientName}
           options={clientOptions}
-        >
-          {slotClientSelect}
-        </CustomSelect>
+        />
       </div>
-      <div ref={listRef}>{slotExamples}</div>
+      <div ref={listRef}>{examples}</div>
     </div>
   );
 }

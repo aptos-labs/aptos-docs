@@ -10,7 +10,7 @@ interface CustomSelectProps<Value extends string> {
   onChange: (value: Value) => void;
 }
 
-export function CustomSelect<Value extends string>({
+export function Select<Value extends string>({
   className,
   id,
   label,
@@ -61,7 +61,7 @@ export function CustomSelect<Value extends string>({
       </select>
       <svg
         aria-hidden="true"
-        className="icon caret absolute top-1/2 -translate-y-1/2 pointer-events-none right-0 text-[1.25rem]"
+        className="icon caret absolute top-1/2 -translate-y-1/2 pointer-events-none right-2 text-[1.25rem]"
         width="16"
         height="16"
         viewBox="0 0 24 24"

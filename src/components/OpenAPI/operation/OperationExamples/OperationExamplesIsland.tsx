@@ -2,7 +2,7 @@ import type { ClientId, Target, TargetId } from "@scalar/snippetz";
 import { type PropsWithChildren, type ReactNode, useState } from "react";
 import { OperationExamplesContext } from "./OperationExamplesContext";
 import { OperationExamplesList } from "./OperationExamplesList";
-import { CustomSelect } from "~/components/CustomSelect";
+import { Select } from "~/components/react/Select/Select";
 import { invariant } from "~/lib/invariant";
 
 type OperationExamplesIslandProps = PropsWithChildren<{
@@ -47,13 +47,13 @@ export function OperationExamplesIsland({
   return (
     <div className="operation-examples not-content">
       <div className="flex items-center gap-2">
-        <CustomSelect
+        <Select
           label="Select target"
           options={targets.map((item) => ({ value: item.key, label: item.title }))}
           value={currentTarget}
           onChange={handleTargetChange}
         />
-        <CustomSelect
+        <Select
           label="Select client"
           value={currentClient}
           onChange={setCurrentClient}

@@ -1,0 +1,100 @@
+name: Crowdin Sync
+
+on:
+  # Runs on pushes to main branch
+  push:
+    branches: [main]
+    paths:
+      - "src/content/docs/**"
+      - "src/content/i18n/en.json"
+
+  # Manual trigger
+  workflow_dispatch:
+
+  # Run daily at midnight UTC
+  schedule:
+    - cron: "0 0 * * *"
+
+jobs:
+  synchronize-with-crowdin:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Crowdin Action
+        uses: crowdin/github-action@v1
+        with:
+          # Upload sources to Crowdin
+          upload_sources: true
+
+          # Download translations from Crowdin
+          download_translations: true
+
+          # Use machine translation for new content
+          crowdin_branch_name: ${{ github.ref_name }}
+
+          # Create pull request
+          create_pull_request: true
+          pull_request_title: "chore: update translations from Crowdin"
+          pull_request_labels: "i18n,crowdin"
+
+          # Configuration
+          config: "crowdin.yml"
+
+          # Localization branch name
+          localization_branch_name: l10n_crowdin_translations
+
+          # GitHub token for creating PRs
+          token: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          CROWDIN_PROJECT_ID: ${{ secrets.CROWDIN_PROJECT_ID }}
+          CROWDIN_PERSONAL_TOKEN: ${{ secrets.CROWDIN_PERSONAL_TOKEN }}
+
+      # AI pre-translation configuration (for future use)
+      # - name: Pre-translate with AI
+      #   if: success()
+      #   uses: crowdin/github-action@v1
+      #   with:
+      #     # Run AI pre-translation on new content
+      #     upload_sources: false
+      #     download_translations: false
+      #     crowdin_branch_name: ${{ github.ref_name }}
+      #     config: 'crowdin.yml'
+      #     command: 'pre-translate'
+      #     command_args: '--method ai --engine crowdin-ai --branch ${{ github.ref_name }}'
+
+      - name: Pre-translate with DeepL
+        if: success()
+        uses: crowdin/github-action@v1
+        with:
+          # Run machine translation on new content
+          upload_sources: false
+          download_translations: false
+          crowdin_branch_name: ${{ github.ref_name }}
+          config: "crowdin.yml"
+          command: "pre-translate"
+          command_args: "--method mt --engine deepl --branch ${{ github.ref_name }}"
+        env:
+          CROWDIN_PROJECT_ID: ${{ secrets.CROWDIN_PROJECT_ID }}
+          CROWDIN_PERSONAL_TOKEN: ${{ secrets.CROWDIN_PERSONAL_TOKEN }}
+
+      - name: Create PR for Direct GitHub Contributions
+        if: github.event_name == 'push' && contains(github.event.head_commit.message, '[translate]')
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: sync translations with Crowdin"
+          title: "🌐 Sync translations with Crowdin"
+          body: |
+            This PR was automatically created to sync translations:
+
+            - Uploads new source content to Crowdin
+            - Downloads latest translations from Crowdin
+            - Applies DeepL machine translation to new content
+
+            Please review the changes and merge if everything looks correct.
+          branch: crowdin-sync
+          base: main
+          labels: i18n,crowdin,automated-pr

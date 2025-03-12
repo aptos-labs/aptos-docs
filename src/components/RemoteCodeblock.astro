@@ -1,0 +1,57 @@
+---
+import { Code } from '@astrojs/starlight/components';
+
+type MarkerDefinition = string | RegExp | number | { range: string; label?: string };
+
+interface Props {
+  src: string;
+  lang?: string;
+  title?: string;
+  ins?: string | MarkerDefinition | (string | MarkerDefinition)[];
+  mark?: string | MarkerDefinition | (string | MarkerDefinition)[];
+  del?: string | MarkerDefinition | (string | MarkerDefinition)[];
+}
+
+function parseMarker(marker: string | MarkerDefinition | (string | MarkerDefinition)[] | undefined): MarkerDefinition | MarkerDefinition[] | undefined {
+  if (!marker) return undefined;
+
+  // If it's already an array, process each item
+  if (Array.isArray(marker)) {
+    return marker.map(m => typeof m === 'string' ? parseMarker(m) : m) as MarkerDefinition[];
+  }
+
+  // If it's not a string, return as is (already a MarkerDefinition)
+  if (typeof marker !== 'string') return marker;
+
+  // Check if it's a range (e.g., "3-4")
+  const rangeMatch = marker.match(/^(\d+)-(\d+)$/);
+  if (rangeMatch) {
+    return { range: marker };
+  }
+
+  // If it's a single number, convert to number
+  const numberMatch = marker.match(/^\d+$/);
+  if (numberMatch) {
+    return parseInt(marker, 10);
+  }
+
+  // Otherwise return as is (might be a string pattern)
+  return marker;
+}
+
+const { src, lang, title, ins, mark, del } = Astro.props;
+const code = await (await fetch(src)).text();
+
+const processedIns = parseMarker(ins);
+const processedMark = parseMarker(mark);
+const processedDel = parseMarker(del);
+---
+
+<Code 
+  code={code} 
+  lang={lang} 
+  title={title} 
+  ins={processedIns} 
+  mark={processedMark} 
+  del={processedDel}
+/>

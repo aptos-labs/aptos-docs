@@ -11,6 +11,19 @@ interface Props {
   ins?: string | MarkerDefinition | (string | MarkerDefinition)[];
   mark?: string | MarkerDefinition | (string | MarkerDefinition)[];
   del?: string | MarkerDefinition | (string | MarkerDefinition)[];
+  /**
+   * Collapses the given line range or ranges.
+   * @example "1-5" or ["1-5", "12-14"]
+   */
+  collapse?: string | string[];
+  /**
+   * When true, automatically collapses all lines except the focused range.
+   * The focused range is determined by:
+   * 1. GitHub URL line range (if present)
+   * 2. mark prop (if present)
+   * 3. ins prop (if present)
+   */
+  collapseRemaining?: boolean;
 }
 
 // Default values for required props
@@ -144,9 +157,78 @@ const { ins, del } = Astro.props;
 
 const code = await (await fetch(finalSrc)).text();
 
+// Process markers
 const processedIns = parseMarker(ins);
 const processedMark = parseMarker(finalMark);
 const processedDel = parseMarker(del);
+
+// Calculate collapse ranges if collapseRemaining is enabled
+let finalCollapse = Astro.props.collapse;
+
+// Set to true by default if not explicitly set to false
+if (Astro.props.collapseRemaining ?? true) {
+  // Get the total number of lines
+  const totalLines = code.split("\n").length;
+
+  // Find the focus range from available sources
+  let focusStart: number | undefined;
+  let focusEnd: number | undefined;
+
+  // Try GitHub line range first
+  if (permalink) {
+    const parsed = parseGitHubUrl(permalink);
+    if (parsed.lineRange) {
+      const match = parsed.lineRange.match(/^(\d+)(?:-(\d+))?$/);
+      if (match?.[1]) {
+        focusStart = parseInt(match[1], 10);
+        focusEnd = match[2] ? parseInt(match[2], 10) : focusStart;
+      }
+    }
+  }
+
+  // Try mark prop next
+  if (!focusStart && finalMark) {
+    const markStr = typeof finalMark === "string" ? finalMark : "";
+    const match = markStr.match(/^(\d+)(?:-(\d+))?$/);
+    if (match?.[1]) {
+      focusStart = parseInt(match[1], 10);
+      focusEnd = match[2] ? parseInt(match[2], 10) : focusStart;
+    }
+  }
+
+  // Try ins prop last
+  if (!focusStart && ins) {
+    const insStr =
+      typeof ins === "string" ? ins : Array.isArray(ins) && ins[0] ? ins[0].toString() : "";
+    const match = insStr.match(/^(\d+)(?:-(\d+))?$/);
+    if (match?.[1]) {
+      focusStart = parseInt(match[1], 10);
+      focusEnd = match[2] ? parseInt(match[2], 10) : focusStart;
+    }
+  }
+
+  // If we found a focus range, create collapse ranges around it
+  if (focusStart && focusEnd) {
+    const collapseRanges: string[] = [];
+
+    // Add range before focus if any
+    if (focusStart > 1) {
+      collapseRanges.push(`1-${focusStart - 1}`);
+    }
+
+    // Add range after focus if any
+    if (focusEnd < totalLines) {
+      collapseRanges.push(`${focusEnd + 1}-${totalLines}`);
+    }
+
+    // Merge with any explicit collapse ranges
+    finalCollapse = Array.isArray(finalCollapse)
+      ? [...finalCollapse, ...collapseRanges]
+      : typeof finalCollapse === "string"
+        ? [finalCollapse, ...collapseRanges]
+        : collapseRanges;
+  }
+}
 ---
 
 <Code
@@ -156,4 +238,5 @@ const processedDel = parseMarker(del);
   ins={processedIns}
   mark={processedMark}
   del={processedDel}
+  {...finalCollapse ? { collapse: finalCollapse } : {}}
 />

@@ -85,13 +85,30 @@ export class CustomComponentTransformer extends BaseTransformer {
                 })
                 .join(" ");
           }
-          nodeStr += ">";
 
+          // Handle both self-closing and regular tags
           if (mdxNode.children && mdxNode.children.length > 0) {
-            nodeStr += "..."; // Placeholder for children
+            nodeStr += ">";
+            // Convert children to string if needed
+            const childContent = mdxNode.children
+              .map((child: any) => {
+                // Handle text content
+                if ("value" in child) {
+                  return child.value;
+                }
+                // Handle nested components
+                if ("name" in child) {
+                  return `<${child.name} />`;
+                }
+                return "";
+              })
+              .filter(Boolean)
+              .join("");
+            nodeStr += childContent;
+            nodeStr += `</${node.name}>`;
+          } else {
+            nodeStr += " />";
           }
-
-          nodeStr += `</${node.name}>`;
 
           // Create a text node with the commented content
           const commentNode = {

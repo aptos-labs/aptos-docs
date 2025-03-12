@@ -61,22 +61,36 @@ export class ImportTransformer implements Transformer {
       if (node.type === "mdxjsEsm") {
         const parsed = this.parseImport(node.value);
         if (parsed && parsed.source && parsed.source !== "''" && parsed.source !== '""') {
-          // Skip nextra and components/index imports as we'll replace them
+          // Skip nextra and old components/index imports
           if (!parsed.source.includes("nextra") && !this.isCustomComponentImport(parsed.source)) {
-            const existingImports = importsBySource.get(parsed.source) || new Set<string>();
-            parsed.specifiers.forEach((spec) => existingImports.add(spec));
-            importsBySource.set(parsed.source, existingImports);
+            // Check if this is a custom component import path (~/components/react/...)
+            if (parsed.source.includes("~/components/react/")) {
+              // Keep custom component imports as-is
+              const existingImports = importsBySource.get(parsed.source) || new Set<string>();
+              parsed.specifiers.forEach((spec) => existingImports.add(spec));
+              importsBySource.set(parsed.source, existingImports);
+            } else {
+              // For other imports, consolidate by source
+              const existingImports = importsBySource.get(parsed.source) || new Set<string>();
+              parsed.specifiers.forEach((spec) => existingImports.add(spec));
+              importsBySource.set(parsed.source, existingImports);
+            }
           }
         }
       }
     });
 
-    // Add all starlight components to the imports
+    // Add starlight components to the imports (but not custom components)
     if (usedComponents.size > 0) {
-      const existingImports =
-        importsBySource.get("'@astrojs/starlight/components'") || new Set<string>();
-      usedComponents.forEach((comp) => existingImports.add(comp));
-      importsBySource.set("'@astrojs/starlight/components'", existingImports);
+      const starlightComponents = Array.from(usedComponents).filter(
+        (comp) => !Array.from(this.componentMappings.values()).includes(comp),
+      );
+      if (starlightComponents.length > 0) {
+        const existingImports =
+          importsBySource.get("'@astrojs/starlight/components'") || new Set<string>();
+        starlightComponents.forEach((comp) => existingImports.add(comp));
+        importsBySource.set("'@astrojs/starlight/components'", existingImports);
+      }
     }
 
     // Create consolidated import nodes

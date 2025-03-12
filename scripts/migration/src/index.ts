@@ -32,6 +32,7 @@ import { CustomComponentTransformer } from "./transformers/custom-components.js"
 import { CodeTransformer } from "./transformers/code.js";
 import { ImageTransformer } from "./transformers/image.js";
 import { PunctuationTransformer } from "./transformers/punctuation.js";
+import { BaseTransformer } from "./transformers/base.js";
 import type { TransformerOptions } from "./types/index.js";
 
 interface ExtendedTransformerOptions extends TransformerOptions {
@@ -96,15 +97,6 @@ async function processFile(filePath: string, options: ExtendedTransformerOptions
     new FileTreeTransformer(),
   ];
 
-  // Get all component mappings
-  const componentMappings = new Map<string, string>();
-  componentTransformers.forEach((transformer) => {
-    const map = transformer.getComponentMap();
-    map.forEach((targetComp: string, sourceComp: string) => {
-      componentMappings.set(sourceComp, targetComp);
-    });
-  });
-
   // Create all transformers in order
   const transformers = [
     new TitleTransformer(),
@@ -116,8 +108,21 @@ async function processFile(filePath: string, options: ExtendedTransformerOptions
     new HrefTransformer(),
     new ImageTransformer(),
     new PunctuationTransformer(),
-    new ImportTransformer(componentMappings), // Run last to see all components
   ];
+
+  // Get all component mappings from transformers that have them
+  const componentMappings = new Map<string, string>();
+  transformers.forEach((transformer) => {
+    if (transformer instanceof BaseTransformer) {
+      const map = transformer.getComponentMap();
+      map.forEach((targetComp: string, sourceComp: string) => {
+        componentMappings.set(sourceComp, targetComp);
+      });
+    }
+  });
+
+  // Add ImportTransformer last with all mappings
+  transformers.push(new ImportTransformer(componentMappings));
 
   logger.log("Migration", "Starting transformers");
   progress.updateTransformer("Starting...");

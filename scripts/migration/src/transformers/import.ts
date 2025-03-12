@@ -125,41 +125,35 @@ export class ImportTransformer implements Transformer {
       children: [],
     };
 
-    // Remove all imports and empty nodes
-    const contentWithoutImports = ast.children.filter((node) => {
-      if (node.type === "mdxjsEsm") {
-        const value = node.value.trim();
-        // Remove empty imports, imports with empty source, nextra imports, and custom component imports
-        if (
-          value === "" ||
-          value.includes('from ""') ||
-          value.includes("from ''") ||
-          value.includes("nextra") ||
-          this.isCustomComponentImport(value)
-        ) {
-          return false;
-        }
-        const parsed = this.parseImport(value);
-        // Keep only non-consolidated imports
-        return parsed && !importsBySource.has(parsed.source);
-      }
-      return true;
-    });
+    // First, remove all existing imports
+    const contentWithoutImports = ast.children.filter((node) => node.type !== "mdxjsEsm");
 
-    // Rebuild AST in correct order
-    if (frontmatterEndIndex !== -1) {
-      // If we have frontmatter, place imports after it
-      ast.children = [
-        ...contentWithoutImports.slice(0, frontmatterEndIndex + 1),
-        blankLine,
-        ...consolidatedImports,
-        blankLine,
-        ...contentWithoutImports.slice(frontmatterEndIndex + 1),
-      ];
+    // Find the frontmatter node index
+    const frontmatterIndex = contentWithoutImports.findIndex((node) => node.type === "yaml");
+
+    // Create new AST structure
+    const newChildren = [];
+
+    if (frontmatterIndex !== -1) {
+      // Add everything up to and including frontmatter
+      newChildren.push(...contentWithoutImports.slice(0, frontmatterIndex + 1));
+      // Add blank line
+      newChildren.push(blankLine);
+      // Add imports
+      newChildren.push(...consolidatedImports);
+      // Add blank line
+      newChildren.push(blankLine);
+      // Add remaining content
+      newChildren.push(...contentWithoutImports.slice(frontmatterIndex + 1));
     } else {
-      // If no frontmatter, place imports at the start
-      ast.children = [...consolidatedImports, blankLine, ...contentWithoutImports];
+      // If no frontmatter, add imports at start
+      newChildren.push(...consolidatedImports);
+      newChildren.push(blankLine);
+      newChildren.push(...contentWithoutImports);
     }
+
+    // Replace AST children with new structure
+    ast.children = newChildren;
   }
 
   getComponentMap(): Map<string, string> {

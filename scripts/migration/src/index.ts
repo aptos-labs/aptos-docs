@@ -113,10 +113,10 @@ async function processFile(filePath: string, options: ExtendedTransformerOptions
     new CalloutTransformer(),
     new CodeTransformer(),
     ...componentTransformers,
-    new ImportTransformer(componentMappings),
     new HrefTransformer(),
     new ImageTransformer(),
     new PunctuationTransformer(),
+    new ImportTransformer(componentMappings), // Run last to see all components
   ];
 
   logger.log("Migration", "Starting transformers");

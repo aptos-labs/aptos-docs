@@ -8,7 +8,6 @@ export class CustomComponentTransformer extends BaseTransformer {
   // Components that are not ready for use with their new import paths
   protected componentNames = [
     "ThemedImage",
-    "RemoteCodeblock",
     "permalinkFetch",
     "IndexerBetaNotice",
     "AptosFrameworkReference",
@@ -19,12 +18,14 @@ export class CustomComponentTransformer extends BaseTransformer {
     // Add ready components here too so BaseTransformer doesn't try to import them
     "Faucet",
     "GraphQLEditor",
+    "RemoteCodeblock",
   ];
 
   // Components that are ready for use with their new import paths
   protected readyComponents: Record<string, string> = {
     Faucet: "~/components/react/Faucet",
     GraphQLEditor: "~/components/react/GraphQLEditor",
+    RemoteCodeblock: "~/components/RemoteCodeblock",
   };
 
   protected oldImportPath = "@components/index";

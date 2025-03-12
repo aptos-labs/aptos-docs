@@ -4,11 +4,7 @@ title: "マルチエージェントトランザクション"
 
 マルチエージェントトランザクションでは,複数のアカウントがMoveコントラクトのロジックに参加することができます.
 
-
-
 import { Aside, Steps } from '@astrojs/starlight/components';
-
-
 
 これは,トランザクションを実行する前に複数の当事者の合意を必要とする場合や,複数のアカウントのリソースを使用する場合に利用できます.
 
@@ -20,85 +16,79 @@ import { Aside, Steps } from '@astrojs/starlight/components';
   `.simple`の代わりに,マルチエージェントトランザクション関数では`.multiAgent`を使用します.
 </Aside>
 
-
-
 <Steps>
+  1. 追加の各エージェントを含むsecondarySignerAddressesを指定してトランザクションを構築します.
 
-1. 追加の各エージェントを含むsecondarySignerAddressesを指定してトランザクションを構築します.
+     <Aside type="note">
+       以下の`function`フィールドを,複数のエージェントの署名を必要とするエントリ関数に置き換えてください.
+     </Aside>
 
-   <Aside type="note">
-     以下の`function`フィールドを,複数のエージェントの署名を必要とするエントリ関数に置き換えてください.
-   </Aside>
+     ```typescript filename="multi-agent.ts"
+     const transaction = await aptos.transaction.build.multiAgent({
+       sender: alice.accountAddress,
+       secondarySignerAddresses: [bob.accountAddress],
+       data: {
+         // ここにあなたのマルチエージェント関数を指定してください
+         function:
+           "<マルチエージェントMoveエントリ関数を指定してください> (構文 {address}::{module}::{function})",
+         // 上で指定した関数の引数を渡してください
+         functionArguments: [],
+       },
+     });
+     ```
 
-   ```typescript filename="multi-agent.ts"
-   const transaction = await aptos.transaction.build.multiAgent({
-     sender: alice.accountAddress,
-     secondarySignerAddresses: [bob.accountAddress],
-     data: {
-       // ここにあなたのマルチエージェント関数を指定してください
-       function:
-         "<マルチエージェントMoveエントリ関数を指定してください> (構文 {address}::{module}::{function})",
-       // 上で指定した関数の引数を渡してください
-       functionArguments: [],
-     },
-   });
-   ```
+  2. (オプション)トランザクションをシミュレートします.
 
-2. (オプション)トランザクションをシミュレートします.
+     以下のようにマルチエージェントトランザクションをシミュレートして,送信前に結果をプレビューできます:
 
-   以下のようにマルチエージェントトランザクションをシミュレートして,送信前に結果をプレビューできます:
+     ```typescript filename="multi-agent.ts"
+     const [userTransactionResponse] = await aptos.transaction.simulate.multiAgent(
+       {
+         signerPublicKey: alice.publicKey,
+         secondarySignersPublicKeys: [bob.publicKey],
+         transaction,
+       },
+     );
+     ```
 
-   ```typescript filename="multi-agent.ts"
-   const [userTransactionResponse] = await aptos.transaction.simulate.multiAgent(
-     {
-       signerPublicKey: alice.publicKey,
-       secondarySignersPublicKeys: [bob.publicKey],
+     `signerPublicKey`と`secondarySignersPublicKeys`の入力はオプションであり,シミュレーション中の署名者の認証キーチェックをスキップする場合は省略できます.一部の副署名者の認証キーチェックのみをスキップしたい場合は,チェックしたい特定の署名者の公開鍵を`secondarySignersPublicKeys`に指定し,他の署名者には`undefined`をプレースホルダーとして使用できます.
+
+     例えば,`bob`と`carol`が副署名者で,`carol`の認証キーのみをチェックしたい場合,`bob`のプレースホルダーとして`undefined`を使用し,`secondarySignersPublicKeys: [undefined, carol.publicKey]`と設定できます.
+
+  3. 各エージェントごとに1回ずつ署名します.
+
+     次のステップでこれらの署名を組み合わせます.
+
+     ```typescript filename="multi-agent.ts"
+     const aliceSenderAuthenticator = aptos.transaction.sign({
+       signer: alice,
        transaction,
-     },
-   );
-   ```
+     });
+     // Bobはこのトランザクションの副署名者です
+     const bobSenderAuthenticator = aptos.transaction.sign({
+       signer: bob,
+       transaction,
+     });
+     ```
 
-   `signerPublicKey`と`secondarySignersPublicKeys`の入力はオプションであり,シミュレーション中の署名者の認証キーチェックをスキップする場合は省略できます.一部の副署名者の認証キーチェックのみをスキップしたい場合は,チェックしたい特定の署名者の公開鍵を`secondarySignersPublicKeys`に指定し,他の署名者には`undefined`をプレースホルダーとして使用できます.
+  4. additionalSignerAuthenticatorsパラメータを使用して全エージェントの署名を組み合わせ,トランザクションを送信します.
 
-   例えば,`bob`と`carol`が副署名者で,`carol`の認証キーのみをチェックしたい場合,`bob`のプレースホルダーとして`undefined`を使用し,`secondarySignersPublicKeys: [undefined, carol.publicKey]`と設定できます.
+     ```typescript filename="multi-agent.ts"
+     const committedTransaction = await aptos.transaction.submit.multiAgent({
+       transaction,
+       senderAuthenticator: aliceSenderAuthenticator,
+       additionalSignersAuthenticators: [bobSenderAuthenticator],
+     });
+     ```
 
-3. 各エージェントごとに1回ずつ署名します.
+  5. 最後に,トランザクションの完了を待ちます.
 
-   次のステップでこれらの署名を組み合わせます.
-
-   ```typescript filename="multi-agent.ts"
-   const aliceSenderAuthenticator = aptos.transaction.sign({
-     signer: alice,
-     transaction,
-   });
-   // Bobはこのトランザクションの副署名者です
-   const bobSenderAuthenticator = aptos.transaction.sign({
-     signer: bob,
-     transaction,
-   });
-   ```
-
-4. additionalSignerAuthenticatorsパラメータを使用して全エージェントの署名を組み合わせ,トランザクションを送信します.
-
-   ```typescript filename="multi-agent.ts"
-   const committedTransaction = await aptos.transaction.submit.multiAgent({
-     transaction,
-     senderAuthenticator: aliceSenderAuthenticator,
-     additionalSignersAuthenticators: [bobSenderAuthenticator],
-   });
-   ```
-
-5. 最後に,トランザクションの完了を待ちます.
-
-   ```typescript filename="multi-agent.ts"
-   const executedTransaction = await aptos.waitForTransaction({
-     transactionHash: committedTransaction.hash,
-   });
-   ```
-
+     ```typescript filename="multi-agent.ts"
+     const executedTransaction = await aptos.waitForTransaction({
+       transactionHash: committedTransaction.hash,
+     });
+     ```
 </Steps>
-
-
 
 ## TypeScriptマルチエージェントコードの完全な例
 
@@ -109,7 +99,7 @@ import { Aside, Steps } from '@astrojs/starlight/components';
 1. `pnpm i @aptos-labs/ts-sdk`を実行するか,お好みのパッケージマネージャーを使用して`@aptos-labs/ts-sdk`をインストールします.
 2. マルチエージェント署名を必要とするトランザクションを構築するために,以下のスニペットを更新します.
    1. このコメントの下のfunction部分を置き換えてください:`// ここにあなたのマルチエージェント関数を指定してください`
-   2. この変更が必要な理由は,マルチエージェント署名を必要とする既製のAptosコントラクトが存在しないためです.独自のマルチエージェントコントラクトの例をデプロイしたい場合は,[&quot;transfer two by two&quot; サンプルMoveコントラクト](https://github.com/aptos-labs/aptos-ts-sdk/blob/main/tests/move/transfer/sources/script_two_by_two.move#L5)をデプロイできます.
+   2. この変更が必要な理由は,マルチエージェント署名を必要とする既製のAptosコントラクトが存在しないためです.独自のマルチエージェントコントラクトの例をデプロイしたい場合は,["transfer two by two" サンプルMoveコントラクト](https://github.com/aptos-labs/aptos-ts-sdk/blob/main/tests/move/transfer/sources/script_two_by_two.move#L5)をデプロイできます.
 
 ```typescript filename="multi-agent.ts"
 /**

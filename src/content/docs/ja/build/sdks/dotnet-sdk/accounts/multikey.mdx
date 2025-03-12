@@ -14,13 +14,9 @@ Multisig accounts. In this guide, we will provide snippets of creating accounts.
 
 ## Creating a MultiKeyAccount
 
-
-
 import { Aside, CardGrid, LinkCard, Steps } from '@astrojs/starlight/components';
 
-
-
-MultiKeyAccount&apos;s are created to sign transactions where the account is controlled by multiple private keys.
+MultiKeyAccount's are created to sign transactions where the account is controlled by multiple private keys.
 
 ### Create a MultiKeyAccount
 
@@ -30,71 +26,63 @@ To create a MultiKey account, you will need the following components:
 - `SignaturesRequired`: The minimum number of signers required to sign transactions.
 - `Signers`: The account signers that will be used to sign transactions. The number of signers should be equal to or greater than the `SignaturesRequired`.
 
-
-
 <Steps>
+  1. Create your Accounts
 
-1. Create your Accounts
+     Create your accounts, they can be different types of accounts.
 
-   Create your accounts, they can be different types of accounts.
+     ```csharp
+     var account1 = Ed25519Account.Generate();
+     var account2 = SingleKeyAccount.Generate(PublicKeyVariant.Secp256k1Ecdsa);
+     ```
 
-   ```csharp
-   var account1 = Ed25519Account.Generate();
-   var account2 = SingleKeyAccount.Generate(PublicKeyVariant.Secp256k1Ecdsa);
-   ```
+  2. Create a MultiKey Verifying Key
 
-2. Create a MultiKey Verifying Key
+     Create a MultiKey verifying key using the `PublicKeys` and `SignaturesRequired`. In this example,
+     we have two accounts controlling the MultiKey and we require 2 signers to sign transactions.
 
-   Create a MultiKey verifying key using the `PublicKeys` and `SignaturesRequired`. In this example,
-   we have two accounts controlling the MultiKey and we require 2 signers to sign transactions.
+     ```csharp
+     var multiKey = new MultiKey(
+         publicKeys: [account1.PublicKey, account2.PublicKey],
+         signaturesRequired: 2,
+     );
+     ```
 
-   ```csharp
-   var multiKey = new MultiKey(
-       publicKeys: [account1.PublicKey, account2.PublicKey],
-       signaturesRequired: 2,
-   );
-   ```
+  3. Create the MultiKey Account
 
-3. Create the MultiKey Account
+     Create the MultiKey account using the `PublicKeys`, `SignaturesRequired`, and `Signers`.
 
-   Create the MultiKey account using the `PublicKeys`, `SignaturesRequired`, and `Signers`.
+     ```csharp
+     var multikeyAccount = new MultiKeyAccount(
+         multiKey: multiKey,
+         signers: [account1, account2]
+     );
+     ```
 
-   ```csharp
-   var multikeyAccount = new MultiKeyAccount(
-       multiKey: multiKey,
-       signers: [account1, account2]
-   );
-   ```
+  4. Sign and Submit transactions
 
-4. Sign and Submit transactions
+     After creating a MultiKey account, you can sign and submit transactions using the `AptosClient`.
 
-   After creating a MultiKey account, you can sign and submit transactions using the `AptosClient`.
+     ```csharp
+     // 1. Build the transaction
+     var transaction = await client.Transaction.Build(
+         sender: multikeyAccount,
+         data: new GenerateEntryFunctionPayloadData(
+             function: "0x1::aptos_account::transfer_coins",
+             typeArguments: ["0x1::aptos_coin::AptosCoin"],
+             functionArguments: [account.Address, "100000"]
+         )
+     );
 
-   ```csharp
-   // 1. Build the transaction
-   var transaction = await client.Transaction.Build(
-       sender: multikeyAccount,
-       data: new GenerateEntryFunctionPayloadData(
-           function: "0x1::aptos_account::transfer_coins",
-           typeArguments: ["0x1::aptos_coin::AptosCoin"],
-           functionArguments: [account.Address, "100000"]
-       )
-   );
+     // 2. Sign and submit the transaction
+     var submittedTransaction = await client.Transaction.SignAndSubmitTransaction(multikeyAccount, transaction);
 
-   // 2. Sign and submit the transaction
-   var submittedTransaction = await client.Transaction.SignAndSubmitTransaction(multikeyAccount, transaction);
-
-   // 3. (Optional) Wait for the transaction to be committed
-   var committedTransaction = await client.Transaction.WaitForTransaction(submittedTransaction.Hash);
-   ```
-
+     // 3. (Optional) Wait for the transaction to be committed
+     var committedTransaction = await client.Transaction.WaitForTransaction(submittedTransaction.Hash);
+     ```
 </Steps>
 
-
-
 ## Additional Resources
-
-
 
 <CardGrid>
   <LinkCard href="https://aptos-labs.github.io/aptos-dotnet-sdk/docs/Aptos.MultiKeyAccount.html" title="MultiKeyAccount Reference" description="The full API reference for the MultiKeyAccount class." target="_blank" />

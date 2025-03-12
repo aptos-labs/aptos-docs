@@ -4,18 +4,14 @@ title: "Node Health Checker"
 
 The Aptos Node Health Checker (NHC) service can be used to check the health of any Aptos fullnodes (VFNs or PFNs).
 If you are a node operator, use the NHC service to check if your node is running correctly. The NHC service evaluates
-your node&apos;s health by comparing against a baseline node configuration, and outputs the evaluation results.
-
-
+your node's health by comparing against a baseline node configuration, and outputs the evaluation results.
 
 import { Aside, Steps } from '@astrojs/starlight/components';
-
-
 
 This document describes how to run NHC locally when you are operating a node.
 
 <Aside type="note">
-  If you don&apos;t want to run the NHC service yourself, you can use the
+  If you don't want to run the NHC service yourself, you can use the
   [publicly available NHC service](https://nodetools.aptosfoundation.org/#/node_checker) run by the Aptos Foundation.
 </Aside>
 
@@ -25,71 +21,65 @@ Before you get into the details of how NHC works, you can run the below steps to
 
 **Important**: If your local node is not a devnet fullnode, you must use a different baseline config. See [the configuration examples in aptos-core](https://github.com/aptos-labs/aptos-core/tree/main/ecosystem/node-checker/configuration_examples) for other such example configs.
 
-
-
 <Steps>
+  1. Download the baseline configuration YAML
 
-1. Download the baseline configuration YAML
+     Download a baseline configuration YAML file for a devnet fullnode. The below command will download the `devnet_fullnode.yaml` configuration file:
 
-   Download a baseline configuration YAML file for a devnet fullnode. The below command will download the `devnet_fullnode.yaml` configuration file:
+     ```shellscript filename="Terminal"
+     mkdir /tmp/nhc
+     cd /tmp/nhc
+     wget https://raw.githubusercontent.com/aptos-labs/aptos-core/main/ecosystem/node-checker/configuration_examples/devnet_fullnode.yaml
+     ```
 
-   ```shellscript filename="Terminal"
-   mkdir /tmp/nhc
-   cd /tmp/nhc
-   wget https://raw.githubusercontent.com/aptos-labs/aptos-core/main/ecosystem/node-checker/configuration_examples/devnet_fullnode.yaml
-   ```
+  2. Start the NHC service
 
-2. Start the NHC service
+     Start the NHC service by providing the above-downloaded `devnet_fullnode.yaml` baseline configuration YAML file:
 
-   Start the NHC service by providing the above-downloaded `devnet_fullnode.yaml` baseline configuration YAML file:
+     ```shellscript filename="Terminal"
+     docker run -v /tmp/nhc:/nhc -p 20121:20121 -t aptoslabs/node-checker:nightly /usr/local/bin/aptos-node-checker server run --baseline-config-paths /nhc/devnet_fullnode.yaml
+     ```
 
-   ```shellscript filename="Terminal"
-   docker run -v /tmp/nhc:/nhc -p 20121:20121 -t aptoslabs/node-checker:nightly /usr/local/bin/aptos-node-checker server run --baseline-config-paths /nhc/devnet_fullnode.yaml
-   ```
+  3. Send a request to NHC service
 
-3. Send a request to NHC service
+     Finally, send a request to the NHC service you started above. The following command runs health checks of your node that is at `node_url=http://mynode.mysite.com` and compares these results with the node configured in the baseline configuration `devnet_fullnode`:
 
-   Finally, send a request to the NHC service you started above. The following command runs health checks of your node that is at `node_url=http://mynode.mysite.com` and compares these results with the node configured in the baseline configuration `devnet_fullnode`:
+     ```shellscript filename="Terminal"
+     curl 'http://localhost:20121/check?node_url=http://mynode.mysite.com&api_port=80&baseline_configuration_id=devnet_fullnode'
+     ```
 
-   ```shellscript filename="Terminal"
-   curl 'http://localhost:20121/check?node_url=http://mynode.mysite.com&api_port=80&baseline_configuration_id=devnet_fullnode'
-   ```
+     You will see output similar to this:
 
-   You will see output similar to this:
-
-   ```json filename="Terminal"
-   {
-     "check_results": [
-       {
-         "headline": "Chain ID reported by baseline and target match",
-         "score": 100,
-         "explanation": "The node under investigation reported the same Chain ID 18 as is reported by the baseline node",
-         "checker_name": "node_identity",
-         "links": []
-       },
-       {
-         "headline": "Role Type reported by baseline and target match",
-         "score": 100,
-         "explanation": "The node under investigation reported the same Role Type full_node as is reported by the baseline node",
-         "checker_name": "node_identity",
-         "links": []
-       },
-       {
-         "headline": "Target node produced valid recent transaction",
-         "score": 100,
-         "explanation": "We were able to pull the same transaction (version: 3238616) from both your node and the baseline node. Great! This implies that your node is keeping up with other nodes in the network.",
-         "checker_name": "transaction_availability",
-         "links": []
-       }
-     ],
-     "summary_score": 100,
-     "summary_explanation": "100: Awesome!"
-   }
-   ```
-
+     ```json filename="Terminal"
+     {
+       "check_results": [
+         {
+           "headline": "Chain ID reported by baseline and target match",
+           "score": 100,
+           "explanation": "The node under investigation reported the same Chain ID 18 as is reported by the baseline node",
+           "checker_name": "node_identity",
+           "links": []
+         },
+         {
+           "headline": "Role Type reported by baseline and target match",
+           "score": 100,
+           "explanation": "The node under investigation reported the same Role Type full_node as is reported by the baseline node",
+           "checker_name": "node_identity",
+           "links": []
+         },
+         {
+           "headline": "Target node produced valid recent transaction",
+           "score": 100,
+           "explanation": "We were able to pull the same transaction (version: 3238616) from both your node and the baseline node. Great! This implies that your node is keeping up with other nodes in the network.",
+           "checker_name": "transaction_availability",
+           "links": []
+         }
+       ],
+       "summary_score": 100,
+       "summary_explanation": "100: Awesome!"
+     }
+     ```
 </Steps>
-
-
 
 ## How NHC works
 
@@ -103,9 +93,9 @@ A single NHC instance can be configured to check the health of multiple node con
 
 ### Baseline configuration
 
-In all the above cases, a baseline node is used to compare your node&apos;s health. For example, for a public fullnode connected to the Aptos devnet, the baseline node might be a node run by the Aptos team and this node demonstrates optimal performance and participation characteristics.
+In all the above cases, a baseline node is used to compare your node's health. For example, for a public fullnode connected to the Aptos devnet, the baseline node might be a node run by the Aptos team and this node demonstrates optimal performance and participation characteristics.
 
-You will download the baseline configuration YAML before running the NHC service for your node. The baseline node&apos;s configuration YAML describes where to find this baseline node (URL + port), what evaluators (e.g., metrics checks, TPS tests, API validations, etc.) the NHC service should run, what parameters the NHC should use for those evaluators, what name the configuration has, and so on. See these [example baseline configuration YAML files](https://github.com/aptos-labs/aptos-core/tree/main/ecosystem/node-checker/configuration_examples).
+You will download the baseline configuration YAML before running the NHC service for your node. The baseline node's configuration YAML describes where to find this baseline node (URL + port), what evaluators (e.g., metrics checks, TPS tests, API validations, etc.) the NHC service should run, what parameters the NHC should use for those evaluators, what name the configuration has, and so on. See these [example baseline configuration YAML files](https://github.com/aptos-labs/aptos-core/tree/main/ecosystem/node-checker/configuration_examples).
 
 When you send requests to the NHC service, you must include a baseline configuration. For example, a request to NHC to use `devnet_fullnode` as the baseline configuration will look like this:
 

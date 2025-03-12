@@ -2,11 +2,7 @@
 title: "Cryptography"
 ---
 
-
-
 import { Aside } from '@astrojs/starlight/components';
-
-
 
 Cryptography plays an integral role in ensuring the security, integrity, confidentiality, and immutability of data in blockchain systems. The Aptos adapter for Move provides developers with an array of cryptographic primitives to cater to this need. This document delves into the cryptographic functionalities offered by Move on Aptos and elucidates the principles that drive their design.
 
@@ -64,10 +60,10 @@ Developers can now use a _type-safe_ API for verifying many kinds of digital sig
 | [MinSig BLS](https://github.com/aptos-labs/aptos-core/blob/7d4fb98c6604c67e526a96f55668e7add7aaebf6/aptos-move/move-examples/drand/sources/drand.move#L57) | BLS12-381     | 48                | 96              | No           | CDH, ROM    | Versatile     | Slower verification |
 
 <Aside type="note">
-  - CDH stands for the _&quot;Computational Diffie-Hellman Assumption&quot;_
-  - DLA stands for the _&quot;Discrete Log Assumption&quot;_
-  - GGM stands for the _&quot;Generic Group Model&quot;_
-  - ROM stands for the _&quot;Random Oracle Model&quot;_
+  - CDH stands for the _"Computational Diffie-Hellman Assumption"_
+  - DLA stands for the _"Discrete Log Assumption"_
+  - GGM stands for the _"Generic Group Model"_
+  - ROM stands for the _"Random Oracle Model"_
 </Aside>
 
 The digital signature modules above can be used to build smart contract-based wallets, secure claiming mechanisms for airdrops, or any digital-signature-based access-control mechanism for dapps.
@@ -75,25 +71,25 @@ The digital signature modules above can be used to build smart contract-based wa
 The right choice of a signature scheme in your dapp could depend on many factors:
 
 1. **Backwards-compatibility**
-   - If your dapp&apos;s user base predominantly uses a particular signing mechanism, it would be prudent to support that mechanism for ease of transition and adoption.
+   - If your dapp's user base predominantly uses a particular signing mechanism, it would be prudent to support that mechanism for ease of transition and adoption.
      - Example: If users mainly sign using Ed25519, it becomes a logical choice.
 2. **Ease-of-implementation**
    - While theoretically sound, complex protocols may be challenging to implement in practice.
-     - Example: Even though $t$-out-of-$n$ threshold protocols for Ed25519 exist, their intricacy on the signer&apos;s side might push developers toward MultiEd25519 due to its more straightforward signing implementation.
+     - Example: Even though $t$-out-of-$n$ threshold protocols for Ed25519 exist, their intricacy on the signer's side might push developers toward MultiEd25519 due to its more straightforward signing implementation.
 3. **Efficiency**
-   - Depending on the dapp&apos;s requirements, you might prioritize one aspect of efficiency over another.
+   - Depending on the dapp's requirements, you might prioritize one aspect of efficiency over another.
      - Signature size vs. public key size: Some applications might prioritize a smaller signature footprint, while others might emphasize a compact PK.
      - Signing time vs. verification time: For certain dapps, the signing speed might be more crucial, while for others, rapid signature verification could be the priority.
 4. **Security analysis**
    - It is essential to consider the underlying assumptions and potential vulnerabilities of a signature scheme.
-     - Example: ECDSA&apos;s security is proven under strong assumptions such as the Generic Group Model (GGM).
+     - Example: ECDSA's security is proven under strong assumptions such as the Generic Group Model (GGM).
      - Malleability concerns: Some signature schemes are susceptible to malleability, where a valid signature, $\sigma$, can be mauled into a different yet still valid signature, $\sigma$, for the same message $m$.
 5. **Versatility**
    - The adaptability and flexibility of signature schemes are important to consider, so you may properly accommodate the cryptographic needs of your dapp.
      - Example: $t$-out-of-$n$ threshold BLS signatures are very simple to implement.
 
 <Aside type="caution">
-  Despite its careful, principled design[^ed25519], Ed25519 has known implementation subtleties. For example, different implementations could easily disagree on the validity of signatures, especially when batch verification is employed[^devalence]$^,$[^eddsa].
+  Despite its careful, principled design\[^ed25519], Ed25519 has known implementation subtleties. For example, different implementations could easily disagree on the validity of signatures, especially when batch verification is employed\[^devalence]$^,$\[^eddsa].
 </Aside>
 
 <Aside type="note">
@@ -138,7 +134,7 @@ This module has proven useful for implementing several cryptographic primitives:
 1. **Zero-knowledge $\Sigma$-protocols** – See the [`veiled_coin` example](#veiled-coins).
 2. **ElGamal** encryption – See [`aptos_std::ristretto255_elgamal`](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-stdlib/sources/cryptography/ristretto255_elgamal.move)
 3. **Pedersen** commitments – See [`aptos_std::ristretto255_pedersen`](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-stdlib/sources/cryptography/ristretto255_pedersen.move)
-4. **Bulletproofs** ZK range proofs[^bulletproofs] – See [`aptos_std::ristretto255_bulletproofs`](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-stdlib/sources/cryptography/ristretto255_bulletproofs.move)
+4. **Bulletproofs** ZK range proofs\[^bulletproofs] – See [`aptos_std::ristretto255_bulletproofs`](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-stdlib/sources/cryptography/ristretto255_bulletproofs.move)
 
 Need ideas for a cryptosystem to build on top of `ristretto255`?
 A popular primitive that you could easily build would be the [schnorrkel](https://github.com/w3f/schnorrkel) signature scheme, which is a hardened version of Schnorr signatures over Ristretto255 groups.
@@ -221,7 +217,7 @@ An important caveat is that veiled transactions do **not** hide the identities o
 
 ### Groth16 zkSNARK verifier
 
-The [`groth16` example](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/move-examples/groth16_example/sources/groth16.move) demonstrates how to verify Groth16 zkSNARK proofs[^groth16], which are the shortest, fastest-to-verify, general-purpose zero-knowledge proofs.
+The [`groth16` example](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/move-examples/groth16_example/sources/groth16.move) demonstrates how to verify Groth16 zkSNARK proofs\[^groth16], which are the shortest, fastest-to-verify, general-purpose zero-knowledge proofs.
 Importantly, as explained [above](#generic-elliptic-curve-arithmetic), this implementation is _generic_ over **any** curve, making it very easy for Move developers to use it with their favorite (supported) curves.
 
 <Aside type="note">
@@ -238,12 +234,12 @@ We give a simple example of a lottery implemented on top of `drand` randomness i
   This code has not been audited by a third-party organization. If using it in a production system, proceed at your own risk.
 </Aside>
 
-Another application that can be built on top of `drand` is time-lock encryption[^tlock], which allows users to encrypt information such that it can only be decrypted in a future block.
+Another application that can be built on top of `drand` is time-lock encryption\[^tlock], which allows users to encrypt information such that it can only be decrypted in a future block.
 We do not currently have an implementation but the reader is encouraged to write one!
 
-[^bulletproofs]: _bulletproofs:_ **Bulletproofs: Short Proofs for Confidential Transactions and More**; by B. Bünz and J. Bootle and D. Boneh and A. Poelstra and P. Wuille and G. Maxwell; in 2018 IEEE Symposium on Security and Privacy
-[^devalence]: _devalence:_ **It’s 255:19AM. Do you know what your validation criteria are?**, by Henry de Valence, [https://hdevalence.ca/blog/2020-10-04-its-25519am](https://hdevalence.ca/blog/2020-10-04-its-25519am)
-[^ed25519]: _ed25519:_ **Ed25519: high-speed high-security signatures**, by Daniel J. Bernstein, Niels Duif, Tanja Lange, Peter Schwabe, Bo-Yin Yang, [https://ed25519.cr.yp.to/](https://ed25519.cr.yp.to/)
-[^eddsa]: _eddsa:_ **Taming the Many EdDSAs**, by Konstantinos Chalkias, François Garillot, Valeria Nikolaenko, in SSR 2020, [https://dl.acm.org/doi/abs/10.1007/978-3-030-64357-7_4](https://dl.acm.org/doi/abs/10.1007/978-3-030-64357-7_4)
-[^groth16]: _groth16:_ **On the Size of Pairing-Based Non-interactive Arguments**; by Groth, Jens; in EUROCRYPT 2016
-[^tlock]: _tlock:_ **tlock: Practical Timelock Encryption from Threshold BLS**; by Nicolas Gailly and Kelsey Melissaris and Yolan Romailler; [https://eprint.iacr.org/2023/189](https://eprint.iacr.org/2023/189)
+\[^bulletproofs]: _bulletproofs:_ **Bulletproofs: Short Proofs for Confidential Transactions and More**; by B. Bünz and J. Bootle and D. Boneh and A. Poelstra and P. Wuille and G. Maxwell; in 2018 IEEE Symposium on Security and Privacy
+\[^devalence]: _devalence:_ **It’s 255:19AM. Do you know what your validation criteria are?**, by Henry de Valence, [https://hdevalence.ca/blog/2020-10-04-its-25519am](https://hdevalence.ca/blog/2020-10-04-its-25519am)
+\[^ed25519]: _ed25519:_ **Ed25519: high-speed high-security signatures**, by Daniel J. Bernstein, Niels Duif, Tanja Lange, Peter Schwabe, Bo-Yin Yang, [https://ed25519.cr.yp.to/](https://ed25519.cr.yp.to/)
+\[^eddsa]: _eddsa:_ **Taming the Many EdDSAs**, by Konstantinos Chalkias, François Garillot, Valeria Nikolaenko, in SSR 2020, [https://dl.acm.org/doi/abs/10.1007/978-3-030-64357-7\_4](https://dl.acm.org/doi/abs/10.1007/978-3-030-64357-7_4)
+\[^groth16]: _groth16:_ **On the Size of Pairing-Based Non-interactive Arguments**; by Groth, Jens; in EUROCRYPT 2016
+\[^tlock]: _tlock:_ **tlock: Practical Timelock Encryption from Threshold BLS**; by Nicolas Gailly and Kelsey Melissaris and Yolan Romailler; [https://eprint.iacr.org/2023/189](https://eprint.iacr.org/2023/189)

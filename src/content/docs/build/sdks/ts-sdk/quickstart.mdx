@@ -6,206 +6,194 @@ title: "TypeScript SDK Quickstart"
   The complete example code can be found at [Full Quickstart Code](#full-quickstart-code) at the bottom of the page.
 </Aside>
 
-
-
-
-
 import { Aside, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
 
-
-
 <Steps>
+  1. Initialize A Project
 
-1. Initialize A Project
+     This will initialize a typescript package with `quickstart.ts`
 
-   This will initialize a typescript package with `quickstart.ts`
+     <Tabs>
+       <TabItem label="npm">
+         ```shellscript
+         npm init && npm add -D typescript @types/node ts-node && npx tsc --init && mkdir src && echo 'async function example() { console.log("Running example!")}; example()' > src/quickstart.ts
+         ```
+       </TabItem>
 
-   <Tabs>
-     <TabItem label="npm">
-       ```shellscript
-       npm init && npm add -D typescript @types/node ts-node && npx tsc --init && mkdir src && echo 'async function example() { console.log("Running example!")}; example()' > src/quickstart.ts
-       ```
-     </TabItem>
+       <TabItem label="pnpm">
+         ```shellscript
+         pnpm init && pnpm add -D typescript @types/node ts-node && pnpx tsc --init && mkdir src && echo 'async function example() { console.log("Running example!")}; example()' > src/quickstart.ts
+         ```
+       </TabItem>
 
-     <TabItem label="pnpm">
-       ```shellscript
-       pnpm init && pnpm add -D typescript @types/node ts-node && pnpx tsc --init && mkdir src && echo 'async function example() { console.log("Running example!")}; example()' > src/quickstart.ts
-       ```
-     </TabItem>
+       <TabItem label="yarn">
+         ```shellscript
+         yarn init -y && yarn add -D typescript @types/node ts-node && npx tsc --init && mkdir src && echo 'async function example() { console.log("Running example!")}; example()' > src/quickstart.ts
+         ```
+       </TabItem>
+     </Tabs>
 
-     <TabItem label="yarn">
-       ```shellscript
-       yarn init -y && yarn add -D typescript @types/node ts-node && npx tsc --init && mkdir src && echo 'async function example() { console.log("Running example!")}; example()' > src/quickstart.ts
-       ```
-     </TabItem>
-   </Tabs>
+  2. Test Initialization
 
-2. Test Initialization
+     To test if you have initialized the package correctly run:
 
-   To test if you have initialized the package correctly run:
+     <Tabs>
+       <TabItem label="npm">
+         ```shellscript
+         npx ts-node src/quickstart.ts
+         ```
+       </TabItem>
 
-   <Tabs>
-     <TabItem label="npm">
-       ```shellscript
-       npx ts-node src/quickstart.ts
-       ```
-     </TabItem>
+       <TabItem label="pnpm">
+         ```shellscript
+         pnpx ts-node src/quickstart.ts
+         ```
+       </TabItem>
 
-     <TabItem label="pnpm">
-       ```shellscript
-       pnpx ts-node src/quickstart.ts
-       ```
-     </TabItem>
+       <TabItem label="yarn">
+         ```shellscript
+         yarn ts-node src/quickstart.ts
+         ```
+       </TabItem>
+     </Tabs>
 
-     <TabItem label="yarn">
-       ```shellscript
-       yarn ts-node src/quickstart.ts
-       ```
-     </TabItem>
-   </Tabs>
+  3. Install the TypeScript SDK using the package manager of your choice:
 
-3. Install the TypeScript SDK using the package manager of your choice:
+     ```shellscript npm2yarn
+     npm i @aptos-labs/ts-sdk
+     ```
 
-   ```shellscript npm2yarn
-   npm i @aptos-labs/ts-sdk
-   ```
+  4. Set up the Aptos client
 
-4. Set up the Aptos client
+     You can use the `Aptos` object to handle everything that requires a connection to the Aptos network. A connection is established as soon as you create the object.
 
-   You can use the `Aptos` object to handle everything that requires a connection to the Aptos network. A connection is established as soon as you create the object.
+     ```typescript filename="quickstart.ts"
+     import { Account, Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
 
-   ```typescript filename="quickstart.ts"
-   import { Account, Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
+     // Specify which network to connect to via AptosConfig
+     async function example() {
+       console.log(
+         "This example will create two accounts (Alice and Bob), fund them, and transfer between them.",
+       );
 
-   // Specify which network to connect to via AptosConfig
-   async function example() {
-     console.log(
-       "This example will create two accounts (Alice and Bob), fund them, and transfer between them.",
-     );
+       // Setup the client
+       const config = new AptosConfig({ network: Network.DEVNET });
+       const aptos = new Aptos(config);
+     }
 
-     // Setup the client
-     const config = new AptosConfig({ network: Network.DEVNET });
-     const aptos = new Aptos(config);
-   }
+     example()
+     ```
 
-   example()
-   ```
+     <Aside type="note">
+       (Advanced) If you need to connect to a specific node, you can set that in the `AptosConfig` by specifying the `fullnode` url. Ex. `fullnode: http://localhost:8080/v1`.
+     </Aside>
 
-   <Aside type="note">
-     (Advanced) If you need to connect to a specific node, you can set that in the `AptosConfig` by specifying the `fullnode` url. Ex. `fullnode: http://localhost:8080/v1`.
-   </Aside>
+  5. Fetch data from on-chain
 
-5. Fetch data from on-chain
+     You can use the `Aptos` client to fetch all sorts of data from on-chain such as information about the network itself or account-specific information.
 
-   You can use the `Aptos` client to fetch all sorts of data from on-chain such as information about the network itself or account-specific information.
+     ```typescript filename="quickstart.ts"
+     ...
+     const ledgerInfo = await aptos.getLedgerInfo();
+     const modules = await aptos.getAccountModules({ accountAddress: "0x123" });
+     const tokens = await aptos.getAccountOwnedTokens({ accountAddress: "0x123" });
+     ...
+     ```
 
-   ```typescript filename="quickstart.ts"
-   ...
-   const ledgerInfo = await aptos.getLedgerInfo();
-   const modules = await aptos.getAccountModules({ accountAddress: "0x123" });
-   const tokens = await aptos.getAccountOwnedTokens({ accountAddress: "0x123" });
-   ...
-   ```
+  6. Send Transactions
 
-6. Send Transactions
+     You can send transactions to change the state of the ledger. Transactions let you send tokens like APT, trigger Move modules, trade NFTs, and more. You can find an in-depth tutorial on transactions [here](/build/sdks/ts-sdk/building-transactions).
 
-   You can send transactions to change the state of the ledger. Transactions let you send tokens like APT, trigger Move modules, trade NFTs, and more. You can find an in-depth tutorial on transactions [here](/build/sdks/ts-sdk/building-transactions).
+     To begin with though, here’s how you can send a basic transaction to transfer APT.
 
-   To begin with though, here’s how you can send a basic transaction to transfer APT.
+     #### 1. Create an Account
 
-   #### 1. Create an Account
+     To create a new account, you first generate new credentials then fund the account. On localnet / devnet you can fund an account programmatically by asking a "faucet" which has a lot of test APT to send some to your new account.
 
-   To create a new account, you first generate new credentials then fund the account. On localnet / devnet you can fund an account programmatically by asking a &quot;faucet&quot; which has a lot of test APT to send some to your new account.
+     ```typescript filename="quickstart.ts"
+     ...
+     // Generate a new account key pair
+     const alice: Account = Account.generate();
 
-   ```typescript filename="quickstart.ts"
-   ...
-   // Generate a new account key pair
-   const alice: Account = Account.generate();
+     // Fund the account on chain. Funding an account creates it on-chain.
+     await aptos.fundAccount({
+       accountAddress: alice.accountAddress,
+       amount: 100000000,
+     });
 
-   // Fund the account on chain. Funding an account creates it on-chain.
-   await aptos.fundAccount({
-     accountAddress: alice.accountAddress,
-     amount: 100000000,
-   });
+     // Also create a second account to transfer tokens to
+     const bob: Account = Account.generate();
 
-   // Also create a second account to transfer tokens to
-   const bob: Account = Account.generate();
+     // Fund the account on chain
+     await aptos.fundAccount({
+       accountAddress: bob.accountAddress,
+       amount: 100000000,
+     });
+     ...
+     ```
 
-   // Fund the account on chain
-   await aptos.fundAccount({
-     accountAddress: bob.accountAddress,
-     amount: 100000000,
-   });
-   ...
-   ```
+     #### 2. Build the Transaction
 
-   #### 2. Build the Transaction
+     You can build transactions with `aptos.transaction.build.simple({...})` by specifying:
 
-   You can build transactions with `aptos.transaction.build.simple({...})` by specifying:
+     1. `sender` - The account that’s sending the transaction. This account will pay the gas fees.
+     2. `data` - The information needed for Aptos to identify what transaction to execute.
+        1. `function` - Which smart contract on chain to call. This has the format `<account_address>::<move_module>::<function>`.
+        2. `functionArguments` - These are specific to the function being called. You can look up what parameters a function needs by searching for the account and module on chain with an explorer [like this](https://explorer.aptoslabs.com/account/0x0000000000000000000000000000000000000000000000000000000000000001/modules/code/aptos_account?network=mainnet).
 
-   1. `sender` - The account that’s sending the transaction. This account will pay the gas fees.
-   2. `data` - The information needed for Aptos to identify what transaction to execute.
-      1. `function` - Which smart contract on chain to call. This has the format `<account_address>::<move_module>::<function>`.
-      2. `functionArguments` - These are specific to the function being called. You can look up what parameters a function needs by searching for the account and module on chain with an explorer [like this](https://explorer.aptoslabs.com/account/0x0000000000000000000000000000000000000000000000000000000000000001/modules/code/aptos_account?network=mainnet).
+     For example:
 
-   For example:
+     ```typescript filename="quickstart.ts"
+     ...
+     const transaction = await aptos.transaction.build.simple({
+       sender: alice.accountAddress,
+       data: {
+     	  // The Move entry-function
+         function: "0x1::aptos_account::transfer",
+         functionArguments: [bob.accountAddress, 100],
+       },
+     });
+     ...
+     ```
 
-   ```typescript filename="quickstart.ts"
-   ...
-   const transaction = await aptos.transaction.build.simple({
-     sender: alice.accountAddress,
-     data: {
-   	  // The Move entry-function
-       function: "0x1::aptos_account::transfer",
-       functionArguments: [bob.accountAddress, 100],
-     },
-   });
-   ...
-   ```
+     <Aside type="note">
+       For some situations, you can also use simplified functions in the SDK such as [`transferCoinTransaction`](https://explorer.aptoslabs.com/account/0x0000000000000000000000000000000000000000000000000000000000000001/modules/code/aptos_account?network=mainnet).
+     </Aside>
 
-   <Aside type="note">
-     For some situations, you can also use simplified functions in the SDK such as [`transferCoinTransaction`](https://explorer.aptoslabs.com/account/0x0000000000000000000000000000000000000000000000000000000000000001/modules/code/aptos_account?network=mainnet).
-   </Aside>
+     #### 3. Sign and Submit
 
-   #### 3. Sign and Submit
+     Signing proves that you own or manage the account that is executing the transaction. This is important since the sender must pay gas fees for the work the network does to execute the transaction.
 
-   Signing proves that you own or manage the account that is executing the transaction. This is important since the sender must pay gas fees for the work the network does to execute the transaction.
+     Once signed, you can submit to the network for on chain verification and execution.
 
-   Once signed, you can submit to the network for on chain verification and execution.
+     You can use `aptos.signAndSubmitTransaction` which combines those two steps into one:
 
-   You can use `aptos.signAndSubmitTransaction` which combines those two steps into one:
+     ```typescript filename="quickstart.ts"
+     ...
+     // Both signs and submits (although these can be done separately too)
+     const pendingTransaction = await aptos.signAndSubmitTransaction({
+       signer: alice,
+       transaction,
+     });
+     ...
+     ```
 
-   ```typescript filename="quickstart.ts"
-   ...
-   // Both signs and submits (although these can be done separately too)
-   const pendingTransaction = await aptos.signAndSubmitTransaction({
-     signer: alice,
-     transaction,
-   });
-   ...
-   ```
+     #### 4. Wait for completion
 
-   #### 4. Wait for completion
+     You can run `aptos.waitForTransaction` to guarantee your code executes after the transaction has been processed and applied.
 
-   You can run `aptos.waitForTransaction` to guarantee your code executes after the transaction has been processed and applied.
+     This also helps you get any errors that may occur after submitting, such as the transaction being rejected.
 
-   This also helps you get any errors that may occur after submitting, such as the transaction being rejected.
-
-   ```typescript filename="quickstart.ts"
-   ...
-   const executedTransaction = await aptos.waitForTransaction({ transactionHash: pendingTransaction.hash });
-   ...
-   ```
-
+     ```typescript filename="quickstart.ts"
+     ...
+     const executedTransaction = await aptos.waitForTransaction({ transactionHash: pendingTransaction.hash });
+     ...
+     ```
 </Steps>
-
-
 
 ## Full Quickstart Code
 
 ### Run Quickstart
-
-
 
 <Tabs>
   <TabItem label="npm">
@@ -226,8 +214,6 @@ import { Aside, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
     ```
   </TabItem>
 </Tabs>
-
-
 
 ```typescript filename="quickstart.ts"
 /**

@@ -2,10 +2,6 @@
 title: "Delegation Pool Operations"
 ---
 
-
-
-
-
 > Beta: This documentation is in experimental, beta mode. Supply feedback by opening a [GitHub issue](https://github.com/aptos-labs/developer-docs/issues/new/choose).
 > See also the related [Staking Pool Operations](/ja/network/nodes/validator-node/connect-nodes/staking-pool-operations) instructions.
 
@@ -67,7 +63,7 @@ This section describes the available operations that can be performed on this re
     --args address:<pool_address> u64:<amount>
   ```
 
-- Undelegate (unlock) the amount of funds from the delegator&apos;s active and pending active stake up to the limit of the active stake in the stake pool using public entry method `unlock(delegator: &signer, pool_address: address, amount: u64)` and substituting your values into the command below before running it:
+- Undelegate (unlock) the amount of funds from the delegator's active and pending active stake up to the limit of the active stake in the stake pool using public entry method `unlock(delegator: &signer, pool_address: address, amount: u64)` and substituting your values into the command below before running it:
 
   ```shellscript filename="Terminal"
   aptos move run --profile delegator \
@@ -152,7 +148,7 @@ Until the delegation pool has received 1 million APT and the validator has been 
 
 - `shareholders_count_active_pool(pool_address: address): u64` - Returns the number of delegators owning an active stake within `pool_address`.
 
-- `get_pending_withdrawal(pool_address: address, delegator_address: address): (bool, u64)` - Returns if the specified delegator possesses any withdrawable stake. However, if the delegator has recently initiated a request to release some of their stake and the stake pool&apos;s lockup cycle has not ended yet, then their funds may not yet be available for withdrawal.
+- `get_pending_withdrawal(pool_address: address, delegator_address: address): (bool, u64)` - Returns if the specified delegator possesses any withdrawable stake. However, if the delegator has recently initiated a request to release some of their stake and the stake pool's lockup cycle has not ended yet, then their funds may not yet be available for withdrawal.
 
 - `can_withdraw_pending_inactive(pool_address: address): bool` - Returns whether `pending_inactive` stake can be directly withdrawn from the delegation pool, implicitly its stake pool, in the special case the validator had gone inactive before its lockup expired.
 
@@ -190,12 +186,12 @@ Use this formula to calculate _rewards earned_ for `active` and `pending_inactiv
 
 2. Calculate principal:
 
-   - &quot;active principal&quot; = **AddStakeEvent** - **UnlockStakeEvent** + **ReactivateStakeEvent**. If at any point during the iteration, &quot;active principal&quot; &lt; 0, reset to 0. Negative principal could happen when the amount users `unlock` include rewards earned from staking.
-   - &quot;pending inactive principal&quot; = **UnlockStakeEvent** - **ReactivateStakeEvent**. If at any point during the iteration, &quot;pending inactive principal&quot; &lt; 0, reset to 0. Negative principal could happen when the amount users `reactivate` include rewards earned from staking.
+   - "active principal" = **AddStakeEvent** - **UnlockStakeEvent** + **ReactivateStakeEvent**. If at any point during the iteration, "active principal" \< 0, reset to 0. Negative principal could happen when the amount users `unlock` include rewards earned from staking.
+   - "pending inactive principal" = **UnlockStakeEvent** - **ReactivateStakeEvent**. If at any point during the iteration, "pending inactive principal" \< 0, reset to 0. Negative principal could happen when the amount users `reactivate` include rewards earned from staking.
 
 3. Compute rewards earned:
    - active rewards = `active` - active principal.
-   - pending_inactive_rewards = `pending_inactive` - &quot;pending inactive principal&quot;.
+   - pending\_inactive\_rewards = `pending_inactive` - "pending inactive principal".
 
 ## Allowlisting for delegation pools
 
@@ -203,10 +199,10 @@ Delegation pool owners can set an allowlist for their delegation pool. They can 
 
 1. By default, a delegation pool is permissionless and does not have an allowlist. The pool owner can set an allowlist, transitioning the pool to a permissioned state.
 2. When an allowlist is first established in a delegation pool, it starts empty. This initial empty allowlist does not impact existing stakes in the pool. However, the pool will not accept any new stakes or reactivation of pending-inactive stakes from any stakers because no one is on the allowlist initially.
-3. The pool owner may add stakers&apos; wallet addresses to the allowlist. Once an address is added, the staker can add new stakes or reactivate existing stakes in the pool. Note that this feature does not facilitate a mechanism for stakers to request to be added to the allowlist; such requests must be managed off-chain (e.g., through private communication between the operator and staker, or UI-based solutions).
+3. The pool owner may add stakers' wallet addresses to the allowlist. Once an address is added, the staker can add new stakes or reactivate existing stakes in the pool. Note that this feature does not facilitate a mechanism for stakers to request to be added to the allowlist; such requests must be managed off-chain (e.g., through private communication between the operator and staker, or UI-based solutions).
 4. If a delegator is removed from the allowlist, they are no longer able to add or reactivate stakes. However, they retain the ability to unlock and withdraw their existing stakes.
-5. The pool owner can evict a delegator who is not included on the allowlist. This action will unlock the delegator&apos;s entire stake, transitioning all of their active stakes to a pending inactive state. As the evicted delegator is not on the allowlist, they cannot reactive their stake. Note that these tokens will remain locked up until the end of the lockup period, and the existing stake will also continue to earn rewards until then. When the lockup period ends, the funds will be unstaked (inactive), but will remain in the pool until the delegator initiates a withdrawal.
-6. If a delegator&apos;s stake enters the pending inactive state due to eviction, the pool owner can subsequently add the delegator back to the allowlist. However, this action will not automatically reactivate the stake. Automatic reactivation is not provided to prevent potential misuse by a malicious pool owner who might repeatedly evict and re-allowlist a delegator to prevent them from leaving the pool. Once a delegator is back on the allowlist, the delegator must manually call the reactivate_stake function to reactivate their stake.
+5. The pool owner can evict a delegator who is not included on the allowlist. This action will unlock the delegator's entire stake, transitioning all of their active stakes to a pending inactive state. As the evicted delegator is not on the allowlist, they cannot reactive their stake. Note that these tokens will remain locked up until the end of the lockup period, and the existing stake will also continue to earn rewards until then. When the lockup period ends, the funds will be unstaked (inactive), but will remain in the pool until the delegator initiates a withdrawal.
+6. If a delegator's stake enters the pending inactive state due to eviction, the pool owner can subsequently add the delegator back to the allowlist. However, this action will not automatically reactivate the stake. Automatic reactivation is not provided to prevent potential misuse by a malicious pool owner who might repeatedly evict and re-allowlist a delegator to prevent them from leaving the pool. Once a delegator is back on the allowlist, the delegator must manually call the reactivate\_stake function to reactivate their stake.
 7. Delegation pools that have enabled allowlisting can disable it. When disabled, the delegation pool becomes permissionless, allowing any staker to stake to the pool.
 
 - The delegation pool owner can enable allow listing and create an empty allowlist using the following command:

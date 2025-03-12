@@ -5,11 +5,7 @@ title: "Go SDK - Multi-Agent Transactions"
 Multi-agent transactions allow multiple accounts to participate in the logic of
 a Move contract.
 
-
-
 import { Aside, Steps } from '@astrojs/starlight/components';
-
-
 
 This can be used to require multiple parties agree to a transaction before
 executing or to use resources from multiple accounts.
@@ -25,74 +21,68 @@ notable differences.
   use `client.BuildTransactionMultiAgent`.
 </Aside>
 
-
-
 <Steps>
+  1. Build the transaction by including aptos.AdditionalSigners with a list of each additional signers.
 
-1. Build the transaction by including aptos.AdditionalSigners with a list of each additional signers.
+     <Aside type="note">
+       Make sure to replace the `Function` field below with your entry function
+       that requires multiple agents to sign.
+     </Aside>
 
-   <Aside type="note">
-     Make sure to replace the `Function` field below with your entry function
-     that requires multiple agents to sign.
-   </Aside>
-
-   ```go filename="multi_agent.go"
-   transaction, err := client.BuildTransactionMultiAgent(alice.AccountAddress(), aptos.TransactionPayload{
-     Payload: &aptos.EntryFunction{
-       // Replace module and function with your multi-agent function
-       Module: aptos.ModuleId{
-         Address: aptos.AccountOne,
-         Name:    "aptos_account",
+     ```go filename="multi_agent.go"
+     transaction, err := client.BuildTransactionMultiAgent(alice.AccountAddress(), aptos.TransactionPayload{
+       Payload: &aptos.EntryFunction{
+         // Replace module and function with your multi-agent function
+         Module: aptos.ModuleId{
+           Address: aptos.AccountOne,
+           Name:    "aptos_account",
+         },
+         Function: "transfer",
+         ArgTypes: []aptos.TypeTag{},
+         Args: [][]byte{
+           accountBytes,
+           amountBytes,
+         },
        },
-       Function: "transfer",
-       ArgTypes: []aptos.TypeTag{},
-       Args: [][]byte{
-         accountBytes,
-         amountBytes,
-       },
-     },
-     AdditionalSigners: []aptos.AccountAddress{bob.AccountAddress()},
-   })
-   ```
+       AdditionalSigners: []aptos.AccountAddress{bob.AccountAddress()},
+     })
+     ```
 
-   {/* TODO Support simulation of multiagent */}
+     {/* TODO Support simulation of multiagent */}
 
-2. Sign once for each signer.
+  2. Sign once for each signer.
 
-   You will combine these signatures in the next step.
+     You will combine these signatures in the next step.
 
-   ```go filename="multi_agent.go"
-   aliceAuth, err := rawTxn.Sign(alice)
-   if err != nil {
-       panic("Failed to sign transaction as sender:" + err.Error())
-   }
-   bobAuth, err := rawTxn.Sign(bob)
-   if err != nil {
-       panic("Failed to sign transaction as second signer:" + err.Error())
-   }
-   ```
+     ```go filename="multi_agent.go"
+     aliceAuth, err := rawTxn.Sign(alice)
+     if err != nil {
+         panic("Failed to sign transaction as sender:" + err.Error())
+     }
+     bobAuth, err := rawTxn.Sign(bob)
+     if err != nil {
+         panic("Failed to sign transaction as second signer:" + err.Error())
+     }
+     ```
 
-3. Combine the signatures with the raw transaction to create a multi-agent signed transaction.
+  3. Combine the signatures with the raw transaction to create a multi-agent signed transaction.
 
-   ```go filename="multi_agent.go"
-   signedTxn, ok := rawTxn.ToMultiAgentSignedTransaction(aliceAuth, []crypto.AccountAuthenticator{bobAuth})
-   ```
+     ```go filename="multi_agent.go"
+     signedTxn, ok := rawTxn.ToMultiAgentSignedTransaction(aliceAuth, []crypto.AccountAuthenticator{bobAuth})
+     ```
 
-4. Submit the transaction by combining all agent signatures via the aptos.AdditionalSigners parameter.
+  4. Submit the transaction by combining all agent signatures via the aptos.AdditionalSigners parameter.
 
-   ```go filename="multi_agent.go"
-   submitResponse, err := client.SubmitTransaction(signedTxn)
-   ```
+     ```go filename="multi_agent.go"
+     submitResponse, err := client.SubmitTransaction(signedTxn)
+     ```
 
-5. Lastly, wait for the transaction to resolve.
+  5. Lastly, wait for the transaction to resolve.
 
-   ```go filename="multi_agent.go"
-   txnResult, err := client.WaitForTransaction(submitResponse.Hash)
-   ```
-
+     ```go filename="multi_agent.go"
+     txnResult, err := client.WaitForTransaction(submitResponse.Hash)
+     ```
 </Steps>
-
-
 
 {/* TODO: Add full code snippet for Go */}
 

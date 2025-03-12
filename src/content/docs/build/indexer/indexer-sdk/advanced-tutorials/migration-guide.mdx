@@ -2,11 +2,7 @@
 title: "Migrate to Indexer SDK"
 ---
 
-
-
-
-
-This guide contains instructions on how to migrate your legacy custom processor (that&apos;s written in the [old way](https://github.com/aptos-labs/aptos-indexer-processors/blob/aptos-indexer-processors-v1.20.0/rust/processor/src/processors/events_processor.rs)) to Indexer SDK.
+This guide contains instructions on how to migrate your legacy custom processor (that's written in the [old way](https://github.com/aptos-labs/aptos-indexer-processors/blob/aptos-indexer-processors-v1.20.0/rust/processor/src/processors/events_processor.rs)) to Indexer SDK.
 
 ## 1. Clone the example repo
 
@@ -21,9 +17,9 @@ git clone https://github.com/aptos-labs/aptos-indexer-processor-example.git
 Previously, you would create a branch of `aptos-indexer-processors` and update the processor config to include your custom processor.
 This legacy approach made it very difficult to upgrade your processor.
 To address this, the SDK no longer depends on `aptos-indexer-processors`.
-As a result, you&apos;ll need to define your own `IndexerProcessorConfig` and `ProcessorConfig` structs.
+As a result, you'll need to define your own `IndexerProcessorConfig` and `ProcessorConfig` structs.
 
-The `IndexerProcessorConfig` defines the base configuration for all processors that you&apos;ll be running.
+The `IndexerProcessorConfig` defines the base configuration for all processors that you'll be running.
 The `ProcessorConfig` is an enum that contains all the individual processor configs.
 
 Update the following files in your project:
@@ -31,11 +27,11 @@ Update the following files in your project:
 - [`ProcessorConfig`](https://github.com/aptos-labs/aptos-indexer-processor-example/blob/main/aptos-indexer-processor-example/src/config/processor_config.rs): Replace `EventsProcessor` with your processor.
 - [`IndexerProcessorConfig`](https://github.com/aptos-labs/aptos-indexer-processor-example/blob/main/aptos-indexer-processor-example/src/config/indexer_processor_config.rs): Update the `.run()` method to include your processor.
 
-If you&apos;d like to read more about configuration in the SDK, take a look at the [Create a Processor](/build/indexer/indexer-sdk/documentation/create-processor) guide.
+If you'd like to read more about configuration in the SDK, take a look at the [Create a Processor](/build/indexer/indexer-sdk/documentation/create-processor) guide.
 
 ## 3. Migrate processing logic to steps
 
-In the old way, you defined your processor&apos;s logic by implementing `ProcessorTrait`&apos;s `process_transactions` method.
+In the old way, you defined your processor's logic by implementing `ProcessorTrait`'s `process_transactions` method.
 
 Example events processor written with the old way:
 
@@ -88,10 +84,10 @@ async fn insert_to_db(
 }
 ```
 
-With the SDK, we&apos;ve introduced the concept of steps, which represent independent units of processing logic.
+With the SDK, we've introduced the concept of steps, which represent independent units of processing logic.
 In the `EventsProcessor` example, the extraction of events and storing them in the database can be broken down into two steps.
 
-To migrate your processor to the SDK, you&apos;ll need to define these steps in your processor.
+To migrate your processor to the SDK, you'll need to define these steps in your processor.
 You can use the `EventsExtractor` and `EventsStorer` steps in the example as a starting point for defining your own steps.
 
 Make the following changes to [`events_extractor.rs`](https://github.com/aptos-labs/aptos-indexer-processor-example/blob/main/aptos-indexer-processor-example/src/processors/events/events_extractor.rs).
@@ -204,7 +200,7 @@ impl NamedStep for EventsStorer {
 
 ## 4. Migrate your processor
 
-Now that we&apos;ve migrated the processing logic to steps, we need to also migrate the processor to instantiate the steps and connect them together.
+Now that we've migrated the processing logic to steps, we need to also migrate the processor to instantiate the steps and connect them together.
 In [`events_processor.rs`](https://github.com/aptos-labs/aptos-indexer-processor-example/blob/main/aptos-indexer-processor-example/src/processors/events/events_processor.rs), make the following changes:
 
 ```rust
@@ -217,7 +213,7 @@ pub struct EventsProcessor {
 }
 ```
 
-In the `run_processor` method, you&apos;ll need to update the code to use the steps you created in [Step 3](#3-migrate-processing-logic-to-steps).
+In the `run_processor` method, you'll need to update the code to use the steps you created in [Step 3](#3-migrate-processing-logic-to-steps).
 
 ```rust
 pub async fn run_processor(self) -> Result<()> {
@@ -298,12 +294,12 @@ In your terminal, you should start to see logs like this:
 
 ## 7. Backfilling with the SDK
 
-With the SDK, we&apos;ve made some improvements to the backfilling process.
+With the SDK, we've made some improvements to the backfilling process.
 There are two options on backfilling:
 
 1. You can keep following the old way of backfilling, which is to run a second instance of the processor and updating `starting_version` to the backfill version.
 2. The SDK introduces an improvement where you can track progress of a backfill and start and stop the backfill as needed.
-   If you&apos;d like to use the new backfilling process, update your `config.yaml` like so:
+   If you'd like to use the new backfilling process, update your `config.yaml` like so:
 
 ```yaml
 health_check_port: 8085

@@ -3,13 +3,9 @@ id: "fungible-asset"
 title: "Aptos ファンジブルアセット (FA) 標準"
 ---
 
-Aptos ファンジブルアセット標準(&quot;ファンジブルアセット&quot;または&quot;FA&quot;としても知られる)は,Moveエコシステムでファンジブルアセットを定義するための標準的で型安全な方法を提供します.これは`coin`モジュールの最新の代替として,あらゆるユースケースに対応したファンジブルアセットのシームレスな発行,転送,カスタマイズを可能にします.
-
-
+Aptos ファンジブルアセット標準("ファンジブルアセット"または"FA"としても知られる)は,Moveエコシステムでファンジブルアセットを定義するための標準的で型安全な方法を提供します.これは`coin`モジュールの最新の代替として,あらゆるユースケースに対応したファンジブルアセットのシームレスな発行,転送,カスタマイズを可能にします.
 
 import { Aside } from '@astrojs/starlight/components';
-
-
 
 この標準は,Aptos上のファンジブルアセット(通貨や実物資産(RWA)など)が,dAppsが認識できる一貫した方法で所有権を表現し転送できるようにするため重要です.また,この標準は[Moveオブジェクト](/ja/build/smart-contracts/objects)を活用してファンジブルアセットデータを表現することで,`coin`モジュールよりも広範なカスタマイズを可能にします.
 
@@ -129,7 +125,7 @@ module my_addr::fungible_asset_example {
 ```
 
 <Aside type="note">
-  独自のファンジブルアセットモジュールを作成する完全な例については,[fa_coin.move](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/move-examples/fungible_asset/fa_coin/sources/FACoin.move)をご覧ください.
+  独自のファンジブルアセットモジュールを作成する完全な例については,[fa\_coin.move](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/move-examples/fungible_asset/fa_coin/sources/FACoin.move)をご覧ください.
   また,[FAのサンプルコード集はこちら](https://github.com/aptos-labs/aptos-core/tree/main/aptos-move/move-examples/fungible_asset)で確認できます.
 </Aside>
 
@@ -193,7 +189,7 @@ public fun primary_fungible_store::balance<T: key>(account: address, metadata: O
 
 ### Check Frozen Status
 
-To check whether the given account&apos;s primary store is frozen, call:
+To check whether the given account's primary store is frozen, call:
 
 ```move filename="is_frozen"
 public primary_fungible_store::fun is_frozen<T: key>(account: address, metadata: Object<T>): bool
@@ -375,7 +371,7 @@ To create a secondary store, you must:
 public fun create_store<T: key>(constructor_ref: &ConstructorRef, metadata: Object<T>): Object<FungibleStore>
 ```
 
-This will create a secondary store owned by the newly created Object. Sometimes an object can be reused as a store. For example, a metadata object can also be a store to hold some FA of its own type or a liquidity pool object can be a store of the issued liquidity pool&apos;s coin.
+This will create a secondary store owned by the newly created Object. Sometimes an object can be reused as a store. For example, a metadata object can also be a store to hold some FA of its own type or a liquidity pool object can be a store of the issued liquidity pool's coin.
 
 It is crucial to set the correct owner of a `FungibleStore` object for managing the FA stored inside. By default, the owner of a newly created object is the creator whose `signer` is passed into the creation function. For `FungibleStore` objects managed by smart contract itself, the owner should usually be an Object address controlled by the contract. For those cases, those objects should keep their `ExtendRef` at the proper place to create `signer` as needed to modify the `FungibleStore` via contract logic.
 
@@ -383,7 +379,7 @@ It is crucial to set the correct owner of a `FungibleStore` object for managing 
 
 ### Smart Contract Migration
 
-**Projects utilizing the `coin` module do not need to modify their contracts.** The `coin` module has been enhanced to handle migration automatically. Whenever a paired FA is required for a `coin`, it will be automatically created if it doesn&apos;t already exist. The mapping between coins and FAs is immutable and stored in an on-chain table:
+**Projects utilizing the `coin` module do not need to modify their contracts.** The `coin` module has been enhanced to handle migration automatically. Whenever a paired FA is required for a `coin`, it will be automatically created if it doesn't already exist. The mapping between coins and FAs is immutable and stored in an on-chain table:
 
 ```move filename="coin_conversion"
 struct CoinConversionMap has key {
@@ -415,7 +411,7 @@ There are two changes needed for off-chain services:
 Since a user may possess **both** a `coin` balance and a paired FA balance, off-chain applications should be updated to reflect the **sum** of both the `coin` balance and its paired FA balance.
 
 - For Aptos Indexer users, you may utilize a new table called `current_unified_fungible_asset_balances` to obtain the latest sum of coin balance and FA balance representing the same asset type.
-- For users employing Node API or other customized indexing, they should add the balance of the paired FA in users&apos; `FungibleStore` and `ConcurrentFungibleBalance` if any of them exist to the coin balance.
+- For users employing Node API or other customized indexing, they should add the balance of the paired FA in users' `FungibleStore` and `ConcurrentFungibleBalance` if any of them exist to the coin balance.
 
 To retrieve the balance of the `PrimaryFungibleStore` for a paired FA to an existing `coin` of type `CoinType`:
 

@@ -6,206 +6,194 @@ title: "TypeScript SDK クイックスタート"
   完全なサンプルコードは,ページ下部の[完全なクイックスタートコード](#full-quickstart-code)で確認できます.
 </Aside>
 
-
-
-
-
 import { Aside, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
 
-
-
 <Steps>
+  1. プロジェクトの初期化
 
-1. プロジェクトの初期化
+     以下のコマンドで`quickstart.ts`を含むTypeScriptパッケージを初期化します.
 
-   以下のコマンドで`quickstart.ts`を含むTypeScriptパッケージを初期化します.
+     <Tabs>
+       <TabItem label="npm">
+         ```shellscript
+         npm init && npm add -D typescript @types/node ts-node && npx tsc --init && mkdir src && echo 'async function example() { console.log("Running example!")}; example()' > src/quickstart.ts
+         ```
+       </TabItem>
 
-   <Tabs>
-     <TabItem label="npm">
-       ```shellscript
-       npm init && npm add -D typescript @types/node ts-node && npx tsc --init && mkdir src && echo 'async function example() { console.log("Running example!")}; example()' > src/quickstart.ts
-       ```
-     </TabItem>
+       <TabItem label="pnpm">
+         ```shellscript
+         pnpm init && pnpm add -D typescript @types/node ts-node && pnpx tsc --init && mkdir src && echo 'async function example() { console.log("Running example!")}; example()' > src/quickstart.ts
+         ```
+       </TabItem>
 
-     <TabItem label="pnpm">
-       ```shellscript
-       pnpm init && pnpm add -D typescript @types/node ts-node && pnpx tsc --init && mkdir src && echo 'async function example() { console.log("Running example!")}; example()' > src/quickstart.ts
-       ```
-     </TabItem>
+       <TabItem label="yarn">
+         ```shellscript
+         yarn init -y && yarn add -D typescript @types/node ts-node && npx tsc --init && mkdir src && echo 'async function example() { console.log("Running example!")}; example()' > src/quickstart.ts
+         ```
+       </TabItem>
+     </Tabs>
 
-     <TabItem label="yarn">
-       ```shellscript
-       yarn init -y && yarn add -D typescript @types/node ts-node && npx tsc --init && mkdir src && echo 'async function example() { console.log("Running example!")}; example()' > src/quickstart.ts
-       ```
-     </TabItem>
-   </Tabs>
+  2. 初期化のテスト
 
-2. 初期化のテスト
+     パッケージが正しく初期化されたかテストするために,以下のコマンドを実行します:
 
-   パッケージが正しく初期化されたかテストするために,以下のコマンドを実行します:
+     <Tabs>
+       <TabItem label="npm">
+         ```shellscript
+         npx ts-node src/quickstart.ts
+         ```
+       </TabItem>
 
-   <Tabs>
-     <TabItem label="npm">
-       ```shellscript
-       npx ts-node src/quickstart.ts
-       ```
-     </TabItem>
+       <TabItem label="pnpm">
+         ```shellscript
+         pnpx ts-node src/quickstart.ts
+         ```
+       </TabItem>
 
-     <TabItem label="pnpm">
-       ```shellscript
-       pnpx ts-node src/quickstart.ts
-       ```
-     </TabItem>
+       <TabItem label="yarn">
+         ```shellscript
+         yarn ts-node src/quickstart.ts
+         ```
+       </TabItem>
+     </Tabs>
 
-     <TabItem label="yarn">
-       ```shellscript
-       yarn ts-node src/quickstart.ts
-       ```
-     </TabItem>
-   </Tabs>
+  3. お好みのパッケージマネージャーを使用してTypeScript SDKをインストール:
 
-3. お好みのパッケージマネージャーを使用してTypeScript SDKをインストール:
+     ```shellscript npm2yarn
+     npm i @aptos-labs/ts-sdk
+     ```
 
-   ```shellscript npm2yarn
-   npm i @aptos-labs/ts-sdk
-   ```
+  4. Aptosクライアントのセットアップ
 
-4. Aptosクライアントのセットアップ
+     `Aptos`オブジェクトを使用して,Aptosネットワークへの接続が必要なすべての操作を処理できます.オブジェクトを作成すると同時に接続が確立されます.
 
-   `Aptos`オブジェクトを使用して,Aptosネットワークへの接続が必要なすべての操作を処理できます.オブジェクトを作成すると同時に接続が確立されます.
+     ```typescript filename="quickstart.ts"
+     import { Account, Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
 
-   ```typescript filename="quickstart.ts"
-   import { Account, Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
+     // AptosConfigを使用して接続するネットワークを指定
+     async function example() {
+       console.log(
+         "このサンプルでは2つのアカウント（AliceとBob）を作成し、資金を提供して、その間で送金を行います。",
+       );
 
-   // AptosConfigを使用して接続するネットワークを指定
-   async function example() {
-     console.log(
-       "このサンプルでは2つのアカウント（AliceとBob）を作成し、資金を提供して、その間で送金を行います。",
-     );
+       // クライアントのセットアップ
+       const config = new AptosConfig({ network: Network.DEVNET });
+       const aptos = new Aptos(config);
+     }
 
-     // クライアントのセットアップ
-     const config = new AptosConfig({ network: Network.DEVNET });
-     const aptos = new Aptos(config);
-   }
+     example()
+     ```
 
-   example()
-   ```
+     <Aside type="note">
+       (上級者向け)特定のノードに接続する必要がある場合は,`AptosConfig`で`fullnode`URLを指定できます.例:`fullnode: http://localhost:8080/v1`
+     </Aside>
 
-   <Aside type="note">
-     (上級者向け)特定のノードに接続する必要がある場合は,`AptosConfig`で`fullnode`URLを指定できます.例:`fullnode: http://localhost:8080/v1`
-   </Aside>
+  5. オンチェーンデータの取得
 
-5. オンチェーンデータの取得
+     `Aptos`クライアントを使用して,ネットワーク自体やアカウント固有の情報など,さまざまなオンチェーンデータを取得できます.
 
-   `Aptos`クライアントを使用して,ネットワーク自体やアカウント固有の情報など,さまざまなオンチェーンデータを取得できます.
+     ```typescript filename="quickstart.ts"
+     ...
+     const ledgerInfo = await aptos.getLedgerInfo();
+     const modules = await aptos.getAccountModules({ accountAddress: "0x123" });
+     const tokens = await aptos.getAccountOwnedTokens({ accountAddress: "0x123" });
+     ...
+     ```
 
-   ```typescript filename="quickstart.ts"
-   ...
-   const ledgerInfo = await aptos.getLedgerInfo();
-   const modules = await aptos.getAccountModules({ accountAddress: "0x123" });
-   const tokens = await aptos.getAccountOwnedTokens({ accountAddress: "0x123" });
-   ...
-   ```
+  6. トランザクションの送信
 
-6. トランザクションの送信
+     トランザクションを送信してレジャーの状態を変更できます.トランザクションを使用してAPTなどのトークンの送信,Moveモジュールのトリガー,NFTの取引などが可能です.トランザクションに関する詳細なチュートリアルは[こちら](/ja/build/sdks/ts-sdk/building-transactions)で確認できます.
 
-   トランザクションを送信してレジャーの状態を変更できます.トランザクションを使用してAPTなどのトークンの送信,Moveモジュールのトリガー,NFTの取引などが可能です.トランザクションに関する詳細なチュートリアルは[こちら](/ja/build/sdks/ts-sdk/building-transactions)で確認できます.
+     まずは,APTを送金する基本的なトランザクションの送信方法を見てみましょう.
 
-   まずは,APTを送金する基本的なトランザクションの送信方法を見てみましょう.
+     #### 1. アカウントの作成
 
-   #### 1. アカウントの作成
+     新しいアカウントを作成するには,まず新しい認証情報を生成し,そのアカウントに資金を提供します.ローカルネット/デブネットでは,テスト用のAPTを多く持つ"フォーセット"にプログラムで要求することで,アカウントに資金を提供できます.
 
-   新しいアカウントを作成するには,まず新しい認証情報を生成し,そのアカウントに資金を提供します.ローカルネット/デブネットでは,テスト用のAPTを多く持つ&quot;フォーセット&quot;にプログラムで要求することで,アカウントに資金を提供できます.
+     ```typescript filename="quickstart.ts"
+     ...
+     // 新しいアカウントのキーペアを生成
+     const alice: Account = Account.generate();
 
-   ```typescript filename="quickstart.ts"
-   ...
-   // 新しいアカウントのキーペアを生成
-   const alice: Account = Account.generate();
+     // オンチェーンでアカウントに資金を提供。資金提供によってアカウントがオンチェーンに作成されます。
+     await aptos.fundAccount({
+       accountAddress: alice.accountAddress,
+       amount: 100000000,
+     });
 
-   // オンチェーンでアカウントに資金を提供。資金提供によってアカウントがオンチェーンに作成されます。
-   await aptos.fundAccount({
-     accountAddress: alice.accountAddress,
-     amount: 100000000,
-   });
+     // トークンの送信先となる2つ目のアカウントも作成
+     const bob: Account = Account.generate();
 
-   // トークンの送信先となる2つ目のアカウントも作成
-   const bob: Account = Account.generate();
+     // オンチェーンでアカウントに資金を提供
+     await aptos.fundAccount({
+       accountAddress: bob.accountAddress,
+       amount: 100000000,
+     });
+     ...
+     ```
 
-   // オンチェーンでアカウントに資金を提供
-   await aptos.fundAccount({
-     accountAddress: bob.accountAddress,
-     amount: 100000000,
-   });
-   ...
-   ```
+     #### 2. トランザクションの構築
 
-   #### 2. トランザクションの構築
+     `aptos.transaction.build.simple({...})`を使用してトランザクションを構築できます.以下を指定する必要があります:
 
-   `aptos.transaction.build.simple({...})`を使用してトランザクションを構築できます.以下を指定する必要があります:
+     1. `sender` - トランザクションを送信するアカウント.このアカウントがガス料金を支払います.
+     2. `data` - Aptosが実行するトランザクションを識別するために必要な情報.
+        1. `function` - 呼び出すオンチェーンのスマートコントラクト.形式は`<account_address>::<move_module>::<function>`です.
+        2. `functionArguments` - 呼び出す関数に固有のパラメータ.関数に必要なパラメータは,[このような](https://explorer.aptoslabs.com/account/0x0000000000000000000000000000000000000000000000000000000000000001/modules/code/aptos_account?network=mainnet)エクスプローラーでアカウントとモジュールを検索することで確認できます.
 
-   1. `sender` - トランザクションを送信するアカウント.このアカウントがガス料金を支払います.
-   2. `data` - Aptosが実行するトランザクションを識別するために必要な情報.
-      1. `function` - 呼び出すオンチェーンのスマートコントラクト.形式は`<account_address>::<move_module>::<function>`です.
-      2. `functionArguments` - 呼び出す関数に固有のパラメータ.関数に必要なパラメータは,[このような](https://explorer.aptoslabs.com/account/0x0000000000000000000000000000000000000000000000000000000000000001/modules/code/aptos_account?network=mainnet)エクスプローラーでアカウントとモジュールを検索することで確認できます.
+     例:
 
-   例:
+     ```typescript filename="quickstart.ts"
+     ...
+     const transaction = await aptos.transaction.build.simple({
+       sender: alice.accountAddress,
+       data: {
+         // Move エントリー関数
+         function: "0x1::aptos_account::transfer",
+         functionArguments: [bob.accountAddress, 100],
+       },
+     });
+     ...
+     ```
 
-   ```typescript filename="quickstart.ts"
-   ...
-   const transaction = await aptos.transaction.build.simple({
-     sender: alice.accountAddress,
-     data: {
-       // Move エントリー関数
-       function: "0x1::aptos_account::transfer",
-       functionArguments: [bob.accountAddress, 100],
-     },
-   });
-   ...
-   ```
+     <Aside type="note">
+       状況によっては,[`transferCoinTransaction`](https://explorer.aptoslabs.com/account/0x0000000000000000000000000000000000000000000000000000000000000001/modules/code/aptos_account?network=mainnet)のようなSDKの簡略化された関数を使用することもできます.
+     </Aside>
 
-   <Aside type="note">
-     状況によっては,[`transferCoinTransaction`](https://explorer.aptoslabs.com/account/0x0000000000000000000000000000000000000000000000000000000000000001/modules/code/aptos_account?network=mainnet)のようなSDKの簡略化された関数を使用することもできます.
-   </Aside>
+     #### 3. 署名と送信
 
-   #### 3. 署名と送信
+     署名は,トランザクションを実行するアカウントの所有権または管理権を証明します.これは,送信者がネットワークがトランザクションを実行するために必要なガス料金を支払う必要があるため重要です.
 
-   署名は,トランザクションを実行するアカウントの所有権または管理権を証明します.これは,送信者がネットワークがトランザクションを実行するために必要なガス料金を支払う必要があるため重要です.
+     署名後,ネットワークに送信してオンチェーンでの検証と実行を行うことができます.
 
-   署名後,ネットワークに送信してオンチェーンでの検証と実行を行うことができます.
+     これら2つのステップを1つにまとめた`aptos.signAndSubmitTransaction`を使用できます:
 
-   これら2つのステップを1つにまとめた`aptos.signAndSubmitTransaction`を使用できます:
+     ```typescript filename="quickstart.ts"
+     ...
+     // 署名と送信を同時に行います（これらは個別に行うこともできます）
+     const pendingTransaction = await aptos.signAndSubmitTransaction({
+       signer: alice,
+       transaction,
+     });
+     ...
+     ```
 
-   ```typescript filename="quickstart.ts"
-   ...
-   // 署名と送信を同時に行います（これらは個別に行うこともできます）
-   const pendingTransaction = await aptos.signAndSubmitTransaction({
-     signer: alice,
-     transaction,
-   });
-   ...
-   ```
+     #### 4. 完了を待つ
 
-   #### 4. 完了を待つ
+     `aptos.waitForTransaction`を実行することで,トランザクションが処理され適用された後にコードが実行されることを保証できます.
 
-   `aptos.waitForTransaction`を実行することで,トランザクションが処理され適用された後にコードが実行されることを保証できます.
+     これは,トランザクションが拒否されるなど,送信後に発生する可能性のあるエラーを取得するのにも役立ちます.
 
-   これは,トランザクションが拒否されるなど,送信後に発生する可能性のあるエラーを取得するのにも役立ちます.
-
-   ```typescript filename="quickstart.ts"
-   ...
-   const executedTransaction = await aptos.waitForTransaction({ transactionHash: pendingTransaction.hash });
-   ...
-   ```
-
+     ```typescript filename="quickstart.ts"
+     ...
+     const executedTransaction = await aptos.waitForTransaction({ transactionHash: pendingTransaction.hash });
+     ...
+     ```
 </Steps>
-
-
 
 ## 完全なクイックスタートコード
 
 ### クイックスタートの実行
-
-
 
 <Tabs>
   <TabItem label="npm">
@@ -226,8 +214,6 @@ import { Aside, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
     ```
   </TabItem>
 </Tabs>
-
-
 
 ```typescript filename="quickstart.ts"
 /**

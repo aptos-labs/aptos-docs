@@ -2,11 +2,7 @@
 title: "Exchange Integration Guide"
 ---
 
-
-
 import { Aside } from '@astrojs/starlight/components';
-
-
 
 This describes how to integrate Aptos and Aptos assets into an exchange.  It provides
 generic information for tracking balances, transferring assets, and testing the integration.
@@ -25,7 +21,7 @@ This document will guide you through the following tasks to integrate with Aptos
 
 ## Infrastructure
 
-It&apos;s suggested that you run your own [full node](/network/nodes/full-node) to interact with the Aptos blockchain.
+It's suggested that you run your own [full node](/network/nodes/full-node) to interact with the Aptos blockchain.
 This will allow you to query the blockchain for the latest state and submit transactions.
 You can also use the [Indexer](/build/indexer) to query for on-chain data efficiently.
 
@@ -173,7 +169,7 @@ const balance = parseInt(balanceStr, 10);
 
 To retrieve the balance of a fungible asset, you can use
 the `0x1::primary_fungible_store::balance<0x1::object::ObjectCore>(account address, fungible asset metadata address)` view function.
-Note, that this will not include the balance of coins if it&apos;s a migrated coin.
+Note, that this will not include the balance of coins if it's a migrated coin.
 
 ```typescript filename="example.ts"
 import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
@@ -238,7 +234,7 @@ The coin transfer can be tracked as an individual transaction
 [here](https://fullnode.mainnet.aptoslabs.com/v1/transactions/by_version/1747361321)
 from the REST API.
 
-We&apos;ll break it down into a few parts:
+We'll break it down into a few parts:
 
 1. The general transaction details tell information about the transaction.  The
    most important thing here is the transaction version is `1747361321`.  This gives
@@ -264,7 +260,7 @@ We&apos;ll break it down into a few parts:
 </details>
 
 2. The Write set `changes` are the end state of the transaction.  It shows all
-   resources that were modified by the transaction, and what it&apos;s final state was.
+   resources that were modified by the transaction, and what it's final state was.
 
 In this case, we only care about coin store changes.
 
@@ -344,7 +340,7 @@ In this case, we only care about coin store changes.
    only care about the `0x1::coin::deposit` and `0x1::coin::withdraw` events.
 
 The Coin deposit event is emitted when coins are deposited into an account. The
-account&apos;s balance will increase by that amount in the field `data.amoount`.  To
+account's balance will increase by that amount in the field `data.amoount`.  To
 determine the matching asset, you must match the `guid` in the `deposit_events`
 to the `guid` in the `changes` section for a `CoinStore`.
 
@@ -369,7 +365,7 @@ to the `guid` in the `changes` section for a `CoinStore`.
 </details>
 
 The Coin withdraw event is emitted when coins are withdrawn from an account. The
-account&apos;s balance will decrease by that amount in the field `data.amount`.  To
+account's balance will decrease by that amount in the field `data.amount`.  To
 determine the matching asset, you must match the `guid` in the `deposit_events`
 to the `guid` in the `changes` section for a `CoinStore`.
 
@@ -674,7 +670,7 @@ For fungible assets, the balance changes are tracked in the `primary_fungible_st
 The primary fungible store address is deterministic, and will always be tracked by
 the owner of the store.
 
-An example: https://api.mainnet.aptoslabs.com/v1/transactions/by_version/1750174030
+An example: https://api.mainnet.aptoslabs.com/v1/transactions/by\_version/1750174030
 
 There are a few steps when tracking fungible assets:
 
@@ -683,7 +679,7 @@ There are a few steps when tracking fungible assets:
 `Withdraw` events are similar to the coin events, where the balance will decrease by the amount in the `data.amount` field.
 And similarly `Deposit` events will increase the balance by the amount in the `data.amount` field.
 
-Note that, I&apos;ve omitted the sequence number, and GUID fields, as they do not apply to module events.
+Note that, I've omitted the sequence number, and GUID fields, as they do not apply to module events.
 
 Each event has a `store` field, which in this case is `0x8a9d57692a9d4deb1680eaf107b83c152436e10f7bb521143fa403fa95ef76a`.
 This is the address of the `FungibleStore` for the asset, where the balance is stored.  Note this, for the next step.
@@ -722,7 +718,7 @@ This is the address of the `FungibleStore` for the asset, where the balance is s
 Additionally, to figure out the actual owner of the assets, you will need to look
 at the owner of the store.  In this case, you will need the `0x1::object::ObjectCore`, where
 the `address` field matches the `store` field from the events.  The `owner` field
-will show the asset owner&apos;s address.
+will show the asset owner's address.
 
 <details>
   <summary>Fungible Asset Changes</summary>
@@ -785,7 +781,7 @@ The Fungible asset metadata address is the hash of the coin type and 0xA
 address = sha3_256(0xA | coin_type | 0xFE)
 ```
 
-Here is an example of a migrated coin with APT: https://api.mainnet.aptoslabs.com/v1/transactions/by_version/1642580695
+Here is an example of a migrated coin with APT: https://api.mainnet.aptoslabs.com/v1/transactions/by\_version/1642580695
 
 <details>
   <summary>Full response</summary>
@@ -1138,7 +1134,7 @@ Here is an example of a migrated coin with APT: https://api.mainnet.aptoslabs.co
 </Aside>
 
 We suggest you use `0x1::aptos_account::transfer_coins<CoinType>(receiver address, amount)` for transferring coins.  It will
-register the coin if it hasn&apos;t been registered yet, and create the associated account if it hasn&apos;t been created yet.
+register the coin if it hasn't been registered yet, and create the associated account if it hasn't been created yet.
 This will continue to work with any coins that were migrated to a fungible asset, including APT.
 
 Coins can be transferred in the following ways:
@@ -1152,12 +1148,12 @@ Coins can be transferred in the following ways:
 ### Fungible Asset Transfers
 
 We suggest you use `0x1::primary_fungible_store::transfer<0x1::object::ObjectCore>(receiver address, amount)` for transferring fungible assets.
-It will send the associated fungible asset, and create a primary store for the asset if it hasn&apos;t been created yet.
+It will send the associated fungible asset, and create a primary store for the asset if it hasn't been created yet.
 
 {/* TODO examples */}
 
 <Aside type="caution">
-  Note: This will not create an account for the user if it hasn&apos;t been created
+  Note: This will not create an account for the user if it hasn't been created
   yet. You will need to call
   `0x1::aptos_account::create_account(account address)` to create the account
   before the user can
@@ -1168,7 +1164,7 @@ It will send the associated fungible asset, and create a primary store for the a
 
 ## Testing
 
-In order to check that everything is working correctly, we&apos;ve provided these checks.
+In order to check that everything is working correctly, we've provided these checks.
 
 ### Balance Checks
 

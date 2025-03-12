@@ -11,13 +11,7 @@ title: "Quickstart"
 
 If you have not already installed the Aptos .NET SDK, follow one of the guides below to get started.
 
-
-
-
-
 import { Aside, CardGrid, LinkCard, Steps } from '@astrojs/starlight/components';
-
-
 
 <CardGrid>
   <LinkCard href="/ja/build/sdks/dotnet-sdk/godot-integration" title="Godot Integration" description="Integrate the Aptos .NET SDK with a Godot project." />
@@ -25,122 +19,112 @@ import { Aside, CardGrid, LinkCard, Steps } from '@astrojs/starlight/components'
   <LinkCard href="/ja/build/sdks/dotnet-sdk/unity-integration" title="Unity SDK" description="Integrate the Aptos .NET SDK with a Unity project." />
 </CardGrid>
 
-
-
-
-
 <Steps>
+  1. Set up your AptosClient
 
-1. Set up your AptosClient
+     Set up your Aptos client by adding the `Aptos` namespace and instantiating an `AptosClient`. You can use a predefined
+     configuration from `Networks` or configuring your own.
 
-   Set up your Aptos client by adding the `Aptos` namespace and instantiating an `AptosClient`. You can use a predefined
-   configuration from `Networks` or configuring your own.
+     ```csharp filename="Program.cs"  {1-1, 7-8}
+     using Aptos;
 
-   ```csharp filename="Program.cs"  {1-1, 7-8}
-   using Aptos;
+     class Program
+     {
+         static void Main(string[] args)
+         {
+             var config = new AptosConfig(Aptos.Networks.Mainnet);
+             var client = new AptosClient(config);
+         }
+     }
+     ```
 
-   class Program
-   {
-       static void Main(string[] args)
-       {
-           var config = new AptosConfig(Aptos.Networks.Mainnet);
-           var client = new AptosClient(config);
-       }
-   }
-   ```
+  2. Query the Blockchain
 
-2. Query the Blockchain
+     Now that you have the client setup, you can query the blockchain!
 
-   Now that you have the client setup, you can query the blockchain!
+     ```csharp filename="Program.cs" {10-11}
+     using Aptos;
 
-   ```csharp filename="Program.cs" {10-11}
-   using Aptos;
+     class Program
+     {
+         static void Main(string[] args)
+         {
+             var config = new AptosConfig(Aptos.Networks.Mainnet);
+             var client = new AptosClient(config);
 
-   class Program
-   {
-       static void Main(string[] args)
-       {
-           var config = new AptosConfig(Aptos.Networks.Mainnet);
-           var client = new AptosClient(config);
+             var ledgerInfo = client.Block.GetLedgerInfo();
+             Console.WriteLine(ledgerInfo.BlockHeight);
+         }
+     }
+     ```
 
-           var ledgerInfo = client.Block.GetLedgerInfo();
-           Console.WriteLine(ledgerInfo.BlockHeight);
-       }
-   }
-   ```
+  3. Sign and Submit Transactions
 
-3. Sign and Submit Transactions
+     To interact with the blockchain, you will need to create a signer and build a transaction.
 
-   To interact with the blockchain, you will need to create a signer and build a transaction.
+     ```csharp filename="Program.cs" {10-11,13-21,23-24,26-27}
+     using Aptos;
 
-   ```csharp filename="Program.cs" {10-11,13-21,23-24,26-27}
-   using Aptos;
+     class Program
+     {
+         static void Main(string[] args)
+         {
+             var config = new AptosConfig(Aptos.Networks.Mainnet);
+             var client = new AptosClient(config);
 
-   class Program
-   {
-       static void Main(string[] args)
-       {
-           var config = new AptosConfig(Aptos.Networks.Mainnet);
-           var client = new AptosClient(config);
+             // 1. Create a signer
+             var signer = Account.Generate();
 
-           // 1. Create a signer
-           var signer = Account.Generate();
+             // 2. Build the transaction
+             var transaction = await client.Transaction.Build(
+                 sender: account,
+                 data: new GenerateEntryFunctionPayloadData(
+                     function: "0x1::aptos_account::transfer_coins",
+                     typeArguments: ["0x1::aptos_coin::AptosCoin"],
+                     functionArguments: [account.Address, "100000"]
+                 )
+             );
 
-           // 2. Build the transaction
-           var transaction = await client.Transaction.Build(
-               sender: account,
-               data: new GenerateEntryFunctionPayloadData(
-                   function: "0x1::aptos_account::transfer_coins",
-                   typeArguments: ["0x1::aptos_coin::AptosCoin"],
-                   functionArguments: [account.Address, "100000"]
-               )
-           );
+             // 3. Sign and submit the transaction
+             var pendingTransaction = client.Transaction.SignAndSubmitTransaction(account, transaction);
 
-           // 3. Sign and submit the transaction
-           var pendingTransaction = client.Transaction.SignAndSubmitTransaction(account, transaction);
+             // 4. (Optional) Wait for the transaction to be committed
+             var committedTransaction = await client.Transaction.WaitForTransaction(pendingTransaction);
+         }
+     }
+     ```
 
-           // 4. (Optional) Wait for the transaction to be committed
-           var committedTransaction = await client.Transaction.WaitForTransaction(pendingTransaction);
-       }
-   }
-   ```
+  4. Smart Contract View Functions
 
-4. Smart Contract View Functions
+     Call view functions to query smart contracts.
 
-   Call view functions to query smart contracts.
+     ```csharp filename="Program.cs" {10-17,19-20}
+     using Aptos;
 
-   ```csharp filename="Program.cs" {10-17,19-20}
-   using Aptos;
+     class Program
+     {
+         static void Main(string[] args)
+         {
+             var config = new AptosConfig(Aptos.Networks.Mainnet);
+             var client = new AptosClient(config);
 
-   class Program
-   {
-       static void Main(string[] args)
-       {
-           var config = new AptosConfig(Aptos.Networks.Mainnet);
-           var client = new AptosClient(config);
+             // Call the view function by specifying the function name, arguments, and type arguments
+             var values = await client.Contract.View(
+                 new GenerateViewFunctionPayloadData(
+                     function: "0x1::coin::name",
+                     functionArguments: [],
+                     typeArguments: ["0x1::aptos_coin::AptosCoin"]
+                 )
+             );
 
-           // Call the view function by specifying the function name, arguments, and type arguments
-           var values = await client.Contract.View(
-               new GenerateViewFunctionPayloadData(
-                   function: "0x1::coin::name",
-                   functionArguments: [],
-                   typeArguments: ["0x1::aptos_coin::AptosCoin"]
-               )
-           );
-
-           // Returns a list of return values: ["Aptos Coin"]
-           Console.WriteLine("APT Name: " + values[0]);
-       }
-   }
-   ```
-
+             // Returns a list of return values: ["Aptos Coin"]
+             Console.WriteLine("APT Name: " + values[0]);
+         }
+     }
+     ```
 </Steps>
 
-
-
 ## Additional Resources
-
-
 
 <CardGrid>
   <LinkCard href="https://aptos-labs.github.io/aptos-dotnet-sdk" title="Full API Reference" description="The full API reference for the Aptos .NET SDK." target="_blank" />

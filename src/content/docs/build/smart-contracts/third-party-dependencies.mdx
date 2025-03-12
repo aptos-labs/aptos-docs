@@ -4,11 +4,7 @@ title: "Third Party Dependencies"
 
 Third party dependencies are external [modules](/build/smart-contracts/book/modules-and-scripts) that a controlled module interacts with. Typically, these external modules exist under different accounts.
 
-
-
 import { Aside, FileTree } from '@astrojs/starlight/components';
-
-
 
 ## Multi-DEX router example
 
@@ -37,19 +33,13 @@ When Aptos CLI commands are ran, updates to the dependency are automatically ret
 
 Third party source code can be included in the `sources` directory. Essentially treating it the same as custom code.
 
-
-
 <FileTree>
-
-- third_party_dependency_project/
-  - source/
-    - `{ControlledCode}.move`
-    - `{ThirdPartyCode}.move`
-  - Move.toml
-
+  - third\_party\_dependency\_project/
+    - source/
+      - `{ControlledCode}.move`
+      - `{ThirdPartyCode}.move`
+    - Move.toml
 </FileTree>
-
-
 
 <Aside type="caution" emoji="⚠️">
   Any upgrades to the Third Party dependency will need to be retrieved, manually.
@@ -65,34 +55,22 @@ aptos move decompile --package-path ./bytecode_modules
 
 Corresponding `{ModuleName}.mv.move` files will be generated in `bytecode_modules`.
 
-
-
 <FileTree>
-
-- third_party_dependency_project/
-  - byte_modules/
-    - `{ModuleName}.mv`
-    - `{ModuleName}.mv.move`
-  - Move.toml
-
+  - third\_party\_dependency\_project/
+    - byte\_modules/
+      - `{ModuleName}.mv`
+      - `{ModuleName}.mv.move`
+    - Move.toml
 </FileTree>
-
-
 
 Reference it as a local source file after changing the file type to `{ModuleName}.move` and placing it in the workspace’s `sources` directory.
 
-
-
 <FileTree>
-
-- third_party_dependency_project/
-  - sources/
-    - `{ModuleName}.move`
-  - Move.toml
-
+  - third\_party\_dependency\_project/
+    - sources/
+      - `{ModuleName}.move`
+    - Move.toml
 </FileTree>
-
-
 
 <Aside type="note" emoji="ℹ️">
   Decompiled code will keep behaviors of on-chain execution, but will be refactored.
@@ -100,7 +78,7 @@ Reference it as a local source file after changing the file type to `{ModuleName
 
 ### Bytecode
 
-The Aptos CLI allows for downloading a [package&apos;s](/build/smart-contracts/book/packages) bytecode.
+The Aptos CLI allows for downloading a [package's](/build/smart-contracts/book/packages) bytecode.
 
 ```shellscript filename="Terminal"
 aptos move download --account {account_addr} --bytecode --package {package_name}
@@ -112,7 +90,7 @@ Each bytecode dependency requires their own package, with a structure of:
 - `build/{ModuleName}/bytecode_modules` directory with the bytecode inside.
 - Empty sources directory.
 
-The controlled module can then reference the dependency, upon it&apos;s inclusion in the controlled package&apos;s `Move.toml`.
+The controlled module can then reference the dependency, upon it's inclusion in the controlled package's `Move.toml`.
 
 <details>
   <summary>Aptos Token example</summary>
@@ -137,41 +115,37 @@ The controlled module can then reference the dependency, upon it&apos;s inclusio
   --output-dir ./aptos_token_bytecode_output/
   ```
 
-<FileTree>
-
-- invoking_code/
-  - aptos_token_bytecode_output/
-    - byte_modules/
-      - aptos_token.mv
-  - sources/
-    - invoking_code.move
-  - Move.toml
-
-</FileTree>
+  <FileTree>
+    - invoking\_code/
+      - aptos\_token\_bytecode\_output/
+        - byte\_modules/
+          - aptos\_token.mv
+      - sources/
+        - invoking\_code.move
+      - Move.toml
+  </FileTree>
 
   The created dependency package structure and contents for `aptos_token` is:
 
-<FileTree>
-
-- aptos_token_objects_addr/
-  - build/
-    - aptos_token/
-      - bytecode_modules/
-        - aptos_token.mv
-  - sources/
-    - ...
-  - Move.toml
-- invoking_code/
-  - aptos_token_bytecode_output/
-    - byte_modules/
-      - aptos_token.mv
-      - aptos_token.mv.move
-      - ...
-  - sources/
-    - invoking_code.move
-  - Move.toml
-
-</FileTree>
+  <FileTree>
+    - aptos\_token\_objects\_addr/
+      - build/
+        - aptos\_token/
+          - bytecode\_modules/
+            - aptos\_token.mv
+      - sources/
+        - ...
+      - Move.toml
+    - invoking\_code/
+      - aptos\_token\_bytecode\_output/
+        - byte\_modules/
+          - aptos\_token.mv
+          - aptos\_token.mv.move
+          - ...
+      - sources/
+        - invoking\_code.move
+      - Move.toml
+  </FileTree>
 
   ```toml filename="aptos_token_objects_addr/Move.toml"
   [package]
@@ -195,7 +169,7 @@ The controlled module can then reference the dependency, upon it&apos;s inclusio
 
 ### ABI
 
-Move interface code can be manually crafted by reading a package&apos;s ABI. Notably, while the function header is required to be exact, the logic within is not.
+Move interface code can be manually crafted by reading a package's ABI. Notably, while the function header is required to be exact, the logic within is not.
 
 <Aside type="note" emoji="ℹ️">
   All available public and entry methods are defined with their name, arguments, return values, and more, within the ABI. Structs and resources will also be included.
@@ -206,7 +180,7 @@ Afterwards, the interface code is treated equivalent to local source code.
 <details>
   <summary>Aptos Token example</summary>
 
-  Below is a portion of the `AptosTokenObjects` ABI, gathered from the [Aptos Explorer](https://explorer.aptoslabs.com/account/0x0000000000000000000000000000000000000000000000000000000000000004/modules/code/aptos_token?network=mainnet#:~\:text=1114-,ABI,-%7B):
+  Below is a portion of the `AptosTokenObjects` ABI, gathered from the [Aptos Explorer](https://explorer.aptoslabs.com/account/0x0000000000000000000000000000000000000000000000000000000000000004/modules/code/aptos_token?network=mainnet#:~:text=1114-,ABI,-%7B):
 
   ```json
   {
@@ -257,13 +231,11 @@ Afterwards, the interface code is treated equivalent to local source code.
   }
   ```
 
-<FileTree>
-
-- third_party_dependency_project/
-  - source/
-    - `{ControlledCode}.move`
-    - aptos_token.move
-  - Move.toml
-
-</FileTree>
+  <FileTree>
+    - third\_party\_dependency\_project/
+      - source/
+        - `{ControlledCode}.move`
+        - aptos\_token.move
+      - Move.toml
+  </FileTree>
 </details>

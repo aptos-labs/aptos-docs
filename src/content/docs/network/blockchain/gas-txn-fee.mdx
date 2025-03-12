@@ -2,15 +2,11 @@
 title: "Gas and Storage Fees"
 ---
 
-
-
 import { Aside } from '@astrojs/starlight/components';
-
-
 
 Any transaction execution on the Aptos blockchain requires a processing fee. As of today, this fee comprises two components:
 
-1. Execution &amp; IO costs
+1. Execution & IO costs
 
 - This covers your usage of transient computation resources, such as processing your transactions and propagating the validated record throughout the distributed network of the mainnet.
 - It is measured in Gas Units whose price may fluctuate according to the load of the network. This allows execution and IO costs to be low when the network is less busy.
@@ -19,7 +15,7 @@ Any transaction execution on the Aptos blockchain requires a processing fee. As 
 2. Storage fees
 
 - This covers the cost to persistently store validated record in the distributed blockchain storage.
-- It is measured in fixed APT prices, so the permanent storage cost stays stable even as the gas unit price fluctuates with the network&apos;s transient load.
+- It is measured in fixed APT prices, so the permanent storage cost stays stable even as the gas unit price fluctuates with the network's transient load.
 - - The storage fee can be refunded when the allocated storage slot is deleted. Currently, the network is configured to refund the entirety of the storage fee paid over the lifetime of a state storage slot.
 - To keep system implementation simple, this portion of gas is burned and minted again upon refund.
 
@@ -34,7 +30,7 @@ Transactions can range from simple and inexpensive to complicated based upon wha
 See [How Base Gas Works](/network/blockchain/base-gas) for a detailed description of gas fee types and available optimizations.
 
 <Aside type="note">
-  👉 A **unit of gas** is a dimensionless number or a unit that is not associated with any one item such as a coin, expressed as an integer. The total gas units consumed by your transaction depend on the complexity of your transaction. The **gas price**, on the other hand, is expressed in terms of Aptos blockchain’s native coin [APT](/network/glossary.mdx#apt) and it&apos;s subunit [Octas](/network/glossary.mdx#octa). Also see [Transactions and States](/network/blockchain/txns-states) for how a transaction submitted to the Aptos blockchain looks like.
+  👉 A **unit of gas** is a dimensionless number or a unit that is not associated with any one item such as a coin, expressed as an integer. The total gas units consumed by your transaction depend on the complexity of your transaction. The **gas price**, on the other hand, is expressed in terms of Aptos blockchain’s native coin [APT](/network/glossary.mdx#apt) and it's subunit [Octas](/network/glossary.mdx#octa). Also see [Transactions and States](/network/blockchain/txns-states) for how a transaction submitted to the Aptos blockchain looks like.
 </Aside>
 
 ## The Fee Statement
@@ -127,11 +123,11 @@ There also exists some global per-category limits:
 
 The storage fee for a transaction is charged according to the number of new slots allocated in the global state and the size increase in the existing slots.
 
-There are some nuances with regard to price changing and legacy slots which didn&apos;t pay for the size of the slot below a historical &quot;free quota&quot;. Refer to [AIP-65](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-65.md#specification) for more details.
+There are some nuances with regard to price changing and legacy slots which didn't pay for the size of the slot below a historical "free quota". Refer to [AIP-65](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-65.md#specification) for more details.
 
 It should also be noted that due to some backward compatibility reasons, the total storage fee of a transaction is currently presented to the client as part of the total `gas_used`. This means, this amount could vary based on the gas unit price even for the same transaction.
 
-Here is an example. Suppose we have a transaction that costs `100` gas units in execution &amp; IO, and `5000` [Octas](/network/glossary.mdx#octa) in storage fees. The network will show that you have used
+Here is an example. Suppose we have a transaction that costs `100` gas units in execution & IO, and `5000` [Octas](/network/glossary.mdx#octa) in storage fees. The network will show that you have used
 
 - `100 + 5000 / 100 = 150` gas units if the gas unit price is `100`, or
 - `100 + 5000 / 200 = 125` gas units if the unit price is `200`.
@@ -142,7 +138,7 @@ We are aware of the confusion this might create, and plan to present these as se
 
 If a transaction deletes state items, a refund is issued to the transaction payer for the released storage slots. Currently, a full refund is issued -- that is, all storage fee paid for the slot and bytes of the item over the lifetime of it.
 
-The refund amount is denominated in APT and is not converted to gas units or included in the total `gas_used`. Instead, this refund amount is specifically detailed in the `storage_fee_refund_octas` field of the [`FeeStatement`](#the-fee-statement). As a result, the transaction&apos;s net effect on the payer&apos;s APT balance is determined by `gas_used * gas_unit_price - storage_refund`. If the result is positive, there is a deduction from the account balance; if negative, there is a deposit.
+The refund amount is denominated in APT and is not converted to gas units or included in the total `gas_used`. Instead, this refund amount is specifically detailed in the `storage_fee_refund_octas` field of the [`FeeStatement`](#the-fee-statement). As a result, the transaction's net effect on the payer's APT balance is determined by `gas_used * gas_unit_price - storage_refund`. If the result is positive, there is a deduction from the account balance; if negative, there is a deposit.
 
 ## Examples
 
@@ -150,7 +146,7 @@ The refund amount is denominated in APT and is not converted to gas units or inc
 
 **The sender’s account must have sufficient funds to pay for the transaction fee.**
 
-If, let&apos;s say, you transfer all the money out of your account so that you have no remaining balance to pay for the transaction fee. In such case the Aptos blockchain would let you know that the transaction will fail, and your transfer wouldn&apos;t succeed either.
+If, let's say, you transfer all the money out of your account so that you have no remaining balance to pay for the transaction fee. In such case the Aptos blockchain would let you know that the transaction will fail, and your transfer wouldn't succeed either.
 
 ### Example 2: Transaction amounts vs transaction fee
 
@@ -187,7 +183,7 @@ The simulation steps for finding the correct amount of gas for a transaction are
 4. To calculate the upper bound of the cost, take the **minimum** of the `max_gas_amount` in the returned transaction, and the `gas_used * safety factor`. In the CLI a value of `1.5` is used for `safety factor`. Use this value as `max_gas_amount` for the transaction you want to submit. Note that the **upper bound** for the cost of the transaction is `max_gas_amount * gas_unit_price`, i.e., this is the most the sender of the transaction is charged.
 5. At this point you now have your `gas_unit_price` and `max_gas_amount` to submit your transaction as follows:
    1. `gas_unit_price` from the returned simulated transaction.
-   2. `max_gas_amount` as the minimum of the `gas_used` * `a safety factor` or the `max_gas_amount` from the transaction.
+   2. `max_gas_amount` as the minimum of the `gas_used` \* `a safety factor` or the `max_gas_amount` from the transaction.
 6. If you feel the need to prioritize or deprioritize your transaction, adjust the `gas_unit_price` of the transaction. Increase the value for higher priority, and decrease the value for lower priority.
 
 <Aside type="note">

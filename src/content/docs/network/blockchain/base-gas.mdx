@@ -3,12 +3,8 @@ id: "base-gas"
 title: "Computing Transaction Gas"
 ---
 
-
-
-
-
 Aptos transactions by default charge a base gas fee, regardless of market conditions.
-For each transaction, this &quot;base gas&quot; amount is based on three conditions:
+For each transaction, this "base gas" amount is based on three conditions:
 
 1. Instructions.
 2. Storage.
@@ -197,32 +193,32 @@ In Move, one can read from the global state:
 
 | Parameter                      | Meaning                                   |
 | ------------------------------ | ----------------------------------------- |
-| storage_io_per_state_slot_read | charged per item loaded from global state |
-| storage_io_per_state_byte_read | charged per byte loaded from global state |
+| storage\_io\_per\_state\_slot\_read | charged per item loaded from global state |
+| storage\_io\_per\_state\_byte\_read | charged per byte loaded from global state |
 
-For a committed transaction, various things will be written to the ledger history. Notice that the ledger history is subject to pruning and doesn&apos;t occupy permanent space on the disk, hence no storage fee charged for it.
+For a committed transaction, various things will be written to the ledger history. Notice that the ledger history is subject to pruning and doesn't occupy permanent space on the disk, hence no storage fee charged for it.
 
 | Parameter                             | Meaning                                                                             |
 | ------------------------------------- | ----------------------------------------------------------------------------------- |
-| storage_io_per_state_slot_write       | charged per state write operation in the transaction output                         |
-| storage_io_per_state_byte_write       | charged per byte in all state write ops in the transaction output                   |
-| storage_io_per_event_byte_write       | charged per byte in all events in the transaction output                            |
-| storage_io_per_transaction_byte_write | charged per byte in the transaction itself which is also part of the ledger history |
+| storage\_io\_per\_state\_slot\_write       | charged per state write operation in the transaction output                         |
+| storage\_io\_per\_state\_byte\_write       | charged per byte in all state write ops in the transaction output                   |
+| storage\_io\_per\_event\_byte\_write       | charged per byte in all events in the transaction output                            |
+| storage\_io\_per\_transaction\_byte\_write | charged per byte in the transaction itself which is also part of the ledger history |
 
 The following storage fee parameters are applied (i.e., charged in absolute APT values) to represent the disk space and structural costs associated with using the [Aptos authenticated data structure](/network/glossary.mdx#merkle-trees) for storing items on the blockchain.
 
 | Parameter                         | Meaning                                                                                                                                                                                                                                             |
 | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| storage_fee_per_state_slot_create | allocating a state slot, by `move_to()`, `table::add()`, etc                                                                                                                                                                                        |
-| storage_fee_per_state_byte        | Notice this is charged every time the slot grows in size, not only at allocation time. (However, for simplicity, refunding is only at deletion time. See [AIP-65](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-65.md#specification)) |
+| storage\_fee\_per\_state\_slot\_create | allocating a state slot, by `move_to()`, `table::add()`, etc                                                                                                                                                                                        |
+| storage\_fee\_per\_state\_byte        | Notice this is charged every time the slot grows in size, not only at allocation time. (However, for simplicity, refunding is only at deletion time. See [AIP-65](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-65.md#specification)) |
 
 ### Vectors
 
-Byte-wise fees are similarly assessed on vectors, which consume $\sum_{i = 0}^{n - 1} e_i + b(n)$ bytes, where:
+Byte-wise fees are similarly assessed on vectors, which consume $\sum\_{i = 0}^{n - 1} e\_i + b(n)$ bytes, where:
 
 - $n$ is the number of elements in the vector
-- $e_i$ is the size of element $i$
-- $b(n)$ is a &quot;base size&quot; which is a function of $n$
+- $e\_i$ is the size of element $i$
+- $b(n)$ is a "base size" which is a function of $n$
 
 See the [BCS sequence specification] for more information on vector base size (technically a `ULEB128`), which typically occupies just one byte in practice, such that a vector of 100 `u8` elements accounts for $100 + 1 = 101$ bytes.
 Hence, per the item-wise read methodology described above, reading the last element of such a vector is treated as a 101-byte read.
@@ -242,9 +238,9 @@ Payload gas is defined in [`transaction.rs`](https://github.com/aptos-labs/aptos
 | `max_transaction_size_in_bytes` | Maximum transaction payload size in bytes                                              |
 | `gas_unit_scaling_factor`       | Conversion factor between internal gas units and external gas units                    |
 
-Here, &quot;internal gas units&quot; are defined as constants in source files like [`instr.rs`] and [`storage_gas.move`], which are more granular than &quot;external gas units&quot; by a factor of `gas_unit_scaling_factor`:
+Here, "internal gas units" are defined as constants in source files like [`instr.rs`] and [`storage_gas.move`], which are more granular than "external gas units" by a factor of `gas_unit_scaling_factor`:
 to convert from internal gas units to external gas units, divide by `gas_unit_scaling_factor`.
-Then, to convert from external gas units to [octas](/network/glossary.mdx#octa), multiply by the &quot;gas price&quot;, which denotes the number of octas per unit of external gas.
+Then, to convert from external gas units to [octas](/network/glossary.mdx#octa), multiply by the "gas price", which denotes the number of octas per unit of external gas.
 
 ## Optimization principles
 
@@ -262,7 +258,7 @@ See [Payload gas](#payload-gas) for the meaning of these constants.
 
 ### Storage Fee
 
-When the network load is low, the gas unit price is expected to be low, making most aspects of the transaction cost more affordable. However, the storage fee is an exception, as it&apos;s priced in terms of absolute APT value. In most instances, the transaction fee is the predominant component of the overall transaction cost. This is especially true when a transaction allocates state slots, writes to sizable state items, emits numerous or large events, or when the transaction itself is a large one. All of these factors consume disk space on Aptos nodes and are charged accordingly.
+When the network load is low, the gas unit price is expected to be low, making most aspects of the transaction cost more affordable. However, the storage fee is an exception, as it's priced in terms of absolute APT value. In most instances, the transaction fee is the predominant component of the overall transaction cost. This is especially true when a transaction allocates state slots, writes to sizable state items, emits numerous or large events, or when the transaction itself is a large one. All of these factors consume disk space on Aptos nodes and are charged accordingly.
 
 On the other hand, the storage refund incentivizes releasing state slots by deleting state items. The state slot fee is fully refunded upon slot deallocation, while the excess state byte fee is non-refundable. This will soon change by differentiating between permanent bytes (those in the global state) and relative ephemeral bytes (those that traverse the ledger history).
 
@@ -292,7 +288,7 @@ Hence, the following representative operations assume gas costs as follows (divi
 
 (Note that per-byte table box operation instruction gas does not account for storage gas, which is assessed separately).
 
-For comparison, reading a 100-byte item costs $r_i + 100 * r_b = 3000 + 100 * 3 = 3300$ [octas](/network/glossary.mdx#octa) at minimum, some 16.5 times as much as a function call, and in general, instruction gas costs are largely dominated by storage gas costs.
+For comparison, reading a 100-byte item costs $r\_i + 100 \* r\_b = 3000 + 100 \* 3 = 3300$ [octas](/network/glossary.mdx#octa) at minimum, some 16.5 times as much as a function call, and in general, instruction gas costs are largely dominated by storage gas costs.
 
 Notably, however, there is still technically an incentive to reduce the number of function calls in a program, but engineering efforts are more effectively dedicated to writing modular, decomposed code that is geared toward reducing storage gas costs, rather than attempting to write repetitive code blocks with fewer nested functions (in nearly all cases).
 

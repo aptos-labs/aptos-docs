@@ -2,11 +2,7 @@
 title: "质押池操作"
 ---
 
-
-
 import { Aside } from '@astrojs/starlight/components';
-
-
 
 本文档描述了如何执行[质押](/zh/network/blockchain/staking)池操作.注意,质押池只能接受质押池所有者的质押.只有在满足最低质押要求时,您才能进行质押.
 
@@ -205,41 +201,41 @@ aptos node get-stake-pool \
 
 **state**
 
-- &quot;Active&quot;: 验证者已经在验证者集合中并提出建议.
-- &quot;Pending_active&quot;: 验证者将在下一个纪元(epoch)被添加到验证者集合中.**在下一个纪元到来之前,不要尝试再次加入验证者集合,否则您将收到错误.**
+- "Active": 验证者已经在验证者集合中并提出建议.
+- "Pending\_active": 验证者将在下一个纪元(epoch)被添加到验证者集合中.**在下一个纪元到来之前,不要尝试再次加入验证者集合,否则您将收到错误.**
 
-**pool_address**
+**pool\_address**
 
-- 在您的 `validator.yaml` 文件中使用此&quot;pool_address&quot;(而不是运营者地址).如果您错误地使用了运营者地址,您将收到消息:&quot;Validator not in validator set&quot;.
+- 在您的 `validator.yaml` 文件中使用此"pool\_address"(而不是运营者地址).如果您错误地使用了运营者地址,您将收到消息:"Validator not in validator set".
 
-**commission_percentage**
+**commission\_percentage**
 
-- 只能由质押池所有者设置.运营者获得生成的质押奖励的&quot;commission_percentage&quot;部分.如果您请求佣金(可以通过运行命令 `aptos stake request-commission` 来完成),那么在 `lockup_expiration_utc_time` 结束时,佣金部分的奖励将转入运营者地址,其余部分将保留在质押池中并属于所有者.这里&quot;the commission part of the rewards&quot;指的是**commission_not_yet_unlocked**的值.
+- 只能由质押池所有者设置.运营者获得生成的质押奖励的"commission\_percentage"部分.如果您请求佣金(可以通过运行命令 `aptos stake request-commission` 来完成),那么在 `lockup_expiration_utc_time` 结束时,佣金部分的奖励将转入运营者地址,其余部分将保留在质押池中并属于所有者.这里"the commission part of the rewards"指的是**commission\_not\_yet\_unlocked**的值.
 
-这项设置仅能由质押池所有者进行.运营者会获得生成的质押奖励中一定的“佣金百分比(`commission_percentage`)”.通过执行命令 `aptos stake request-commission`,你可以申请这份佣金.那么,在锁定期结束时间(`lockup_expiration_utc_time`)到来时,奖励中的佣金部分将转入运营者的地址,其余部分则留在质押池中,归属于池所有者.“奖励中的佣金部分(the commission part of the rewards)”指的是**尚未解锁的佣金(commission_not_yet_unlocked)**数额.
+这项设置仅能由质押池所有者进行.运营者会获得生成的质押奖励中一定的“佣金百分比(`commission_percentage`)”.通过执行命令 `aptos stake request-commission`,你可以申请这份佣金.那么,在锁定期结束时间(`lockup_expiration_utc_time`)到来时,奖励中的佣金部分将转入运营者的地址,其余部分则留在质押池中,归属于池所有者.“奖励中的佣金部分(the commission part of the rewards)”指的是\*\*尚未解锁的佣金(commission\_not\_yet\_unlocked)\*\*数额.
 
 例如,在一个月的锁定期情况下,您每个月调用 `aptos stake request-commission`.这将在前一个月累积的佣金解锁后支付给您,但只有在前一个月结束时解锁.无论您在一个月中运行 `aptos stake request-commission` 多少次,佣金都只会在 `lockup_expiration_utc_time` 来临之后支付.
 
 <Aside type="note">
   **复利**<br />
-  请注意,如果您连续多个月不请求佣金,由于这些月份的**commission_percentage**复利,您的佣金将会累积得更多.
+  请注意,如果您连续多个月不请求佣金,由于这些月份的**commission\_percentage**复利,您的佣金将会累积得更多.
 </Aside>
 
-**commission_not_yet_unlocked**
+**commission\_not\_yet\_unlocked**
 
 - 尚未解锁的佣金金额(APT 的数量).它将在 `lockup_expiration_utc_time` 解锁.这是运营者可用的总佣金金额,即,仅属于运营者的质押奖励.这不包括属于所有者的质押奖励.
 
-**lockup_expiration_utc_time**
+**lockup\_expiration\_utc\_time**
 
 - 佣金解锁的日期.然而,这个解锁的佣金不会自动发放.只有在再次调用命令 `aptos stake request-commission` 时才会发放.
 
-**epoch_info**
+**epoch\_info**
 
 - 使用 [Epoch Converter](https://www.epochconverter.com/) 或类似的工具将 `unix_time` 转换为人类可读的时间.
 
 ## 请求佣金
 
-无论是所有者,运营者还是运营者的受益人,都可以请求佣金.您必须请求佣金**两次**,一次在锁定期结束之前,另一次在锁定期结束后,即在**lockup_expiration_utc_time**结束时,通过运行 `aptos stake request-commission` 命令.确保提供运营者和所有者的地址正确.下面是一个示例命令:
+无论是所有者,运营者还是运营者的受益人,都可以请求佣金.您必须请求佣金**两次**,一次在锁定期结束之前,另一次在锁定期结束后,即在**lockup\_expiration\_utc\_time**结束时,通过运行 `aptos stake request-commission` 命令.确保提供运营者和所有者的地址正确.下面是一个示例命令:
 
 ```shellscript filename="Terminal"
 aptos stake request-commission \
@@ -311,13 +307,13 @@ aptos node get-performance \
 
 #### 字段说明
 
-**current_epoch_successful_proposals**
+**current\_epoch\_successful\_proposals**
 
 - 当前纪元(epoch)中成功的领导者验证者提案.另见[Aptos 区块链上的验证](/zh/network/blockchain/staking.mdx#validation-on-the-aptos-blockchain),了解领导者验证者和投票者验证者之间的区别.
 
 在当前纪元(Epoch)内,成功的领导-验证节点的提案.为了理解领导-验证节点与投票-验证节点之间的差异,请参考 [Aptos 区块链上的验证](/zh/network/blockchain/staking.mdx#validation-on-the-aptos-blockchain)部分.
 
-**previous_epoch_rewards**
+**previous\_epoch\_rewards**
 
 以下列出了从倒数第十个纪元开始,过去 10 个纪元中获得的 APT 奖励金额.例如,在上面的示例中,第 10 个纪元以前赚得了 12312716242 APT,而在最近的一个纪元中赚得了 12313600288 APT.如果某个纪元的奖励为 0,接下来会是:
 
@@ -337,4 +333,4 @@ aptos node analyze-validator-performance \
 
 ## 跟踪奖励
 
-当有资金从质押合约 (staking_contract) 转给运营者或质押者(即所有者)时,会触发“分发事件” (`DistributeEvent`).要追踪奖励情况,可以选择监听这个“分发事件”,或使用 [view 函数](/zh/build/apis.mdx#reading-state-with-the-view-function)查询质押合约中的金额 (`staking_contract_amounts`).这样可以查看到累积奖励 (`accumulated_rewards`) 和佣金数额 (`commission_amount`).
+当有资金从质押合约 (staking\_contract) 转给运营者或质押者(即所有者)时,会触发“分发事件” (`DistributeEvent`).要追踪奖励情况,可以选择监听这个“分发事件”,或使用 [view 函数](/zh/build/apis.mdx#reading-state-with-the-view-function)查询质押合约中的金额 (`staking_contract_amounts`).这样可以查看到累积奖励 (`accumulated_rewards`) 和佣金数额 (`commission_amount`).

@@ -5,82 +5,72 @@ title: "Go SDK - トランザクションのスポンサー"
 通常,トランザクションを実行するアカウントがガス料金を支払います.
 トランザクションをスポンサーすることで,別のアカウントにそれらの料金を負担させることができます.
 
-
-
 import { Aside, Steps } from '@astrojs/starlight/components';
-
-
 
 これは,複雑なスマートコントラクトを扱う際に,中央アカウントから料金を管理するのに役立ちます.
 
 ## トランザクションのスポンサー方法
 
-
-
 <Steps>
+  1. パラメータ FeePayer() を使用してトランザクションを構築します.
 
-1. パラメータ FeePayer() を使用してトランザクションを構築します.
+     ```go filename="sponsor.go"
+       rawTxn, err := client.BuildTransactionMultiAgent(
+       alice.Address,
+       aptos.TransactionPayload{
+       Payload: transferPayload,
+       },
+       aptos.FeePayer(&sponsor.Address),
+       )
+     ```
 
-   ```go filename="sponsor.go"
-     rawTxn, err := client.BuildTransactionMultiAgent(
-     alice.Address,
-     aptos.TransactionPayload{
-     Payload: transferPayload,
-     },
-     aptos.FeePayer(&sponsor.Address),
-     )
-   ```
+     <Aside type="note">
+       `FeePayer()` 関数は,トランザクションのガス料金を支払うアカウントを指定するために使用されます.
+       料金支払者が事前にわからない場合は,`AccountZero` を使用して示すことができます.
+     </Aside>
 
-   <Aside type="note">
-     `FeePayer()` 関数は,トランザクションのガス料金を支払うアカウントを指定するために使用されます.
-     料金支払者が事前にわからない場合は,`AccountZero` を使用して示すことができます.
-   </Aside>
+  2. 送信者とスポンサーの両方でトランザクションに署名します.
 
-2. 送信者とスポンサーの両方でトランザクションに署名します.
+     1. 送信者アカウントで `rawTxn.Sign()` を使用して署名します.
+     2. スポンサーアカウントで `rawTxn.Sign()` を使用して署名します.
 
-   1. 送信者アカウントで `rawTxn.Sign()` を使用して署名します.
-   2. スポンサーアカウントで `rawTxn.Sign()` を使用して署名します.
+     ```go filename="sponsor.go"
+       aliceAuth, err := rawTxn.Sign(alice)
+       if err != nil {
+         panic("Failed to sign transaction as sender:" + err.Error())
+       }
+       sponsorAuth, err := rawTxn.Sign(sponsor)
+       if err != nil {
+         panic("Failed to sign transaction as sponsor:" + err.Error())
+       }
+     ```
 
-   ```go filename="sponsor.go"
-     aliceAuth, err := rawTxn.Sign(alice)
-     if err != nil {
-       panic("Failed to sign transaction as sender:" + err.Error())
-     }
-     sponsorAuth, err := rawTxn.Sign(sponsor)
-     if err != nil {
-       panic("Failed to sign transaction as sponsor:" + err.Error())
-     }
-   ```
+  3. 両方の署名を組み合わせてトランザクションを送信します.
 
-3. 両方の署名を組み合わせてトランザクションを送信します.
+     ```go filename="sponsor.go"
+       signedFeePayerTxn, ok = rawTxn.ToFeePayerSignedTransaction(
+           aliceAuth,
+           sponsorAuth,
+           []crypto.AccountAuthenticator{},
+       )
+       if !ok {
+           panic("Failed to build fee payer signed transaction")
+       }
 
-   ```go filename="sponsor.go"
-     signedFeePayerTxn, ok = rawTxn.ToFeePayerSignedTransaction(
-         aliceAuth,
-         sponsorAuth,
-         []crypto.AccountAuthenticator{},
-     )
-     if !ok {
-         panic("Failed to build fee payer signed transaction")
-     }
+       // 送信して完了を待ちます
+       submitResult, err = client.SubmitTransaction(signedFeePayerTxn)
+       if err != nil {
+           panic("Failed to submit transaction:" + err.Error())
+       }
+     ```
 
-     // 送信して完了を待ちます
-     submitResult, err = client.SubmitTransaction(signedFeePayerTxn)
-     if err != nil {
-         panic("Failed to submit transaction:" + err.Error())
-     }
-   ```
+  4. トランザクションの実行を待ちます.
 
-4. トランザクションの実行を待ちます.
-
-   ```go filename="sponsor.go"
-     // トランザクションを待ちます
-     _, err = client.WaitForTransaction(txnHash)
-   ```
-
+     ```go filename="sponsor.go"
+       // トランザクションを待ちます
+       _, err = client.WaitForTransaction(txnHash)
+     ```
 </Steps>
-
-
 
 ## Goスポンサードトランザクションのコードサンプル
 

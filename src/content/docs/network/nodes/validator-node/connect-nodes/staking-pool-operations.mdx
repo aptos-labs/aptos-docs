@@ -2,11 +2,7 @@
 title: "Staking Pool Operations"
 ---
 
-
-
 import { Aside } from '@astrojs/starlight/components';
-
-
 
 This document describes how to perform [staking](/network/blockchain/staking) pool operations. Note that a staking pool can only accept stake
 from the stake pool owner. You can stake only when you meet the minimum staking requirement.
@@ -207,39 +203,39 @@ Example output:
 
 **state**
 
-- &quot;Active&quot;: Validator is already in the validator set and proposing.
-- &quot;Pending_active&quot;: Validator will be added to the validator set in the next epoch. **Do not try to join the validator set again before the arrival of next epoch, or else you will receive an error. **
+- "Active": Validator is already in the validator set and proposing.
+- "Pending\_active": Validator will be added to the validator set in the next epoch. \*\*Do not try to join the validator set again before the arrival of next epoch, or else you will receive an error. \*\*
 
-**pool_address**
+**pool\_address**
 
-- Use this &quot;pool_address&quot; (not the operator address) in you `validator.yaml` file. If you mistakenly used the operator address, you will receive the message: &quot;Validator not in validator set&quot;.
+- Use this "pool\_address" (not the operator address) in you `validator.yaml` file. If you mistakenly used the operator address, you will receive the message: "Validator not in validator set".
 
-**commission_percentage**
+**commission\_percentage**
 
-- This can be set only by the stake pool owner. Operator receives the &quot;commission_percentage&quot; of the generated staking rewards. If you request the commission (you can do so by running the command `aptos stake request-commission`), then at the end of the `lockup_expiration_utc_time` the commission part of the rewards will go to the operator address while the rest will stay in the stake pool and belong to the owner. Here &quot;the commission part of the rewards&quot; means the value of **commission_not_yet_unlocked**.
+- This can be set only by the stake pool owner. Operator receives the "commission\_percentage" of the generated staking rewards. If you request the commission (you can do so by running the command `aptos stake request-commission`), then at the end of the `lockup_expiration_utc_time` the commission part of the rewards will go to the operator address while the rest will stay in the stake pool and belong to the owner. Here "the commission part of the rewards" means the value of **commission\_not\_yet\_unlocked**.
 
   For example, in a scenario with a lock-up of one month, you call `aptos stake request-commission` every month. This will pay out the commission that was accrued during the previous month but only when unlocked at the end of the previous month. Regardless of how often you run `aptos stake request-commission` during the month, the commission is only paid out upon the completion of `lockup_expiration_utc_time`.
 
   <Aside type="note">
     **COMPOUNDING**<br />
-    Note that if you do not request commission for multiple months, your commission will accrue more due to compounding of the **commission_percentage** during these months.
+    Note that if you do not request commission for multiple months, your commission will accrue more due to compounding of the **commission\_percentage** during these months.
   </Aside>
 
-**commission_not_yet_unlocked**
+**commission\_not\_yet\_unlocked**
 
 - The amount of commission (amount of APT) that is not yet unlocked. It will be unlocked at the `lockup_expiration_utc_time`. This is the total commission amount available to the operator, i.e., the staking rewards **only** to the operator. This does not include the staking rewards to the owner.
 
-**lockup_expiration_utc_time**
+**lockup\_expiration\_utc\_time**
 
 - The date when the commission will unlock. However, this unlocked commission will not be auto-disbursed. It will only disburse when the command `aptos stake request-commission` is called again.
 
-**epoch_info**
+**epoch\_info**
 
 - Use [Epoch Converter](https://www.epochconverter.com/) or a similar tool to convert the `unix_time` into human-readable time.
 
 ## Requesting commission
 
-Either an owner, an operator or the beneficiary of the operator can request commission. You must request commission **twice**, once before the end of the lockup period and a second time after the lockup period ends, i.e., at the end of **lockup_expiration_utc_time**, by running the `aptos stake request-commission` command. Make sure to provide the operator and the owner addresses. See an example command below:
+Either an owner, an operator or the beneficiary of the operator can request commission. You must request commission **twice**, once before the end of the lockup period and a second time after the lockup period ends, i.e., at the end of **lockup\_expiration\_utc\_time**, by running the `aptos stake request-commission` command. Make sure to provide the operator and the owner addresses. See an example command below:
 
 ```shellscript filename="Terminal"
 aptos stake request-commission \
@@ -264,7 +260,7 @@ Commission is unlocked when `request-commission` is called, the staker unlocks s
 
 ## Checking your validator performance
 
-To see your validator performance in the current and past epochs and the rewards earned, run the below command. The output will show the validator&apos;s performance in block proposals, and in governance voting and governance proposals. Default values are used in the below command. Type `aptos node get-performance --help` to see default values used.
+To see your validator performance in the current and past epochs and the rewards earned, run the below command. The output will show the validator's performance in block proposals, and in governance voting and governance proposals. Default values are used in the below command. Type `aptos node get-performance --help` to see default values used.
 
 ```shellscript filename="Terminal"
 aptos node get-performance \
@@ -311,14 +307,14 @@ Example output:
 
 #### Description of fields
 
-**current_epoch_successful_proposals**
+**current\_epoch\_successful\_proposals**
 
 - Successful leader-validator proposals during the current epoch. Also see [Validation on the Aptos blockchain](/network/blockchain/staking.mdx#validation-on-the-aptos-blockchain) for the distinction between leader-validator and the voter-validator.
 
-**previous_epoch_rewards**
+**previous\_epoch\_rewards**
 
 - An ordered list of rewards earned (APT amounts) for the previous 10 epochs, starting with the 10 epoch in the past. In the above example, a reward of 12312716242 APT was earned 10 epochs past and a reward of 12313600288 APT was earned in the most recent epoch. If a reward is 0 for any epoch, then:
-  - Either the validator was not part of the validator set in that epoch (could have been in either inactive or pending_active validator state), or
+  - Either the validator was not part of the validator set in that epoch (could have been in either inactive or pending\_active validator state), or
   - The validator missed all the leader proposals.
 
 ### Checking the performance for all epochs
@@ -334,7 +330,7 @@ aptos node analyze-validator-performance \
 
 ## Tracking rewards
 
-`DistributeEvent` is emitted when there is a transfer from staking_contract to
+`DistributeEvent` is emitted when there is a transfer from staking\_contract to
 the operator or staker (owner). Rewards can be tracked either by listening to
 `DistributeEvent` or by using the [View function](/build/apis/fullnode-rest-api.mdx#reading-state-with-the-view-function)
 to call `staking_contract_amounts`. This will return `accumulated_rewards` and `commission_amount`.

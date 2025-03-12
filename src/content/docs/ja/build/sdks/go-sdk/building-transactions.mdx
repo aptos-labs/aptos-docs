@@ -5,128 +5,118 @@ title: "Go SDK - トランザクションの構築"
 トランザクションを使用することで,オンチェーンのデータを変更したりイベントをトリガーしたりできます.
 一般的に,トランザクションは構築から実行まで5つのステップを経ます:構築,シミュレーション,署名,送信,待機です.
 
-
-
 import { Aside, Steps } from '@astrojs/starlight/components';
-
-
 
 <Aside type="note">
   これらの例では,`client`は[`Client`](https://pkg.go.dev/github.com/aptos-labs/aptos-go-sdk#Client)
   オブジェクトのインスタンスです.
 </Aside>
 
-
-
 <Steps>
+  1. 構築
 
-1. 構築
+     トランザクションの構築では,以下を指定します:
 
-   トランザクションの構築では,以下を指定します:
+     1. **`Sender`アカウント.** <br />このアカウントは通常,このトランザクションのガス料金を支払います.
+        別のアカウントにトランザクション料金を支払わせる方法については,[トランザクションのスポンサー](/ja/build/sdks/go-sdk/building-transactions/sponsoring-transactions)をご覧ください.
+     2. **呼び出される`Function`.** <br />これは,このトランザクションを実行したときにトリガーされるオンチェーンのスマートコントラクトエントリ関数の識別子です.
+     3. **`ArgTypes`と`Args`.** <br />これは関数の実行に必要なデータです.
 
-   1. **`Sender`アカウント.** <br />このアカウントは通常,このトランザクションのガス料金を支払います.
-      別のアカウントにトランザクション料金を支払わせる方法については,[トランザクションのスポンサー](/ja/build/sdks/go-sdk/building-transactions/sponsoring-transactions)をご覧ください.
-   2. **呼び出される`Function`.** <br />これは,このトランザクションを実行したときにトリガーされるオンチェーンのスマートコントラクトエントリ関数の識別子です.
-   3. **`ArgTypes`と`Args`.** <br />これは関数の実行に必要なデータです.
+     単一のアカウントに対して以下のように作成できます:
 
-   単一のアカウントに対して以下のように作成できます:
+     ```go filename="build_a_transaction.go"
+     // 1. トランザクションの構築
+     accountBytes, err := bcs.Serialize(&bob.Address)
+     if err != nil {
+         panic("Failed to serialize bob's address:" + err.Error())
+     }
 
-   ```go filename="build_a_transaction.go"
-   // 1. トランザクションの構築
-   accountBytes, err := bcs.Serialize(&bob.Address)
-   if err != nil {
-       panic("Failed to serialize bob's address:" + err.Error())
-   }
+     amountBytes, err := bcs.SerializeU64(TransferAmount)
+     if err != nil {
+         panic("Failed to serialize transfer amount:" + err.Error())
+     }
+     rawTxn, err := client.BuildTransaction(alice.AccountAddress(), aptos.TransactionPayload{
+         Payload: &aptos.EntryFunction{
+             Module: aptos.ModuleId{
+                 Address: aptos.AccountOne,
+                 Name:    "aptos_account",
+             },
+             Function: "transfer",
+             ArgTypes: []aptos.TypeTag{},
+             Args: [][]byte{
+                 accountBytes,
+                 amountBytes,
+             },
+         }},
+     )
+     ```
 
-   amountBytes, err := bcs.SerializeU64(TransferAmount)
-   if err != nil {
-       panic("Failed to serialize transfer amount:" + err.Error())
-   }
-   rawTxn, err := client.BuildTransaction(alice.AccountAddress(), aptos.TransactionPayload{
-       Payload: &aptos.EntryFunction{
-           Module: aptos.ModuleId{
-               Address: aptos.AccountOne,
-               Name:    "aptos_account",
-           },
-           Function: "transfer",
-           ArgTypes: []aptos.TypeTag{},
-           Args: [][]byte{
-               accountBytes,
-               amountBytes,
-           },
-       }},
-   )
-   ```
+     <Aside type="note">
+       すべての引数`Args`は,渡す前にバイトにシリアライズする必要があります.
+       [バイナリ正規シリアライゼーション(BCS)](/ja/build/sdks/go-sdk/building-transactions/bcs-format)を使用してシリアライズする必要があります.
+     </Aside>
 
-   <Aside type="note">
-     すべての引数`Args`は,渡す前にバイトにシリアライズする必要があります.
-     [バイナリ正規シリアライゼーション(BCS)](/ja/build/sdks/go-sdk/building-transactions/bcs-format)を使用してシリアライズする必要があります.
-   </Aside>
+     #### 構築オプション
 
-   #### 構築オプション
+     トランザクションの実行方法は,構築時に`options`を渡すことでカスタマイズできます.
+     最も一般的に使用されるオプションは以下の通りです:
 
-   トランザクションの実行方法は,構築時に`options`を渡すことでカスタマイズできます.
-   最も一般的に使用されるオプションは以下の通りです:
+     1. `MaxGasAmount` - このトランザクションの実行に支払う意思のあるガス量の上限を設定します.
+     2. `GasUnitPrice` - Aptosネットワークでより高い優先度で実行されるように,最小価格よりも高いガス単価を指定できます.
+     3. `ExpirationSeconds` - トランザクションが実行されなければならない具体的な時間を設定し,それを過ぎるとキャンセルされます.
 
-   1. `MaxGasAmount` - このトランザクションの実行に支払う意思のあるガス量の上限を設定します.
-   2. `GasUnitPrice` - Aptosネットワークでより高い優先度で実行されるように,最小価格よりも高いガス単価を指定できます.
-   3. `ExpirationSeconds` - トランザクションが実行されなければならない具体的な時間を設定し,それを過ぎるとキャンセルされます.
+     これらの値が明示的に指定されない場合,SDKは適切なデフォルト値を提供します.
 
-   これらの値が明示的に指定されない場合,SDKは適切なデフォルト値を提供します.
+  2. シミュレーション(オプション)
 
-2. シミュレーション(オプション)
+     Aptosチェーン上のすべてのトランザクションには,ネットワークマシンがトランザクションを実行する際の作業量に応じたガス料金が関連付けられています.
+     その費用を見積もるために,トランザクションをコミットする前にシミュレーションを実行できます.
 
-   Aptosチェーン上のすべてのトランザクションには,ネットワークマシンがトランザクションを実行する際の作業量に応じたガス料金が関連付けられています.
-   その費用を見積もるために,トランザクションをコミットする前にシミュレーションを実行できます.
+     <Aside type="note">
+       このシミュレーションは実際の台帳の状態に影響を与えないため,アカウントの`PublicKey`のみが必要です.
+     </Aside>
 
-   <Aside type="note">
-     このシミュレーションは実際の台帳の状態に影響を与えないため,アカウントの`PublicKey`のみが必要です.
-   </Aside>
+     以下のように`aptos.SimulateTransaction`を使用してシミュレーションを実行できます:
 
-   以下のように`aptos.SimulateTransaction`を使用してシミュレーションを実行できます:
+     ```go filename="build_a_transaction.go"
+     // 2. トランザクションのシミュレーション（オプション）
+     // これはトランザクションのコストを理解し、
+     // トランザクションがネットワークに送信される前に有効であることを確認するのに役立ちます
+     // これはオプションですが、推奨されます
+     simulationResult, err := client.SimulateTransaction(rawTxn, alice)
 
-   ```go filename="build_a_transaction.go"
-   // 2. トランザクションのシミュレーション（オプション）
-   // これはトランザクションのコストを理解し、
-   // トランザクションがネットワークに送信される前に有効であることを確認するのに役立ちます
-   // これはオプションですが、推奨されます
-   simulationResult, err := client.SimulateTransaction(rawTxn, alice)
+     // 料金が問題なければ、署名に進みます！
+     ```
 
-   // 料金が問題なければ、署名に進みます！
-   ```
+  3. 署名
 
-3. 署名
+     トランザクションが構築され,料金が妥当と思われたら,`rawTransaction.SignedTransaction()`でトランザクションに署名できます.
+     署名は`sender`アカウントから行う必要があります.
 
-   トランザクションが構築され,料金が妥当と思われたら,`rawTransaction.SignedTransaction()`でトランザクションに署名できます.
-   署名は`sender`アカウントから行う必要があります.
+     ```go filename="build_a_transaction.go"
+     // 3. トランザクションの署名
+     signedTxn, err := rawTxn.SignedTransaction(alice)
+     ```
 
-   ```go filename="build_a_transaction.go"
-   // 3. トランザクションの署名
-   signedTxn, err := rawTxn.SignedTransaction(alice)
-   ```
+  4. 送信
 
-4. 送信
+     トランザクションに署名したら,以下のように`client.SubmitTransaction()`を使用してネットワークに送信できます:
 
-   トランザクションに署名したら,以下のように`client.SubmitTransaction()`を使用してネットワークに送信できます:
+     ```go filename="build_a_transaction.go"
+     // 4. トランザクションの送信
+     submitResult, err := client.SubmitTransaction(signedTxn)
+     ```
 
-   ```go filename="build_a_transaction.go"
-   // 4. トランザクションの送信
-   submitResult, err := client.SubmitTransaction(signedTxn)
-   ```
+  5. 待機
 
-5. 待機
+     最後に,以下のように`client.WaitForTransaction()`を使用して,送信したトランザクションのハッシュを指定してトランザクションの結果を待つことができます:
 
-   最後に,以下のように`client.WaitForTransaction()`を使用して,送信したトランザクションのハッシュを指定してトランザクションの結果を待つことができます:
-
-   ```go filename="build_a_transaction.go"
-   // 5. トランザクションの完了を待機
-   txnHash := submitResult.Hash
-   _, err = client.WaitForTransaction(txnHash)
-   ```
-
+     ```go filename="build_a_transaction.go"
+     // 5. トランザクションの完了を待機
+     txnHash := submitResult.Hash
+     _, err = client.WaitForTransaction(txnHash)
+     ```
 </Steps>
-
-
 
 ## 完全なGoの例
 

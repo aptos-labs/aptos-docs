@@ -11,201 +11,189 @@ title: "Sponsored Transactions"
 
 This section covers how to do sponsored transactions with the Aptos .NET SDK.
 
-
-
 import { Aside, LinkCard, Steps } from '@astrojs/starlight/components';
 
-
-
-**It&apos;s important that you understand the basics of building transactions. If not, refer to the guide below for more information.**
+**It's important that you understand the basics of building transactions. If not, refer to the guide below for more information.**
 
 <br />
 
-
-
 <LinkCard href="/ja/build/sdks/dotnet-sdk/transactions/basic-transactions" title="Basic Transactions" description="Learn how to build basic transactions with the Aptos .NET SDK." />
-
-
 
 ## Create a Sponsored Transaction
 
-
-
 <Steps>
+  1. Set up your AptosClient
 
-1. Set up your AptosClient
+     Set up your Aptos client by adding the `Aptos` namespace and instantiating an `AptosClient`. You can use a predefined
+     configuration from `Networks` or configuring your own.
 
-   Set up your Aptos client by adding the `Aptos` namespace and instantiating an `AptosClient`. You can use a predefined
-   configuration from `Networks` or configuring your own.
+     ```csharp filename="Program.cs"  {1-1, 7-8}
+     using Aptos;
 
-   ```csharp filename="Program.cs"  {1-1, 7-8}
-   using Aptos;
+     class Program
+     {
+         static void Main(string[] args)
+         {
+             var config = new AptosConfig(Aptos.Networks.Mainnet);
+             var client = new AptosClient(config);
+         }
+     }
+     ```
 
-   class Program
-   {
-       static void Main(string[] args)
-       {
-           var config = new AptosConfig(Aptos.Networks.Mainnet);
-           var client = new AptosClient(config);
-       }
-   }
-   ```
+  2. Set up the Accounts
 
-2. Set up the Accounts
+     To create a sponsored transaction, it's important that there is a sponsor and a user. In this example:
 
-   To create a sponsored transaction, it&apos;s important that there is a sponsor and a user. In this example:
+     - **The user:** Will be the account that is sending APT to the recipient.
+     - **The sponsor:** Will be the account that pays for **gas fees** of the transaction.
 
-   - **The user:** Will be the account that is sending APT to the recipient.
-   - **The sponsor:** Will be the account that pays for **gas fees** of the transaction.
+     ```csharp filename="Program.cs" {10-16}
+     using Aptos;
 
-   ```csharp filename="Program.cs" {10-16}
-   using Aptos;
+     class Program
+     {
+         static void Main(string[] args)
+         {
+             var config = new AptosConfig(Aptos.Networks.Devnet);
+             var client = new AptosClient(config);
 
-   class Program
-   {
-       static void Main(string[] args)
-       {
-           var config = new AptosConfig(Aptos.Networks.Devnet);
-           var client = new AptosClient(config);
+             // 1. Create accounts and fund it them.
+             var user = Account.Generate();
+             var recipient = Account.Generate();
+             var sponsor = Account.Generate();
 
-           // 1. Create accounts and fund it them.
-           var user = Account.Generate();
-           var recipient = Account.Generate();
-           var sponsor = Account.Generate();
+             await client.Faucet.FundAccount(user.Address, 100_000_000);
+             await client.Faucet.FundAccount(sponsor.Address, 100_000_000);
+         }
+     }
+     ```
 
-           await client.Faucet.FundAccount(user.Address, 100_000_000);
-           await client.Faucet.FundAccount(sponsor.Address, 100_000_000);
-       }
-   }
-   ```
+  3. Build the Transaction
 
-3. Build the Transaction
+     You can now build the transaction using the `AptosClient`. In the transaction, its important that you
+     enable the `withFeePayer` flag to enable the sponsored transactions.
 
-   You can now build the transaction using the `AptosClient`. In the transaction, its important that you
-   enable the `withFeePayer` flag to enable the sponsored transactions.
+     ```csharp filename="Program.cs" {9-19}
+     using Aptos;
 
-   ```csharp filename="Program.cs" {9-19}
-   using Aptos;
+     class Program
+     {
+         static void Main(string[] args)
+         {
+             ...
 
-   class Program
-   {
-       static void Main(string[] args)
-       {
-           ...
+             // 2. Build the transaction
+             var transaction = await client.Transaction.Build(
+                 sender: account,
+                 data: new GenerateEntryFunctionPayloadData(
+                     function: "0x1::aptos_account::transfer_coins",
+                     typeArguments: ["0x1::aptos_coin::AptosCoin"],
+                     functionArguments: [account.Address, "100000"]
+                 ),
+                 // It's important to set this flag to true to enable sponsored transactions
+                 withFeePayer: true
+             );
+         }
+     }
+     ```
 
-           // 2. Build the transaction
-           var transaction = await client.Transaction.Build(
-               sender: account,
-               data: new GenerateEntryFunctionPayloadData(
-                   function: "0x1::aptos_account::transfer_coins",
-                   typeArguments: ["0x1::aptos_coin::AptosCoin"],
-                   functionArguments: [account.Address, "100000"]
-               ),
-               // It's important to set this flag to true to enable sponsored transactions
-               withFeePayer: true
-           );
-       }
-   }
-   ```
+  4. Sign the Transaction using both accounts
 
-4. Sign the Transaction using both accounts
+     Have both the user and the sponsor sign the transaction. This ensures that the sponsor has agreed
+     to pay for the transaction and the user has agreed to execute the transaction. When signing with
+     the sponsor, the `SignAsFeePayer` method is used instead.
 
-   Have both the user and the sponsor sign the transaction. This ensures that the sponsor has agreed
-   to pay for the transaction and the user has agreed to execute the transaction. When signing with
-   the sponsor, the `SignAsFeePayer` method is used instead.
+     ```csharp filename="Program.cs" {9-13}
+     using Aptos;
 
-   ```csharp filename="Program.cs" {9-13}
-   using Aptos;
+     class Program
+     {
+         static void Main(string[] args)
+         {
+             ...
 
-   class Program
-   {
-       static void Main(string[] args)
-       {
-           ...
+             // 3. Sign the transaction with the user
+             var userSignature = client.Transaction.SignTransaction(transaction);
 
-           // 3. Sign the transaction with the user
-           var userSignature = client.Transaction.SignTransaction(transaction);
+             // 4. Sign the transaction with the sponsor
+             var feePayerSignature = client.Transaction.SignAsFeePayer(feePayer, transaction);
+         }
+     }
+     ```
 
-           // 4. Sign the transaction with the sponsor
-           var feePayerSignature = client.Transaction.SignAsFeePayer(feePayer, transaction);
-       }
-   }
-   ```
+  5. Submit the Transaction
 
-5. Submit the Transaction
+     Once the transaction is signed by both the user and the sponsor, it can be submitted to the blockchain. The `AptosClient` can be
+     used to submit the transaction.
 
-   Once the transaction is signed by both the user and the sponsor, it can be submitted to the blockchain. The `AptosClient` can be
-   used to submit the transaction.
+     ```csharp filename="Program.cs" {9-11}
+     using Aptos;
 
-   ```csharp filename="Program.cs" {9-11}
-   using Aptos;
+     class Program
+     {
+         static void Main(string[] args)
+         {
+             ...
 
-   class Program
-   {
-       static void Main(string[] args)
-       {
-           ...
+             // 5. Submit the transaction
+             var submitTransactionData = new SubmitTransactionData(transaction, userSignature, feePayerSignature);
+             var submittedTransaction = await client.Transaction.SubmitTransaction(submitTransactionData);
+         }
+     }
+     ```
 
-           // 5. Submit the transaction
-           var submitTransactionData = new SubmitTransactionData(transaction, userSignature, feePayerSignature);
-           var submittedTransaction = await client.Transaction.SubmitTransaction(submitTransactionData);
-       }
-   }
-   ```
+  6. Wait for the Transaction to Execute
 
-6. Wait for the Transaction to Execute
+     After the transaction has been submitted, it will have to process before its committed to the blockchain. The `AptosClient` can be
+     used to wait for the transaction to be processed and executed.
 
-   After the transaction has been submitted, it will have to process before its committed to the blockchain. The `AptosClient` can be
-   used to wait for the transaction to be processed and executed.
+     ```csharp filename="Program.cs" {8-9}
+     using Aptos;
 
-   ```csharp filename="Program.cs" {8-9}
-   using Aptos;
+     class Program
+     {
+         static void Main(string[] args)
+         {
+             ...
 
-   class Program
-   {
-       static void Main(string[] args)
-       {
-           ...
+             // 6. Wait for the transaction to be processed
+             var transactionResult = await client.Transaction.WaitForTransaction(submittedTransaction.Hash);
+         }
+     }
+     ```
 
-           // 6. Wait for the transaction to be processed
-           var transactionResult = await client.Transaction.WaitForTransaction(submittedTransaction.Hash);
-       }
-   }
-   ```
+  7. Print Balances
 
-7. Print Balances
+     After the transaction has committed to the blockchain, you can print the balances of the user and the recipient.
 
-   After the transaction has committed to the blockchain, you can print the balances of the user and the recipient.
+     ```csharp filename="Program.cs" {9-15}
+     using Aptos;
 
-   ```csharp filename="Program.cs" {9-15}
-   using Aptos;
+     class Program
+     {
+         static void Main(string[] args)
+         {
+             ...
 
-   class Program
-   {
-       static void Main(string[] args)
-       {
-           ...
+             // 7. Print balances
+             var userBalance = await client.Account.GetCoinBalance(user.Address);
+             var feePayerBalance = await client.Account.GetCoinBalance(feePayer.Address);
+             var recipientBalance = await client.Account.GetCoinBalance(recipient.Address);
+             Console.WriteLine($"User {user.Address} has {userBalance?.Amount ?? 0} APT");
+             Console.WriteLine($"FeePayer {feePayer.Address} has {feePayerBalance?.Amount ?? 0} APT");
+             Console.WriteLine($"Recipient {recipient.Address} has {recipientBalance?.Amount ?? 0} APT");
+         }
+     }
+     ```
 
-           // 7. Print balances
-           var userBalance = await client.Account.GetCoinBalance(user.Address);
-           var feePayerBalance = await client.Account.GetCoinBalance(feePayer.Address);
-           var recipientBalance = await client.Account.GetCoinBalance(recipient.Address);
-           Console.WriteLine($"User {user.Address} has {userBalance?.Amount ?? 0} APT");
-           Console.WriteLine($"FeePayer {feePayer.Address} has {feePayerBalance?.Amount ?? 0} APT");
-           Console.WriteLine($"Recipient {recipient.Address} has {recipientBalance?.Amount ?? 0} APT");
-       }
-   }
-   ```
+     The result should look like this:
 
-   The result should look like this:
+     ```shellscript
+     User 0xffd89f1e2fef8c67cfb1b99d58ea799281f1d1a0a178db49c3eacab2fe7c0735 has 99900000 APT
+     FeePayer 0x842ca7d995255ee73186a6793d6bde7c983c528be7b1a25e1614f4eddb744d4c has 99900100 APT
+     Recipient 0x823010a52a589ef528d14ebee4a4af56a00f0ae8afba135c9268581a960e21d7 has 100000 APT
+     ```
 
-   ```shellscript
-   User 0xffd89f1e2fef8c67cfb1b99d58ea799281f1d1a0a178db49c3eacab2fe7c0735 has 99900000 APT
-   FeePayer 0x842ca7d995255ee73186a6793d6bde7c983c528be7b1a25e1614f4eddb744d4c has 99900100 APT
-   Recipient 0x823010a52a589ef528d14ebee4a4af56a00f0ae8afba135c9268581a960e21d7 has 100000 APT
-   ```
-
-   The user sent 0.001 APT to the recipient leaving the user with 0.999 APT. The sponsor paid
-   for the gas fees of the transaction leaving the sponsor with 0.999001 APT.
-
+     The user sent 0.001 APT to the recipient leaving the user with 0.999 APT. The sponsor paid
+     for the gas fees of the transaction leaving the sponsor with 0.999001 APT.
 </Steps>

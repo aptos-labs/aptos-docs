@@ -4,101 +4,91 @@ title: "トランザクションのスポンサー"
 
 通常,トランザクションを実行するアカウントがガス手数料を支払います.トランザクションをスポンサーすることで,別のアカウントにそれらの手数料を負担させることができます.
 
-
-
 import { Aside, Steps } from '@astrojs/starlight/components';
-
-
 
 これは,複雑なスマートコントラクトを扱う際に,中央アカウントから手数料を管理するのに役立ちます.
 
 ## トランザクションのスポンサー方法
 
-
-
 <Steps>
+  1. パラメータwithFeePayer: trueを指定してトランザクションを構築します.
 
-1. パラメータwithFeePayer: trueを指定してトランザクションを構築します.
+     ```typescript filename="sponsor.ts"
+     const transaction = await aptos.transaction.build.simple({
+         sender: sender.accountAddress,
+         withFeePayer: true,
+         data: {
+             // Aptosのすべてのトランザクションはスマートコントラクトを通じて実装されています。
+             function: "0x1::aptos_account::transfer",
+             functionArguments: [destination.accountAddress, 100],
+         },
+     });
+     ```
 
-   ```typescript filename="sponsor.ts"
-   const transaction = await aptos.transaction.build.simple({
-       sender: sender.accountAddress,
-       withFeePayer: true,
-       data: {
-           // Aptosのすべてのトランザクションはスマートコントラクトを通じて実装されています。
-           function: "0x1::aptos_account::transfer",
-           functionArguments: [destination.accountAddress, 100],
-       },
-   });
-   ```
+  2. 送信者とスポンサー(手数料支払者)の両方でトランザクションに署名します.
 
-2. 送信者とスポンサー(手数料支払者)の両方でトランザクションに署名します.
+     1. `.sign`を使用して送信者アカウントで署名します.
+     2. `.signAsFeePayer`を使用してスポンサーアカウントで署名します.
 
-   1. `.sign`を使用して送信者アカウントで署名します.
-   2. `.signAsFeePayer`を使用してスポンサーアカウントで署名します.
+     <Aside type="caution">
+       スポンサーは送信者とは異なる関数(`.signAsFeePayer`)を使用して署名します!
+     </Aside>
 
-   <Aside type="caution">
-     スポンサーは送信者とは異なる関数(`.signAsFeePayer`)を使用して署名します!
-   </Aside>
+     ```typescript filename="sponsor.ts"
+     const senderAuthenticator = aptos.transaction.sign({
+         signer: sender,
+         transaction,
+     });
+     const feePayerAuthenticator = aptos.transaction.signAsFeePayer({
+         signer: feePayer,
+         transaction
+     })
+     ```
 
-   ```typescript filename="sponsor.ts"
-   const senderAuthenticator = aptos.transaction.sign({
-       signer: sender,
-       transaction,
-   });
-   const feePayerAuthenticator = aptos.transaction.signAsFeePayer({
-       signer: feePayer,
-       transaction
-   })
-   ```
+  3. (オプション)スポンサー付きトランザクションをシミュレートします
 
-3. (オプション)スポンサー付きトランザクションをシミュレートします
+     以下のように,スポンサー付きトランザクションをシミュレートして送信前に結果をプレビューできます:
 
-   以下のように,スポンサー付きトランザクションをシミュレートして送信前に結果をプレビューできます:
+     ```typescript filename="sponsor.ts"
+     const [userTransactionResponse] = await aptos.transaction.simulate.simple({
+         signerPublicKey: sender.publicKey,
+         transaction,
+     });
+     ```
 
-   ```typescript filename="sponsor.ts"
-   const [userTransactionResponse] = await aptos.transaction.simulate.simple({
-       signerPublicKey: sender.publicKey,
-       transaction,
-   });
-   ```
+     デフォルトでは,`transaction`の`feePayerAddress`は`0x0`に設定されており,トランザクションシミュレーション中のガス手数料支払いをスキップするように指示します.これにより,手数料支払者を指定せずにトランザクションをシミュレートできます.なお,送信者の認証キーチェックをスキップしたい場合は,`signerPublicKey`はオプションで省略可能です.
 
-   デフォルトでは,`transaction`の`feePayerAddress`は`0x0`に設定されており,トランザクションシミュレーション中のガス手数料支払いをスキップするように指示します.これにより,手数料支払者を指定せずにトランザクションをシミュレートできます.なお,送信者の認証キーチェックをスキップしたい場合は,`signerPublicKey`はオプションで省略可能です.
+     また,以下のように`transaction`オブジェクトで`feePayerAddress`を設定することで,特定の手数料支払者を指定してトランザクションをシミュレートすることもできます:
 
-   また,以下のように`transaction`オブジェクトで`feePayerAddress`を設定することで,特定の手数料支払者を指定してトランザクションをシミュレートすることもできます:
+     ```typescript filename="sponsor.ts"
+     transaction.feePayerAddress = feePayer.accountAddress;
+     const [userTransactionResponse] = await aptos.transaction.simulate.simple({
+         signerPublicKey: sender.publicKey,
+         feePayerPublicKey: feePayer.publicKey,
+         transaction,
+     });
+     ```
 
-   ```typescript filename="sponsor.ts"
-   transaction.feePayerAddress = feePayer.accountAddress;
-   const [userTransactionResponse] = await aptos.transaction.simulate.simple({
-       signerPublicKey: sender.publicKey,
-       feePayerPublicKey: feePayer.publicKey,
-       transaction,
-   });
-   ```
+     このセットアップにより,`feePayer`がトランザクションのガス手数料を支払うのに十分な残高を持っているかを検証します.同様に,手数料支払者の認証キーチェックをバイパスしたい場合は,`feePayerPublicKey`もオプションで省略可能です.
 
-   このセットアップにより,`feePayer`がトランザクションのガス手数料を支払うのに十分な残高を持っているかを検証します.同様に,手数料支払者の認証キーチェックをバイパスしたい場合は,`feePayerPublicKey`もオプションで省略可能です.
+  4. 両方の署名を組み合わせてトランザクションを送信します.
 
-4. 両方の署名を組み合わせてトランザクションを送信します.
+     ```typescript filename="sponsor.ts"
+     // 4. 送信
+     const committedTransaction = await aptos.transaction.submit.simple({
+         transaction,
+         senderAuthenticator: senderAuthenticator,
+         feePayerAuthenticator: feePayerAuthenticator,
+     });
+     ```
 
-   ```typescript filename="sponsor.ts"
-   // 4. 送信
-   const committedTransaction = await aptos.transaction.submit.simple({
-       transaction,
-       senderAuthenticator: senderAuthenticator,
-       feePayerAuthenticator: feePayerAuthenticator,
-   });
-   ```
+  5. トランザクションの実行を待ちます.
 
-5. トランザクションの実行を待ちます.
-
-   ```typescript filename="sponsor.ts"
-   // 5. 結果を待つ
-   const executedTransaction = await aptos.waitForTransaction({ transactionHash: committedTransaction.hash });
-   ```
-
+     ```typescript filename="sponsor.ts"
+     // 5. 結果を待つ
+     const executedTransaction = await aptos.waitForTransaction({ transactionHash: committedTransaction.hash });
+     ```
 </Steps>
-
-
 
 ## TypeScriptスポンサー付きトランザクションのコード例
 

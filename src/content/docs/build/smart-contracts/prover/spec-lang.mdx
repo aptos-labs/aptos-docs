@@ -2,10 +2,6 @@
 title: "Move Specification Language"
 ---
 
-
-
-
-
 This document describes the _Move specification language (MSL)_, a subset of the
 [Move](/build/smart-contracts) language that supports specification of the
 behavior of Move programs. MSL works together with the [Move Prover](/build/smart-contracts/prover),
@@ -240,10 +236,10 @@ language:
   `ensures` post-conditions,
   inline spec blocks (with additional restrictions), and
   certain forms of invariants, as discussed later.
-- `TRACE(T): T` is semantically the identity function and causes visualization of the argument&apos;s
+- `TRACE(T): T` is semantically the identity function and causes visualization of the argument's
   value in error messages created by the prover.
 - `int2bv(v)` explicitly converts an integer `v` into its `bv` representation.
-- `bv2int(b)` explicitly converts a &apos;bv&apos; integer &apos;b&apos; into the `num` representation. However, it is not encouraged to use it due to efficiency issue.
+- `bv2int(b)` explicitly converts a 'bv' integer 'b' into the `num` representation. However, it is not encouraged to use it due to efficiency issue.
 
 Built-in functions live in an unnamed outer scope of a module. If the module defines a function `len`,
 then this definition will shadow that of the according built-in function. To access the built-in
@@ -323,7 +319,7 @@ content.
 ## Separating specifications
 
 Instead of putting specifications into the same module as the regular Move definitions, one can also
-put them into a separate &quot;specification&quot; module, which can live in the same or a different file:
+put them into a separate "specification" module, which can live in the same or a different file:
 
 ```move
 module addr::M {
@@ -439,7 +435,7 @@ which evaluates its parameter in the pre-state and returns its value. It is impo
 that every sub-expression in `exp` is computed in the pre-state as well, including calls to helper
 functions.
 
-The &apos;state&apos; in question here consists of assignments to global resource memory, as well as to any
+The 'state' in question here consists of assignments to global resource memory, as well as to any
 parameters of the function of type `&mut T`. Examples:
 
 ```move
@@ -531,7 +527,7 @@ In a spec block that has a pre-state and post-state (like a function specificati
 form will evaluate `e` in the pre-state. In order to evaluate an expression in the post-state, use `let post name = e`. In the rhs expression of this form, one can use `old(..)` to refer to the
 pre-state.
 
-## Aborts_if condition
+## Aborts\_if condition
 
 The `aborts_if` condition is a spec block member that can appear only in a function context. It
 specifies conditions under which the function aborts.
@@ -588,7 +584,7 @@ or may not abort, and verification will not raise any errors, whether `aborts_if
 or not. In order to state that a function never aborts, use `aborts_if false`. One can use the
 pragma `aborts_if_is_strict` to change this behavior; this is equivalent to an `aborts_if false` being added to each function that does not have an explicit `aborts_if` clause.
 
-### Aborts_if condition with code
+### Aborts\_if condition with code
 
 The `aborts_if` condition can be augmented with code:
 
@@ -622,10 +618,10 @@ module 0x42::m {
 
 This same constant can be used for all other VM failures (division by zero, overflow, etc.).
 
-## Aborts_with condition
+## Aborts\_with condition
 
 The `aborts_with` condition allows specifying with which codes a function can abort, independent
-under which condition. It is similar to a &apos;throws&apos; clause in languages like Java.
+under which condition. It is similar to a 'throws' clause in languages like Java.
 
 ```move
 module 0x42::m {
@@ -812,7 +808,7 @@ follows from the borrow semantics of Move and includes mutation via an enclosing
 ends).
 
 There is one exception to this rule. When a mutable reference to a struct declared in module M is
-passed into a _public_ function of M which does by itself _not_ return any other mutable reference (which could be borrowed from the input parameter), we treat this parameter as &quot;packed&quot;. That means, on function entry, we will unpack it and on function exit we will pack again, enforcing the invariant. This reflects that in Move, struct data can be mutated only within the module that declares the struct; so for an outside caller of the public function, the mutable reference can actually not be mutated unless by calling public functions of module M again. It is a significant simplification of the verification problem to exploit this in the semantics.
+passed into a _public_ function of M which does by itself _not_ return any other mutable reference (which could be borrowed from the input parameter), we treat this parameter as "packed". That means, on function entry, we will unpack it and on function exit we will pack again, enforcing the invariant. This reflects that in Move, struct data can be mutated only within the module that declares the struct; so for an outside caller of the public function, the mutable reference can actually not be mutated unless by calling public functions of module M again. It is a significant simplification of the verification problem to exploit this in the semantics.
 
 ### Global invariants
 
@@ -891,14 +887,14 @@ module 0x42::m {
 
 which says that invariants are not required to hold while `setup` is executing but are assumed to hold on entry to and exit from `setup`.
 
-This pragma changes the Move Prover&apos;s behavior. The invariants are assumed on entry to `setup` but not proved during or after `publish1` and `publish2`. Instead, all invariants that could be invalidated in the
+This pragma changes the Move Prover's behavior. The invariants are assumed on entry to `setup` but not proved during or after `publish1` and `publish2`. Instead, all invariants that could be invalidated in the
 body of `setup` are asserted and proved at the point of return from `setup`. A consequence of this processing is that the user may need to provide stronger post-conditions on `publish1` and `publish2` to
 make it possible to prove the invariants on exit from `setup`.
 
 Another consequence of this processing is that invariants cannot safely be assumed to hold during the execution of `publish1` and `publish2` (unless nothing in the body of `setup` changes state
 mentioned in the invariant). Therefore, if proving a post-condition requires the invariant to be assumed, the post-condition will fail.
 
-In the example, invariants hold at the call sites of `setup` but not in the body. For `publish1`, invariants don&apos;t necessarily hold at the call site _or_ in the body of the function. In the example, that
+In the example, invariants hold at the call sites of `setup` but not in the body. For `publish1`, invariants don't necessarily hold at the call site _or_ in the body of the function. In the example, that
 behavior is implied because `publish1` is called in a context where invariants are disabled.
 
 When invariants are disabled in `setup` in the above example, the Move Prover cannot assume them on entry to `publish1` and `publish2` and should not try to prove them on exit from those functions. The Move Prover
@@ -920,7 +916,7 @@ While both pragmas disable invariants in the body of a function, the difference 
 
 There are some limitations on how these pragmas can be used. `disable_invariants_in_body` cannot be declared for functions where invariants are delegated to a caller, either explicitly via the pragma
 or implicitly because the function is called in a context where invariants have been disabled. (This restriction is to ensure consistent processing, because on pragma assumes that invariants hold
-in the calling context and the other does not). Second, it is illegal for a public or script function to delegate invariant checking to its callers (since the Move Prover does not know all the call sites), _unless_ the function cannot possibly invalidate an invariant because it doesn&apos;t change any of the state mentioned in `exists` and `global` expressions appearing in the invariant.
+in the calling context and the other does not). Second, it is illegal for a public or script function to delegate invariant checking to its callers (since the Move Prover does not know all the call sites), _unless_ the function cannot possibly invalidate an invariant because it doesn't change any of the state mentioned in `exists` and `global` expressions appearing in the invariant.
 
 #### Update invariants
 
@@ -943,7 +939,7 @@ where there are many global invariants, but they have no direct influence on ver
 
 #### Modular verification and global invariants
 
-Certain usage of global invariants leads to verification problems that cannot be checked in a modular fashion. &quot;Modular&quot; here means that a module can be verified standalone and proven to be universally correct in all usage contexts (if preconditions are met).
+Certain usage of global invariants leads to verification problems that cannot be checked in a modular fashion. "Modular" here means that a module can be verified standalone and proven to be universally correct in all usage contexts (if preconditions are met).
 
 A non-modular verification problem may arise if a global invariant refers to state from multiple modules. Consider a situation where module `M1` uses module `M2`, and `M1` contains the following invariant, with the helper function `condition` referring to global state of each respective module:
 
@@ -1246,7 +1242,7 @@ express the restriction of the invariant to only specific functions.
 ## Opaque specifications
 
 With the pragma `opaque`, a function is declared to be solely defined by its specification at caller
-sides. In contrast, if this pragma is not provided, then the function&apos;s implementation will be used
+sides. In contrast, if this pragma is not provided, then the function's implementation will be used
 as the basis to verify the caller.
 
 Using `opaque` requires the specification to be sufficiently complete for the verification problem at hand. Without `opaque`, the Move Prover will use the implementation as the source of truth for the definition of the function. But with `opaque`, if there is an aspect of the function definition unspecified, an arbitrary meaning will be assumed. For example, with the specification below, the `increment` function can abort under arbitrary conditions:
@@ -1349,5 +1345,5 @@ module 0x42::m {
 
 ## Supporting resources
 
-- [Design by contract PRE_POST_REFERENCE](https://en.wikipedia.org/wiki/Design_by_contract)
-- [APTOS_FRAMEWORK](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/doc/overview.md)
+- [Design by contract PRE\_POST\_REFERENCE](https://en.wikipedia.org/wiki/Design_by_contract)
+- [APTOS\_FRAMEWORK](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/doc/overview.md)

@@ -2,20 +2,16 @@
 title: "Move Security Guidelines"
 ---
 
+The Move language is designed with security and inherently offers several features including a type system and a linear logic. Despite this, its novelty and the intricacies of some business logic mean that developers might not always be familiar with Move's secure coding patterns, potentially leading to bugs.
 
-
-
-
-The Move language is designed with security and inherently offers several features including a type system and a linear logic. Despite this, its novelty and the intricacies of some business logic mean that developers might not always be familiar with Move&apos;s secure coding patterns, potentially leading to bugs.
-
-This guide addresses this gap by detailing common anti-patterns and their secure alternatives. It provides practical examples to illustrate how security issues can arise and recommends best practices for secure coding. This guide aims to sharpen developers&apos; understanding of Move&apos;s security mechanisms and ensure the robust development of smart contracts.
+This guide addresses this gap by detailing common anti-patterns and their secure alternatives. It provides practical examples to illustrate how security issues can arise and recommends best practices for secure coding. This guide aims to sharpen developers' understanding of Move's security mechanisms and ensure the robust development of smart contracts.
 
 ## Access Control
 
 ### Object Ownership Check
 
-Every `Object<T>` can be accessed by anyone, which means any `Object<T>` can be passed to any function, even if the caller doesn&apos;t own it.
-It&apos;s important to verify that the `signer` is the rightful owner of the object.
+Every `Object<T>` can be accessed by anyone, which means any `Object<T>` can be passed to any function, even if the caller doesn't own it.
+It's important to verify that the `signer` is the rightful owner of the object.
 
 #### Example Insecure Code
 
@@ -50,7 +46,7 @@ module 0x42::example {
 }
 ```
 
-In this insecure example, `execute_action_with_valid_subscription` does not verify if the user owns the `obj` passed to it. Consequently, anyone can use another person&apos;s subscription, bypassing the payment requirement.
+In this insecure example, `execute_action_with_valid_subscription` does not verify if the user owns the `obj` passed to it. Consequently, anyone can use another person's subscription, bypassing the payment requirement.
 
 #### Example Secure Code
 
@@ -132,11 +128,11 @@ Adhere to the principle of least privilege:
 - Always start with private functions, change their visibility as it is needed by the business logic.
 - Utilize `entry` for functions intended for use solely from the Aptos CLI or SDK.
 - Utilize `friend` for functions that can only be accessible by specific modules.
-- Utilize the `#[view]` decorator with functions that read data from storage without altering state. #[view] functions can be invoked indirectly and in this case they might change the storage.
+- Utilize the `#[view]` decorator with functions that read data from storage without altering state. #\[view] functions can be invoked indirectly and in this case they might change the storage.
 
-Function visibility determines who can call a function. It&apos;s a way to enforce access control and is critical for smart contract security:
+Function visibility determines who can call a function. It's a way to enforce access control and is critical for smart contract security:
 
-- private functions are only callable within the module they are defined in. They&apos;re not accessible from other modules or from the CLI/SDK, which prevents unintended interactions with contract internals.
+- private functions are only callable within the module they are defined in. They're not accessible from other modules or from the CLI/SDK, which prevents unintended interactions with contract internals.
 
 ```move
 module 0x42::example {
@@ -285,7 +281,7 @@ module 0x42::example {
 
 ### Resource management and Unbounded Execution
 
-Effective resource management and unbounded execution prevention are important for maintaining security and gas efficiency in protocol. It&apos;s essential to consider these aspects in contract design:
+Effective resource management and unbounded execution prevention are important for maintaining security and gas efficiency in protocol. It's essential to consider these aspects in contract design:
 
 1. Avoid iterating over a publicly accessible structure that allows for unlimited entries, where any number of users can contribute without constraints.
 2. Store user-specific assets, such as coins and NFTs, within individual user accounts.
@@ -322,7 +318,7 @@ module 0x42::example {
 
 #### Example Secure Code
 
-It&apos;s recommended to structure the order management system in a way that each user&apos;s orders are stored in their respective account rather than in a single global order store. This approach not only enhances security by isolating user data but also improves scalability by distributing the data load. Instead of using **`borrow_global_mut<OrderStore>(@admin)`** which accesses a global store, the orders should be accessed through the individual user&apos;s account.
+It's recommended to structure the order management system in a way that each user's orders are stored in their respective account rather than in a single global order store. This approach not only enhances security by isolating user data but also improves scalability by distributing the data load. Instead of using **`borrow_global_mut<OrderStore>(@admin)`** which accesses a global store, the orders should be accessed through the individual user's account.
 
 ```move
 module 0x42::example {
@@ -342,7 +338,7 @@ It is also advisable to utilize efficient data structures tailored to the specif
 
 ### Move Abilities
 
-Move&apos;s abilities are a set of permissions that control the possible actions on data structures within the language. Smart contract developers must handle these capabilities with care, ensuring they&apos;re only assigned where necessary and understanding their implications to prevent security vulnerabilities.
+Move's abilities are a set of permissions that control the possible actions on data structures within the language. Smart contract developers must handle these capabilities with care, ensuring they're only assigned where necessary and understanding their implications to prevent security vulnerabilities.
 
 | Ability | Description                                                                                                            |
 | ------- | ---------------------------------------------------------------------------------------------------------------------- |
@@ -439,7 +435,7 @@ Bad operations could unexpectedly alter the correct execution of the smart contr
 
 ### ConstructorRef leak
 
-When creating objects ensure to never expose the object’s `ConstructorRef` as it allows adding resources to an object. A `ConstructorRef` can also be used to generate other capabilities (or &quot;Refs&quot;) that are used to alter or transfer the ownership the object. [Read more](/build/smart-contracts/object/creating-objects) about Objects capabilities.
+When creating objects ensure to never expose the object’s `ConstructorRef` as it allows adding resources to an object. A `ConstructorRef` can also be used to generate other capabilities (or "Refs") that are used to alter or transfer the ownership the object. [Read more](/build/smart-contracts/object/creating-objects) about Objects capabilities.
 
 #### Example Vulnerable code
 
@@ -633,7 +629,7 @@ We recommend to use multiple oracles to determine prices.
 
 Thala, for example, utilizes a tiered-oracle design. The system has a primary and a secondary oracle. Should one of the oracles fail, the other one serves as a backup based on a sophisticated switching logic. The system is designed with adversarial situations in mind, and strives to provide highly accurate price feeds with minimal governance interaction all the time.
 
-For more in-depth information, refer to [Thala&apos;s documentation](https://docs.thala.fi/thala-protocol-design/move-dollar-mod/oracles).
+For more in-depth information, refer to [Thala's documentation](https://docs.thala.fi/thala-protocol-design/move-dollar-mod/oracles).
 
 ### Token Identifier Collision
 
@@ -782,7 +778,7 @@ module user::lottery {
 
 ### Randomness - undergasing
 
-When different code paths in a function consume different amounts of gas, an attacker can manipulate the gas limit to bias the outcome. Let&apos;s look at an example of how different paths can consume different amounts of gas.
+When different code paths in a function consume different amounts of gas, an attacker can manipulate the gas limit to bias the outcome. Let's look at an example of how different paths can consume different amounts of gas.
 
 #### Example Vulnerable code
 

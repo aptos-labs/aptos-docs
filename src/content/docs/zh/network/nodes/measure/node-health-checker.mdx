@@ -4,11 +4,7 @@ title: "节点健康检查器"
 
 Aptos 节点健康检查器(NHC, Aptos Node Health Checker)服务能够检测任何 Aptos 全节点(例如验证全节点 VFNs 或对等全节点 PFNs)的健康状态.作为节点运营者,您可以利用 NHC 服务来确认您的节点是否正常运作.NHC 服务通过将您节点的配置与基础配置进行对比,来判定节点健康状态,并提供评估报告.
 
-
-
 import { Aside, Steps } from '@astrojs/starlight/components';
-
-
 
 本文档描述了当你操作节点时如何本地运行 NHC.
 
@@ -22,71 +18,65 @@ import { Aside, Steps } from '@astrojs/starlight/components';
 
 **重要**:如果你的本地节点不是 devnet 全节点,你必须使用不同的基础配置.查看 [aptos-core 中的配置示例](https://github.com/aptos-labs/aptos-core/tree/main/ecosystem/node-checker/configuration_examples) 以获取其他示例配置.
 
-
-
 <Steps>
+  1. 下载基础配置 YAML
 
-1. 下载基础配置 YAML
+     为 devnet 全节点下载一个基础配置 YAML 文件.下面的命令将下载 `devnet_fullnode.yaml` 配置文件:
 
-   为 devnet 全节点下载一个基础配置 YAML 文件.下面的命令将下载 `devnet_fullnode.yaml` 配置文件:
+     ```shellscript filename="Terminal"
+     mkdir /tmp/nhc
+     cd /tmp/nhc
+     wget https://raw.githubusercontent.com/aptos-labs/aptos-core/main/ecosystem/node-checker/configuration_examples/devnet_fullnode.yaml
+     ```
 
-   ```shellscript filename="Terminal"
-   mkdir /tmp/nhc
-   cd /tmp/nhc
-   wget https://raw.githubusercontent.com/aptos-labs/aptos-core/main/ecosystem/node-checker/configuration_examples/devnet_fullnode.yaml
-   ```
+  2. 启动 NHC 服务
 
-2. 启动 NHC 服务
+     通过提供上述下载的 `devnet_fullnode.yaml` 基础配置 YAML 文件来启动 NHC 服务:
 
-   通过提供上述下载的 `devnet_fullnode.yaml` 基础配置 YAML 文件来启动 NHC 服务:
+     ```shellscript filename="Terminal"
+     docker run -v /tmp/nhc:/nhc -p 20121:20121 -t aptoslabs/node-checker:nightly /usr/local/bin/aptos-node-checker server run --baseline-config-paths /nhc/devnet_fullnode.yaml
+     ```
 
-   ```shellscript filename="Terminal"
-   docker run -v /tmp/nhc:/nhc -p 20121:20121 -t aptoslabs/node-checker:nightly /usr/local/bin/aptos-node-checker server run --baseline-config-paths /nhc/devnet_fullnode.yaml
-   ```
+  3. 向 NHC 服务发送请求
 
-3. 向 NHC 服务发送请求
+     最后,向你启动的 NHC 服务发送请求.下面的命令将运行你的节点的健康检查,该节点位于 `node_url=http://mynode.mysite.com`,并将这些结果与基础配置 `devnet_fullnode` 中配置的节点进行比较:
 
-   最后,向你启动的 NHC 服务发送请求.下面的命令将运行你的节点的健康检查,该节点位于 `node_url=http://mynode.mysite.com`,并将这些结果与基础配置 `devnet_fullnode` 中配置的节点进行比较:
+     ```shellscript filename="Terminal"
+     curl 'http://localhost:20121/check?node_url=http://mynode.mysite.com&api_port=80&baseline_configuration_id=devnet_fullnode'
+     ```
 
-   ```shellscript filename="Terminal"
-   curl 'http://localhost:20121/check?node_url=http://mynode.mysite.com&api_port=80&baseline_configuration_id=devnet_fullnode'
-   ```
+     你将看到类似于这样的输出:
 
-   你将看到类似于这样的输出:
-
-   ```json filename="Terminal"
-   {
-     "check_results": [
-       {
-         "headline": "Chain ID reported by baseline and target match",
-         "score": 100,
-         "explanation": "The node under investigation reported the same Chain ID 18 as is reported by the baseline node",
-         "checker_name": "node_identity",
-         "links": []
-       },
-       {
-         "headline": "Role Type reported by baseline and target match",
-         "score": 100,
-         "explanation": "The node under investigation reported the same Role Type full_node as is reported by the baseline node",
-         "checker_name": "node_identity",
-         "links": []
-       },
-       {
-         "headline": "Target node produced valid recent transaction",
-         "score": 100,
-         "explanation": "We were able to pull the same transaction (version: 3238616) from both your node and the baseline node. Great! This implies that your node is keeping up with other nodes in the network.",
-         "checker_name": "transaction_availability",
-         "links": []
-       }
-     ],
-     "summary_score": 100,
-     "summary_explanation": "100: Awesome!"
-   }
-   ```
-
+     ```json filename="Terminal"
+     {
+       "check_results": [
+         {
+           "headline": "Chain ID reported by baseline and target match",
+           "score": 100,
+           "explanation": "The node under investigation reported the same Chain ID 18 as is reported by the baseline node",
+           "checker_name": "node_identity",
+           "links": []
+         },
+         {
+           "headline": "Role Type reported by baseline and target match",
+           "score": 100,
+           "explanation": "The node under investigation reported the same Role Type full_node as is reported by the baseline node",
+           "checker_name": "node_identity",
+           "links": []
+         },
+         {
+           "headline": "Target node produced valid recent transaction",
+           "score": 100,
+           "explanation": "We were able to pull the same transaction (version: 3238616) from both your node and the baseline node. Great! This implies that your node is keeping up with other nodes in the network.",
+           "checker_name": "transaction_availability",
+           "links": []
+         }
+       ],
+       "summary_score": 100,
+       "summary_explanation": "100: Awesome!"
+     }
+     ```
 </Steps>
-
-
 
 ## NHC 如何工作
 

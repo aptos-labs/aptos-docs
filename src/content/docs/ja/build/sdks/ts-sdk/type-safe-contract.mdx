@@ -6,88 +6,78 @@ title: "Surf: Moveコントラクトのための TypeScript型安全性"
 
 SurfはAptos TypeScript SDKとウォレットアダプターの上に構築されたTypeScriptライブラリで,コントラクトのABI(Application Binary Interface)から型を推論することで,Moveコントラクトに対する静的な型安全性を提供します.これにより,存在しないフィールドへのアクセスや誤った入力型の使用を,実行時ではなくコンパイル時に検出できます.ほとんどの既存のTypeScript IDEは,存在しないフィールドへのアクセスや誤った入力型の使用を自動的に警告します.
 
-
-
 import { Steps, TabItem, Tabs } from '@astrojs/starlight/components';
-
-
 
 ## 使用方法
 
-
-
 <Steps>
+  1. ステップ1
 
-1. ステップ1
+     まず,MoveコントラクトのABIをダウンロードし,TypeScriptファイルとして保存します.この例では,`src/utils`フォルダに`abi.ts`という名前で保存します.
 
-   まず,MoveコントラクトのABIをダウンロードし,TypeScriptファイルとして保存します.この例では,`src/utils`フォルダに`abi.ts`という名前で保存します.
+     <Tabs>
+       <TabItem label="macOS & Linux">
+         ```shellscript filename="get_abi.sh"
+         #! /bin/bash
 
-   <Tabs>
-     <TabItem label="macOS & Linux">
-       ```shellscript filename="get_abi.sh"
-       #! /bin/bash
+         # コントラクトが存在するネットワークに置き換えてください
+         NETWORK=testnet
+         # コントラクトアドレスに置き換えてください
+         CONTRACT_ADDRESS=0x12345
+         # モジュール名に置き換えてください。moveスクリプト以外のすべての.moveファイルはmodule_address::module_name {}の形式です
+         MODULE_NAME=fungible_asset_launchpad
 
-       # コントラクトが存在するネットワークに置き換えてください
-       NETWORK=testnet
-       # コントラクトアドレスに置き換えてください
-       CONTRACT_ADDRESS=0x12345
-       # モジュール名に置き換えてください。moveスクリプト以外のすべての.moveファイルはmodule_address::module_name {}の形式です
-       MODULE_NAME=fungible_asset_launchpad
+         # ABIをTypeScriptファイルとして保存
+         echo "export const ABI = $(curl https://fullnode.$NETWORK.aptoslabs.com/v1/accounts/$CONTRACT_ADDRESS/module/$MODULE_NAME | sed -n 's/.*"abi":\({.*}\).*}$/\1/p') as const" > abi.ts
+         ```
+       </TabItem>
 
-       # ABIをTypeScriptファイルとして保存
-       echo "export const ABI = $(curl https://fullnode.$NETWORK.aptoslabs.com/v1/accounts/$CONTRACT_ADDRESS/module/$MODULE_NAME | sed -n 's/.*"abi":\({.*}\).*}$/\1/p') as const" > abi.ts
-       ```
-     </TabItem>
+       <TabItem label="Windows">
+         ```powershell filename="get_abi.ps1"
+         # コントラクトが存在するネットワークに置き換えてください
+         $NETWORK = "testnet"
+         # コントラクトアドレスに置き換えてください
+         $CONTRACT_ADDRESS = "0x1"
+         # モジュール名に置き換えてください。moveスクリプト以外のすべての.moveファイルはmodule_address::module_name {}の形式です
+         $MODULE_NAME = "fungible_asset_launchpad"
 
-     <TabItem label="Windows">
-       ```powershell filename="get_abi.ps1"
-       # コントラクトが存在するネットワークに置き換えてください
-       $NETWORK = "testnet"
-       # コントラクトアドレスに置き換えてください
-       $CONTRACT_ADDRESS = "0x1"
-       # モジュール名に置き換えてください。moveスクリプト以外のすべての.moveファイルはmodule_address::module_name {}の形式です
-       $MODULE_NAME = "fungible_asset_launchpad"
+         # ABIをTypeScriptファイルとして保存
+         Invoke-RestMethod -Uri "https://fullnode.$NETWORK.aptoslabs.com/v1/accounts/$CONTRACT_ADDRESS/module/$MODULE_NAME" |
+             Select-Object -ExpandProperty abi | ConvertTo-Json -Compress |
+             Foreach-Object { "export const ABI = $_ as const" } |
+             Out-File -FilePath "abi.ts"
+         ```
+       </TabItem>
+     </Tabs>
 
-       # ABIをTypeScriptファイルとして保存
-       Invoke-RestMethod -Uri "https://fullnode.$NETWORK.aptoslabs.com/v1/accounts/$CONTRACT_ADDRESS/module/$MODULE_NAME" |
-           Select-Object -ExpandProperty abi | ConvertTo-Json -Compress |
-           Foreach-Object { "export const ABI = $_ as const" } |
-           Out-File -FilePath "abi.ts"
-       ```
-     </TabItem>
-   </Tabs>
+  2. ステップ2
 
-2. ステップ2
+     ABIを使用して,Moveコントラクトと対話する際にAptos TypeScript SDKクライアント`Aptos`の上にSurfをレイヤーとして使用できます.コントラクトに関連しない操作には,引き続き`Aptos`を使用する必要があります.
 
-   ABIを使用して,Moveコントラクトと対話する際にAptos TypeScript SDKクライアント`Aptos`の上にSurfをレイヤーとして使用できます.コントラクトに関連しない操作には,引き続き`Aptos`を使用する必要があります.
+     ```typescript filename="src/utils/aptos.ts"
+     import { createSurfClient } from '@thalalabs/surf';
+     import { Aptos, AptosConfig, NETWORK } from "@aptos-labs/ts-sdk";
+     import { ABI } from "./abi";
 
-   ```typescript filename="src/utils/aptos.ts"
-   import { createSurfClient } from '@thalalabs/surf';
-   import { Aptos, AptosConfig, NETWORK } from "@aptos-labs/ts-sdk";
-   import { ABI } from "./abi";
+     // まず、Aptosクライアントを作成します。コントラクトが存在するネットワークであることを確認してください
+     export const aptos = new Aptos(new AptosConfig({ network: Network.DEVNET }));
+     // 次に、AptosクライアントとABIを使用してSurfClientを作成します
+     export const surfClient = createSurfClient(aptos).useABI(ABI);
 
-   // まず、Aptosクライアントを作成します。コントラクトが存在するネットワークであることを確認してください
-   export const aptos = new Aptos(new AptosConfig({ network: Network.DEVNET }));
-   // 次に、AptosクライアントとABIを使用してSurfClientを作成します
-   export const surfClient = createSurfClient(aptos).useABI(ABI);
+     // Surfを使用してエントリー関数を実行
+     const result = await surfClient.entry.transfer({
+       functionArguments: ['0x1', 1],
+       typeArguments: ['0x1::aptos_coin::AptosCoin'],
+       account: Account.fromPrivateKey(...),
+     });
 
-   // Surfを使用してエントリー関数を実行
-   const result = await surfClient.entry.transfer({
-     functionArguments: ['0x1', 1],
-     typeArguments: ['0x1::aptos_coin::AptosCoin'],
-     account: Account.fromPrivateKey(...),
-   });
-
-   // Surfを使用してview関数をクエリ
-   const [balance] = await surfClient.view.balance({
-     functionArguments: ['0x1'],
-     typeArguments: ['0x1::aptos_coin::AptosCoin'],
-   });
-   ```
-
+     // Surfを使用してview関数をクエリ
+     const [balance] = await surfClient.view.balance({
+       functionArguments: ['0x1'],
+       typeArguments: ['0x1::aptos_coin::AptosCoin'],
+     });
+     ```
 </Steps>
-
-
 
 ## リソース
 

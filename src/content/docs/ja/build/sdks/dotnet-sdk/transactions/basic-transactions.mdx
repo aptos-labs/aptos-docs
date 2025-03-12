@@ -9,153 +9,145 @@ title: "Basic Transactions"
   repository.
 </Aside>
 
-
-
 import { Aside, Steps } from '@astrojs/starlight/components';
-
-
 
 This section covers the basic transaction types that can be built and submitted to the Aptos blockchain.
 
-
-
 <Steps>
+  1. Set up your AptosClient
 
-1. Set up your AptosClient
+     Set up your Aptos client by adding the `Aptos` namespace and instantiating an `AptosClient`. You can use a predefined
+     configuration from `Networks` or configuring your own.
 
-   Set up your Aptos client by adding the `Aptos` namespace and instantiating an `AptosClient`. You can use a predefined
-   configuration from `Networks` or configuring your own.
+     ```csharp filename="Program.cs"  {1-1, 7-8}
+     using Aptos;
 
-   ```csharp filename="Program.cs"  {1-1, 7-8}
-   using Aptos;
+     class Program
+     {
+         static void Main(string[] args)
+         {
+             var config = new AptosConfig(Aptos.Networks.Mainnet);
+             var client = new AptosClient(config);
+         }
+     }
+     ```
 
-   class Program
-   {
-       static void Main(string[] args)
-       {
-           var config = new AptosConfig(Aptos.Networks.Mainnet);
-           var client = new AptosClient(config);
-       }
-   }
-   ```
+  2. Set up an Account
 
-2. Set up an Account
+     To create a transaction, you will need an account to sign the transaction. This can be done using a private key,
+     mnemonic, or a combination of both. In this example, we will generate a random new account.
 
-   To create a transaction, you will need an account to sign the transaction. This can be done using a private key,
-   mnemonic, or a combination of both. In this example, we will generate a random new account.
+     ```csharp filename="Program.cs" {10-12}
+     using Aptos;
 
-   ```csharp filename="Program.cs" {10-12}
-   using Aptos;
+     class Program
+     {
+         static void Main(string[] args)
+         {
+             var config = new AptosConfig(Aptos.Networks.Devnet);
+             var client = new AptosClient(config);
 
-   class Program
-   {
-       static void Main(string[] args)
-       {
-           var config = new AptosConfig(Aptos.Networks.Devnet);
-           var client = new AptosClient(config);
+             // 1. Create an account and fund it.
+             var account = Account.Generate();
+             await client.Faucet.FundAccount(account.Address, 100_000_000);
+         }
+     }
+     ```
 
-           // 1. Create an account and fund it.
-           var account = Account.Generate();
-           await client.Faucet.FundAccount(account.Address, 100_000_000);
-       }
-   }
-   ```
+  3. Build the Transaction
 
-3. Build the Transaction
+     To interact with the blockchain, you will need to build a transaction. The `AptosClient` can be
+     used to build a transaction payload that can be signed and submitted to chain. In the transaction,
+     we can specify the sender, entry function, and arguments.
 
-   To interact with the blockchain, you will need to build a transaction. The `AptosClient` can be
-   used to build a transaction payload that can be signed and submitted to chain. In the transaction,
-   we can specify the sender, entry function, and arguments.
+     ```csharp filename="Program.cs" {12-20}
+     using Aptos;
 
-   ```csharp filename="Program.cs" {12-20}
-   using Aptos;
+     class Program
+     {
+         static void Main(string[] args)
+         {
+             var config = new AptosConfig(Aptos.Networks.Devnet);
+             var client = new AptosClient(config);
 
-   class Program
-   {
-       static void Main(string[] args)
-       {
-           var config = new AptosConfig(Aptos.Networks.Devnet);
-           var client = new AptosClient(config);
+             var account = Account.Generate();
 
-           var account = Account.Generate();
+             // 2. Build the transaction
+             var transaction = await client.Transaction.Build(
+                 sender: account,
+                 data: new GenerateEntryFunctionPayloadData(
+                     function: "0x1::aptos_account::transfer_coins",
+                     typeArguments: ["0x1::aptos_coin::AptosCoin"],
+                     functionArguments: [account.Address, "100000"]
+                 )
+             );
+         }
+     }
+     ```
 
-           // 2. Build the transaction
-           var transaction = await client.Transaction.Build(
-               sender: account,
-               data: new GenerateEntryFunctionPayloadData(
-                   function: "0x1::aptos_account::transfer_coins",
-                   typeArguments: ["0x1::aptos_coin::AptosCoin"],
-                   functionArguments: [account.Address, "100000"]
-               )
-           );
-       }
-   }
-   ```
+  4. Sign and Submit Transactions
 
-4. Sign and Submit Transactions
+     Once the transaction is built, it can be signed and submitted to the blockchain. The `AptosClient` can be
+     used to sign and submit the transaction.
 
-   Once the transaction is built, it can be signed and submitted to the blockchain. The `AptosClient` can be
-   used to sign and submit the transaction.
+     ```csharp filename="Program.cs" {21-22}
+     using Aptos;
 
-   ```csharp filename="Program.cs" {21-22}
-   using Aptos;
+     class Program
+     {
+         static void Main(string[] args)
+         {
+             var config = new AptosConfig(Aptos.Networks.Devnet);
+             var client = new AptosClient(config);
 
-   class Program
-   {
-       static void Main(string[] args)
-       {
-           var config = new AptosConfig(Aptos.Networks.Devnet);
-           var client = new AptosClient(config);
+             var account = Account.Generate();
 
-           var account = Account.Generate();
+             var transaction = await client.Transaction.Build(
+                 sender: account,
+                 data: new GenerateEntryFunctionPayloadData(
+                     function: "0x1::aptos_account::transfer_coins",
+                     typeArguments: ["0x1::aptos_coin::AptosCoin"],
+                     functionArguments: [account.Address, "100000"]
+                 )
+             );
 
-           var transaction = await client.Transaction.Build(
-               sender: account,
-               data: new GenerateEntryFunctionPayloadData(
-                   function: "0x1::aptos_account::transfer_coins",
-                   typeArguments: ["0x1::aptos_coin::AptosCoin"],
-                   functionArguments: [account.Address, "100000"]
-               )
-           );
+             // 3. Sign the transaction
+             var submittedTransaction = await client.Transaction.SignAndSubmitTransaction(signer, transaction);
+         }
+     }
+     ```
 
-           // 3. Sign the transaction
-           var submittedTransaction = await client.Transaction.SignAndSubmitTransaction(signer, transaction);
-       }
-   }
-   ```
+  5. (Optional) Wait for the Transaction to Execute
 
-5. (Optional) Wait for the Transaction to Execute
+     After the transaction has been submitted, it will have to process before its committed to the blockchain. The `AptosClient` can be
+     used to wait for the transaction to be processed and executed.
 
-   After the transaction has been submitted, it will have to process before its committed to the blockchain. The `AptosClient` can be
-   used to wait for the transaction to be processed and executed.
+     ```csharp filename="Program.cs" {23-24}
+     using Aptos;
 
-   ```csharp filename="Program.cs" {23-24}
-   using Aptos;
+     class Program
+     {
+         static void Main(string[] args)
+         {
+             var config = new AptosConfig(Aptos.Networks.Devnet);
+             var client = new AptosClient(config);
 
-   class Program
-   {
-       static void Main(string[] args)
-       {
-           var config = new AptosConfig(Aptos.Networks.Devnet);
-           var client = new AptosClient(config);
+             var account = Account.Generate();
 
-           var account = Account.Generate();
+             var transaction = await client.Transaction.Build(
+                 sender: account,
+                 data: new GenerateEntryFunctionPayloadData(
+                     function: "0x1::aptos_account::transfer_coins",
+                     typeArguments: ["0x1::aptos_coin::AptosCoin"],
+                     functionArguments: [account.Address, "100000"]
+                 )
+             );
 
-           var transaction = await client.Transaction.Build(
-               sender: account,
-               data: new GenerateEntryFunctionPayloadData(
-                   function: "0x1::aptos_account::transfer_coins",
-                   typeArguments: ["0x1::aptos_coin::AptosCoin"],
-                   functionArguments: [account.Address, "100000"]
-               )
-           );
+             var submittedTransaction = await client.Transaction.SignAndSubmitTransaction(account, transaction);
 
-           var submittedTransaction = await client.Transaction.SignAndSubmitTransaction(account, transaction);
-
-           // 4. Wait for the transaction to be processed
-           var transactionResult = await client.Transaction.WaitForTransaction(submittedTransaction.Hash);
-       }
-   }
-   ```
-
+             // 4. Wait for the transaction to be processed
+             var transactionResult = await client.Transaction.WaitForTransaction(submittedTransaction.Hash);
+         }
+     }
+     ```
 </Steps>

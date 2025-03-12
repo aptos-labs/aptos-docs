@@ -4,109 +4,99 @@ title: "Building Transactions"
 
 Transactions allow you to change on-chain data or trigger events. Generally, transactions follow 5 steps from building to executing on chain: building, simulating, signing, submitting, and waiting.
 
-
-
 import { Aside, Steps } from '@astrojs/starlight/components';
-
-
 
 <Aside type="note">
   For these examples, `aptos` is an instance of the [`Aptos`](https://aptos-labs.github.io/aptos-ts-sdk/@aptos-labs/ts-sdk-1.35.0/classes/Aptos.html) client object.
 </Aside>
 
-
-
 <Steps>
+  1. Build
 
-1. Build
+     Building a transaction is how you specify:
 
-   Building a transaction is how you specify:
+     1. **The `sender` account.** <br />This account normally pays the gas fees for this transaction. See [Transaction Sponsoring](/build/sdks/ts-sdk/building-transactions/sponsoring-transactions) to learn how to have another account pay for fees.
+     2. **The `function` being called on-chain.** <br />This is the identifier for the smart contract entry function on-chain that will trigger when you execute this transaction.
+     3. **The `functionArguments`.** <br />This is any data the function needs to run.
 
-   1. **The `sender` account.** <br />This account normally pays the gas fees for this transaction. See [Transaction Sponsoring](/build/sdks/ts-sdk/building-transactions/sponsoring-transactions) to learn how to have another account pay for fees.
-   2. **The `function` being called on-chain.** <br />This is the identifier for the smart contract entry function on-chain that will trigger when you execute this transaction.
-   3. **The `functionArguments`.** <br />This is any data the function needs to run.
+     This can be packaged into a `SimpleTransaction` using `aptos.transaction.build.simple(...)` like so:
 
-   This can be packaged into a `SimpleTransaction` using `aptos.transaction.build.simple(...)` like so:
+     ```typescript filename="build-a-transaction.ts"
+     const transaction = await aptos.transaction.build.simple({
+       sender: sender.accountAddress,
+       data: {
+     	  // All transactions on Aptos are implemented via smart contracts.
+     	  function: "0x1::aptos_account::transfer",
+     	  functionArguments: [destination.accountAddress, 100],
+       },
+     });
+     ```
 
-   ```typescript filename="build-a-transaction.ts"
-   const transaction = await aptos.transaction.build.simple({
-     sender: sender.accountAddress,
-     data: {
-   	  // All transactions on Aptos are implemented via smart contracts.
-   	  function: "0x1::aptos_account::transfer",
-   	  functionArguments: [destination.accountAddress, 100],
-     },
-   });
-   ```
+     <Aside type="note">
+       There is a more advanced format to pass in `functionArguments` called [Binary Canonical Serialization (BCS)](/build/sdks/ts-sdk/building-transactions/bcs-format) format which is how the Aptos chain parses function arguments. The SDK converts TypeScript primitives to BCS format behind the scenes via an API call.
+     </Aside>
 
-   <Aside type="note">
-     There is a more advanced format to pass in `functionArguments` called [Binary Canonical Serialization (BCS)](/build/sdks/ts-sdk/building-transactions/bcs-format) format which is how the Aptos chain parses function arguments. The SDK converts TypeScript primitives to BCS format behind the scenes via an API call.
-   </Aside>
+     #### Building Options
 
-   #### Building Options
+     You can customize the way your transaction executes by passing in `options: {...}` when building. Some of the most commonly used options are:
 
-   You can customize the way your transaction executes by passing in `options: {...}` when building. Some of the most commonly used options are:
+     1. `maxGasAmount` - This caps the amount of gas you are willing to pay for to execute this transaction.
+     2. `gasUnitPrice` - You can specify a higher than minimum price per gas to be executed with higher priority by the Aptos network.
+     3. `expireTimestamp` - This gives a concrete time the transaction must execute by or it will be canceled.
 
-   1. `maxGasAmount` - This caps the amount of gas you are willing to pay for to execute this transaction.
-   2. `gasUnitPrice` - You can specify a higher than minimum price per gas to be executed with higher priority by the Aptos network.
-   3. `expireTimestamp` - This gives a concrete time the transaction must execute by or it will be canceled.
+     The SDK provides sensible defaults for these values if they are not specified explicitly.
 
-   The SDK provides sensible defaults for these values if they are not specified explicitly.
+  2. Simulate (Optional)
 
-2. Simulate (Optional)
+     Every transaction on the Aptos chain has a gas fee associated with how much work the network machines have to do when executing the transaction. In order to estimate the cost associated with that, you can simulate transactions before committing them.
 
-   Every transaction on the Aptos chain has a gas fee associated with how much work the network machines have to do when executing the transaction. In order to estimate the cost associated with that, you can simulate transactions before committing them.
+     <Aside type="note">
+       This simulation only requires the `publicKey` of an account since it will not impact the actual state of the ledger.
+     </Aside>
 
-   <Aside type="note">
-     This simulation only requires the `publicKey` of an account since it will not impact the actual state of the ledger.
-   </Aside>
+     You can execute the simulation by using `aptos.transaction.simulate.simple(...)` like so:
 
-   You can execute the simulation by using `aptos.transaction.simulate.simple(...)` like so:
+     ```typescript filename="build-a-transaction.ts"
+     const [userTransactionResponse] = await aptos.transaction.simulate.simple({
+       signerPublicKey: signer.publicKey,
+       transaction,
+     });
+     // If the fee looks ok, continue to signing!
+     ```
 
-   ```typescript filename="build-a-transaction.ts"
-   const [userTransactionResponse] = await aptos.transaction.simulate.simple({
-     signerPublicKey: signer.publicKey,
-     transaction,
-   });
-   // If the fee looks ok, continue to signing!
-   ```
+  3. Sign
 
-3. Sign
+     Once the transaction is built and the fees seem reasonable, you can sign the transaction with `aptos.transaction.sign`. The signature must come from the `sender` account.
 
-   Once the transaction is built and the fees seem reasonable, you can sign the transaction with `aptos.transaction.sign`. The signature must come from the `sender` account.
+     ```typescript filename="build-a-transaction.ts"
+     // 3. Sign
+     const senderAuthenticator = aptos.transaction.sign({
+       signer: sender,
+       transaction,
+     });
+     ```
 
-   ```typescript filename="build-a-transaction.ts"
-   // 3. Sign
-   const senderAuthenticator = aptos.transaction.sign({
-     signer: sender,
-     transaction,
-   });
-   ```
+  4. Submit
 
-4. Submit
+     Now that the transaction is signed, you can submit it to the network using `aptos.transaction.submit.simple` like so:
 
-   Now that the transaction is signed, you can submit it to the network using `aptos.transaction.submit.simple` like so:
+     ```typescript filename="build-a-transaction.ts"
+     // 4. Submit
+     const committedTransaction = await aptos.transaction.submit.simple({
+       transaction,
+       senderAuthenticator,
+     });
+     ```
 
-   ```typescript filename="build-a-transaction.ts"
-   // 4. Submit
-   const committedTransaction = await aptos.transaction.submit.simple({
-     transaction,
-     senderAuthenticator,
-   });
-   ```
+  5. Wait
 
-5. Wait
+     Finally, you can wait for the result of the transaction by using [`aptos.waitForTransaction`](https://aptos-labs.github.io/aptos-ts-sdk/@aptos-labs/ts-sdk-1.35.0/classes/Aptos.html#waitForTransaction) and specifying the hash of the transaction you just submitted like so:
 
-   Finally, you can wait for the result of the transaction by using [`aptos.waitForTransaction`](https://aptos-labs.github.io/aptos-ts-sdk/@aptos-labs/ts-sdk-1.35.0/classes/Aptos.html#waitForTransaction) and specifying the hash of the transaction you just submitted like so:
-
-   ```typescript filename="build-a-transaction.ts"
-   // 5. Wait
-   const executedTransaction = await aptos.waitForTransaction({ transactionHash: committedTransaction.hash });
-   ```
-
+     ```typescript filename="build-a-transaction.ts"
+     // 5. Wait
+     const executedTransaction = await aptos.waitForTransaction({ transactionHash: committedTransaction.hash });
+     ```
 </Steps>
-
-
 
 ## Full TypeScript Example
 

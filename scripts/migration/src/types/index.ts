@@ -16,6 +16,10 @@ export interface TransformerOptions {
   useComponentSyntax?: boolean;
   /** Current file path being processed */
   filePath?: string;
+  /** Source path for the file */
+  sourcePath?: string;
+  /** Target language (en, ja, zh) */
+  language?: string;
 }
 
 export interface FileTransformResult {

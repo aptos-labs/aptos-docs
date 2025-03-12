@@ -33,6 +33,7 @@ import { CodeTransformer } from "./transformers/code.js";
 import { ImageTransformer } from "./transformers/image.js";
 import { PunctuationTransformer } from "./transformers/punctuation.js";
 import { BaseTransformer } from "./transformers/base.js";
+import { LanguageDetectionTransformer } from "./transformers/language-detection.js";
 import type { TransformerOptions } from "./types/index.js";
 
 interface ExtendedTransformerOptions extends TransformerOptions {
@@ -136,6 +137,21 @@ async function processFile(filePath: string, options: ExtendedTransformerOptions
 
   logger.log("Migration", "Finished all transformers");
 
+  // Calculate the new file path
+  if (!options.sourcePath) {
+    throw new Error("Source path not provided in options");
+  }
+  const relativePath = path.relative(options.sourcePath, filePath);
+
+  // Check if we should write this file based on language analysis
+  const languageDetector = new LanguageDetectionTransformer();
+  const shouldWrite = languageDetector.transform(ast, transformerOptions);
+
+  if (!shouldWrite) {
+    logger.log("Migration", "Skipping English content in language folder:", relativePath);
+    return;
+  }
+
   // Convert AST back to MDX
   const defaultMdxJsxFlowElement = mdxJsxToMarkdown().handlers?.mdxJsxFlowElement;
   if (!defaultMdxJsxFlowElement) {
@@ -221,12 +237,6 @@ async function processFile(filePath: string, options: ExtendedTransformerOptions
       },
     },
   });
-
-  // Calculate the new file path
-  if (!options.sourcePath) {
-    throw new Error("Source path not provided in options");
-  }
-  const relativePath = path.relative(options.sourcePath, filePath);
 
   // Determine the output path based on the language
   const basePath = path.join(projectRoot, "src/content/docs");

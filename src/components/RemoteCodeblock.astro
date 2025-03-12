@@ -1,10 +1,11 @@
 ---
-import { Code } from '@astrojs/starlight/components';
+import { Code } from "@astrojs/starlight/components";
 
 type MarkerDefinition = string | RegExp | number | { range: string; label?: string };
 
 interface Props {
-  src: string;
+  src?: string;
+  permalink?: string;
   lang?: string;
   title?: string;
   ins?: string | MarkerDefinition | (string | MarkerDefinition)[];
@@ -12,16 +13,77 @@ interface Props {
   del?: string | MarkerDefinition | (string | MarkerDefinition)[];
 }
 
-function parseMarker(marker: string | MarkerDefinition | (string | MarkerDefinition)[] | undefined): MarkerDefinition | MarkerDefinition[] | undefined {
+// Default values for required props
+const DEFAULT_LANG = "text";
+const DEFAULT_TITLE = "Code";
+
+interface ParsedGitHubUrl {
+  rawUrl: string;
+  filename: string;
+  extension?: string;
+  lineRange?: string;
+}
+
+function parseGitHubUrl(url: string): ParsedGitHubUrl {
+  // Extract line numbers if present
+  const [baseUrl = "", fragment = ""] = url.split("#");
+  let lineRange: string | undefined;
+
+  if (fragment) {
+    const match = fragment.match(/^L(\d+)(?:-L(\d+))?$/);
+    if (match) {
+      if (match[2]) {
+        lineRange = `${match[1]}-${match[2]}`;
+      } else {
+        lineRange = match[1];
+      }
+    }
+  }
+
+  // Validate and convert GitHub URL to raw URL
+  if (!baseUrl) {
+    throw new Error("Invalid GitHub URL: Empty URL provided");
+  }
+
+  const rawUrl = baseUrl.replace("github.com", "raw.githubusercontent.com").replace("/blob/", "/");
+
+  if (!rawUrl.includes("raw.githubusercontent.com")) {
+    throw new Error("Invalid GitHub URL: Not a GitHub repository URL");
+  }
+
+  // Extract filename and extension
+  const pathParts = rawUrl.split("/");
+  const lastPart = pathParts[pathParts.length - 1];
+
+  // Ensure we have a valid filename
+  if (!lastPart) {
+    throw new Error("Invalid GitHub URL: Could not extract filename");
+  }
+
+  const filename = lastPart;
+  const extensionMatch = filename.match(/\.([^.]+)$/);
+  const extension = extensionMatch ? extensionMatch[1] : undefined;
+
+  return {
+    rawUrl,
+    filename,
+    extension,
+    lineRange,
+  };
+}
+
+function parseMarker(
+  marker: string | MarkerDefinition | (string | MarkerDefinition)[] | undefined,
+): MarkerDefinition | MarkerDefinition[] | undefined {
   if (!marker) return undefined;
 
   // If it's already an array, process each item
   if (Array.isArray(marker)) {
-    return marker.map(m => typeof m === 'string' ? parseMarker(m) : m) as MarkerDefinition[];
+    return marker.map((m) => (typeof m === "string" ? parseMarker(m) : m)) as MarkerDefinition[];
   }
 
   // If it's not a string, return as is (already a MarkerDefinition)
-  if (typeof marker !== 'string') return marker;
+  if (typeof marker !== "string") return marker;
 
   // Check if it's a range (e.g., "3-4")
   const rangeMatch = marker.match(/^(\d+)-(\d+)$/);
@@ -39,19 +101,64 @@ function parseMarker(marker: string | MarkerDefinition | (string | MarkerDefinit
   return marker;
 }
 
-const { src, lang, title, ins, mark, del } = Astro.props;
-const code = await (await fetch(src)).text();
+function isValidSource(src: string | undefined): src is string {
+  return typeof src === "string" && src.length > 0;
+}
+
+// Process props and ensure we have a valid source URL
+const permalink = Astro.props.permalink;
+const providedSrc = Astro.props.src;
+
+// Get the source URL either from src prop or by parsing permalink
+let finalSrc: string;
+if (permalink) {
+  finalSrc = parseGitHubUrl(permalink).rawUrl;
+} else if (isValidSource(providedSrc)) {
+  finalSrc = providedSrc;
+} else {
+  throw new Error("Either src or permalink must be provided");
+}
+
+// Now get the rest of the props
+let finalLang = Astro.props.lang ?? DEFAULT_LANG;
+let finalTitle = Astro.props.title ?? DEFAULT_TITLE;
+let finalMark = Astro.props.mark;
+
+// If we have GitHub info, override defaults
+if (permalink) {
+  const parsed = parseGitHubUrl(permalink);
+  if (parsed.extension && finalLang === DEFAULT_LANG) {
+    finalLang = parsed.extension;
+  } else if (finalLang === DEFAULT_LANG) {
+    // Try to infer language from filename if no extension in GitHub URL
+    const filenameExt = parsed.filename.split(".").pop();
+    if (filenameExt) {
+      finalLang = filenameExt;
+    }
+  }
+  if (parsed.filename && finalTitle === DEFAULT_TITLE) {
+    finalTitle = parsed.filename;
+  }
+  if (!finalMark && parsed.lineRange) {
+    finalMark = parsed.lineRange;
+  }
+}
+
+// Get remaining props
+const { ins, del } = Astro.props;
+
+const code = await (await fetch(finalSrc)).text();
 
 const processedIns = parseMarker(ins);
-const processedMark = parseMarker(mark);
+const processedMark = parseMarker(finalMark);
 const processedDel = parseMarker(del);
 ---
 
-<Code 
-  code={code} 
-  lang={lang} 
-  title={title} 
-  ins={processedIns} 
-  mark={processedMark} 
+<Code
+  code={code}
+  lang={finalLang}
+  title={finalTitle}
+  ins={processedIns}
+  mark={processedMark}
   del={processedDel}
 />

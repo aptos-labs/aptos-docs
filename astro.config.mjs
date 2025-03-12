@@ -184,6 +184,7 @@ export default defineConfig({
         {
           components: {
             GraphQLEditor: "react",
+            Faucet: "react",
           },
         },
       ],

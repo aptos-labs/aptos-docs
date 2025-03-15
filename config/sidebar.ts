@@ -4,28 +4,35 @@ import enLabels from "../src/content/nav/en";
 type NavKey = keyof typeof enLabels;
 type NavDict = Record<NavKey, string>;
 
-// Define simple types for sidebar items that match Starlight's API
-interface SidebarItemBase {
+// Define the sidebar entry types that align with Starlight's expected structure
+interface SidebarItemCommon {
   label: string;
-  collapsed?: boolean;
   translations?: Record<string, string>;
+  collapsed?: boolean;
 }
 
-type SidebarGroupWithItems = SidebarItemBase & {
-  items: (string | SidebarGroupWithItems | SidebarLinkItem)[];
-};
-
-type SidebarGroupWithAutogenerate = SidebarItemBase & {
-  autogenerate: { directory: string; collapsed?: boolean };
-};
-
-type SidebarLinkItem = SidebarItemBase & {
+// A link item in the sidebar
+type SidebarLinkItem = SidebarItemCommon & {
   link: string;
   attrs?: Record<string, string | number | boolean>;
 };
 
-// Union type of all possible sidebar items
-type SidebarItem = SidebarGroupWithItems | SidebarGroupWithAutogenerate | SidebarLinkItem;
+// Forward declaration to allow for recursive types
+type NestedSidebarItem =
+  | string
+  | SidebarLinkItem
+  | SidebarGroupWithItems
+  | SidebarGroupWithAutogenerate;
+
+// A sidebar group with manual items
+type SidebarGroupWithItems = SidebarItemCommon & {
+  items: NestedSidebarItem[];
+};
+
+// A sidebar group with auto-generated items
+type SidebarGroupWithAutogenerate = SidebarItemCommon & {
+  autogenerate: { directory: string; collapsed?: boolean };
+};
 
 // Load translations from all language files
 const translations = (() => {
@@ -69,18 +76,18 @@ const translations = (() => {
  * Create a sidebar group entry with labels and translations from nav files
  *
  * @param key - The key in the navigation dictionary
- * @param groupConfig - Configuration for the sidebar group
- * @returns A sidebar group entry
+ * @param config - Configuration for the sidebar group
+ * @returns A sidebar group entry compatible with Starlight's config
  */
 export function group(
   key: NavKey,
-  groupConfig:
+  config:
     | Omit<SidebarGroupWithItems, "label" | "translations">
     | Omit<SidebarGroupWithAutogenerate, "label" | "translations">,
-): SidebarItem {
+): SidebarGroupWithItems | SidebarGroupWithAutogenerate {
   return {
     label: enLabels[key],
     translations: translations[key],
-    ...groupConfig,
+    ...config,
   };
 }

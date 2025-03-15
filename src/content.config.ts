@@ -1,25 +1,25 @@
 import { docsLoader, i18nLoader } from "@astrojs/starlight/loaders";
 import { docsSchema, i18nSchema } from "@astrojs/starlight/schema";
-import { defineCollection, z, type CollectionEntry } from 'astro:content';
+import { defineCollection, z, type CollectionEntry } from "astro:content";
 import type { StarlightIcon } from "@astrojs/starlight/types";
 import { moveReferenceLoader } from "./loaders/moveReference";
 import type { BranchConfig, ModuleConfig } from "./loaders/moveReference/types";
 
 export const baseSchema = z.object({
-	type: z.literal('base').optional().default('base'),
-	// i18nReady: z.boolean().default(false),
-	// githubURL: z.string().url().optional(),
-	// hasREADME: z.boolean().optional(),
-	// Extends Starlight’s default `hero` schema with custom fields.
-	// hero: z
-	// 	.object({
-	// 		facepile: z.object({
-	// 			tagline: z.string(),
-	// 			linkText: z.string(),
-	// 			link: z.string(),
-	// 		}),
-	// 	})
-	// 	.optional(),
+  type: z.literal("base").optional().default("base"),
+  // i18nReady: z.boolean().default(false),
+  // githubURL: z.string().url().optional(),
+  // hasREADME: z.boolean().optional(),
+  // Extends Starlight’s default `hero` schema with custom fields.
+  // hero: z
+  // 	.object({
+  // 		facepile: z.object({
+  // 			tagline: z.string(),
+  // 			linkText: z.string(),
+  // 			link: z.string(),
+  // 		}),
+  // 	})
+  // 	.optional(),
 });
 
 const MOVE_REFERENCE_FRAMEWORK_BASE_PATH = "aptos-move/framework";
@@ -55,31 +55,31 @@ const createBranchConfig = (branch: Omit<BranchConfig, "modules">): BranchConfig
 
 export const docsCollectionSchema = baseSchema;
 
-
 export type DocsEntryData = z.infer<typeof docsCollectionSchema>;
 
-export type DocsEntryType = DocsEntryData['type'];
+export type DocsEntryType = DocsEntryData["type"];
 
-export type DocsEntry<T extends DocsEntryType> = CollectionEntry<'docs'> & {
-	data: Extract<DocsEntryData, { type: T }>;
+export type DocsEntry<T extends DocsEntryType> = CollectionEntry<"docs"> & {
+  data: Extract<DocsEntryData, { type: T }>;
 };
 
 export function createIsDocsEntry<T extends DocsEntryType>(type: T) {
-	// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-	return (entry: CollectionEntry<'docs'>): entry is DocsEntry<T> => entry.data.type === type;
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+  return (entry: CollectionEntry<"docs">): entry is DocsEntry<T> => entry.data.type === type;
 }
 
 export function createIsLangEntry(lang: string) {
-	return (entry: CollectionEntry<'docs'>): boolean => entry.id.startsWith(lang + '/');
+  return (entry: CollectionEntry<"docs">): boolean => entry.id.startsWith(lang + "/");
 }
 
-export const isEnglishEntry = createIsLangEntry('en');
-export const isKoreanEntry = createIsLangEntry('ko');
-
-
+export const isEnglishEntry = createIsLangEntry("en");
+export const isKoreanEntry = createIsLangEntry("ko");
 
 export const collections = {
-  docs: defineCollection({ loader: docsLoader(), schema: docsSchema({ extend: docsCollectionSchema }), }),
+  docs: defineCollection({
+    loader: docsLoader(),
+    schema: docsSchema({ extend: docsCollectionSchema }),
+  }),
   i18n: defineCollection({ loader: i18nLoader(), schema: i18nSchema() }),
   moveReference: defineCollection({
     type: "content_layer",
@@ -98,5 +98,3 @@ export const collections = {
     }),
   }),
 };
-
-

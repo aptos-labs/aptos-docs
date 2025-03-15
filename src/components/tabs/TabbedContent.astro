@@ -1,240 +1,240 @@
 ---
-import TabListItem from './TabListItem.astro';
+import TabListItem from "./TabListItem.astro";
 
 interface Props {
-	/**
-	 * List of content for the tab list.
-	 *
-	 * To use more complex mark-up for the tab list, pass `<TabListItem>`s
-	 * inside a `<Fragment slot="tab-list">`.
-	 */
-	tabs?: { label: string; id: string; initial?: boolean }[];
-	/** Enable default styles for the tab list and panels. */
-	styled?: boolean;
-	/** Additional class names to apply to `.tab-list` and `.panels`. */
-	class?: string;
+  /**
+   * List of content for the tab list.
+   *
+   * To use more complex mark-up for the tab list, pass `<TabListItem>`s
+   * inside a `<Fragment slot="tab-list">`.
+   */
+  tabs?: { label: string; id: string; initial?: boolean }[];
+  /** Enable default styles for the tab list and panels. */
+  styled?: boolean;
+  /** Additional class names to apply to `.tab-list` and `.panels`. */
+  class?: string;
 }
 
 const { tabs, styled, class: className } = Astro.props;
 ---
 
 <tabbed-content>
-	<ul class:list={['tab-list', className, { 'tab-list--styled': styled }]}>
-		<slot name="tab-list">
-			{
-				tabs?.map((tab) => (
-					<TabListItem id={tab.id} initial={tab.initial}>
-						{tab.label}
-					</TabListItem>
-				))
-			}
-		</slot>
-	</ul>
+  <ul class:list={["tab-list", className, { "tab-list--styled": styled }]}>
+    <slot name="tab-list">
+      {
+        tabs?.map((tab) => (
+          <TabListItem id={tab.id} initial={tab.initial}>
+            {tab.label}
+          </TabListItem>
+        ))
+      }
+    </slot>
+  </ul>
 
-	<div class:list={['panels', className, { 'panels--styled': styled }]}>
-		<slot />
-	</div>
+  <div class:list={["panels", className, { "panels--styled": styled }]}>
+    <slot />
+  </div>
 </tabbed-content>
 
 <style>
-	.tab-list {
-		list-style: none;
-		padding: 0;
-	}
-	.tab-list--styled {
-		display: flex;
-		margin-top: -1px;
-		overflow-x: auto;
-		overflow-y: hidden;
-	}
-	@media (min-width: 72em) {
-		.tab-list--styled {
-			justify-content: space-between;
-			margin-top: 0;
-			padding: 1px;
-		}
-	}
+  .tab-list {
+    list-style: none;
+    padding: 0;
+  }
+  .tab-list--styled {
+    display: flex;
+    margin-top: -1px;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+  @media (min-width: 72em) {
+    .tab-list--styled {
+      justify-content: space-between;
+      margin-top: 0;
+      padding: 1px;
+    }
+  }
 
-	.panels--styled {
-		padding-left: 1px;
-		padding-right: 1px;
-	}
+  .panels--styled {
+    padding-left: 1px;
+    padding-right: 1px;
+  }
 </style>
 
 <script>
-	// A custom element implementation for tabbed content
-	class Tabs extends HTMLElement {
-		private readonly tabId: string;
-		private counter: number;
-		private tabStore: Set<HTMLElement>[];
-		private panelStore: Set<HTMLElement>[];
+  // A custom element implementation for tabbed content
+  class Tabs extends HTMLElement {
+    private readonly tabId: string;
+    private counter: number;
+    private tabStore: Set<HTMLElement>[];
+    private panelStore: Set<HTMLElement>[];
 
-		constructor() {
-			super();
-			this.tabId = Math.floor(Math.random() * 10e10).toString(32);
-			this.counter = 0;
-			this.tabStore = [];
-			this.panelStore = [];
+    constructor() {
+      super();
+      this.tabId = Math.floor(Math.random() * 10e10).toString(32);
+      this.counter = 0;
+      this.tabStore = [];
+      this.panelStore = [];
 
-			// Initialization after DOM is loaded
-			setTimeout(() => this.initialize(), 0);
-		}
+      // Initialization after DOM is loaded
+      setTimeout(() => this.initialize(), 0);
+    }
 
-		private initialize(): void {
-			// Get relevant elements and collections
-			const panels = Array.from(this.querySelectorAll<HTMLElement>('.panels > [id]') || []);
-			const tablist = this.querySelector<HTMLElement>('.tab-list');
-			
-			if (!tablist) return;
-			
-			const tabs = Array.from(tablist.querySelectorAll<HTMLAnchorElement>('a') || []);
-			if (tabs.length === 0) return;
+    private initialize(): void {
+      // Get relevant elements and collections
+      const panels = Array.from(this.querySelectorAll<HTMLElement>(".panels > [id]") || []);
+      const tablist = this.querySelector<HTMLElement>(".tab-list");
 
-			// Add the tablist role to the first <ul> in the .tabbed container
-			tablist.setAttribute('role', 'tablist');
+      if (!tablist) return;
 
-			let initialTab = 0;
+      const tabs = Array.from(tablist.querySelectorAll<HTMLAnchorElement>("a") || []);
+      if (tabs.length === 0) return;
 
-			// Add semantics and remove user focusability for each tab
-			tabs.forEach((tab, i) => {
-				if (!tab) return;
-				
-				tab.setAttribute('role', 'tab');
-				tab.setAttribute('id', this.tabId + 'tab' + this.counter++);
-				tab.setAttribute('tabindex', '-1');
-				
-				const parentElement = tab.parentElement;
-				if (parentElement) {
-					parentElement.setAttribute('role', 'presentation');
-				}
-				
-				if (!this.tabStore[i]) this.tabStore[i] = new Set<HTMLElement>();
-				this.tabStore[i].add(tab);
-				
-				if (tab.dataset && 'initial' in tab.dataset && tab.dataset.initial !== 'false') {
-					initialTab = i;
-				}
+      // Add the tablist role to the first <ul> in the .tabbed container
+      tablist.setAttribute("role", "tablist");
 
-				// Handle clicking of tabs for mouse users
-				const onClick = (e: MouseEvent) => {
-					e.preventDefault();
-					const currentTab = tablist.querySelector('[aria-selected]');
-					const target = e.currentTarget;
-					if (target && target !== currentTab) {
-						this.switchTab(target as HTMLElement, i);
-					}
-				};
-				
-				tab.addEventListener('click', onClick);
-				tab.addEventListener('auxclick', onClick);
+      let initialTab = 0;
 
-				// Handle keydown events for keyboard users
-				tab.addEventListener('keydown', (e: KeyboardEvent) => {
-					const target = e.currentTarget;
-					if (!target) return;
-					
-					// Get the index of the current tab in the tabs node list
-					const index = tabs.indexOf(target as HTMLAnchorElement);
-					if (index === -1) return;
-					
-					// Calculate the new tab's index based on key pressed
-					let dir: number | null = null;
-					
-					if (e.key === 'ArrowLeft') {
-						dir = index - 1;
-					} else if (e.key === 'ArrowRight') {
-						dir = index + 1;
-					} else if (e.key === 'Home') {
-						dir = 0;
-					} else if (e.key === 'End') {
-						dir = tabs.length - 1;
-					}
-					
-					if (dir !== null && dir >= 0 && dir < tabs.length) {
-						e.preventDefault();
-						const targetTab = tabs[dir];
-						if (targetTab) {
-							this.switchTab(targetTab, dir);
-						}
-					}
-				});
-			});
+      // Add semantics and remove user focusability for each tab
+      tabs.forEach((tab, i) => {
+        if (!tab) return;
 
-			// Add tab panel semantics and hide them all
-			panels.forEach((panel, i) => {
-				if (!panel) return;
-				
-				panel.setAttribute('role', 'tabpanel');
-				panel.setAttribute('tabindex', '-1');
-				
-				const tabAtIndex = tabs[i];
-				if (tabAtIndex?.id) {
-					panel.setAttribute('aria-labelledby', tabAtIndex.id);
-				}
-				
-				panel.hidden = true;
-				
-				if (!this.panelStore[i]) this.panelStore[i] = new Set<HTMLElement>();
-				this.panelStore[i].add(panel);
-			});
+        tab.setAttribute("role", "tab");
+        tab.setAttribute("id", this.tabId + "tab" + this.counter++);
+        tab.setAttribute("tabindex", "-1");
 
-			// Activate and reveal the initial tab panel
-			const initialTabElement = tabs[initialTab];
-			if (initialTab >= 0 && initialTab < tabs.length && initialTabElement) {
-				initialTabElement.removeAttribute('tabindex');
-				initialTabElement.setAttribute('aria-selected', 'true');
-				
-				const initialPanel = panels[initialTab];
-				if (initialTab < panels.length && initialPanel) {
-					initialPanel.hidden = false;
-				}
-			}
-		}
+        const parentElement = tab.parentElement;
+        if (parentElement) {
+          parentElement.setAttribute("role", "presentation");
+        }
 
-		// The tab switching function
-		private switchTab(newTab: HTMLElement, index: number): void {
-			// Hide all tabs
-			this.tabStore.forEach((store) => {
-				if (store) {
-					store.forEach((oldTab) => {
-						oldTab.removeAttribute('aria-selected');
-						oldTab.setAttribute('tabindex', '-1');
-					});
-				}
-			});
-			
-			// Show the selected tab
-			const tabStoreIndex = this.tabStore[index];
-			if (index >= 0 && index < this.tabStore.length && tabStoreIndex) {
-				tabStoreIndex.forEach((tab) => {
-					tab.removeAttribute('tabindex');
-					tab.setAttribute('aria-selected', 'true');
-				});
-			}
+        if (!this.tabStore[i]) this.tabStore[i] = new Set<HTMLElement>();
+        this.tabStore[i].add(tab);
 
-			// Hide all panels
-			this.panelStore.forEach((store) => {
-				if (store) {
-					store.forEach((oldPanel) => {
-						oldPanel.hidden = true;
-					});
-				}
-			});
-			
-			// Show the selected panel
-			const panelStoreIndex = this.panelStore[index];
-			if (index >= 0 && index < this.panelStore.length && panelStoreIndex) {
-				panelStoreIndex.forEach((panel) => {
-					panel.hidden = false;
-				});
-			}
+        if (tab.dataset && "initial" in tab.dataset && tab.dataset.initial !== "false") {
+          initialTab = i;
+        }
 
-			// Focus the new tab
-			if (newTab) {
-				newTab.focus();
-			}
-		}
-	}
+        // Handle clicking of tabs for mouse users
+        const onClick = (e: MouseEvent) => {
+          e.preventDefault();
+          const currentTab = tablist.querySelector("[aria-selected]");
+          const target = e.currentTarget;
+          if (target && target !== currentTab) {
+            this.switchTab(target as HTMLElement, i);
+          }
+        };
 
-	customElements.define('tabbed-content', Tabs);
+        tab.addEventListener("click", onClick);
+        tab.addEventListener("auxclick", onClick);
+
+        // Handle keydown events for keyboard users
+        tab.addEventListener("keydown", (e: KeyboardEvent) => {
+          const target = e.currentTarget;
+          if (!target) return;
+
+          // Get the index of the current tab in the tabs node list
+          const index = tabs.indexOf(target as HTMLAnchorElement);
+          if (index === -1) return;
+
+          // Calculate the new tab's index based on key pressed
+          let dir: number | null = null;
+
+          if (e.key === "ArrowLeft") {
+            dir = index - 1;
+          } else if (e.key === "ArrowRight") {
+            dir = index + 1;
+          } else if (e.key === "Home") {
+            dir = 0;
+          } else if (e.key === "End") {
+            dir = tabs.length - 1;
+          }
+
+          if (dir !== null && dir >= 0 && dir < tabs.length) {
+            e.preventDefault();
+            const targetTab = tabs[dir];
+            if (targetTab) {
+              this.switchTab(targetTab, dir);
+            }
+          }
+        });
+      });
+
+      // Add tab panel semantics and hide them all
+      panels.forEach((panel, i) => {
+        if (!panel) return;
+
+        panel.setAttribute("role", "tabpanel");
+        panel.setAttribute("tabindex", "-1");
+
+        const tabAtIndex = tabs[i];
+        if (tabAtIndex?.id) {
+          panel.setAttribute("aria-labelledby", tabAtIndex.id);
+        }
+
+        panel.hidden = true;
+
+        if (!this.panelStore[i]) this.panelStore[i] = new Set<HTMLElement>();
+        this.panelStore[i].add(panel);
+      });
+
+      // Activate and reveal the initial tab panel
+      const initialTabElement = tabs[initialTab];
+      if (initialTab >= 0 && initialTab < tabs.length && initialTabElement) {
+        initialTabElement.removeAttribute("tabindex");
+        initialTabElement.setAttribute("aria-selected", "true");
+
+        const initialPanel = panels[initialTab];
+        if (initialTab < panels.length && initialPanel) {
+          initialPanel.hidden = false;
+        }
+      }
+    }
+
+    // The tab switching function
+    private switchTab(newTab: HTMLElement, index: number): void {
+      // Hide all tabs
+      this.tabStore.forEach((store) => {
+        if (store) {
+          store.forEach((oldTab) => {
+            oldTab.removeAttribute("aria-selected");
+            oldTab.setAttribute("tabindex", "-1");
+          });
+        }
+      });
+
+      // Show the selected tab
+      const tabStoreIndex = this.tabStore[index];
+      if (index >= 0 && index < this.tabStore.length && tabStoreIndex) {
+        tabStoreIndex.forEach((tab) => {
+          tab.removeAttribute("tabindex");
+          tab.setAttribute("aria-selected", "true");
+        });
+      }
+
+      // Hide all panels
+      this.panelStore.forEach((store) => {
+        if (store) {
+          store.forEach((oldPanel) => {
+            oldPanel.hidden = true;
+          });
+        }
+      });
+
+      // Show the selected panel
+      const panelStoreIndex = this.panelStore[index];
+      if (index >= 0 && index < this.panelStore.length && panelStoreIndex) {
+        panelStoreIndex.forEach((panel) => {
+          panel.hidden = false;
+        });
+      }
+
+      // Focus the new tab
+      if (newTab) {
+        newTab.focus();
+      }
+    }
+  }
+
+  customElements.define("tabbed-content", Tabs);
 </script>

@@ -13,7 +13,7 @@ import sitemap from "@astrojs/sitemap";
 import partytown from "@astrojs/partytown";
 import node from "@astrojs/node";
 import react from "@astrojs/react";
-import { sidebar } from './astro.sidebar.ts';
+import { sidebar } from "./astro.sidebar.ts";
 import { ENV } from "./src/lib/env";
 import { ogImagesIntegration } from "./src/integrations/ogImages";
 import { SUPPORTED_LANGUAGES } from "./src/config/locales";
@@ -98,7 +98,7 @@ export default defineConfig({
         PageFrame: "./src/starlight-overrides/PageFrame.astro",
         PageSidebar: "./src/starlight-overrides/PageSidebar.astro",
         PageTitle: "./src/starlight-overrides/PageTitle.astro",
-        Sidebar: './src/starlight-overrides/Sidebar.astro',
+        Sidebar: "./src/starlight-overrides/Sidebar.astro",
       },
       plugins: [
         ...(hasAlgoliaConfig

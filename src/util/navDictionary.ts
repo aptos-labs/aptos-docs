@@ -1,4 +1,4 @@
-import type keys from '../content/nav/en';
+import type keys from "../content/nav/en";
 
 type NavKey = keyof typeof keys;
 

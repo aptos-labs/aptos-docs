@@ -1,17 +1,17 @@
 ---
 // Handle Starlight sidebar integration
-import { Icon } from '@astrojs/starlight/components';
-import SidebarPersister from '@astrojs/starlight/components/SidebarPersister.astro';
-import SidebarSublist from '@astrojs/starlight/components/SidebarSublist.astro';
-import MobileMenuFooter from '@astrojs/starlight/components/MobileMenuFooter.astro';
-import type { Props } from '@astrojs/starlight/props';
+import { Icon } from "@astrojs/starlight/components";
+import SidebarPersister from "@astrojs/starlight/components/SidebarPersister.astro";
+import SidebarSublist from "@astrojs/starlight/components/SidebarSublist.astro";
+import MobileMenuFooter from "@astrojs/starlight/components/MobileMenuFooter.astro";
+import type { Props } from "@astrojs/starlight/props";
 import type { StarlightIcon } from "@astrojs/starlight/types";
-import { stripLeadingAndTrailingSlashes } from 'node_modules/@astrojs/starlight/utils/path';
-import TabbedContent from '~/components/tabs/TabbedContent.astro';
-import TabListItem from '~/components/tabs/TabListItem.astro';
-import TabPanel from '~/components/tabs/TabPanel.astro';
-import { stripLangFromSlug } from '~/utils/path-utils';
-import { isSubPage } from '~/utils/isSubPage';
+import { stripLeadingAndTrailingSlashes } from "node_modules/@astrojs/starlight/utils/path";
+import TabbedContent from "~/components/tabs/TabbedContent.astro";
+import TabListItem from "~/components/tabs/TabListItem.astro";
+import TabPanel from "~/components/tabs/TabPanel.astro";
+import { stripLangFromSlug } from "~/utils/path-utils";
+import { isSubPage } from "~/utils/isSubPage";
 
 // Get sidebar data
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -31,33 +31,33 @@ interface SidebarEntryType {
 
 // Process sidebar entries to mark current pages
 function markEntries(i: SidebarEntryType): void {
-	if (i.type === 'group' && i.entries) {
-		i.entries.forEach(markEntries);
-	} else if (i.href) {
-		const itemSlug = stripLeadingAndTrailingSlashes(i.href);
-		const itemSlugWithoutLang = stripLangFromSlug(itemSlug);
-		if (i.isCurrent !== undefined) {
-		    i.isCurrent ||= isSubPage(id, itemSlugWithoutLang);
-		}
-	}
+  if (i.type === "group" && i.entries) {
+    i.entries.forEach(markEntries);
+  } else if (i.href) {
+    const itemSlug = stripLeadingAndTrailingSlashes(i.href);
+    const itemSlugWithoutLang = stripLangFromSlug(itemSlug);
+    if (i.isCurrent !== undefined) {
+      i.isCurrent ||= isSubPage(id, itemSlugWithoutLang);
+    }
+  }
 }
 
 // Apply markEntries to all sidebar items if they exist
 if (Array.isArray(sidebarData)) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (sidebarData as any[]).forEach((item) => {
-        if (item) markEntries(item as SidebarEntryType);
-    });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (sidebarData as any[]).forEach((item) => {
+    if (item) markEntries(item as SidebarEntryType);
+  });
 }
 
 // Validate sidebar structure
 function assertGroups(sidebarItems: SidebarEntryType[]): SidebarEntryType[] {
-	for (const entry of sidebarItems) {
-		if (entry.type !== 'group') {
-			throw new Error('Top-level links are not permitted in the docs sidebar.');
-		}
-	}
-	return sidebarItems;
+  for (const entry of sidebarItems) {
+    if (entry.type !== "group") {
+      throw new Error("Top-level links are not permitted in the docs sidebar.");
+    }
+  }
+  return sidebarItems;
 }
 
 // Create sidebar groups with validation
@@ -66,175 +66,175 @@ const sidebarGroups = Array.isArray(sidebarData) ? assertGroups(sidebarData as a
 
 // Generate id for tab panel from label
 const makeId = (label: string): string => {
-    if (!label) return '__tab-unknown';
-    return '__tab-' + label.toLowerCase().replaceAll(/\s+/g, '-');
+  if (!label) return "__tab-unknown";
+  return "__tab-" + label.toLowerCase().replaceAll(/\s+/g, "-");
 };
 
 // Define specific icon names that are valid StarlightIcon values
 // These are guaranteed to be valid Starlight icons
-const ROCKET: StarlightIcon = 'rocket';
-const BOOK: StarlightIcon = 'open-book';
-const DOC: StarlightIcon = 'document';
-const SETTING: StarlightIcon = 'setting';
+const ROCKET: StarlightIcon = "rocket";
+const BOOK: StarlightIcon = "open-book";
+const DOC: StarlightIcon = "document";
+const SETTING: StarlightIcon = "setting";
 
 // Get an icon name based on index - always returns a valid StarlightIcon
 function getIcon(index: number): StarlightIcon {
-    // Default for invalid input
-    if (typeof index !== 'number' || index < 0) {
-        return ROCKET;
-    }
-    
-    // Safe index calculation
-    const modIndex = index % 4;
-    if (modIndex === 0) return ROCKET;
-    if (modIndex === 1) return BOOK;
-    if (modIndex === 2) return DOC;
-    return SETTING;
+  // Default for invalid input
+  if (typeof index !== "number" || index < 0) {
+    return ROCKET;
+  }
+
+  // Safe index calculation
+  const modIndex = index % 4;
+  if (modIndex === 0) return ROCKET;
+  if (modIndex === 1) return BOOK;
+  if (modIndex === 2) return DOC;
+  return SETTING;
 }
 
 // Check if a sidebar section contains the current page
 function isCurrent(sidebarItems: SidebarEntryType[]): boolean {
-    if (!Array.isArray(sidebarItems) || sidebarItems.length === 0) return false;
-    
-    return sidebarItems.some(entry => {
-        if (!entry) return false;
-        
-        if (entry.type === 'link') {
-            return !!entry.isCurrent;
-        } else if (entry.type === 'group' && Array.isArray(entry.entries) && entry.entries.length > 0) {
-            return isCurrent(entry.entries);
-        }
-        return false;
-    });
+  if (!Array.isArray(sidebarItems) || sidebarItems.length === 0) return false;
+
+  return sidebarItems.some((entry) => {
+    if (!entry) return false;
+
+    if (entry.type === "link") {
+      return !!entry.isCurrent;
+    } else if (entry.type === "group" && Array.isArray(entry.entries) && entry.entries.length > 0) {
+      return isCurrent(entry.entries);
+    }
+    return false;
+  });
 }
 ---
 
 <SidebarPersister {...Astro.props}>
-	<TabbedContent class="tabbed-sidebar">
-		<Fragment slot="tab-list">
-			{
-				sidebarGroups.map(({ label, entries }, index) => (
-					<TabListItem id={makeId(label)} initial={entries && isCurrent(entries)} class="tab-item">
-						<Icon class="icon" name={getIcon(index)} /> {label}
-					</TabListItem>
-				))
-			}
-		</Fragment>
-		{
-			sidebarGroups.map(({ label, entries }) => (
-				<TabPanel id={makeId(label)} initial={entries && isCurrent(entries)}>
-					{/* The entries are compatible with what SidebarSublist expects */}
-					{entries && (
-						// eslint-disable-next-line @typescript-eslint/no-explicit-any
-						<SidebarSublist sublist={entries as any} />
-					)}
-				</TabPanel>
-			))
-		}
-	</TabbedContent>
+  <TabbedContent class="tabbed-sidebar">
+    <Fragment slot="tab-list">
+      {
+        sidebarGroups.map(({ label, entries }, index) => (
+          <TabListItem id={makeId(label)} initial={entries && isCurrent(entries)} class="tab-item">
+            <Icon class="icon" name={getIcon(index)} /> {label}
+          </TabListItem>
+        ))
+      }
+    </Fragment>
+    {
+      sidebarGroups.map(({ label, entries }) => (
+        <TabPanel id={makeId(label)} initial={entries && isCurrent(entries)}>
+          {/* The entries are compatible with what SidebarSublist expects */}
+          {entries && (
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            <SidebarSublist sublist={entries as any} />
+          )}
+        </TabPanel>
+      ))
+    }
+  </TabbedContent>
 </SidebarPersister>
 
 <div class="md:sl-hidden">
-	<MobileMenuFooter {...Astro.props} />
+  <MobileMenuFooter {...Astro.props} />
 </div>
 
 <style>
-	/** Add "EN" to the end of sidebar items with the `fallback` class. */
-	:global(.fallback)::after {
-		content: 'EN';
-		vertical-align: super;
-		font-size: 0.75em;
-		font-weight: 700;
-	}
+  /** Add "EN" to the end of sidebar items with the `fallback` class. */
+  :global(.fallback)::after {
+    content: "EN";
+    vertical-align: super;
+    font-size: 0.75em;
+    font-weight: 700;
+  }
 
-	/** Align sponsors at sidebar bottom when there is room. */
-	.desktop-footer {
-		margin-top: auto;
-	}
+  /** Align sponsors at sidebar bottom when there is room. */
+  .desktop-footer {
+    margin-top: auto;
+  }
 
-	/** Always show the scrollbar gutter. */
-	:global(.sidebar-pane) {
-		overflow-y: scroll;
-	}
+  /** Always show the scrollbar gutter. */
+  :global(.sidebar-pane) {
+    overflow-y: scroll;
+  }
 
-	/* Styles for the custom tab switcher. */
-	.tabbed-sidebar {
-		/* Layout variables */
-		--tab-switcher-border-width: 1px;
-		--tab-switcher-padding: calc(0.25rem - var(--tab-switcher-border-width));
-		--tab-item-border-radius: var(--global-radius);
-		--tab-switcher-border-radius: var(--global-radius);
+  /* Styles for the custom tab switcher. */
+  .tabbed-sidebar {
+    /* Layout variables */
+    --tab-switcher-border-width: 1px;
+    --tab-switcher-padding: calc(0.25rem - var(--tab-switcher-border-width));
+    --tab-item-border-radius: var(--global-radius);
+    --tab-switcher-border-radius: var(--global-radius);
 
-		/* Color variables */
-		--tab-switcher-border-color: var(--sl-color-hairline-light);
-		--tab-switcher-background-color: var(--sl-color-gray-7, var(--sl-color-gray-6));
-		--tab-switcher-text-color: var(--sl-color-gray-3);
-		--tab-switcher-text-color--active: var(--sl-color-white);
-		--tab-switcher-icon-color: var(--sl-color-gray-4);
-		--tab-switcher-icon-color--active: var(--sl-color-text-accent);
-		--tab-item-background-color--hover: var(--sl-color-gray-6);
-		--tab-item-background-color--active: var(--sl-color-black);
-	}
-	/* Dark theme variations */
-	:global([data-theme='dark']) .tabbed-sidebar {
-		--tab-switcher-text-color: var(--sl-color-gray-2);
-		--tab-switcher-icon-color: var(--sl-color-gray-3);
-		--tab-item-background-color--hover: var(--sl-color-gray-5);
-	}
+    /* Color variables */
+    --tab-switcher-border-color: var(--sl-color-hairline-light);
+    --tab-switcher-background-color: var(--sl-color-gray-7, var(--sl-color-gray-6));
+    --tab-switcher-text-color: var(--sl-color-gray-3);
+    --tab-switcher-text-color--active: var(--sl-color-white);
+    --tab-switcher-icon-color: var(--sl-color-gray-4);
+    --tab-switcher-icon-color--active: var(--sl-color-text-accent);
+    --tab-item-background-color--hover: var(--sl-color-gray-6);
+    --tab-item-background-color--active: var(--sl-color-black);
+  }
+  /* Dark theme variations */
+  :global([data-theme="dark"]) .tabbed-sidebar {
+    --tab-switcher-text-color: var(--sl-color-gray-2);
+    --tab-switcher-icon-color: var(--sl-color-gray-3);
+    --tab-item-background-color--hover: var(--sl-color-gray-5);
+  }
 
-	@media (min-width: 50rem) {
-		/* Dark theme variations with the desktop sidebar visible */
-		:global([data-theme='dark']) .tabbed-sidebar {
-			--tab-switcher-background-color: color-mix(in srgb, var(--sl-color-white) 1%, transparent);
-			--tab-item-background-color--hover: var(--sl-color-gray-6);
-			--tab-item-background-color--active: var(--sl-color-gray-6);
-		}
-	}
+  @media (min-width: 50rem) {
+    /* Dark theme variations with the desktop sidebar visible */
+    :global([data-theme="dark"]) .tabbed-sidebar {
+      --tab-switcher-background-color: color-mix(in srgb, var(--sl-color-white) 1%, transparent);
+      --tab-item-background-color--hover: var(--sl-color-gray-6);
+      --tab-item-background-color--active: var(--sl-color-gray-6);
+    }
+  }
 
-	.tabbed-sidebar.tab-list {
-		/* border: var(--tab-switcher-border-width) solid var(--tab-switcher-border-color); */
-		border-radius: var(--tab-switcher-border-radius);
-		display: flex;
-		flex-direction: column;
-		gap: 0.25rem;
-		padding: var(--tab-switcher-padding);
-		background-color: transparent;
-		margin-bottom: 1.5rem;
-	}
+  .tabbed-sidebar.tab-list {
+    /* border: var(--tab-switcher-border-width) solid var(--tab-switcher-border-color); */
+    border-radius: var(--tab-switcher-border-radius);
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding: var(--tab-switcher-padding);
+    background-color: transparent;
+    margin-bottom: 1.5rem;
+  }
 
-	.tab-item :global(a) {
-		border: var(--tab-switcher-border-width) solid transparent;
-		border-radius: var(--tab-item-border-radius);
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: calc(0.5rem - var(--tab-switcher-border-width));
-		background-clip: padding-box;
-		line-height: var(--sl-line-height-headings);
-		text-decoration: none;
-		color: var(--tab-switcher-text-color);
-		font-weight: 600;
-		font-size: large;
-	}
+  .tab-item :global(a) {
+    border: var(--tab-switcher-border-width) solid transparent;
+    border-radius: var(--tab-item-border-radius);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: calc(0.5rem - var(--tab-switcher-border-width));
+    background-clip: padding-box;
+    line-height: var(--sl-line-height-headings);
+    text-decoration: none;
+    color: var(--tab-switcher-text-color);
+    font-weight: 600;
+    font-size: large;
+  }
 
-	.tab-item :global(a:hover) {
-		color: var(--tab-switcher-text-color--active);
-		background-color: var(--tab-item-background-color--hover);
-	}
-	.tab-item :global(a[aria-selected='true']) {
-		border-color: var(--tab-switcher-border-color);
-		color: var(--tab-switcher-text-color--active);
-		background-color: var(--tab-item-background-color--active);
-	}
+  .tab-item :global(a:hover) {
+    color: var(--tab-switcher-text-color--active);
+    background-color: var(--tab-item-background-color--hover);
+  }
+  .tab-item :global(a[aria-selected="true"]) {
+    border-color: var(--tab-switcher-border-color);
+    color: var(--tab-switcher-text-color--active);
+    background-color: var(--tab-item-background-color--active);
+  }
 
-	.icon {
-		margin: 0.25rem;
-		color: var(--tab-switcher-icon-color);
-	}
-	.tab-item :global(a:hover) .icon {
-		color: inherit;
-	}
-	.tab-item :global(a[aria-selected='true']) .icon {
-		color: var(--tab-switcher-icon-color--active);
-	}
+  .icon {
+    margin: 0.25rem;
+    color: var(--tab-switcher-icon-color);
+  }
+  .tab-item :global(a:hover) .icon {
+    color: inherit;
+  }
+  .tab-item :global(a[aria-selected="true"]) .icon {
+    color: var(--tab-switcher-icon-color--active);
+  }
 </style>

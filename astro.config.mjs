@@ -2,7 +2,7 @@
 import { defineConfig, envField } from "astro/config";
 import starlight from "@astrojs/starlight";
 import tailwindcss from "@tailwindcss/vite";
-import starlightOpenAPI, { openAPISidebarGroups } from "starlight-openapi";
+import starlightOpenAPI from "starlight-openapi";
 import starlightDocSearch from "@astrojs/starlight-docsearch";
 
 import vercel from "@astrojs/vercel";
@@ -13,6 +13,7 @@ import sitemap from "@astrojs/sitemap";
 import partytown from "@astrojs/partytown";
 import node from "@astrojs/node";
 import react from "@astrojs/react";
+import { sidebar } from './astro.sidebar.ts';
 import { ENV } from "./src/lib/env";
 import { ogImagesIntegration } from "./src/integrations/ogImages";
 import { SUPPORTED_LANGUAGES } from "./src/config/locales";
@@ -97,6 +98,7 @@ export default defineConfig({
         PageFrame: "./src/starlight-overrides/PageFrame.astro",
         PageSidebar: "./src/starlight-overrides/PageSidebar.astro",
         PageTitle: "./src/starlight-overrides/PageTitle.astro",
+        Sidebar: './src/starlight-overrides/Sidebar.astro',
       },
       plugins: [
         ...(hasAlgoliaConfig
@@ -125,20 +127,7 @@ export default defineConfig({
             ]
           : []),
       ],
-      sidebar: [
-        {
-          label: "Build",
-          collapsed: true,
-          autogenerate: { directory: "build" },
-        },
-        {
-          label: "Network",
-          collapsed: true,
-          autogenerate: { directory: "network" },
-        },
-        { label: "Move Reference", link: "/move-reference/" },
-        ...(enableApiReference ? openAPISidebarGroups : []),
-      ],
+      sidebar,
       customCss: ["./src/globals.css", "katex/dist/katex.min.css"],
     }),
     sitemap({

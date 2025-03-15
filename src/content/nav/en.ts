@@ -1,15 +1,32 @@
-export default {
-	build: 'Build',
+/**
+ * English labels for navigation items
+ * Keys correspond to identifiers used in sidebar configuration
+ */
+interface NavLabels {
+  build: string;
+  network: string;
+  "network.group.blockchain": string;
+  "network.group.nodes": string;
+  guides: string;
+  "guides.group.beginner": string;
+  "guides.group.advanced": string;
+  reference: string;
+  "reference.move": string;
+}
 
-	network: 'Network',
-	'network.group.blockchain': 'Blockchain',
-	'network.group.nodes': 'Nodes',
+const labels: NavLabels = {
+  build: "Build",
 
-	guides: 'Guides',
-	'guides.group.beginner': 'Beginner',
-	'guides.group.advanced': 'Advanced',
+  network: "Network",
+  "network.group.blockchain": "Blockchain",
+  "network.group.nodes": "Nodes",
 
-	reference: 'Reference',
-	'reference.move': 'Move Reference',
-	
+  guides: "Guides",
+  "guides.group.beginner": "Beginner",
+  "guides.group.advanced": "Advanced",
+
+  reference: "Reference",
+  "reference.move": "Move Reference",
 };
+
+export default labels;

@@ -1,103 +1,142 @@
 ---
+// Handle Starlight sidebar integration
 import { Icon } from '@astrojs/starlight/components';
 import SidebarPersister from '@astrojs/starlight/components/SidebarPersister.astro';
 import SidebarSublist from '@astrojs/starlight/components/SidebarSublist.astro';
 import MobileMenuFooter from '@astrojs/starlight/components/MobileMenuFooter.astro';
 import type { Props } from '@astrojs/starlight/props';
-// import type { SidebarEntry } from 'node_modules/@astrojs/starlight/utils/navigation';
+import type { StarlightIcon } from "@astrojs/starlight/types";
 import { stripLeadingAndTrailingSlashes } from 'node_modules/@astrojs/starlight/utils/path';
-// import Sponsors from '../LeftSidebar/Sponsors.astro';
 import TabbedContent from '~/components/tabs/TabbedContent.astro';
 import TabListItem from '~/components/tabs/TabListItem.astro';
 import TabPanel from '~/components/tabs/TabPanel.astro';
 import { stripLangFromSlug } from '~/utils/path-utils';
 import { isSubPage } from '~/utils/isSubPage';
-import { allPages } from '~/content';
-// import MobileMenuFooter from './MobileMenuFooter.astro';
 
-const { sidebar } = Astro.locals.starlightRoute;
+// Get sidebar data
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const sidebarData = Astro.locals.starlightRoute ? Astro.locals.starlightRoute.sidebar : [];
 const { id } = Astro.props;
 
-interface SidebarEntry {
-  path: string;
-  children: string[];
+// Interface for sidebar entries
+interface SidebarEntryType {
+  type: string;
+  label: string;
+  href?: string;
+  isCurrent?: boolean;
+  attrs?: Record<string, string>;
+  entries?: SidebarEntryType[];
+  [key: string]: unknown;
 }
 
-// Recursively tweaks properties of sidebar entries.
-// - Adds a fallback class to entries in the sidebar that don’t exist in the current language.
-// - Marks pages as “current” if they parents of pages that don’t appear in the sidebar.
-function markEntries(i: SidebarEntry) {
-	if (i.type === 'group') {
+// Process sidebar entries to mark current pages
+function markEntries(i: SidebarEntryType): void {
+	if (i.type === 'group' && i.entries) {
 		i.entries.forEach(markEntries);
-	} else {
+	} else if (i.href) {
 		const itemSlug = stripLeadingAndTrailingSlashes(i.href);
 		const itemSlugWithoutLang = stripLangFromSlug(itemSlug);
-		// const isFallback = !allPages.some((entry) => entry.id === itemSlug);
-		// if (isFallback) i.attrs.class = 'fallback';
-		i.isCurrent ||= isSubPage(id, itemSlugWithoutLang);
+		if (i.isCurrent !== undefined) {
+		    i.isCurrent ||= isSubPage(id, itemSlugWithoutLang);
+		}
 	}
 }
-sidebar.forEach(markEntries);
 
-// Make sure all top-level items in the sidebar are groups.
-type Group = Extract<SidebarEntry, { type: 'group' }>;
-function assertGroups(sidebar: SidebarEntry[]): asserts sidebar is Group[] {
-	for (const entry of sidebar) {
+// Apply markEntries to all sidebar items if they exist
+if (Array.isArray(sidebarData)) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (sidebarData as any[]).forEach((item) => {
+        if (item) markEntries(item as SidebarEntryType);
+    });
+}
+
+// Validate sidebar structure
+function assertGroups(sidebarItems: SidebarEntryType[]): SidebarEntryType[] {
+	for (const entry of sidebarItems) {
 		if (entry.type !== 'group') {
 			throw new Error('Top-level links are not permitted in the docs sidebar.');
 		}
 	}
+	return sidebarItems;
 }
-assertGroups(sidebar);
 
-/** Convert a group label to an `id` we can use to identify tab panels. */
-// The id is prefixed to avoid clashing with existing heading IDs on the page.
-const makeId = (label: string) => '__tab-' + label.toLowerCase().replaceAll(/\s+/g, '-');
+// Create sidebar groups with validation
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const sidebarGroups = Array.isArray(sidebarData) ? assertGroups(sidebarData as any) : [];
 
-/** Get the icon for a group. Update the icon names in the array to change the icons associated with a group. */
-const getIcon = (index: number) =>
-	(['rocket', 'seti:xml', 'open-book', 'setting'] as const)[index];
+// Generate id for tab panel from label
+const makeId = (label: string): string => {
+    if (!label) return '__tab-unknown';
+    return '__tab-' + label.toLowerCase().replaceAll(/\s+/g, '-');
+};
 
-/** Determine if an array of sidebar items contains the current page.  */
-const isCurrent = (sidebar: SidebarEntry[]): boolean =>
-	sidebar
-		.map((entry) => (entry.type === 'link' ? entry.isCurrent : isCurrent(entry.entries)))
-		.some((entry) => entry === true);
+// Define specific icon names that are valid StarlightIcon values
+// These are guaranteed to be valid Starlight icons
+const ROCKET: StarlightIcon = 'rocket';
+const BOOK: StarlightIcon = 'open-book';
+const DOC: StarlightIcon = 'document';
+const SETTING: StarlightIcon = 'setting';
+
+// Get an icon name based on index - always returns a valid StarlightIcon
+function getIcon(index: number): StarlightIcon {
+    // Default for invalid input
+    if (typeof index !== 'number' || index < 0) {
+        return ROCKET;
+    }
+    
+    // Safe index calculation
+    const modIndex = index % 4;
+    if (modIndex === 0) return ROCKET;
+    if (modIndex === 1) return BOOK;
+    if (modIndex === 2) return DOC;
+    return SETTING;
+}
+
+// Check if a sidebar section contains the current page
+function isCurrent(sidebarItems: SidebarEntryType[]): boolean {
+    if (!Array.isArray(sidebarItems) || sidebarItems.length === 0) return false;
+    
+    return sidebarItems.some(entry => {
+        if (!entry) return false;
+        
+        if (entry.type === 'link') {
+            return !!entry.isCurrent;
+        } else if (entry.type === 'group' && Array.isArray(entry.entries) && entry.entries.length > 0) {
+            return isCurrent(entry.entries);
+        }
+        return false;
+    });
+}
 ---
 
 <SidebarPersister {...Astro.props}>
 	<TabbedContent class="tabbed-sidebar">
 		<Fragment slot="tab-list">
 			{
-				sidebar.map(({ label, entries }, index) => (
-					<TabListItem id={makeId(label)} initial={isCurrent(entries)} class="tab-item">
+				sidebarGroups.map(({ label, entries }, index) => (
+					<TabListItem id={makeId(label)} initial={entries && isCurrent(entries)} class="tab-item">
 						<Icon class="icon" name={getIcon(index)} /> {label}
 					</TabListItem>
 				))
 			}
 		</Fragment>
 		{
-			sidebar.map(({ label, entries }) => (
-				<TabPanel id={makeId(label)} initial={isCurrent(entries)}>
-					<SidebarSublist sublist={entries} />
+			sidebarGroups.map(({ label, entries }) => (
+				<TabPanel id={makeId(label)} initial={entries && isCurrent(entries)}>
+					{/* The entries are compatible with what SidebarSublist expects */}
+					{entries && (
+						// eslint-disable-next-line @typescript-eslint/no-explicit-any
+						<SidebarSublist sublist={entries as any} />
+					)}
 				</TabPanel>
 			))
 		}
 	</TabbedContent>
 </SidebarPersister>
 
-
 <div class="md:sl-hidden">
 	<MobileMenuFooter {...Astro.props} />
 </div>
-
-<!-- <div class="md:sl-hidden">
-	<MobileMenuFooter {...Astro.props} />
-</div>
-
-<div class="desktop-footer sl-hidden md:sl-block">
-	<Sponsors />
-</div> -->
 
 <style>
 	/** Add "EN" to the end of sidebar items with the `fallback` class. */
@@ -175,7 +214,7 @@ const isCurrent = (sidebar: SidebarEntry[]): boolean =>
 		text-decoration: none;
 		color: var(--tab-switcher-text-color);
 		font-weight: 600;
-    font-size: large;
+		font-size: large;
 	}
 
 	.tab-item :global(a:hover) {

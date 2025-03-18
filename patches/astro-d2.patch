@@ -1,0 +1,419 @@
+diff --git a/config.ts b/config.ts
+index 5ad62f3e3311c953049dc9b909e86a1d022b9950..52a8f0e8484ac25627e8a203bcb65b13c4994563 100644
+--- a/config.ts
++++ b/config.ts
+@@ -1,4 +1,4 @@
+-import { z } from 'astro/zod'
++import { z } from "astro/zod";
+ 
+ export const AstroD2ConfigSchema = z
+   .object({
+@@ -35,13 +35,13 @@ export const AstroD2ConfigSchema = z
+      * @default 'dagre'
+      * @see https://d2lang.com/tour/layouts#layout-engines
+      */
+-    layout: z.union([z.literal('dagre'), z.literal('elk'), z.literal('tala')]).default('dagre'),
++    layout: z.union([z.literal("dagre"), z.literal("elk")]).default("dagre"),
+     /**
+      * The name of the output directory containing the generated diagrams relative to the `public/` directory.
+      *
+      * @default 'd2'
+      */
+-    output: z.string().default('d2'),
++    output: z.string().default("d2"),
+     /**
+      * The padding (in pixels) around the rendered diagrams.
+      *
+@@ -78,18 +78,18 @@ export const AstroD2ConfigSchema = z
+          * @default '200'
+          * @see https://d2lang.com/tour/themes
+          */
+-        dark: z.union([z.string(), z.literal(false)]).default('200'),
++        dark: z.union([z.string(), z.literal(false)]).default("200"),
+         /**
+          * The default theme to use for the diagrams.
+          *
+          * @default '0'
+          * @see https://d2lang.com/tour/themes
+          */
+-        default: z.string().default('0'),
++        default: z.string().default("0"),
+       })
+       .default({}),
+   })
+-  .default({})
++  .default({});
+ 
+-export type AstroD2UserConfig = z.input<typeof AstroD2ConfigSchema>
+-export type AstroD2Config = z.output<typeof AstroD2ConfigSchema>
++export type AstroD2UserConfig = z.input<typeof AstroD2ConfigSchema>;
++export type AstroD2Config = z.output<typeof AstroD2ConfigSchema>;
+diff --git a/index.ts b/index.ts
+index 7cef47bf45a2d3cd2974ab2c73f1480f0e258cee..a0d1018ab3429dc9d12fccb7d0114cbee8b60966 100644
+--- a/index.ts
++++ b/index.ts
+@@ -5,7 +5,6 @@ import type { AstroIntegration } from 'astro'
+ 
+ import { AstroD2ConfigSchema, type AstroD2UserConfig } from './config'
+ import { clearContentLayerCache } from './libs/astro'
+-import { isD2Installed } from './libs/d2'
+ import { throwErrorWithHint } from './libs/integration'
+ import { remarkAstroD2 } from './libs/remark'
+ 
+@@ -33,12 +32,6 @@ export default function astroD2Integration(userConfig?: AstroD2UserConfig): Astr
+         if (config.skipGeneration) {
+           logger.warn("Skipping generation of D2 diagrams as the 'skipGeneration' option is enabled.")
+         } else {
+-          if (!(await isD2Installed())) {
+-            throwErrorWithHint(
+-              'Could not find D2. Please check the installation instructions at https://github.com/terrastruct/d2/blob/master/docs/INSTALL.md',
+-            )
+-          }
+-
+           if (command === 'build') {
+             await clearContentLayerCache(astroConfig, logger)
+             await fs.rm(path.join('public', config.output), { force: true, recursive: true })
+diff --git a/libs/attributes.ts b/libs/attributes.ts
+index 4454a16de4fb6271a23ce9f927c8392859ec19d7..66dd13e571f405dcfac1d61681b1bcb316502462 100644
+--- a/libs/attributes.ts
++++ b/libs/attributes.ts
+@@ -1,4 +1,4 @@
+-import { z } from 'astro/zod'
++import { z } from "astro/zod";
+ 
+ export const AttributesSchema = z
+   .object({
+@@ -17,11 +17,11 @@ export const AttributesSchema = z
+     darkTheme: z
+       .string()
+       .optional()
+-      .transform((value) => (value === 'false' ? false : value)),
++      .transform((value) => (value === "false" ? false : value)),
+     /**
+      * Overrides the global `layout` configuration for the diagram.
+      */
+-    layout: z.union([z.literal('dagre'), z.literal('elk'), z.literal('tala')]).optional(),
++    layout: z.union([z.literal("dagre"), z.literal("elk")]).optional(),
+     /**
+      * Overrides the global `pad` configuration for the diagram.
+      */
+@@ -30,9 +30,9 @@ export const AttributesSchema = z
+      * Overrides the global `sketch` configuration for the diagram.
+      */
+     sketch: z
+-      .union([z.literal('true'), z.literal('false')])
++      .union([z.literal("true"), z.literal("false")])
+       .optional()
+-      .transform((value) => (value === 'false' ? false : value)),
++      .transform((value) => (value === "false" ? false : value)),
+     /**
+      * Defines the target board to render when using composition.
+      * Use `root` to target the root board.
+@@ -42,13 +42,13 @@ export const AttributesSchema = z
+     target: z
+       .string()
+       .optional()
+-      .transform((value) => (value === 'root' ? '' : value)),
++      .transform((value) => (value === "root" ? "" : value)),
+     /**
+      * The title of the diagram that will be used as the `alt` attribute of the generated image.
+      *
+      * @default 'Diagram'
+      */
+-    title: z.string().default('Diagram'),
++    title: z.string().default("Diagram"),
+     /**
+      * The default theme to use for the diagrams.
+      *
+@@ -60,36 +60,38 @@ export const AttributesSchema = z
+      */
+     width: z.coerce.number().optional(),
+   })
+-  .default({})
++  .default({});
+ 
+ const attributeRegex =
+-  /(?<key>[^\s"'=]+)=(?:(?<noQuoteValue>\w+)|'(?<singleQuoteValue>[^']+)'|"(?<doubleQuoteValue>[^"]+))|(?<truthyKey>\w+)/g
++  /(?<key>[^\s"'=]+)=(?:(?<noQuoteValue>\w+)|'(?<singleQuoteValue>[^']+)'|"(?<doubleQuoteValue>[^"]+))|(?<truthyKey>\w+)/g;
+ 
+ export function getAttributes(attributesStr: string | null | undefined) {
+-  return AttributesSchema.parse(parseAttributes(attributesStr))
++  return AttributesSchema.parse(parseAttributes(attributesStr));
+ }
+ 
+ function parseAttributes(attributesStr: string | null | undefined) {
+   if (!attributesStr) {
+-    return {}
++    return {};
+   }
+ 
+-  const matches = attributesStr.matchAll(attributeRegex)
++  const matches = attributesStr.matchAll(attributeRegex);
+ 
+-  const attributes: Record<string, string> = {}
++  const attributes: Record<string, string> = {};
+ 
+   for (const match of matches) {
+-    const { key, noQuoteValue, singleQuoteValue, doubleQuoteValue, truthyKey } = match.groups ?? {}
++    const { key, noQuoteValue, singleQuoteValue, doubleQuoteValue, truthyKey } = match.groups ?? {};
+ 
+-    const attributeKey = truthyKey ?? key
+-    const attributeValue = truthyKey ? 'true' : (noQuoteValue ?? singleQuoteValue ?? doubleQuoteValue)
++    const attributeKey = truthyKey ?? key;
++    const attributeValue = truthyKey
++      ? "true"
++      : (noQuoteValue ?? singleQuoteValue ?? doubleQuoteValue);
+ 
+     if (attributeKey && attributeValue) {
+-      attributes[attributeKey] = attributeValue
++      attributes[attributeKey] = attributeValue;
+     }
+   }
+ 
+-  return attributes
++  return attributes;
+ }
+ 
+-export type DiagramAttributes = z.infer<typeof AttributesSchema>
++export type DiagramAttributes = z.infer<typeof AttributesSchema>;
+diff --git a/libs/d2.ts b/libs/d2.ts
+index 8d7b9d62b38ba53acc2d4c6019d51b2a6db8f129..5abf39d852ef19f14a995ff2737bed50d0557c8b 100644
+--- a/libs/d2.ts
++++ b/libs/d2.ts
+@@ -1,21 +1,50 @@
+-import fs from 'node:fs/promises'
+-import path from 'node:path'
+-import url from 'node:url'
+-
+-import type { DiagramAttributes } from './attributes'
+-import { exec } from './exec'
+-import type { RemarkAstroD2Config } from './remark'
+-
+-const viewBoxRegex = /viewBox="\d+ \d+ (?<width>\d+) (?<height>\d+)"/
+-
+-export async function isD2Installed() {
+-  try {
+-    await getD2Version()
++import fs from "node:fs/promises";
++import path from "node:path";
++import url from "node:url";
++import { D2 } from "@terrastruct/d2";
++
++import type { DiagramAttributes } from "./attributes";
++import type { RemarkAstroD2Config } from "./remark";
++
++const viewBoxRegex = /viewBox="\d+ \d+ (?<width>\d+) (?<height>\d+)"/;
++
++/* types are takes from https://github.com/terrastruct/d2/blob/master/d2js/js/index.d.ts, since they aren't provided with the package itself */
++export interface RenderOptions {
++  /** Enable sketch mode [default: false] */
++  sketch?: boolean;
++  /** Theme ID to use [default: 0] */
++  themeID?: number;
++  /** Theme ID to use when client is in dark mode */
++  darkThemeID?: number;
++  /** Center the SVG in the containing viewbox [default: false] */
++  center?: boolean;
++  /** Pixels padded around the rendered diagram [default: 100] */
++  pad?: number;
++  /** Scale the output. E.g., 0.5 to halve the default size. The default will render SVG's that will fit to screen. Setting to 1 turns off SVG fitting to screen. */
++  scale?: number;
++  /** Adds an appendix for tooltips and links [default: false] */
++  forceAppendix?: boolean;
++  /** Target board/s to render. If target ends with '', it will be rendered with all of its scenarios, steps, and layers. Otherwise, only the target board will be rendered. E.g. target: 'layers.x.*' to render layer 'x' with all of its children. Pass '' to render all scenarios, steps, and layers. By default, only the root board is rendered. Multi-board outputs are currently only supported for animated SVGs and so animateInterval must be set to a value greater than 0 when targeting multiple boards. */
++  target?: string;
++  /** If given, multiple boards are packaged as 1 SVG which transitions through each board at the interval (in milliseconds). */
++  animateInterval?: number;
++  /** Add a salt value to ensure the output uses unique IDs. This is useful when generating multiple identical diagrams to be included in the same HTML doc, so that duplicate IDs do not cause invalid HTML. The salt value is a string that will be appended to IDs in the output. */
++  salt?: string;
++  /** Omit XML tag (<?xml ...?>) from output SVG files. Useful when generating SVGs for direct HTML embedding. */
++  noXMLTag?: boolean;
++}
+ 
+-    return true
+-  } catch {
+-    return false
+-  }
++export interface CompileOptions extends RenderOptions {
++  /** Layout engine to use [default: 'dagre'] */
++  layout?: "dagre" | "elk";
++  /** A byte array containing .ttf file to use for the regular font. If none provided, Source Sans Pro Regular is used. */
++  fontRegular?: Uint8Array;
++  /** A byte array containing .ttf file to use for the italic font. If none provided, Source Sans Pro Italic is used. */
++  fontItalic?: Uint8Array;
++  /** A byte array containing .ttf file to use for the bold font. If none provided, Source Sans Pro Bold is used. */
++  fontBold?: Uint8Array;
++  /** A byte array containing .ttf file to use for the semibold font. If none provided, Source Sans Pro Semibold is used. */
++  fontSemibold?: Uint8Array;
+ }
+ 
+ export async function generateD2Diagram(
+@@ -25,103 +54,88 @@ export async function generateD2Diagram(
+   outputPath: string,
+   cwd: string,
+ ) {
+-  const extraArgs = []
++  const options: CompileOptions = {
++    layout: attributes.layout ?? config.layout,
++    sketch: Boolean(attributes.sketch ?? config.sketch),
++  };
++
++  if (attributes.theme !== undefined) {
++    options.themeID = Number.parseInt(attributes.theme, 10);
++  } else if (config.theme.default !== undefined) {
++    options.themeID = Number.parseInt(config.theme.default, 10);
++  }
+ 
+-  if (
+-    (config.theme.dark !== false && attributes.darkTheme !== false) ||
+-    (attributes.darkTheme !== undefined && attributes.darkTheme !== false)
+-  ) {
+-    extraArgs.push(`--dark-theme=${attributes.darkTheme ?? config.theme.dark}`)
++  if (attributes.darkTheme !== undefined && attributes.darkTheme !== false) {
++    options.darkThemeID = Number.parseInt(attributes.darkTheme, 10);
++  } else if (config.theme.dark !== false) {
++    options.darkThemeID = Number.parseInt(config.theme.dark, 10);
+   }
+ 
+   if (attributes.animateInterval) {
+-    extraArgs.push(`--animate-interval=${attributes.animateInterval}`)
++    options.animateInterval = Number.parseInt(attributes.animateInterval, 10);
+   }
+ 
+   if (attributes.target !== undefined) {
+-    extraArgs.push(`--target=${attributes.target}`)
++    options.target = attributes.target;
+   }
+ 
+   if (config.fonts?.regular) {
+-    extraArgs.push(
+-      `--font-regular=${path.relative(cwd, path.join(url.fileURLToPath(config.root), config.fonts.regular))}`,
+-    )
++    options.fontRegular = await fs.readFile(
++      path.relative(cwd, path.join(url.fileURLToPath(config.root), config.fonts.regular)),
++    );
+   }
+ 
+   if (config.fonts?.italic) {
+-    extraArgs.push(
+-      `--font-italic=${path.relative(cwd, path.join(url.fileURLToPath(config.root), config.fonts.italic))}`,
+-    )
++    options.fontItalic = await fs.readFile(
++      path.relative(cwd, path.join(url.fileURLToPath(config.root), config.fonts.italic)),
++    );
+   }
+ 
+   if (config.fonts?.bold) {
+-    extraArgs.push(`--font-bold=${path.relative(cwd, path.join(url.fileURLToPath(config.root), config.fonts.bold))}`)
++    options.fontBold = await fs.readFile(
++      path.relative(
++        cwd,
++        path.relative(cwd, path.join(url.fileURLToPath(config.root), config.fonts.bold)),
++      ),
++    );
+   }
+ 
+   try {
+-    // The `-` argument is used to read from stdin instead of a file.
+-    await exec(
+-      'd2',
+-      [
+-        `--layout=${attributes.layout ?? config.layout}`,
+-        `--theme=${attributes.theme ?? config.theme.default}`,
+-        `--sketch=${attributes.sketch ?? config.sketch}`,
+-        `--pad=${attributes.pad ?? config.pad}`,
+-        ...extraArgs,
+-        '-',
+-        outputPath,
+-      ],
+-      input,
+-      cwd,
+-    )
+-  } catch (error) {
+-    throw new Error('Failed to generate D2 diagram.', { cause: error })
+-  }
++    const d2 = new D2();
++    const result = await d2.compile(input, options);
++    const svg = await d2.render(result.diagram, result.renderOptions);
+ 
+-  return await getD2Diagram(outputPath)
+-}
++    await fs.mkdir(path.dirname(outputPath), { recursive: true });
++    await fs.writeFile(outputPath, svg);
+ 
+-export async function getD2Diagram(diagramPath: string): Promise<D2Diagram | undefined> {
+-  try {
+-    const content = await fs.readFile(diagramPath, 'utf8')
+-    const match = viewBoxRegex.exec(content)
+-    const { height, width } = match?.groups ?? {}
+-
+-    if (!height || !width) {
+-      return
+-    }
+-
+-    const computedHeight = Number.parseInt(height, 10)
+-    const computedWidth = Number.parseInt(width, 10)
+-
+-    return { content, size: { height: computedHeight, width: computedWidth } }
++    return await getD2Diagram(svg);
+   } catch (error) {
+-    throw new Error(`Failed to get D2 diagram size at '${diagramPath}'.`, { cause: error })
++    throw new Error("Failed to generate D2 diagram.", { cause: error });
+   }
+ }
+ 
+-async function getD2Version() {
+-  try {
+-    const [version] = await exec('d2', ['--version'])
+-
+-    if (!version || !/^v?\d+\.\d+\.\d+/.test(version)) {
+-      throw new Error(`Invalid D2 version, got '${version}'.`)
+-    }
++export async function getD2Diagram(content: string): Promise<D2Diagram | undefined> {
++  const match = viewBoxRegex.exec(content);
++  const { height, width } = match?.groups ?? {};
+ 
+-    return version
+-  } catch (error) {
+-    throw new Error('Failed to get D2 version.', { cause: error })
++  if (!height || !width) {
++    return;
+   }
++
++  const computedHeight = Number.parseInt(height, 10);
++  const computedWidth = Number.parseInt(width, 10);
++
++  return { content, size: { height: computedHeight, width: computedWidth } };
+ }
+ 
+ export interface D2Diagram {
+-  content: string
+-  size: D2Size
++  content: string;
++  size: D2Size;
+ }
+ 
+ export type D2Size =
+   | {
+-      height: number
+-      width: number
++      height: number;
++      width: number;
+     }
+-  | undefined
++  | undefined;
+diff --git a/libs/exec.ts b/libs/exec.ts
+deleted file mode 100644
+index 62b3a595d8fd1cc160f6a0d63dde833082dbff6d..0000000000000000000000000000000000000000
+diff --git a/package.json b/package.json
+index bd69152e03327ad8ca8d44b2d6867cf244440a98..7cbb0a13d2b5657ca4f341a606020b7d3abc3612 100644
+--- a/package.json
++++ b/package.json
+@@ -10,6 +10,7 @@
+     "./package.json": "./package.json"
+   },
+   "dependencies": {
++    "@terrastruct/d2": "^0.1.21",
+     "hast-util-from-html": "^2.0.3",
+     "hast-util-to-html": "^9.0.4",
+     "unist-util-visit": "^5.0.0"

@@ -14,6 +14,7 @@ import partytown from "@astrojs/partytown";
 import node from "@astrojs/node";
 import react from "@astrojs/react";
 import Icons from "unplugin-icons/vite";
+import astroD2 from "astro-d2";
 import { sidebar } from "./astro.sidebar.ts";
 import { ENV } from "./src/lib/env";
 import { ogImagesIntegration } from "./src/integrations/ogImages";
@@ -43,6 +44,7 @@ export default defineConfig({
   integrations: [
     ogImagesIntegration(),
     firebaseIntegration(),
+    astroD2({ theme: { default: "1", dark: "200" } }),
     starlight({
       title: {
         en: "Aptos Docs",

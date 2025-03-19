@@ -1,0 +1,32 @@
+---
+import Default from "@astrojs/starlight/components/LanguageSelect.astro";
+---
+
+<Default {...Astro.props}><slot /></Default>
+
+<script>
+  // Wait for the DOM to be fully loaded
+  document.addEventListener("DOMContentLoaded", () => {
+    // Find the language select element
+    const langSelect = document.querySelector("starlight-lang-select select");
+
+    if (langSelect) {
+      // Add our enhanced handler
+      langSelect.addEventListener("change", (e) => {
+        if (e.currentTarget instanceof HTMLSelectElement) {
+          // Get the selected locale from the pathname
+          const pathname = e.currentTarget.value;
+          const localeMatch = pathname.match(/^\/(zh|ja)/);
+          const locale = localeMatch ? localeMatch[1] : "en";
+
+          // Set the cookie with a 1-year expiration
+          const expiryDate = new Date();
+          expiryDate.setFullYear(expiryDate.getFullYear() + 1);
+          document.cookie = `preferred_locale=${locale}; expires=${expiryDate.toUTCString()}; path=/; SameSite=Lax`;
+
+          console.log(`Set language preference cookie: preferred_locale=${locale}`);
+        }
+      });
+    }
+  });
+</script>

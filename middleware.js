@@ -1,0 +1,56 @@
+// middleware.js
+export const config = {
+  // Match both non-language paths and language-prefixed paths
+  matcher: [
+    "/",
+    "/docs/:path*",
+    "/build/:path*",
+    "/guides/:path*",
+    "/network/:path*",
+    "/reference/:path*",
+    "/zh/:path*",
+    "/ja/:path*",
+  ],
+};
+
+export default function middleware(request) {
+  const url = new URL(request.url);
+
+  // 1. Check for language cookie first
+  const cookies = request.headers.get("cookie") || "";
+  const langCookieMatch = cookies.match(/preferred_locale=([a-z-]+)/);
+  let preferredLocale = langCookieMatch ? langCookieMatch[1] : null;
+
+  // 2. Fall back to Accept-Language header if no cookie
+  if (!preferredLocale) {
+    const acceptLanguage = request.headers.get("accept-language") || "";
+    preferredLocale = acceptLanguage.split(",")[0].split(";")[0].split("-")[0];
+  }
+
+  // Check if we're on a language path
+  const langPathMatch = url.pathname.match(/^\/([a-z]{2})(\/.*|$)/);
+  const currentLang = langPathMatch ? langPathMatch[1] : "en";
+
+  // If current language doesn't match preferred language, redirect
+  if (currentLang !== preferredLocale) {
+    if (preferredLocale === "en") {
+      // Remove language prefix for English
+      url.pathname = langPathMatch ? langPathMatch[2] || "/" : url.pathname;
+    } else if (preferredLocale === "zh" || preferredLocale === "ja") {
+      // Add language prefix for non-English
+      if (!langPathMatch) {
+        url.pathname = `/${preferredLocale}${url.pathname}`;
+      } else {
+        // Replace existing language prefix
+        url.pathname = `/${preferredLocale}${langPathMatch[2]}`;
+      }
+    }
+
+    // Only redirect if the path actually changed
+    if (url.pathname !== new URL(request.url).pathname) {
+      return Response.redirect(url);
+    }
+  }
+
+  return undefined;
+}

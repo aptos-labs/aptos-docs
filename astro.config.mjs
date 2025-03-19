@@ -96,6 +96,7 @@ export default defineConfig({
       components: {
         Head: "./src/starlight-overrides/Head.astro",
         // Header: "./src/starlight-overrides/Header.astro",
+        LanguageSelect: "./src/starlight-overrides/LanguageSelect.astro",
         MobileMenuToggle: "./src/starlight-overrides/MobileMenuToggle.astro",
         PageFrame: "./src/starlight-overrides/PageFrame.astro",
         PageSidebar: "./src/starlight-overrides/PageSidebar.astro",
@@ -162,7 +163,9 @@ export default defineConfig({
     }),
   ],
   adapter: process.env.VERCEL
-    ? vercel()
+    ? vercel({
+        edgeMiddleware: false,
+      })
     : node({
         mode: "standalone",
       }),

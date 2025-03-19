@@ -13,6 +13,7 @@ import sitemap from "@astrojs/sitemap";
 import partytown from "@astrojs/partytown";
 import node from "@astrojs/node";
 import react from "@astrojs/react";
+import Icons from "unplugin-icons/vite";
 import { sidebar } from "./astro.sidebar.ts";
 import { ENV } from "./src/lib/env";
 import { ogImagesIntegration } from "./src/integrations/ogImages";
@@ -160,7 +161,7 @@ export default defineConfig({
         mode: "standalone",
       }),
   vite: {
-    plugins: [tailwindcss()],
+    plugins: [tailwindcss(), Icons({ compiler: "astro" })],
     optimizeDeps: {
       exclude: ["@rollup/browser"],
     },

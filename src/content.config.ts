@@ -80,7 +80,14 @@ export const collections = {
     loader: docsLoader(),
     schema: docsSchema({ extend: docsCollectionSchema }),
   }),
-  i18n: defineCollection({ loader: i18nLoader(), schema: i18nSchema() }),
+  i18n: defineCollection({
+    loader: i18nLoader(),
+    schema: i18nSchema({
+      extend: z.object({
+        "searchAlt.label": z.string().optional(),
+      }),
+    }),
+  }),
   moveReference: defineCollection({
     type: "content_layer",
     loader: moveReferenceLoader({

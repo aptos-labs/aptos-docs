@@ -1,6 +1,6 @@
-type Theme = "light" | "dark";
+export type Theme = "light" | "dark";
 
-function getCurrentTheme(): Theme {
+export function getCurrentTheme(): Theme {
   return (document.documentElement.dataset.theme ?? "light") as Theme;
 }
 
@@ -20,4 +20,8 @@ export function observeThemeChange(cb: (theme: Theme) => void) {
 
   // Initial value
   cb(getCurrentTheme());
+
+  return () => {
+    observer.disconnect();
+  };
 }

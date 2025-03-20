@@ -1,56 +1,25 @@
-// middleware.js
+// Edge-compatible middleware that implements a middleware chain pattern
+import i18nRedirect from "./src/middlewares/i18n-redirect.js";
+import { matcher } from "./src/middlewares/matcher-routes-dynamic.js";
+
+// Create config object with the auto-generated matcher
 export const config = {
-  // Match both non-language paths and language-prefixed paths
-  matcher: [
-    "/",
-    "/docs/:path*",
-    "/build/:path*",
-    "/guides/:path*",
-    "/network/:path*",
-    "/reference/:path*",
-    "/zh/:path*",
-    "/ja/:path*",
-  ],
+  matcher,
 };
 
-export default function middleware(request) {
-  const url = new URL(request.url);
+// Function to run middleware sequentially
+async function applyMiddleware(req, middlewares) {
+  return middlewares.reduce(async (chain, middleware) => {
+    const response = await chain;
+    if (response) return response; // Stop chain if middleware returns a response
+    return middleware(req);
+  }, Promise.resolve(null));
+}
 
-  // 1. Check for language cookie first
-  const cookies = request.headers.get("cookie") || "";
-  const langCookieMatch = cookies.match(/preferred_locale=([a-z-]+)/);
-  let preferredLocale = langCookieMatch ? langCookieMatch[1] : null;
-
-  // 2. Fall back to Accept-Language header if no cookie
-  if (!preferredLocale) {
-    const acceptLanguage = request.headers.get("accept-language") || "";
-    preferredLocale = acceptLanguage.split(",")[0].split(";")[0].split("-")[0];
-  }
-
-  // Check if we're on a language path
-  const langPathMatch = url.pathname.match(/^\/([a-z]{2})(\/.*|$)/);
-  const currentLang = langPathMatch ? langPathMatch[1] : "en";
-
-  // If current language doesn't match preferred language, redirect
-  if (currentLang !== preferredLocale) {
-    if (preferredLocale === "en") {
-      // Remove language prefix for English
-      url.pathname = langPathMatch ? langPathMatch[2] || "/" : url.pathname;
-    } else if (preferredLocale === "zh" || preferredLocale === "ja") {
-      // Add language prefix for non-English
-      if (!langPathMatch) {
-        url.pathname = `/${preferredLocale}${url.pathname}`;
-      } else {
-        // Replace existing language prefix
-        url.pathname = `/${preferredLocale}${langPathMatch[2]}`;
-      }
-    }
-
-    // Only redirect if the path actually changed
-    if (url.pathname !== new URL(request.url).pathname) {
-      return Response.redirect(url);
-    }
-  }
-
-  return undefined;
+// The main middleware function
+export default async function middleware(req) {
+  return await applyMiddleware(req, [
+    i18nRedirect,
+    // Add more middleware functions here as needed
+  ]);
 }

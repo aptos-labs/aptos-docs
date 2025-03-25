@@ -28,6 +28,7 @@ const config = [
       "**/public",
       "**/scripts/migration",
       "**/nextra-migration",
+      "middleware.js", // Ignore the generated middleware file
     ],
   },
 

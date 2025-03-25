@@ -44,7 +44,7 @@ export default defineConfig({
   integrations: [
     ogImagesIntegration(),
     firebaseIntegration(),
-    astroD2({ theme: { default: "1", dark: "200" } }),
+    astroD2({ theme: { default: "1", dark: "200" }, pad: 50 }),
     starlight({
       title: {
         en: "Aptos Docs",

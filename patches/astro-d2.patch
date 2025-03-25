@@ -74,7 +74,7 @@ index 7cef47bf45a2d3cd2974ab2c73f1480f0e258cee..a0d1018ab3429dc9d12fccb7d0114cbe
              await clearContentLayerCache(astroConfig, logger)
              await fs.rm(path.join('public', config.output), { force: true, recursive: true })
 diff --git a/libs/attributes.ts b/libs/attributes.ts
-index 4454a16de4fb6271a23ce9f927c8392859ec19d7..66dd13e571f405dcfac1d61681b1bcb316502462 100644
+index 4454a16de4fb6271a23ce9f927c8392859ec19d7..d7fc7c6ba1bc082b36bd1a3b6acac355a83fbbd9 100644
 --- a/libs/attributes.ts
 +++ b/libs/attributes.ts
 @@ -1,4 +1,4 @@
@@ -125,9 +125,14 @@ index 4454a16de4fb6271a23ce9f927c8392859ec19d7..66dd13e571f405dcfac1d61681b1bcb3
      /**
       * The default theme to use for the diagrams.
       *
-@@ -60,36 +60,38 @@ export const AttributesSchema = z
+@@ -59,37 +59,43 @@ export const AttributesSchema = z
+      * The width (in pixels) of the diagram.
       */
      width: z.coerce.number().optional(),
++    /**
++     * Whether to center the SVG in the containing viewbox.
++     */
++    center: z.boolean().optional(),
    })
 -  .default({})
 +  .default({});
@@ -177,14 +182,21 @@ index 4454a16de4fb6271a23ce9f927c8392859ec19d7..66dd13e571f405dcfac1d61681b1bcb3
 -export type DiagramAttributes = z.infer<typeof AttributesSchema>
 +export type DiagramAttributes = z.infer<typeof AttributesSchema>;
 diff --git a/libs/d2.ts b/libs/d2.ts
-index 8d7b9d62b38ba53acc2d4c6019d51b2a6db8f129..5abf39d852ef19f14a995ff2737bed50d0557c8b 100644
+index 8d7b9d62b38ba53acc2d4c6019d51b2a6db8f129..85b859cc507360646f4253e15bcdce0b5a50b28a 100644
 --- a/libs/d2.ts
 +++ b/libs/d2.ts
-@@ -1,21 +1,50 @@
+@@ -1,22 +1,12 @@
 -import fs from 'node:fs/promises'
 -import path from 'node:path'
 -import url from 'node:url'
--
++import fs from "node:fs/promises";
++import path from "node:path";
++import url from "node:url";
++import { D2 } from "@terrastruct/d2";
++import type { CompileOptions } from "@terrastruct/d2";
++import type { DiagramAttributes } from "./attributes";
++import type { RemarkAstroD2Config } from "./remark";
+ 
 -import type { DiagramAttributes } from './attributes'
 -import { exec } from './exec'
 -import type { RemarkAstroD2Config } from './remark'
@@ -194,61 +206,17 @@ index 8d7b9d62b38ba53acc2d4c6019d51b2a6db8f129..5abf39d852ef19f14a995ff2737bed50
 -export async function isD2Installed() {
 -  try {
 -    await getD2Version()
-+import fs from "node:fs/promises";
-+import path from "node:path";
-+import url from "node:url";
-+import { D2 } from "@terrastruct/d2";
-+
-+import type { DiagramAttributes } from "./attributes";
-+import type { RemarkAstroD2Config } from "./remark";
-+
-+const viewBoxRegex = /viewBox="\d+ \d+ (?<width>\d+) (?<height>\d+)"/;
-+
-+/* types are takes from https://github.com/terrastruct/d2/blob/master/d2js/js/index.d.ts, since they aren't provided with the package itself */
-+export interface RenderOptions {
-+  /** Enable sketch mode [default: false] */
-+  sketch?: boolean;
-+  /** Theme ID to use [default: 0] */
-+  themeID?: number;
-+  /** Theme ID to use when client is in dark mode */
-+  darkThemeID?: number;
-+  /** Center the SVG in the containing viewbox [default: false] */
-+  center?: boolean;
-+  /** Pixels padded around the rendered diagram [default: 100] */
-+  pad?: number;
-+  /** Scale the output. E.g., 0.5 to halve the default size. The default will render SVG's that will fit to screen. Setting to 1 turns off SVG fitting to screen. */
-+  scale?: number;
-+  /** Adds an appendix for tooltips and links [default: false] */
-+  forceAppendix?: boolean;
-+  /** Target board/s to render. If target ends with '', it will be rendered with all of its scenarios, steps, and layers. Otherwise, only the target board will be rendered. E.g. target: 'layers.x.*' to render layer 'x' with all of its children. Pass '' to render all scenarios, steps, and layers. By default, only the root board is rendered. Multi-board outputs are currently only supported for animated SVGs and so animateInterval must be set to a value greater than 0 when targeting multiple boards. */
-+  target?: string;
-+  /** If given, multiple boards are packaged as 1 SVG which transitions through each board at the interval (in milliseconds). */
-+  animateInterval?: number;
-+  /** Add a salt value to ensure the output uses unique IDs. This is useful when generating multiple identical diagrams to be included in the same HTML doc, so that duplicate IDs do not cause invalid HTML. The salt value is a string that will be appended to IDs in the output. */
-+  salt?: string;
-+  /** Omit XML tag (<?xml ...?>) from output SVG files. Useful when generating SVGs for direct HTML embedding. */
-+  noXMLTag?: boolean;
-+}
- 
+-
 -    return true
 -  } catch {
 -    return false
 -  }
-+export interface CompileOptions extends RenderOptions {
-+  /** Layout engine to use [default: 'dagre'] */
-+  layout?: "dagre" | "elk";
-+  /** A byte array containing .ttf file to use for the regular font. If none provided, Source Sans Pro Regular is used. */
-+  fontRegular?: Uint8Array;
-+  /** A byte array containing .ttf file to use for the italic font. If none provided, Source Sans Pro Italic is used. */
-+  fontItalic?: Uint8Array;
-+  /** A byte array containing .ttf file to use for the bold font. If none provided, Source Sans Pro Bold is used. */
-+  fontBold?: Uint8Array;
-+  /** A byte array containing .ttf file to use for the semibold font. If none provided, Source Sans Pro Semibold is used. */
-+  fontSemibold?: Uint8Array;
- }
+-}
++const viewBoxRegex = /viewBox="\d+ \d+ (?<width>\d+) (?<height>\d+)"/;
  
  export async function generateD2Diagram(
-@@ -25,103 +54,88 @@ export async function generateD2Diagram(
+   config: RemarkAstroD2Config,
+@@ -25,103 +15,88 @@ export async function generateD2Diagram(
    outputPath: string,
    cwd: string,
  ) {
@@ -406,14 +374,14 @@ diff --git a/libs/exec.ts b/libs/exec.ts
 deleted file mode 100644
 index 62b3a595d8fd1cc160f6a0d63dde833082dbff6d..0000000000000000000000000000000000000000
 diff --git a/package.json b/package.json
-index bd69152e03327ad8ca8d44b2d6867cf244440a98..7cbb0a13d2b5657ca4f341a606020b7d3abc3612 100644
+index bd69152e03327ad8ca8d44b2d6867cf244440a98..c1d933e15cea56c86067c115e61e67ded1ee7613 100644
 --- a/package.json
 +++ b/package.json
 @@ -10,6 +10,7 @@
      "./package.json": "./package.json"
    },
    "dependencies": {
-+    "@terrastruct/d2": "^0.1.21",
++    "@terrastruct/d2": "^0.1.23",
      "hast-util-from-html": "^2.0.3",
      "hast-util-to-html": "^9.0.4",
      "unist-util-visit": "^5.0.0"

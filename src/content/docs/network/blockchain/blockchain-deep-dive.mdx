@@ -22,34 +22,37 @@ In this section, we will describe the lifecycle of transaction T<sub>5</sub>, fr
 
 For the relevant steps, we've included a link to the corresponding inter-component interactions of the validator node. After you are familiar with all the steps in the lifecycle of the transaction, you may want to refer to the information on the corresponding inter-component interactions for each step.
 
-```mermaid
-graph LR
-    subgraph Fullnodes
-        direction TB
-        REST_Service[REST Service]
-    end
+```d2
+direction: right
 
-    Client(Client) -->|1| REST_Service
+# Nodes
+Client: "Client"
 
-    subgraph Other_Validators[Other Validators]
-        direction TB
-    end
+Other_Validators: "Other Validators"
 
-    subgraph Validators
-        direction TB
-        Mempool[3\nMempool]
-        Consensus[Consensus]
-        Consensus -->|7, 9| Execution
-        Execution -->|11| Storage
-        Execution -->|8| Virtual_Machine(Virtual Machine)
-        Mempool --> Virtual_Machine
-        Virtual_Machine --> Storage
-    end
+Fullnodes: {
+  REST_Service: "REST Service"
+}
 
-    Other_Validators <-->|6, 10| Consensus
-    REST_Service -->|2| Mempool
-    Mempool <-->|4| Other_Validators(Other Validators)
-    Consensus -->|5| Mempool
+Validators: {
+  Consensus: "Consensus"
+  Execution: "Execution"
+  Mempool: "Mempool"
+  Virtual_Machine: "Virtual Machine"
+  Storage: "Storage"
+}
+
+# Connections with labels
+Client -> Fullnodes.REST_Service: "1"
+Fullnodes.REST_Service -> Validators.Mempool: "2"
+Validators.Mempool -> Other_Validators: "4"
+Other_Validators -> Validators.Consensus: "6, 10"
+Validators.Consensus -> Validators.Execution: "7, 9"
+Validators.Execution -> Validators.Virtual_Machine: "8"
+Validators.Execution -> Validators.Storage: "11"
+Validators.Consensus -> Validators.Mempool: "5"
+Validators.Virtual_Machine -> Validators.Storage
+
 ```
 
 <Aside type="note">
@@ -165,11 +168,15 @@ The following are the core components of an Aptos node used in the lifecycle of 
 
 ## REST Service
 
-```mermaid
-graph LR
-    Client -->|1| REST_Service[REST Service]
-    REST_Service -->|2| Mempool
-    REST_Service -->|3| Storage
+```d2
+direction: right
+
+Client -> REST_Service: "1"
+REST_Service -> Mempool: "2"
+REST_Service -> Storage: "3"
+
+REST_Service: "REST Service"
+
 ```
 
 Any request made by a client goes to the REST Service of a fullnode first. Then, the submitted transaction is forwarded to the validator fullnode, which then sends it to the validator node V<sub>X</sub>.
@@ -192,11 +199,15 @@ When a client performs a read query on the Aptos blockchain (for example, to get
 
 ## Virtual Machine (VM)
 
-```mermaid
-graph LR
-    Mempool -->|3| Virtual_Machine[Virtual Machine]
-    Virtual_Machine -->|2| Execution
-    Virtual_Machine -->|1| Storage
+```d2
+direction: right
+
+Mempool -> Virtual_Machine: "3"
+Virtual_Machine -> Execution: "2"
+Virtual_Machine -> Storage: "1"
+
+Virtual_Machine: "Virtual Machine"
+
 ```
 
 The Move VM verifies and executes transaction scripts written in Move bytecode.
@@ -225,20 +236,22 @@ For implementation details refer to the [Move Virtual Machine README](https://gi
 
 ## Mempool
 
-```mermaid
-graph LR
-    Mempool -->|2| Other_Validators[Other Validators]
+```d2
+direction: right
 
-    subgraph Fullnodes
-        REST_Service[REST Service]
-        Mempool[Mempool]
-        Consensus[Consensus]
-        Virtual_Machine[Virtual Machine]
-    end
+Fullnodes: {
+  REST_Service: "REST Service"
+  Mempool
+  Consensus
+  Virtual_Machine: "Virtual Machine"
+}
 
-    REST_Service -->|1| Mempool
-    Mempool -->|3| Consensus
-    Mempool -->|4| Virtual_Machine
+Fullnodes.REST_Service -> Fullnodes.Mempool: "1"
+Fullnodes.Mempool -> Other_Validators: "2"
+Fullnodes.Mempool -> Fullnodes.Consensus: "3"
+Fullnodes.Mempool -> Fullnodes.Virtual_Machine: "4"
+
+Other_Validators: "Other Validators"
 ```
 
 Mempool is a shared buffer that holds the transactions that are "waiting" to be executed. When a new transaction is added to the mempool, the mempool shares this transaction with other validator nodes in the system. To reduce network consumption in the "shared mempool," each validator is responsible for delivering its own transactions to other validators. When a validator receives a transaction from the mempool of another validator, the transaction is added to the mempool of the recipient validator.
@@ -264,15 +277,21 @@ When mempool receives a transaction from other validators, mempool invokes `VMVa
 
 ## Consensus
 
-```mermaid
-graph TD
-    subgraph Validators
-        direction LR
-            Consensus[Consensus] -->|1| Mempool[Mempool]
-            Consensus -->|3, 4| Execution[Execution]
-    end
+```d2
+direction: down
 
-    Other_Validators(Other Validators) <-->|2, 4| Consensus
+Validators: {
+  direction: right
+  Consensus
+  Mempool
+  Execution
+}
+
+Other_Validators: "Other Validators"
+
+Other_Validators <-> Validators.Consensus: "2, 4"
+Validators.Consensus -> Validators.Mempool: "1"
+Validators.Consensus -> Validators.Execution: "3, 4"
 ```
 
 The consensus component is responsible for ordering blocks of transactions and agreeing on the results of execution by participating in the [consensus protocol](/network/glossary.mdx#consensus-protocol) with other validators in the network.
@@ -297,11 +316,14 @@ If enough validators vote for the same execution result, the consensus component
 
 ## Execution
 
-```mermaid
-graph TD
-    Consensus[Consensus] -->|1 and 3| Execution[Execution]
-    Execution -->|2| Virtual_Machine[Virtual Machine]
-    Execution -->|4| Storage[Storage]
+```d2
+direction: down
+
+Consensus -> Execution: "1 and 3"
+Execution -> Virtual_Machine: "2"
+Execution -> Storage: "4"
+
+Virtual_Machine: "Virtual Machine"
 ```
 
 The execution component coordinates the execution of a block of transactions and maintains a transient state that can be voted upon by consensus. If these transactions are successful, they are committed to storage.
@@ -329,11 +351,17 @@ For implementation details refer to the [Execution README](https://github.com/ap
 
 ## Storage
 
-```mermaid
-graph TD
-    Virtual_Machine[Virtual Machine] -->|1| Storage[Storage]
-    Execution[Execution] -->|2, 3| Storage
-    REST_Service[REST Service] -->|4| Storage
+```d2
+direction: down
+
+Virtual_Machine: "Virtual Machine"
+Execution
+REST_Service: "REST Service"
+Storage
+
+Virtual_Machine -> Storage: "1"
+Execution -> Storage: "2, 3"
+REST_Service -> Storage: "4"
 ```
 
 The storage component persists agreed upon blocks of transactions and their execution results to the Aptos blockchain. A block of transactions (which includes transaction T<sub>N</sub>) will be saved via storage when there is agreement between more than a quorum (2f+1) of the validators participating in consensus. Agreement must include all the following:

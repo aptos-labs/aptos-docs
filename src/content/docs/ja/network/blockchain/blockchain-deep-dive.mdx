@@ -22,34 +22,37 @@ Aptosトランザクションのライフサイクルをより深く理解する
 
 関連するステップについては,バリデータノードのコンポーネント間の相互作用へのリンクを含めています.トランザクションのライフサイクルのすべてのステップに慣れたら,各ステップに対応するコンポーネント間の相互作用に関する情報を参照することをお勧めします.
 
-```mermaid
-graph LR
-    subgraph Fullnodes
-        direction TB
-        REST_Service[REST Service]
-    end
+```d2
+direction: right
 
-    Client(Client) -->|1| REST_Service
+# Nodes
+Client: "Client"
 
-    subgraph Other_Validators[Other Validators]
-        direction TB
-    end
+Other_Validators: "Other Validators"
 
-    subgraph Validators
-        direction TB
-        Mempool[3\nMempool]
-        Consensus[Consensus]
-        Consensus -->|7, 9| Execution
-        Execution -->|11| Storage
-        Execution -->|8| Virtual_Machine(Virtual Machine)
-        Mempool --> Virtual_Machine
-        Virtual_Machine --> Storage
-    end
+Fullnodes: {
+  REST_Service: "REST Service"
+}
 
-    Other_Validators <-->|6, 10| Consensus
-    REST_Service -->|2| Mempool
-    Mempool <-->|4| Other_Validators(Other Validators)
-    Consensus -->|5| Mempool
+Validators: {
+  Consensus: "Consensus"
+  Execution: "Execution"
+  Mempool: "Mempool"
+  Virtual_Machine: "Virtual Machine"
+  Storage: "Storage"
+}
+
+# Connections with labels
+Client -> Fullnodes.REST_Service: "1"
+Fullnodes.REST_Service -> Validators.Mempool: "2"
+Validators.Mempool -> Other_Validators: "4"
+Other_Validators -> Validators.Consensus: "6, 10"
+Validators.Consensus -> Validators.Execution: "7, 9"
+Validators.Execution -> Validators.Virtual_Machine: "8"
+Validators.Execution -> Validators.Storage: "11"
+Validators.Consensus -> Validators.Mempool: "5"
+Validators.Virtual_Machine -> Validators.Storage
+
 ```
 
 <Aside type="note">
@@ -162,20 +165,22 @@ Aptos**クライアントは生のトランザクション**(Traw<sub>5</sub>と
 
 ## RESTサービス
 
-```mermaid
-graph LR
-    Mempool -->|2| Other_Validators[Other Validators]
+```d2
+direction: right
 
-    subgraph Fullnodes
-        REST_Service[REST Service]
-        Mempool[Mempool]
-        Consensus[Consensus]
-        Virtual_Machine[Virtual Machine]
-    end
+Fullnodes: {
+  REST_Service: "REST Service"
+  Mempool
+  Consensus
+  Virtual_Machine: "Virtual Machine"
+}
 
-    REST_Service -->|1| Mempool
-    Mempool -->|3| Consensus
-    Mempool -->|4| Virtual_Machine
+Fullnodes.REST_Service -> Fullnodes.Mempool: "1"
+Fullnodes.Mempool -> Other_Validators: "2"
+Fullnodes.Mempool -> Fullnodes.Consensus: "3"
+Fullnodes.Mempool -> Fullnodes.Virtual_Machine: "4"
+
+Other_Validators: "Other Validators"
 ```
 
 メモリプールは,実行を"待機"しているトランザクションを保持する共有バッファです.新しいトランザクションがメモリプールに追加されると,メモリプールはこのトランザクションをシステム内の他のバリデーターノードと共有します."共有メモリプール"でのネットワーク消費を削減するため,各バリデーターは自身のトランザクションを他のバリデーターに配信する責任があります.バリデーターが他のバリデーターのメモリプールからトランザクションを受信すると,そのトランザクションは受信側バリデーターのメモリプールに追加されます.
@@ -201,15 +206,21 @@ graph LR
 
 ## コンセンサス
 
-```mermaid
-graph TD
-    subgraph Validators
-        direction LR
-            Consensus[Consensus] -->|1| Mempool[Mempool]
-            Consensus -->|3, 4| Execution[Execution]
-    end
+```d2
+direction: down
 
-    Other_Validators(Other Validators) <-->|2, 4| Consensus
+Validators: {
+  direction: right
+  Consensus
+  Mempool
+  Execution
+}
+
+Other_Validators: "Other Validators"
+
+Other_Validators <-> Validators.Consensus: "2, 4"
+Validators.Consensus -> Validators.Mempool: "1"
+Validators.Consensus -> Validators.Execution: "3, 4"
 ```
 
 コンセンサスコンポーネントは,ネットワーク内の他のバリデーターと[コンセンサスプロトコル](/ja/network/glossary.mdx#consensus-protocol)に参加することで,トランザクションブロックの順序付けと実行結果の合意に責任を持ちます.
@@ -234,11 +245,14 @@ V<sub>X</sub>がプロポーザー/リーダーの場合,そのコンセンサ�
 
 ## 実行
 
-```mermaid
-graph TD
-    Consensus[Consensus] -->|1 and 3| Execution[Execution]
-    Execution -->|2| Virtual_Machine[Virtual Machine]
-    Execution -->|4| Storage[Storage]
+```d2
+direction: down
+
+Consensus -> Execution: "1 and 3"
+Execution -> Virtual_Machine: "2"
+Execution -> Storage: "4"
+
+Virtual_Machine: "Virtual Machine"
 ```
 
 実行コンポーネントは,トランザクションブロックの実行を調整し,コンセンサスによって投票できる一時的な状態を維持します.これらのトランザクションが成功した場合,ストレージにコミットされます.
@@ -266,11 +280,17 @@ graph TD
 
 ## Storage
 
-```mermaid
-graph TD
-    Virtual_Machine[Virtual Machine] -->|1| Storage[Storage]
-    Execution[Execution] -->|2, 3| Storage
-    REST_Service[REST Service] -->|4| Storage
+```d2
+direction: down
+
+Virtual_Machine: "Virtual Machine"
+Execution
+REST_Service: "REST Service"
+Storage
+
+Virtual_Machine -> Storage: "1"
+Execution -> Storage: "2, 3"
+REST_Service -> Storage: "4"
 ```
 
 ストレージコンポーネントは,合意されたトランザクションブロックとその実行結果をAptosブロックチェーンに永続化します.トランザクションブロック(トランザクションT<sub>N</sub>を含む)は,コンセンサスに参加しているバリデーターの定足数(2f+1)以上の間で合意が得られた場合にストレージを介して保存されます.合意には以下のすべてが含まれる必要があります:

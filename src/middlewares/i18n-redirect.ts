@@ -9,18 +9,6 @@ export default function middleware(request: Request): Response | void {
   const url = new URL(request.url);
   const pathname = url.pathname;
 
-  // 🚫 Early bail for Vite & dev asset paths (fixes your 404s in dev mode)
-  if (
-    pathname.startsWith("/@vite/") ||
-    pathname.startsWith("/node_modules/") ||
-    pathname.startsWith("/@fs/") ||
-    pathname.startsWith("/src/") ||
-    pathname.startsWith("/~partytown/") ||
-    pathname === "/favicon.svg"
-  ) {
-    return;
-  }
-
   // Check for cookie
   const cookies = request.headers.get("cookie") ?? "";
   const langCookieMatch = /preferred_locale=([a-z-]+)/.exec(cookies);

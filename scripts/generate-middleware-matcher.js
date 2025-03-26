@@ -140,8 +140,8 @@ async function generateMatcher() {
   // Generate language-specific paths
   const LANGUAGE_PATHS = [];
   NON_ENGLISH_LOCALES.forEach((code) => {
-    // Add the base language path
-    LANGUAGE_PATHS.push(`/${code}`);
+    // Add the base language path with exact matching to avoid matching _astro paths
+    LANGUAGE_PATHS.push(`/${code}$`);
 
     // Add localized versions of all content paths (except the root path)
     ALL_CONTENT_PATHS.forEach((contentPath) => {

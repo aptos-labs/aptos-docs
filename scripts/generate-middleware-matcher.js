@@ -140,8 +140,16 @@ async function generateMatcher() {
   // Generate language-specific paths
   const LANGUAGE_PATHS = [];
   NON_ENGLISH_LOCALES.forEach((code) => {
+    // Add the base language path
     LANGUAGE_PATHS.push(`/${code}`);
-    LANGUAGE_PATHS.push(`/${code}/:path*`);
+
+    // Add localized versions of all content paths (except the root path)
+    ALL_CONTENT_PATHS.forEach((contentPath) => {
+      // Skip the root path as we already have /{code}
+      if (contentPath !== "/") {
+        LANGUAGE_PATHS.push(`/${code}${contentPath}`);
+      }
+    });
   });
 
   // Combine all paths

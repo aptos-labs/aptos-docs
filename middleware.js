@@ -46,9 +46,19 @@ var matcher = [
   "/move-reference",
   "/move-reference/:path*",
   "/zh",
-  "/zh/:path*",
+  "/zh/build/:path*",
+  "/zh/guides/:path*",
+  "/zh/network/:path*",
+  "/zh/reference/:path*",
+  "/zh/move-reference",
+  "/zh/move-reference/:path*",
   "/ja",
-  "/ja/:path*",
+  "/ja/build/:path*",
+  "/ja/guides/:path*",
+  "/ja/network/:path*",
+  "/ja/reference/:path*",
+  "/ja/move-reference",
+  "/ja/move-reference/:path*",
 ];
 
 // src/vercel-edge-middleware.ts
@@ -66,7 +76,6 @@ async function applyMiddleware(req, middlewares) {
   );
 }
 async function middleware2(req) {
-  console.log("Middleware executed for URL:", req.url);
   return await applyMiddleware(req, [
     middleware,
     // Add more middleware functions here as needed

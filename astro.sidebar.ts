@@ -24,6 +24,7 @@ export const sidebar = [
       "build/sdks",
       "build/indexer",
       "build/cli",
+      "llms-txt",
     ],
   }),
 

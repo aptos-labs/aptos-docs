@@ -1,11 +1,11 @@
 diff --git a/entryToSimpleMarkdown.ts b/entryToSimpleMarkdown.ts
-index 1bd6fbfb1f35df938061693de3bebe627b74c8c3..1bd8c207eb6144f6e34450eef801f5dbf809f7c3 100644
+index 1bd6fbfb1f35df938061693de3bebe627b74c8c3..996e2572bf2ee451f29df5a910458dcb3eecf098 100644
 --- a/entryToSimpleMarkdown.ts
 +++ b/entryToSimpleMarkdown.ts	
-@@ -63,6 +63,23 @@ const htmlToMarkdownPipeline = unified()
- 			return tree;
- 		};
- 	})
+@@ -34,6 +34,23 @@ const astroContainer = await experimental_AstroContainer.create({
+ 
+ const htmlToMarkdownPipeline = unified()
+ 	.use(rehypeParse, { fragment: true })
 +	.use(function skipReactComponents() {
 +		return (tree) => {
 +			// Find and remove React components
@@ -23,10 +23,10 @@ index 1bd6fbfb1f35df938061693de3bebe627b74c8c3..1bd8c207eb6144f6e34450eef801f5db
 +			});
 +		};
 +	})
- 	.use(function improveExpressiveCodeHandling() {
- 		return (tree) => {
- 			const ecInstances = selectAll('.expressive-code', tree as Parameters<typeof selectAll>[1]);
-@@ -149,15 +166,30 @@ export async function entryToSimpleMarkdown(
+ 	.use(function minifyLlmsTxt() {
+ 		return (tree, file) => {
+ 			if (!file.data.starlightLlmsTxt.minify) {
+@@ -149,15 +166,27 @@ export async function entryToSimpleMarkdown(
  	context: APIContext,
  	shouldMinify: boolean = false
  ) {
@@ -45,9 +45,7 @@ index 1bd6fbfb1f35df938061693de3bebe627b74c8c3..1bd8c207eb6144f6e34450eef801f5db
 +		try {
 +			html = await astroContainer.renderToString(Content, context);
 +		} catch (error) {
-+			// If rendering fails, return a simplified version of the content
-+			console.error(`Error rendering content for ${entry.id}: ${error instanceof Error ? error.message : String(error)}`);
-+			// Return a placeholder for the content that couldn't be rendered
++			// If rendering fails, return a simplified version of the content without logging the error
 +			return `Content for ${entry.id} could not be fully rendered due to component compatibility issues.`;
 +		}
 +		
@@ -61,8 +59,7 @@ index 1bd6fbfb1f35df938061693de3bebe627b74c8c3..1bd8c207eb6144f6e34450eef801f5db
 +		}
 +		return markdown;
 +	} catch (error) {
-+		console.error(`Error processing content for ${entry.id}: ${error instanceof Error ? error.message : String(error)}`);
-+		// Return a placeholder for the content that couldn't be processed
++		// Return a placeholder for the content that couldn't be processed without logging the error
 +		return `Content for ${entry.id} could not be processed due to compatibility issues.`;
  	}
 -	return markdown;

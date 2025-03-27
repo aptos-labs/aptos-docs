@@ -14,6 +14,7 @@ import partytown from "@astrojs/partytown";
 import node from "@astrojs/node";
 import react from "@astrojs/react";
 import Icons from "unplugin-icons/vite";
+import starlightLlmsTxt from "starlight-llms-txt";
 import { sidebar } from "./astro.sidebar.ts";
 import { ENV } from "./src/lib/env";
 import { ogImagesIntegration } from "./src/integrations/ogImages";
@@ -102,6 +103,7 @@ export default defineConfig({
         Sidebar: "./src/starlight-overrides/Sidebar.astro",
       },
       plugins: [
+        starlightLlmsTxt(),
         ...(hasAlgoliaConfig
           ? [
               starlightDocSearch({

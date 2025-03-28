@@ -1,10 +1,16 @@
-import { SUPPORTED_LANGUAGES } from "../config/locales.ts";
+// @ts-check
+import { SUPPORTED_LANGUAGES } from "../config/locales";
 
 // Extract language codes for easier access
 const LANGUAGE_CODES = SUPPORTED_LANGUAGES.map((lang) => lang.code);
 const DEFAULT_LANG = "en";
 const NON_DEFAULT_LANGS = LANGUAGE_CODES.filter((code) => code !== DEFAULT_LANG);
 
+/**
+ *
+ * @param {Request} request
+ * @returns {Response | void}
+ */
 export default function middleware(request) {
   const url = new URL(request.url);
 
@@ -16,7 +22,7 @@ export default function middleware(request) {
   // 2. Fall back to Accept-Language header if no cookie
   if (!preferredLocale) {
     const acceptLanguage = request.headers.get("accept-language") || "";
-    preferredLocale = acceptLanguage.split(",")[0].split(";")[0].split("-")[0];
+    preferredLocale = acceptLanguage.split(",")[0]?.split(";")[0]?.split("-")[0] ?? DEFAULT_LANG;
   }
 
   // Check if we're on a language path

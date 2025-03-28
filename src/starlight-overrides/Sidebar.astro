@@ -47,13 +47,17 @@ function markEntries(i: SidebarEntryType): void {
     const itemSlug = stripLeadingAndTrailingSlashes(i.href);
     const itemSlugWithoutLang = stripLangFromSlug(itemSlug);
 
-    // Force Move Reference pages to be current if we're on a move reference page
+    // Only highlight the specific move-reference page that's currently being visited
     if (
       isMoveReference &&
       (itemSlug.includes(MOVE_REFERENCE_PATH) || itemSlugWithoutLang.includes(MOVE_REFERENCE_PATH))
     ) {
-      i.isCurrent = true;
-      return; // Exit early once we've found a match
+      // Check if the current path matches or is a subpath of this specific item
+      const currentPathWithoutLang = stripLangFromSlug(stripLeadingAndTrailingSlashes(currentPath));
+      i.isCurrent =
+        currentPathWithoutLang === itemSlugWithoutLang ||
+        currentPathWithoutLang.startsWith(itemSlugWithoutLang + "/");
+      if (i.isCurrent) return; // Exit early only if we've found a match
     }
 
     if (i.isCurrent !== undefined) {

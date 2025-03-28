@@ -1,10 +1,13 @@
 /* eslint-disable @typescript-eslint/no-invalid-void-type */
 // Edge-compatible middleware that implements a middleware chain pattern
 import i18nRedirect from "./middlewares/i18n-redirect";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore - auto-generated import
 import { matcher } from "./middlewares/matcher-routes-dynamic";
 
 // Create config object with the auto-generated matcher
 export const config = {
+  // eslint-disable-next-line  @typescript-eslint/no-unsafe-assignment
   matcher,
 };
 

@@ -3,6 +3,7 @@ import Default from "@astrojs/starlight/components/Head.astro";
 // import { ClientRouter } from "astro:transitions";
 import { Schema } from "astro-seo-schema";
 import TextSizeProvider from "../components/TextSizeProvider.astro";
+import { SUPPORTED_LANGUAGES } from "../config/locales";
 import { getImageUrl } from "~/lib/og-image/getImageUrl";
 
 const entryData = Astro.locals.starlightRoute.entry.data || Astro.props.entry.data;
@@ -11,16 +12,111 @@ const ogImageUrl = await getImageUrl(new URL("/api/og-image.png", Astro.site), {
 });
 
 const { description, lang, lastUpdated, title } = Astro.locals.starlightRoute;
+
+// Get non-English language codes
+const nonEnglishLangCodes = SUPPORTED_LANGUAGES.filter(({ code }) => code !== "en").map(
+  ({ code }) => code,
+);
+
+// Create a regex pattern for language path matching
+const langPathRegex = new RegExp(`^\\/(${nonEnglishLangCodes.join("|")})\\/`);
+
+// Function to generate URLs for other language versions
+function getLanguageUrl(targetLang: string): string {
+  const currentPath = Astro.url.pathname;
+  const basePath = Astro.site?.href.replace(/\/$/, "") || "";
+
+  // If we're already at the root and the target is English, just return the current URL
+  if (targetLang === "en" && !currentPath.match(langPathRegex)) {
+    return Astro.url.href;
+  }
+
+  // If we're in a language path and the target is English, remove the language prefix
+  if (targetLang === "en" && currentPath.match(langPathRegex)) {
+    return `${basePath}${currentPath.replace(langPathRegex, "")}`;
+  }
+
+  // If we're targeting a non-English language
+  if (targetLang !== "en") {
+    // If we're already in that language, return the current URL
+    if (currentPath.startsWith(`/${targetLang}/`)) {
+      return Astro.url.href;
+    }
+
+    // If we're in another language path, replace the language prefix
+    if (currentPath.match(langPathRegex)) {
+      return `${basePath}${currentPath.replace(langPathRegex, `/${targetLang}/`)}`;
+    }
+
+    // If we're at the root (English), add the language prefix
+    return `${basePath}/${targetLang}${currentPath}`;
+  }
+
+  return Astro.url.href;
+}
+
+// Generate translation URLs for all languages except current
+const translationUrls = SUPPORTED_LANGUAGES.filter(({ code }) => code !== lang).map(({ code }) => ({
+  language: code,
+  url: getLanguageUrl(code),
+}));
+
+// Determine if this is a translation (non-English) or original (English)
+const isTranslation = lang !== "en";
+
+// Generate organization name - keeping "Aptos Foundation" as the official entity name
+const orgName = "Aptos Foundation";
+
+// Generate keywords by language dynamically
+const baseKeywords = ["Aptos", "blockchain", "web3"];
+const keywordTranslations = {
+  en: { "Move language": "Move language" },
+  zh: { "Move language": "Move 语言" },
+  ja: { "Move language": "Move言語" },
+};
+
+const keywords = Object.fromEntries(
+  SUPPORTED_LANGUAGES.map(({ code }) => [
+    code,
+    [
+      ...baseKeywords,
+      keywordTranslations[code as keyof typeof keywordTranslations]?.["Move language"] ||
+        keywordTranslations.en["Move language"],
+    ],
+  ]),
+);
+
+const lastUpdatedDate = lastUpdated ? lastUpdated.toISOString() : new Date().toISOString();
 ---
 
 <Schema
   item={{
     "@context": "https://schema.org",
     "@type": "TechArticle",
-    headline: title,
-    description: description,
+    headline: title as string,
+    description: description as string,
     inLanguage: lang,
     url: Astro.url.href,
+
+    // If this is a translation, link to the English original
+    ...(isTranslation && {
+      translationOfWork: {
+        "@type": "TechArticle",
+        url: getLanguageUrl("en"),
+      },
+    }),
+
+    // If this is the English original, link to all translations
+    ...(!isTranslation &&
+      translationUrls.length > 0 && {
+        workTranslation: translationUrls.map((t) => ({
+          "@type": "TechArticle",
+          url: t.url,
+        })),
+      }),
+
+    keywords: keywords[lang as keyof typeof keywords] || keywords.en,
+
     sameAs: [
       "https://aptosfoundation.org/",
       "https://discord.com/invite/aptosnetwork",
@@ -40,24 +136,24 @@ const { description, lang, lastUpdated, title } = Astro.locals.starlightRoute;
     },
     author: {
       "@type": "Organization",
-      name: "Aptos",
-      url: Astro.site.href,
+      name: orgName,
+      url: Astro.site?.href || "",
       logo: {
         "@type": "ImageObject",
-        url: `${Astro.site.href}schema-logo.png`,
+        url: `${Astro.site?.href || ""}schema-logo.png`,
       },
     },
     publisher: {
       "@type": "Organization",
-      name: "Aptos",
-      url: Astro.site.href,
+      name: orgName,
+      url: Astro.site?.href || "",
       logo: {
         "@type": "ImageObject",
-        url: `${Astro.site.href}schema-logo.png`,
+        url: `${Astro.site?.href || ""}schema-logo.png`,
       },
     },
-    dateModified: lastUpdated,
-    // datePublished: lastUpdated,
+    dateModified: lastUpdatedDate,
+    // datePublished: entryData.publishDate ? new Date(entryData.publishDate).toISOString() : undefined,
   }}
 />
 
@@ -73,14 +169,18 @@ const { description, lang, lastUpdated, title } = Astro.locals.starlightRoute;
 <Default {...Astro.props}><slot /></Default>
 
 <!-- <meta property="article:published_time" content={entryData.publishDate} /> -->
-<meta property="article:modified_time" content={lastUpdated.toISOString()} />
+<meta property="article:modified_time" content={lastUpdatedDate} />
 <!-- Algolia docsearch language facet -->
 <meta name="docsearch:language" content={lang} />
 <!-- Open Graph / Facebook -->
 <meta property="og:type" content="website" />
 <meta property="og:url" content={Astro.request.url} />
-<meta property="og:title" content={entryData.title} />
-{entryData.description && <meta property="og:description" content={entryData.description} />}
+<meta property="og:title" content={title as string} />
+{
+  entryData.description && (
+    <meta property="og:description" content={entryData.description as string} />
+  )
+}
 {
   ogImageUrl && (
     <>
@@ -93,8 +193,12 @@ const { description, lang, lastUpdated, title } = Astro.locals.starlightRoute;
     </>
   )
 }
-<meta name="twitter:title" content={entryData.title} />
-{entryData.description && <meta name="twitter:description" content={entryData.description} />}
+<meta name="twitter:title" content={entryData.title as string} />
+{
+  entryData.description && (
+    <meta name="twitter:description" content={entryData.description as string} />
+  )
+}
 
 <!-- <style is:global>
   ::view-transition-old(root),

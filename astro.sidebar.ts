@@ -97,14 +97,97 @@ export const sidebar = [
 
   group("reference", {
     items: [
-      {
-        label: "Move Reference",
-        link: "/move-reference/",
-        translations: {
-          zh: "Move 参考",
-          ja: "Move リファレンス",
-        },
-      },
+      group("reference.group.move", {
+        items: [
+          // {
+          //   label: "Move Framework",
+          //   link: "/move-reference/",
+          //   translations: {
+          //     zh: "Move 参考",
+          //     ja: "Move リファレンス",
+          //   },
+          // },
+          group("reference.group.move.frameworks", {
+            items: [
+              {
+                label: "Aptos Framework",
+                link: "/move-reference/mainnet/aptos-framework",
+              },
+              {
+                label: "Aptos Standard Library",
+                link: "/move-reference/mainnet/aptos-stdlib",
+              },
+              {
+                label: "Aptos Token",
+                link: "/move-reference/mainnet/aptos-token",
+              },
+              {
+                label: "Aptos Token Objects",
+                link: "/move-reference/mainnet/aptos-token-objects",
+              },
+              {
+                label: "Move Standard Library",
+                link: "/move-reference/mainnet/move-stdlib",
+              },
+            ],
+          }),
+          group("reference.group.move.book", {
+            items: [
+              "build/smart-contracts/book",
+              "build/smart-contracts/book/move-2",
+              group("reference.group.move.book.gettingstarted", {
+                collapsed: true,
+                items: [
+                  "build/smart-contracts/book/modules-and-scripts",
+                  "build/smart-contracts/book/move-tutorial",
+                ],
+              }),
+              group("reference.group.move.book.primitivetypes", {
+                collapsed: true,
+                items: [
+                  "build/smart-contracts/book/integers",
+                  "build/smart-contracts/book/bool",
+                  "build/smart-contracts/book/address",
+                  "build/smart-contracts/book/vector",
+                  "build/smart-contracts/book/signer",
+                  "build/smart-contracts/book/references",
+                  "build/smart-contracts/book/tuples",
+                ],
+              }),
+              group("reference.group.move.book.basicconcepts", {
+                collapsed: true,
+                items: [
+                  "build/smart-contracts/book/variables",
+                  "build/smart-contracts/book/equality",
+                  "build/smart-contracts/book/abort-and-assert",
+                  "build/smart-contracts/book/conditionals",
+                  "build/smart-contracts/book/loops",
+                  "build/smart-contracts/book/functions",
+                  "build/smart-contracts/book/structs-and-resources",
+                  "build/smart-contracts/book/enums",
+                  "build/smart-contracts/book/constants",
+                  "build/smart-contracts/book/generics",
+                  "build/smart-contracts/book/abilities",
+                  "build/smart-contracts/book/uses",
+                  "build/smart-contracts/book/friends",
+                  "build/smart-contracts/book/packages",
+                  "build/smart-contracts/book/package-upgrades",
+                  "build/smart-contracts/book/unit-testing",
+                ],
+              }),
+              group("reference.group.move.book.globalstorage", {
+                collapsed: true,
+                items: [
+                  "build/smart-contracts/book/global-storage-structure",
+                  "build/smart-contracts/book/global-storage-operators",
+                ],
+              }),
+              "build/smart-contracts/book/coding-conventions",
+            ],
+          }),
+        ],
+      }),
+
       ...(enableApiReference ? openAPISidebarGroups : []),
       // Other items...
     ],

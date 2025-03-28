@@ -12,5 +12,4 @@ export default navDictionary({
   "guides.group.advanced": "高级",
 
   reference: "参考",
-  "reference.move": "Move 参考",
 });

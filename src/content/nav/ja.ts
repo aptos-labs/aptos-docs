@@ -12,5 +12,4 @@ export default navDictionary({
   "guides.group.advanced": "上級者",
 
   reference: "リファレンス",
-  "reference.move": "Move リファレンス",
 });

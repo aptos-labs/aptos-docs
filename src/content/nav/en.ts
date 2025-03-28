@@ -2,19 +2,7 @@
  * English labels for navigation items
  * Keys correspond to identifiers used in sidebar configuration
  */
-interface NavLabels {
-  build: string;
-  network: string;
-  "network.group.blockchain": string;
-  "network.group.nodes": string;
-  guides: string;
-  "guides.group.beginner": string;
-  "guides.group.advanced": string;
-  reference: string;
-  "reference.move": string;
-}
-
-const labels: NavLabels = {
+const labels = {
   build: "Build",
 
   network: "Network",
@@ -26,7 +14,18 @@ const labels: NavLabels = {
   "guides.group.advanced": "Advanced",
 
   reference: "Reference",
-  "reference.move": "Move Reference",
-};
+  "reference.group.move": "Smart Contracts",
+
+  "reference.group.move.frameworks": "Move Frameworks",
+  "reference.group.move.book": "Move Book",
+  "reference.group.move.book.gettingstarted": "Getting Started",
+  "reference.group.move.book.primitivetypes": "Primitive Types",
+  "reference.group.move.book.basicconcepts": "Basic Concepts",
+  "reference.group.move.book.globalstorage": "Global Storage",
+} as const;
+
+type NavLabels = typeof labels;
+
+export type NavKey = keyof NavLabels;
 
 export default labels;

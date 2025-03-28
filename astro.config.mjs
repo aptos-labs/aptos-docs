@@ -121,8 +121,8 @@ export default defineConfig({
               starlightOpenAPI(
                 [
                   {
-                    base: "api-reference",
-                    label: "API Reference",
+                    base: "rest-api",
+                    label: "REST API",
                     schema: "./public/aptos-spec.json",
                     sidebarMethodBadges: true,
                   },

@@ -1,0 +1,31 @@
+---
+import { DEFAULT_NETWORK } from "../config/networks";
+---
+
+<script is:inline define:vars={{ defaultNetwork: DEFAULT_NETWORK }}>
+  window.StarlightNetworkProvider = (() => {
+    function setNetworkPreference() {
+      // Check for cookie
+      const cookieMatch = document.cookie.match(/preferred_network=([^;]+)/);
+      const preferredNetwork = cookieMatch ? cookieMatch[1] : defaultNetwork;
+      
+      // Store the preference in a data attribute on the document
+      document.documentElement.dataset.preferredNetwork = preferredNetwork;
+      
+      return preferredNetwork;
+    }
+
+    // Set the network preference immediately
+    const networkPreference = setNetworkPreference();
+
+    return {
+      updatePickers: function (network = networkPreference) {
+        document.documentElement.dataset.preferredNetwork = network;
+        document.querySelectorAll("starlight-network-select").forEach((picker) => {
+          const select = picker.querySelector("select");
+          if (select) select.value = network;
+        });
+      },
+    };
+  })();
+</script>

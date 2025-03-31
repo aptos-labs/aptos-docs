@@ -13,6 +13,7 @@ import sitemap from "@astrojs/sitemap";
 import partytown from "@astrojs/partytown";
 import node from "@astrojs/node";
 import react from "@astrojs/react";
+// Removed astro-iconify import
 import Icons from "unplugin-icons/vite";
 import starlightLlmsTxt from "starlight-llms-txt";
 import { sidebar } from "./astro.sidebar.ts";
@@ -95,7 +96,7 @@ export default defineConfig({
       },
       components: {
         Head: "./src/starlight-overrides/Head.astro",
-        // Header: "./src/starlight-overrides/Header.astro",
+        Header: "./src/starlight-overrides/Header.astro",
         LanguageSelect: "./src/starlight-overrides/LanguageSelect.astro",
         MobileMenuToggle: "./src/starlight-overrides/MobileMenuToggle.astro",
         PageFrame: "./src/starlight-overrides/PageFrame.astro",
@@ -161,6 +162,7 @@ export default defineConfig({
       experimentalReactChildren: true,
       include: ["**/GraphQLEditor.tsx"],
     }),
+    // Removed astro-iconify integration
   ],
   adapter: process.env.VERCEL
     ? vercel({

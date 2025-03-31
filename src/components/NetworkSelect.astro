@@ -1,0 +1,66 @@
+---
+import Select from "@astrojs/starlight/components/Select.astro";
+import { MOVE_REFERENCE_BRANCHES } from "../content.config";
+import { DEFAULT_NETWORK } from "../config/networks";
+
+const networks = MOVE_REFERENCE_BRANCHES.map(network => ({
+  label: network.label,
+  value: network.name,
+  selected: network.name === DEFAULT_NETWORK
+}));
+---
+
+<starlight-network-select>
+  <Select
+    icon="setting"
+    label="Network"
+    value={DEFAULT_NETWORK}
+    options={networks}
+    width="7.5em"
+  />
+</starlight-network-select>
+
+{/* Inlined to avoid FOUC. Uses global scope from `NetworkProvider.astro` */}
+<script is:inline>
+  window.StarlightNetworkProvider.updatePickers();
+</script>
+
+<script>
+  declare global {
+    interface Window {
+      StarlightNetworkProvider: {
+        updatePickers: (network?: string) => void;
+      };
+    }
+  }
+
+  class StarlightNetworkSelect extends HTMLElement {
+    constructor() {
+      super();
+      const select = this.querySelector('select');
+      if (!select) return;
+
+      select.addEventListener('change', (e) => {
+        if (e.currentTarget instanceof HTMLSelectElement) {
+          // Get the selected network
+          const network = e.currentTarget.value;
+
+          // Set the cookie with a 1-year expiration
+          const expiryDate = new Date();
+          expiryDate.setFullYear(expiryDate.getFullYear() + 1);
+          document.cookie = `preferred_network=${network}; expires=${expiryDate.toUTCString()}; path=/; SameSite=Lax`;
+
+          console.log(`Set network preference cookie: preferred_network=${network}`);
+          
+          // Update all pickers
+          window.StarlightNetworkProvider.updatePickers(network);
+
+          // Reload the page to apply the network change
+          // This will trigger the middleware to redirect to the correct network
+          window.location.reload();
+        }
+      });
+    }
+  }
+  customElements.define('starlight-network-select', StarlightNetworkSelect);
+</script>

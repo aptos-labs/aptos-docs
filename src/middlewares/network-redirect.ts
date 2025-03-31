@@ -20,8 +20,17 @@ export default function middleware(request: Request): Response | void {
     return undefined;
   }
 
+  // Check for language prefix
+  const langPathMatch = /^\/([a-z]{2})(?:\/|$)/.exec(pathname);
+  // Ensure langPrefix is always a string
+  let langPrefix = "";
+  if (langPathMatch?.[1]) {
+    langPrefix = "/" + langPathMatch[1];
+  }
+  const pathWithoutLang = langPathMatch ? pathname.substring(langPathMatch[0].length) : pathname;
+
   // Check if the path already includes a network
-  const networkPathMatch = /^\/move-reference\/([a-z-]+)(\/.*|$)/.exec(pathname);
+  const networkPathMatch = /^\/move-reference\/([a-z-]+)(\/.*|$)/.exec(pathWithoutLang);
 
   if (networkPathMatch) {
     const pathNetwork = networkPathMatch[1];
@@ -29,12 +38,14 @@ export default function middleware(request: Request): Response | void {
 
     // If the network in the path is valid but different from the preferred one, redirect
     if (NETWORK_NAMES.includes(pathNetwork as NetworkName) && pathNetwork !== preferredNetwork) {
-      url.pathname = `/move-reference/${preferredNetwork}${remainingPath}`;
+      // Construct the new path without template literals
+      url.pathname = langPrefix + "/move-reference/" + preferredNetwork + remainingPath;
       return Response.redirect(url);
     }
-  } else if (pathname === "/move-reference" || pathname === "/move-reference/") {
+  } else if (pathWithoutLang === "/move-reference" || pathWithoutLang === "/move-reference/") {
     // If no network is specified in the path, redirect to the preferred network
-    url.pathname = `/move-reference/${preferredNetwork}/`;
+    // Construct the new path without template literals
+    url.pathname = langPrefix + "/move-reference/" + preferredNetwork + "/";
     return Response.redirect(url);
   }
 

@@ -124,7 +124,8 @@ export default defineConfig({
                   {
                     base: "rest-api",
                     label: "REST API",
-                    schema: "./public/aptos-spec.json",
+                    schema:
+                      "https://raw.githubusercontent.com/aptos-labs/aptos-core/refs/heads/main/api/doc/spec.json",
                     sidebarMethodBadges: true,
                   },
                 ],

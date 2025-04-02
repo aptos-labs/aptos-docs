@@ -43,6 +43,7 @@ export function moveReferenceLoader(config: GitHubConfig): Loader {
         for (const module of branch.modules) {
           metaKeys.push(`${branch.name}-${module.framework}-folder-etag`);
           metaKeys.push(`${branch.name}-${module.framework}-file-count`);
+          metaKeys.push(`${branch.name}-${module.framework}-commit`); // Add commit hash cache key
         }
       }
       metaKeys.forEach((key) => {

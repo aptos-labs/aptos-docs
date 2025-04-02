@@ -1,3 +1,5 @@
+// src/content/config.ts
+
 import { docsLoader, i18nLoader } from "@astrojs/starlight/loaders";
 import { docsSchema, i18nSchema } from "@astrojs/starlight/schema";
 import { defineCollection, z, type CollectionEntry } from "astro:content";
@@ -5,8 +7,12 @@ import type { StarlightIcon } from "@astrojs/starlight/types";
 import { moveReferenceLoader } from "./loaders/moveReference";
 import type { BranchConfig, ModuleConfig } from "./loaders/moveReference/types";
 
+// --- Updated baseSchema to include breadcrumbTitle ---
 export const baseSchema = z.object({
   type: z.literal("base").optional().default("base"),
+  // Add an optional 'breadcrumbTitle' field.
+  // This will be prioritized over the main 'title' for breadcrumbs if present.
+  breadcrumbTitle: z.string().optional(),
   // i18nReady: z.boolean().default(false),
   // githubURL: z.string().url().optional(),
   // hasREADME: z.boolean().optional(),
@@ -85,6 +91,10 @@ export const collections = {
     schema: i18nSchema({
       extend: z.object({
         "searchAlt.label": z.string().optional(),
+        "breadcrumb.home": z.string().optional(), // For the "Home" link text
+        "breadcrumb.label": z.string().optional(), // For the nav aria-label
+        // Add any other specific breadcrumb overrides here ONLY if needed
+        // e.g., "breadcrumb.some-specific-slug": z.string().optional(),
       }),
     }),
   }),
@@ -102,6 +112,9 @@ export const collections = {
       description: z.string().optional(),
       editUrl: z.string(),
       lastUpdated: z.string(),
+      // TODO: Add breadcrumbs for 'moveReference',
+      // adding breadcrumbTitle here and update the
+      // Breadcrumbs component to handle multiple collections.
     }),
   }),
 };

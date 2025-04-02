@@ -1,5 +1,5 @@
 ---
-import { getCollection } from "astro:content";
+import { getPathMaps } from "../loaders/breadcrumbsLoader";
 
 // Extract locale from the URL path
 import { SUPPORTED_LANGUAGES } from "../config/locales";
@@ -116,84 +116,7 @@ function getTranslation(t: unknown, key: string, fallback: string): string {
   }
 }
 
-// Function to process content collections and build path maps
-async function buildPathMaps() {
-  // Create maps for paths to frontmatter data and to track valid landing pages
-  const pathToTitleMap = new Map<string, string>();
-  const validLandingPaths = new Set<string>();
-  const allSlugs = new Set<string>();
-
-  // Fetch all docs and moveReference entries
-  const allDocs = await getCollection("docs");
-
-  // Process all docs to build the path-to-title map
-  for (const doc of allDocs) {
-    if (!doc.id) continue;
-
-    // Get the slug (path) from the doc ID
-    // Remove the file extension (.md or .mdx)
-    const slug = doc.id ? doc.id.replace(/\.(md|mdx)$/, "") : "";
-    if (!slug) continue;
-
-    // Store all slugs for later reference
-    allSlugs.add(slug);
-
-    // Get title from frontmatter data
-    let title = "";
-    if (doc.data && typeof doc.data === "object") {
-      title = (doc.data.title as string) || (doc.data.breadcrumbTitle as string) || "";
-    }
-
-    // Store the title in the map
-    if (title) {
-      pathToTitleMap.set(slug, title);
-
-      // Case 1: Handle index files - map 'path/index' to 'path' for directory titles
-      if (slug.endsWith("/index")) {
-        const dirPath = slug.slice(0, -"/index".length);
-        pathToTitleMap.set(dirPath, title);
-        validLandingPaths.add(dirPath);
-      }
-
-      // Case 2: Handle files with same name as their parent directory
-      const lastSlashIndex = slug.lastIndexOf("/");
-      if (lastSlashIndex !== -1) {
-        const dirName = slug.substring(0, lastSlashIndex);
-        const fileName = slug.substring(lastSlashIndex + 1);
-
-        // If the file name matches the last part of the directory path
-        const dirNameParts = dirName.split("/");
-        const lastDirPart = dirNameParts[dirNameParts.length - 1];
-
-        if (fileName === lastDirPart) {
-          validLandingPaths.add(dirName);
-        }
-      }
-    }
-  }
-
-  // Case 3: Handle files that have the same name as a subdirectory
-  for (const slug of allSlugs) {
-    const parts = slug.split("/");
-    if (parts.length >= 2) {
-      const fileName = parts[parts.length - 1];
-
-      // Check if there's a directory with the same name as this file
-      const potentialDirPath = `${slug.substring(0, slug.lastIndexOf("/"))}/${fileName}`;
-
-      // If this directory exists (we have files in it)
-      for (const otherSlug of allSlugs) {
-        if (otherSlug.startsWith(`${potentialDirPath}/`)) {
-          // This is a landing page for the directory with the same name
-          validLandingPaths.add(potentialDirPath);
-          break;
-        }
-      }
-    }
-  }
-
-  return { pathToTitleMap, validLandingPaths };
-}
+// We now use getPathMaps() from "../loaders/breadcrumbsLoader" instead of building the maps here
 
 // Function to generate breadcrumb items from a path
 function generateBreadcrumbs(
@@ -263,7 +186,7 @@ const locale = SUPPORTED_LANGUAGES.find((lang) => lang.code === firstSegment)?.c
 const localePrefix = locale ? `/${locale}` : "";
 
 // Build path maps and generate breadcrumbs
-const { pathToTitleMap, validLandingPaths } = await buildPathMaps();
+const { pathToTitleMap, validLandingPaths } = await getPathMaps();
 const breadcrumbs = generateBreadcrumbs(currentPath, pathToTitleMap, t);
 
 // If we're on a localized page, modify the home breadcrumb to point to the localized home

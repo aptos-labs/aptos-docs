@@ -16,7 +16,7 @@ const labels = {
   reference: "Reference",
   "reference.group.move": "Smart Contracts",
 
-  "reference.group.move.frameworks": "Move Frameworks",
+  "reference.group.move.reference": "Move Reference",
   "reference.group.move.book": "Move Book",
   "reference.group.move.book.gettingstarted": "Getting Started",
   "reference.group.move.book.primitivetypes": "Primitive Types",

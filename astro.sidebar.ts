@@ -107,8 +107,12 @@ export const sidebar = [
           //     ja: "Move リファレンス",
           //   },
           // },
-          group("reference.group.move.frameworks", {
+          group("reference.group.move.reference", {
             items: [
+              {
+                label: "View Frameworks",
+                link: "/move-reference",
+              },
               {
                 label: "Aptos Framework",
                 link: "/move-reference/mainnet/aptos-framework",

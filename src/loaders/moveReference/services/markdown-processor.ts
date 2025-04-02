@@ -4,6 +4,7 @@ import matter from "gray-matter";
 import remarkRemoveAnchorLinks from "../plugins/remark-remove-anchor-links.js";
 import remarkGroupMoveDefinitions from "../plugins/remark-group-move-definitions.js";
 import remarkConvertCodeBlocks from "../plugins/remark-convert-codeblocks.js";
+import remarkFixMoveLinks from "../plugins/remark-fix-move-links.js";
 import type { ContentEntry } from "../types.js";
 
 export class MarkdownProcessor {
@@ -21,6 +22,7 @@ export class MarkdownProcessor {
       remarkPlugins: [
         remarkConvertCodeBlocks,
         remarkRemoveAnchorLinks,
+        remarkFixMoveLinks,
         ...remarkPlugins,
         [
           remarkGroupMoveDefinitions,

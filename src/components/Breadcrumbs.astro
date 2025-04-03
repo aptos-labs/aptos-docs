@@ -24,6 +24,8 @@ interface Props {
   truncated?: boolean;
   /** Aria label for the ellipsis button when truncated */
   ellipsisAriaLabel?: string;
+  /** Array of path prefixes where intermediate paths should not be clickable */
+  disableIntermediatePaths?: string[];
 }
 const {
   currentPath,
@@ -34,6 +36,7 @@ const {
   dynamicPrefixes = [],
   truncated = false,
   ellipsisAriaLabel = "Show hidden breadcrumbs",
+  disableIntermediatePaths = [],
 } = Astro.props;
 
 // Default SVG separator - a simple chevron
@@ -73,6 +76,7 @@ function hasValidLandingPage(
   path: string,
   validLandingPaths: Set<string>,
   dynamicPrefixes: string[],
+  disableIntermediatePaths: string[] = [],
 ): boolean {
   // Root path always has an index
   if (path === "/") return true;
@@ -89,6 +93,18 @@ function hasValidLandingPage(
 
   // Normalize the path for comparison
   const normalizedPath = normalizePath(path);
+
+  // Check if this is an intermediate path that should be disabled
+  for (const prefix of disableIntermediatePaths) {
+    const normalizedPrefix = normalizePath(prefix);
+
+    // If the path starts with this prefix but isn't exactly the prefix
+    // and isn't the final path segment (which would be a leaf node)
+    if (normalizedPath.startsWith(normalizedPrefix + "/") && normalizedPath !== normalizedPrefix) {
+      // This is an intermediate path that should be disabled
+      return false;
+    }
+  }
 
   // Check if the path starts with any of the dynamic prefixes
   if (
@@ -273,7 +289,12 @@ const breadcrumbsId = `breadcrumbs-${Math.random().toString(36).substring(2, 9)}
                         </span>
                       );
                     } else if (
-                      hasValidLandingPage(crumb.href, validLandingPaths, dynamicPrefixes)
+                      hasValidLandingPage(
+                        crumb.href,
+                        validLandingPaths,
+                        dynamicPrefixes,
+                        disableIntermediatePaths,
+                      )
                     ) {
                       return (
                         <a href={crumb.href} class="crumb-text">

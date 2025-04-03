@@ -1,4 +1,4 @@
-import { SUPPORTED_LANGUAGES } from "../config/locales";
+import { SUPPORTED_LANGUAGES } from "../config/18n";
 
 const LANGUAGE_CODES = SUPPORTED_LANGUAGES.map((lang) => lang.code);
 const DEFAULT_LANG = "en";

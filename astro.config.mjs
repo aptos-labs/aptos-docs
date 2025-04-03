@@ -15,10 +15,11 @@ import node from "@astrojs/node";
 import react from "@astrojs/react";
 import Icons from "unplugin-icons/vite";
 import starlightLlmsTxt from "starlight-llms-txt";
+import favicons from "astro-favicons";
 import { sidebar } from "./astro.sidebar.ts";
 import { ENV } from "./src/lib/env";
 import { ogImagesIntegration } from "./src/integrations/ogImages";
-import { SUPPORTED_LANGUAGES } from "./src/config/locales";
+import { SUPPORTED_LANGUAGES, SITE_TITLES } from "./src/config/18n";
 import { firebaseIntegration } from "./src/integrations/firebase";
 import { remarkClientOnly } from "./src/plugins";
 // import { isMoveReferenceEnabled } from "./src/utils/isMoveReferenceEnabled";
@@ -45,11 +46,7 @@ export default defineConfig({
     ogImagesIntegration(),
     firebaseIntegration(),
     starlight({
-      title: {
-        en: "Aptos Docs",
-        zh: "Aptos 文档",
-        ja: "Aptos ドキュメント",
-      },
+      title: SITE_TITLES,
       logo: {
         light: "~/assets/aptos-logomark-light.svg",
         dark: "~/assets/aptos-logomark-dark.svg",
@@ -144,12 +141,8 @@ export default defineConfig({
         return item;
       },
       i18n: {
-        defaultLocale: "en",
-        locales: {
-          en: "en",
-          zh: "zh",
-          ja: "ja",
-        },
+        defaultLocale: SUPPORTED_LANGUAGES.find((lang) => lang.default)?.code || "en",
+        locales: Object.fromEntries(SUPPORTED_LANGUAGES.map(({ code }) => [code, code])),
       },
     }),
     partytown({
@@ -160,6 +153,19 @@ export default defineConfig({
     react({
       experimentalReactChildren: true,
       include: ["**/GraphQLEditor.tsx"],
+    }),
+    favicons({
+      name: "Aptos Docs",
+      name_localized: SITE_TITLES,
+      short_name: "Aptos",
+      icons: {
+        android: true,
+        appleIcon: true,
+        appleStartup: true,
+        favicons: false,
+        windows: true,
+        yandex: true,
+      },
     }),
   ],
   adapter: process.env.VERCEL

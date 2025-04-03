@@ -14,9 +14,9 @@ const GraphQLLogo = ({
   >
     <path
       fill="currentColor"
-      fill-rule="evenodd"
+      fillRule="evenodd"
       d="m50 6.903 37.323 21.549v43.096L50 93.097 12.677 71.548V28.451L50 6.903ZM16.865 30.87v31.656L44.28 15.041 16.864 30.87ZM50 13.51 18.398 68.246h63.205L50 13.509Zm27.415 58.924h-54.83L50 88.261l27.415-15.828Zm5.72-9.908L55.72 15.041 83.136 30.87v31.656Z"
-      clip-rule="evenodd"
+      clipRule="evenodd"
     />
     <path
       fill="currentColor"

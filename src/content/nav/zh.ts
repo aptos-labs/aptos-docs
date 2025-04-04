@@ -1,15 +1,37 @@
 import { navDictionary } from "../../util/navDictionary";
 
+/**
+ * Simplified Chinese labels for navigation items
+ * Keys correspond to identifiers used in sidebar configuration
+ */
+
 export default navDictionary({
-  build: "构建",
+  // Top Level
+  build: "构建", // Build
+  network: "网络", // Network
+  smartContracts: "智能合约 & Move", // Smart Contracts & Move
+  guides: "指南", // Guides
+  reference: "参考", // Reference
 
-  network: "网络",
-  "network.group.blockchain": "区块链",
-  "network.group.nodes": "节点",
+  // Build Sub-Groups
+  "build.group.sdks": "SDK", // SDKs (often kept as "SDK" or "开发工具包")
+  "build.group.sdks.official": "官方", // Official
+  "build.group.sdks.community": "社区", // Community
 
-  guides: "指南",
-  "guides.group.beginner": "初学者",
-  "guides.group.advanced": "高级",
+  // Network Sub-Groups
+  "network.group.blockchain": "区块链", // Blockchain
+  "network.group.nodes": "节点", // Nodes
 
-  reference: "参考",
+  // Smart Contracts & Move Sub-Groups
+  "smartContracts.group.moveBook": "Move 语言概念", // Move Language Concepts
+  "smartContracts.group.development": "开发", // Development
+  "smartContracts.group.aptosFeatures": "Aptos Move 功能", // Aptos Move Features
+  "smartContracts.group.tooling": "工具", // Tooling
+  "smartContracts.group.reference": "Move 参考", // Move Reference
+
+  // Guides Sub-Groups
+  "guides.group.beginner": "初学者", // Beginner
+  "guides.group.advanced": "高级", // Advanced
+
+  // Reference Sub-Groups (Currently none needed based on sidebar structure)
 });

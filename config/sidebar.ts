@@ -15,7 +15,17 @@ interface SidebarItemCommon {
 type SidebarLinkItem = SidebarItemCommon & {
   link: string;
   attrs?: Record<string, string | number | boolean>;
+  badge?: BadgeConfig; // Added badge property
 };
+
+// Based on Starlight docs for badge config
+type BadgeConfig =
+  | string
+  | {
+      text: string | Record<string, string>; // Allow string or object for i18n
+      variant?: "note" | "tip" | "danger" | "caution" | "success";
+      class?: string;
+    };
 
 // Forward declaration to allow for recursive types
 type NestedSidebarItem =

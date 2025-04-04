@@ -3,25 +3,34 @@
  * Keys correspond to identifiers used in sidebar configuration
  */
 const labels = {
+  // Top Level
   build: "Build",
-
   network: "Network",
+  smartContracts: "Smart Contracts (Move)",
+  guides: "Guides",
+  reference: "Reference",
+
+  // Build Sub-Groups
+  "build.group.sdks": "SDKs",
+  "build.group.sdks.official": "Official",
+  "build.group.sdks.community": "Community",
+
+  // Network Sub-Groups
   "network.group.blockchain": "Blockchain",
   "network.group.nodes": "Nodes",
 
-  guides: "Guides",
+  // Smart Contracts & Move Sub-Groups
+  "smartContracts.group.moveBook": "Move Book",
+  "smartContracts.group.development": "Development",
+  "smartContracts.group.aptosFeatures": "Aptos Move Features",
+  "smartContracts.group.tooling": "Tooling",
+  "smartContracts.group.reference": "Move Reference",
+
+  // Guides Sub-Groups
   "guides.group.beginner": "Beginner",
   "guides.group.advanced": "Advanced",
 
-  reference: "Reference",
-  "reference.group.move": "Smart Contracts",
-
-  "reference.group.move.reference": "Move Reference",
-  "reference.group.move.book": "Move Book",
-  "reference.group.move.book.gettingstarted": "Getting Started",
-  "reference.group.move.book.primitivetypes": "Primitive Types",
-  "reference.group.move.book.basicconcepts": "Basic Concepts",
-  "reference.group.move.book.globalstorage": "Global Storage",
+  // Reference Sub-Groups (Only has generated API and glossary for now)
 } as const;
 
 type NavLabels = typeof labels;

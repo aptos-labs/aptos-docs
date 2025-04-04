@@ -8,31 +8,62 @@ const enableApiReference = ENABLE_API_REFERENCE === "true";
 
 /**
  * Starlight sidebar configuration object for the global site sidebar.
- *
- * - Top-level groups become tabs.
- * - Use the `group()` utility function to define groups. This uses labels from our
- *   `src/content/nav/*.ts` files instead of defining labels and translations inline.
- *
  */
-
 export const sidebar = [
+  // --- BUILD Tab (Focus: Tools & APIs for Integration) ---
   group("build", {
     items: [
       "build/get-started",
-      "build/smart-contracts",
+      "build/get-started/developer-setup",
       "build/apis",
-      "build/sdks",
+      // SDKs Grouped
+      group("build.group.sdks", {
+        items: [
+          "build/sdks", // SDK Overview
+          group("build.group.sdks.official", {
+            // Removed explicit label
+            items: [
+              "build/sdks/ts-sdk",
+              "build/sdks/python-sdk",
+              "build/sdks/go-sdk",
+              "build/sdks/rust-sdk",
+              "build/sdks/dotnet-sdk",
+              "build/sdks/unity-sdk",
+              "build/sdks/cpp-sdk",
+              "build/sdks/wallet-adapter",
+            ],
+          }),
+          group("build.group.sdks.community", {
+            // Removed explicit label
+            items: [
+              "build/sdks/community-sdks", // Community Overview
+              "build/sdks/community-sdks/kotlin-sdk",
+              "build/sdks/community-sdks/swift-sdk",
+              // REMOVED: "build/sdks/community-sdks/unity-opendive-sdk",
+            ],
+          }),
+          // REMOVED: "build/sdks/ts-sdk/legacy-ts-sdk",
+        ],
+      }),
       "build/indexer",
       "build/cli",
-      "llms-txt",
+      "build/create-aptos-dapp",
+
+      {
+        label: "LLMs Text",
+        link: "/llms-txt",
+        badge: { text: "NEW", variant: "tip" },
+      },
     ],
   }),
 
+  // --- NETWORK Tab (Focus: Blockchain Infrastructure & Concepts) ---
   group("network", {
     items: [
-      // 'getting-started',
+      // "network/blockchain", // blockchain overview
       group("network.group.blockchain", {
         items: [
+          "network/blockchain/aptos-white-paper",
           "network/blockchain/blockchain-deep-dive",
           "network/blockchain/execution",
           "network/blockchain/gas-txn-fee",
@@ -41,7 +72,6 @@ export const sidebar = [
           "network/blockchain/validator-nodes",
           "network/blockchain/fullnodes",
           "network/blockchain/node-networks-sync",
-          "network/blockchain/move",
           "network/blockchain/resources",
           "network/blockchain/txns-states",
           "network/blockchain/base-gas",
@@ -53,6 +83,7 @@ export const sidebar = [
       }),
       group("network.group.nodes", {
         items: [
+          "network/nodes", // Added Nodes Overview/Landing page
           "network/nodes/localnet",
           "network/nodes/validator-node",
           "network/nodes/full-node",
@@ -64,13 +95,99 @@ export const sidebar = [
         ],
       }),
       "network/releases",
-      "network/glossary",
       "network/faucet",
     ],
   }),
 
+  // --- SMART CONTRACTS & MOVE Tab (NEW - Focus: Writing On-Chain Code) ---
+  group("smartContracts", {
+    items: [
+      "build/smart-contracts", // Overview page
+      "build/smart-contracts/why-move",
+
+      group("smartContracts.group.moveBook", {
+        items: [
+          "build/smart-contracts/book/modules-and-scripts",
+          "build/smart-contracts/book/structs-and-resources",
+          "build/smart-contracts/book/integers",
+          "build/smart-contracts/book/bool",
+          "build/smart-contracts/book/address",
+          "build/smart-contracts/book/vector",
+          "build/smart-contracts/book/signer",
+          "build/smart-contracts/book/references",
+          "build/smart-contracts/book/tuples",
+          "build/smart-contracts/book/abilities",
+          "build/smart-contracts/book/equality",
+          "build/smart-contracts/book/abort-and-assert",
+          "build/smart-contracts/book/conditionals",
+          "build/smart-contracts/book/loops",
+          "build/smart-contracts/book/functions",
+          "build/smart-contracts/book/enums",
+          "build/smart-contracts/book/constants",
+          "build/smart-contracts/book/generics",
+          "build/smart-contracts/book/uses",
+          "build/smart-contracts/book/friends",
+          "build/smart-contracts/book/global-storage-structure",
+          "build/smart-contracts/book/global-storage-operators",
+        ],
+      }),
+      group("smartContracts.group.development", {
+        items: [
+          "build/smart-contracts/create-package",
+          "build/smart-contracts/compiling",
+          "build/smart-contracts/deployment",
+          "build/smart-contracts/book/packages",
+          "build/smart-contracts/book/package-upgrades",
+          "build/smart-contracts/book/unit-testing",
+          "build/smart-contracts/debugging",
+          "build/smart-contracts/scripts",
+          "build/smart-contracts/move-security-guidelines",
+          "build/smart-contracts/third-party-dependencies",
+          "build/smart-contracts/book/coding-conventions",
+        ],
+      }),
+      group("smartContracts.group.aptosFeatures", {
+        items: [
+          "build/smart-contracts/objects",
+          "build/smart-contracts/aptos-standards",
+          "build/smart-contracts/digital-asset",
+          "build/smart-contracts/fungible-asset",
+          "build/smart-contracts/aptos-coin", // Kept legacy standard concept pages
+          "build/smart-contracts/aptos-token", // Kept legacy standard concept pages
+          "build/smart-contracts/randomness",
+          "build/smart-contracts/cryptography",
+          "build/smart-contracts/resource-accounts",
+          "build/smart-contracts/bcs",
+          "build/smart-contracts/maps",
+          "build/smart-contracts/smart-table",
+          "build/smart-contracts/smart-vector",
+        ],
+      }),
+      group("smartContracts.group.tooling", {
+        items: [
+          "build/smart-contracts/prover",
+          "build/smart-contracts/linter",
+          "build/smart-contracts/compiler_v2",
+        ],
+      }),
+      group("smartContracts.group.reference", {
+        items: [
+          { label: "View Frameworks", link: "/move-reference" }, // Entry point is fine
+          { label: "Aptos Framework", link: "/move-reference/mainnet/aptos-framework" },
+          { label: "Aptos Standard Library", link: "/move-reference/mainnet/aptos-stdlib" },
+          { label: "Aptos Token Objects", link: "/move-reference/mainnet/aptos-token-objects" },
+          { label: "Move Standard Library", link: "/move-reference/mainnet/move-stdlib" },
+          // { label: "Aptos Token (Legacy)", link: "/move-reference/mainnet/aptos-token"}, // Removed legacy ref link
+        ],
+      }),
+      "build/smart-contracts/book/move-2", // Release Notes
+    ],
+  }),
+
+  // --- GUIDES Tab (Focus: Task-Oriented Tutorials) ---
   group("guides", {
     items: [
+      // "build/guides", // Guides overview page
       group("guides.group.beginner", {
         items: [
           "build/guides/first-transaction",
@@ -79,7 +196,6 @@ export const sidebar = [
           "build/guides/first-fungible-asset",
           "build/guides/first-move-module",
           "build/guides/first-multisig",
-          "build/create-aptos-dapp",
           "build/guides/build-e2e-dapp",
         ],
       }),
@@ -90,110 +206,21 @@ export const sidebar = [
           "build/guides/sponsored-transactions",
           "build/guides/transaction-management",
           "build/guides/key-rotation",
+          "build/guides/exchanges",
+          "build/guides/oracles",
         ],
       }),
     ],
   }),
 
+  // --- REFERENCE Tab (Focus: API/Tool Lookup) ---
   group("reference", {
     items: [
-      group("reference.group.move", {
-        items: [
-          // {
-          //   label: "Move Framework",
-          //   link: "/move-reference/",
-          //   translations: {
-          //     zh: "Move 参考",
-          //     ja: "Move リファレンス",
-          //   },
-          // },
-          group("reference.group.move.reference", {
-            items: [
-              {
-                label: "View Frameworks",
-                link: "/move-reference",
-              },
-              {
-                label: "Aptos Framework",
-                link: "/move-reference/mainnet/aptos-framework",
-              },
-              {
-                label: "Aptos Standard Library",
-                link: "/move-reference/mainnet/aptos-stdlib",
-              },
-              {
-                label: "Aptos Token",
-                link: "/move-reference/mainnet/aptos-token",
-              },
-              {
-                label: "Aptos Token Objects",
-                link: "/move-reference/mainnet/aptos-token-objects",
-              },
-              {
-                label: "Move Standard Library",
-                link: "/move-reference/mainnet/move-stdlib",
-              },
-            ],
-          }),
-          group("reference.group.move.book", {
-            items: [
-              "build/smart-contracts/book",
-              "build/smart-contracts/book/move-2",
-              group("reference.group.move.book.gettingstarted", {
-                collapsed: true,
-                items: [
-                  "build/smart-contracts/book/modules-and-scripts",
-                  "build/smart-contracts/book/move-tutorial",
-                ],
-              }),
-              group("reference.group.move.book.primitivetypes", {
-                collapsed: true,
-                items: [
-                  "build/smart-contracts/book/integers",
-                  "build/smart-contracts/book/bool",
-                  "build/smart-contracts/book/address",
-                  "build/smart-contracts/book/vector",
-                  "build/smart-contracts/book/signer",
-                  "build/smart-contracts/book/references",
-                  "build/smart-contracts/book/tuples",
-                ],
-              }),
-              group("reference.group.move.book.basicconcepts", {
-                collapsed: true,
-                items: [
-                  "build/smart-contracts/book/variables",
-                  "build/smart-contracts/book/equality",
-                  "build/smart-contracts/book/abort-and-assert",
-                  "build/smart-contracts/book/conditionals",
-                  "build/smart-contracts/book/loops",
-                  "build/smart-contracts/book/functions",
-                  "build/smart-contracts/book/structs-and-resources",
-                  "build/smart-contracts/book/enums",
-                  "build/smart-contracts/book/constants",
-                  "build/smart-contracts/book/generics",
-                  "build/smart-contracts/book/abilities",
-                  "build/smart-contracts/book/uses",
-                  "build/smart-contracts/book/friends",
-                  "build/smart-contracts/book/packages",
-                  "build/smart-contracts/book/package-upgrades",
-                  "build/smart-contracts/book/unit-testing",
-                ],
-              }),
-              group("reference.group.move.book.globalstorage", {
-                collapsed: true,
-                items: [
-                  "build/smart-contracts/book/global-storage-structure",
-                  "build/smart-contracts/book/global-storage-operators",
-                ],
-              }),
-              "build/smart-contracts/book/coding-conventions",
-            ],
-          }),
-        ],
-      }),
-
+      { label: "REST API", link: "/build/apis/fullnode-rest-api" },
+      { label: "Indexer API", link: "/build/indexer/indexer-api" },
+      "network/glossary",
       ...(enableApiReference ? openAPISidebarGroups : []),
-      // Other items...
+      { label: "Indexer API Reference", link: "build/indexer/indexer-api/indexer-reference" },
     ],
   }),
 ] satisfies StarlightUserConfig["sidebar"];

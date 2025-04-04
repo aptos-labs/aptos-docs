@@ -9,6 +9,7 @@ interface SidebarItemCommon {
   label: string;
   translations?: Record<string, string>;
   collapsed?: boolean;
+  icon?: string; // Add icon property back
 }
 
 // A link item in the sidebar
@@ -83,14 +84,28 @@ const translations = (() => {
  * Create a sidebar group entry with labels and translations from nav files
  *
  * @param key - The key in the navigation dictionary
+ * @param key - The key in the navigation dictionary
  * @param config - Configuration for the sidebar group
+ * @returns A sidebar group entry compatible with Starlight's config
+ */
+// Define specific config types that include the optional icon
+type GroupWithItemsConfig = Omit<SidebarGroupWithItems, "label" | "translations"> & {
+  icon?: string;
+};
+type GroupWithAutogenerateConfig = Omit<SidebarGroupWithAutogenerate, "label" | "translations"> & {
+  icon?: string;
+};
+
+/**
+ * Create a sidebar group entry with labels and translations from nav files
+ *
+ * @param key - The key in the navigation dictionary
+ * @param config - Configuration for the sidebar group, potentially including an icon
  * @returns A sidebar group entry compatible with Starlight's config
  */
 export function group(
   key: NavKey,
-  config:
-    | Omit<SidebarGroupWithItems, "label" | "translations">
-    | Omit<SidebarGroupWithAutogenerate, "label" | "translations">,
+  config: GroupWithItemsConfig | GroupWithAutogenerateConfig,
 ): SidebarGroupWithItems | SidebarGroupWithAutogenerate {
   return {
     label: enLabels[key],

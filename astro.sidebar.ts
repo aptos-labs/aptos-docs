@@ -3,6 +3,16 @@ import { openAPISidebarGroups } from "starlight-openapi";
 import { group, type NestedSidebarItem } from "./config/sidebar";
 import { ENV } from "./src/lib/env";
 
+// Define icons for top-level sidebar groups
+// This is separate from the sidebar configuration to avoid Starlight schema validation errors
+export const sidebarGroupIcons: Record<string, string> = {
+  build: "ph:rocket-launch",
+  network: "ph:hard-drives",
+  smartContracts: "ph:brackets-curly",
+  guides: "ph:file-text",
+  reference: "ph:book-open",
+};
+
 const ENABLE_API_REFERENCE = ENV.ENABLE_API_REFERENCE;
 const enableApiReference = ENABLE_API_REFERENCE === "true";
 

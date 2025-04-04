@@ -170,7 +170,14 @@ export default defineConfig({
     }),
     icon({
       include: {
-        ph: ["rocket-launch", "hard-drives", "brackets-curly", "file-text", "book-open"],
+        ph: [
+          "rocket-launch",
+          "hard-drives",
+          "brackets-curly",
+          "file-text",
+          "book-open",
+          "circle-dashed",
+        ],
       },
     }),
   ],

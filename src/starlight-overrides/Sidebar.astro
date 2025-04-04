@@ -5,6 +5,8 @@ import SidebarPersister from "@astrojs/starlight/components/SidebarPersister.ast
 import SidebarSublist from "@astrojs/starlight/components/SidebarSublist.astro";
 import MobileMenuFooter from "@astrojs/starlight/components/MobileMenuFooter.astro";
 import { stripLeadingAndTrailingSlashes } from "node_modules/@astrojs/starlight/utils/path";
+import { sidebarGroupIcons } from "../../astro.sidebar.ts";
+import labels from "../../src/content/nav/en";
 import TabbedContent from "~/components/tabs/TabbedContent.astro";
 import TabListItem from "~/components/tabs/TabListItem.astro";
 import TabPanel from "~/components/tabs/TabPanel.astro";
@@ -94,25 +96,6 @@ const makeId = (label: string): string => {
   return "__tab-" + label.toLowerCase().replaceAll(/\s+/g, "-");
 };
 
-// Removed Starlight icon constants
-
-// Get a Phosphor icon name based on index
-function getIcon(index: number): string {
-  // Default for invalid input
-  if (typeof index !== "number" || index < 0) {
-    return "ph:rocket-launch";
-  }
-
-  // Safe index calculation using Phosphor icons
-  const modIndex = index % 5;
-  if (modIndex === 0) return "ph:rocket-launch";
-  if (modIndex === 1) return "ph:hard-drives";
-  if (modIndex === 2) return "ph:brackets-curly";
-  if (modIndex === 3) return "ph:file-text";
-  if (modIndex === 4) return "ph:book-open";
-  return "ph:book-open";
-}
-
 // Check if a sidebar section contains the current page
 function isCurrent(sidebarItems: SidebarEntryType[]): boolean {
   if (!Array.isArray(sidebarItems) || sidebarItems.length === 0) return false;
@@ -128,17 +111,37 @@ function isCurrent(sidebarItems: SidebarEntryType[]): boolean {
     return false;
   });
 }
+
+// Create a reverse mapping from label to key
+const labelToKey: Record<string, string> = {};
+Object.entries(labels).forEach(([key, val]) => {
+  if (typeof val === "string") {
+    labelToKey[val] = key;
+  }
+});
 ---
 
 <SidebarPersister {...Astro.props}>
   <TabbedContent class="tabbed-sidebar">
     <Fragment slot="tab-list">
       {
-        sidebarGroups.map(({ label, entries }, index) => (
-          <TabListItem id={makeId(label)} initial={entries && isCurrent(entries)} class="tab-item">
-            <Icon size="24" class="icon" name={getIcon(index)} /> {label}
-          </TabListItem>
-        ))
+        sidebarGroups.map(({ label, entries }) => {
+          // Look up the key for this label
+          const key = labelToKey[label] || label.toLowerCase().replace(/\s+/g, "");
+
+          // Look up the icon from the mapping, or use a default
+          const iconName = sidebarGroupIcons[key] || "ph:rocket-launch";
+
+          return (
+            <TabListItem
+              id={makeId(label)}
+              initial={entries && isCurrent(entries)}
+              class="tab-item"
+            >
+              <Icon size="24" class="icon" name={iconName} /> {label}
+            </TabListItem>
+          );
+        })
       }
     </Fragment>
     {

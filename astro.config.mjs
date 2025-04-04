@@ -13,7 +13,6 @@ import sitemap from "@astrojs/sitemap";
 import partytown from "@astrojs/partytown";
 import node from "@astrojs/node";
 import react from "@astrojs/react";
-import Icons from "unplugin-icons/vite";
 import starlightLlmsTxt from "starlight-llms-txt";
 import favicons from "astro-favicons";
 import icon from "astro-icon";
@@ -177,6 +176,9 @@ export default defineConfig({
           "file-text",
           "book-open",
           "circle-dashed",
+          "lightning",
+          "terminal",
+          "globe-simple",
         ],
       },
     }),
@@ -189,7 +191,7 @@ export default defineConfig({
         mode: "standalone",
       }),
   vite: {
-    plugins: [tailwindcss(), Icons({ compiler: "astro" })],
+    plugins: [tailwindcss()],
     optimizeDeps: {
       exclude: ["@rollup/browser"],
     },

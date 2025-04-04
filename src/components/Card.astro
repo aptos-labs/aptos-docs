@@ -1,9 +1,6 @@
 ---
-// Import specific icons that we want to support
-import IconLightning from "~icons/ph/lightning";
-import IconTerminal from "~icons/ph/terminal";
-import IconFileText from "~icons/ph/file-text";
-import IconGlobeSimple from "~icons/ph/globe-simple";
+// Import Icon component from astro-icon
+import { Icon } from "astro-icon/components";
 
 interface Props {
   iconName?: string;
@@ -13,34 +10,19 @@ interface Props {
 
 const { iconName, title, iconProps = {} } = Astro.props;
 
-// Default icon props that will be applied to all icons
-const defaultIconProps = {
-  "font-size": "1.5rem",
-  "aria-hidden": true,
-};
+// Extract icon size from props or use default
+const iconSize = (iconProps.size as string) || "1.5rem";
 
-// Merge default props with user-provided props (user props take precedence)
-const mergedIconProps = { ...defaultIconProps, ...iconProps };
-
-// Map of icon names to components
-const iconMap = {
-  lightning: IconLightning,
-  terminal: IconTerminal,
-  "file-text": IconFileText,
-  "globe-simple": IconGlobeSimple,
-} as const;
-
-// Get the icon component based on the iconName
-const IconComponent =
-  iconName && iconName in iconMap ? iconMap[iconName as keyof typeof iconMap] : null;
+// Prefix with 'ph:' if not already prefixed
+const iconPath = iconName ? (iconName.includes(":") ? iconName : `ph:${iconName}`) : null;
 ---
 
 <article class="card sl-flex">
   <p class="title sl-flex">
     {
-      IconComponent && (
+      iconPath && (
         <span class="icon">
-          <IconComponent {...mergedIconProps} />
+          <Icon name={iconPath} size={iconSize} aria-hidden="true" />
         </span>
       )
     }

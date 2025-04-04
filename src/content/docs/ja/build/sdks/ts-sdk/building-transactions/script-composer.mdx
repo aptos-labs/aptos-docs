@@ -2,8 +2,6 @@
 title: "ScriptComposerを使用したMoveコール連鎖の動的呼び出し"
 ---
 
-これは現時点で**実験的な**機能であり,TypeScript SDKの[この特定のバージョン](https://www.npmjs.com/package/@aptos-labs/ts-sdk/v/1.33.0-sc.0)でのみリリースされており,変更される可能性があります.
-
 基本的なAPIでは,1つのトランザクションに対して1つのエントリ関数しか指定できません.より高度な開発者は,1つのトランザクション内で複数の**パブリック**なMove関数を呼び出したい場合があります.これが,トランザクションビルダーで提供される新しい`scriptComposer` APIによって可能になりました.
 
 以下は,APIの使用例です:
@@ -11,24 +9,25 @@ title: "ScriptComposerを使用したMoveコール連鎖の動的呼び出し"
 ```typescript filename="example.ts"
 const transaction = await aptos.transaction.build.scriptComposer({
     sender: singleSignerED25519SenderAccount.accountAddress,
-    // ビルダーはMoveコールシーケンスを構築するためのクロージャを期待します
+    // The builder expects a closure to build up the move call sequence.
     builder: async (builder) => {
-        // 0x1::coin::withdrawを呼び出します。この関数は`coin`型の値を返します。
+        // invoke 0x1::coin::withdraw. This function would return a value of a `coin` type.
         const coin = await builder.addBatchedCalls({
             function: "0x1::coin::withdraw",
             functionArguments: [CallArgument.new_signer(0), 1],
             typeArguments: ["0x1::aptos_coin::AptosCoin"],
         });
 
-        // コインをファンジブルアセットに変換するために、coin値を0x1::coin::coin_to_fungible_assetに渡します
+        // Passing the coin value to the 0x1::coin::coin_to_fungible_asset to convert a coin
+        // into fungible asset.
         const fungibleAsset = await builder.addBatchedCalls({
             function: "0x1::coin::coin_to_fungible_asset",
-            // coin[0]は最初の呼び出しから返された最初の戻り値を表します
+            // coin[0] represents the first return value from the first call you added.
             functionArguments: [coin[0]],
             typeArguments: ["0x1::aptos_coin::AptosCoin"],
         });
 
-        // 2番目の呼び出しで変換されたfungibleAssetを預け入れます
+        // Deposit the fungibleAsset converted from second call.
         await builder.addBatchedCalls({
             function: "0x1::primary_fungible_store::deposit",
             functionArguments: [singleSignerED25519SenderAccount.accountAddress, fungibleAsset[0]],

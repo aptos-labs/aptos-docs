@@ -40,7 +40,7 @@ module my_addr::object_playground {
   use std::signer;
   use aptos_framework::object;
 
-  /// 名前付きオブジェクトのシード、作成アカウントにおいてグローバルに一意である必要があります
+  /// Seed for my named object, must be globally unique to the creating account
   const NAME: vector<u8> = b"MyAwesomeObject";
 
   entry fun create_my_object(caller: &signer) {
@@ -100,13 +100,13 @@ module my_addr::object_playground {
   entry fun create_my_object(caller: &signer) {
     let caller_address = signer::address_of(caller);
 
-    // オブジェクトを作成
+    // Creates the object
     let constructor_ref = object::create_object(caller_address);
 
-    // オブジェクトのsignerを取得
+    // Retrieves a signer for the object
     let object_signer = object::generate_signer(&constructor_ref);
 
-    // MyStructリソースをオブジェクトに移動
+    // Moves the MyStruct resource into the object
     move_to(&object_signer, MyStruct { num: 0 });
 
     // ...
@@ -126,9 +126,9 @@ module my_addr::object_playground {
   use std::string::{Self, String};
   use aptos_framework::object::{Self, Object};
 
-  /// 呼び出し元がオブジェクトの所有者ではありません
+  /// Caller is not the owner of the object
   const E_NOT_OWNER: u64 = 1;
-  /// 呼び出し元がコントラクトの公開者ではありません
+  /// Caller is not the publisher of the contract
   const E_NOT_PUBLISHER: u64 = 2;
 
   #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
@@ -149,16 +149,16 @@ module my_addr::object_playground {
   entry fun create_my_object(caller: &signer) {
     let caller_address = signer::address_of(caller);
 
-    // オブジェクトを作成
+    // Creates the object
     let constructor_ref = object::create_object(caller_address);
 
-    // オブジェクトのsignerを取得
+    // Retrieves a signer for the object
     let object_signer = object::generate_signer(&constructor_ref);
 
-    // MyStructリソースをオブジェクトに移動
+    // Moves the MyStruct resource into the object
     move_to(&object_signer, MyStruct { num: 0 });
 
-    // extend_refを作成し、オブジェクトに移動
+    // Creates an extend ref, and moves it to the object
     let extend_ref = object::generate_extend_ref(&constructor_ref);
     move_to(&object_signer, ObjectController { extend_ref });
     // ...
@@ -170,20 +170,20 @@ module my_addr::object_playground {
     message: String
   ) acquires ObjectController {
     let caller_address = signer::address_of(caller);
-    // 権限を処理するいくつかの方法があります
+    // There are a couple ways to go about permissions
 
-    // オブジェクトの所有者のみを許可
+    // Allow only the owner of the object
     assert!(object::is_owner(object, caller_address), E_NOT_OWNER);
-    // コントラクトの公開者のみを許可
+    // Allow only the publisher of the contract
     assert!(caller_address == @my_addr, E_NOT_PUBLISHER);
-    // または他の権限スキームを考えることもできます。可能性は無限大です！
+    // Or any other permission scheme you can think of, the possibilities are endless!
 
-    // extend_refを使用してsignerを取得
+    // Use the extend ref to get a signer
     let object_address = object::object_address(&object);
     let extend_ref = &borrow_global<ObjectController>(object_address).extend_ref;
     let object_signer = object::generate_signer_for_extending(extend_ref);
 
-    // オブジェクトにメッセージを追加
+    // Extend the object to have a message
     move_to(&object_signer, Message { message });
   }
 }
@@ -200,7 +200,7 @@ module my_addr::object_playground {
   use std::signer;
   use aptos_framework::object::{Self, Object};
 
-  /// 呼び出し元がコントラクトの公開者ではありません
+  /// Caller is not the publisher of the contract
   const E_NOT_PUBLISHER: u64 = 1;
 
   #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
@@ -215,46 +215,46 @@ module my_addr::object_playground {
   ) {
     let caller_address = signer::address_of(caller);
 
-    // オブジェクトを作成
+    // Creates the object
     let constructor_ref = object::create_object(caller_address);
 
-    // オブジェクトのsignerを取得
+    // Retrieves a signer for the object
     let object_signer = object::generate_signer(&constructor_ref);
 
-    // 転送を制御するためのtransfer_refを作成
+    // Creates a transfer ref for controlling transfers
     let transfer_ref = object::generate_transfer_ref(&constructor_ref);
 
-    // ここで選択肢があります。オブジェクトを転送可能にし、
-    // 後で変更を許可するかどうかを決定できます。デフォルトでは
-    // 転送可能です
+    // We now have a choice, we can make it so the object can be transferred
+    // and we can decide if we want to allow it to change later.  By default, it
+    // is transferrable
     if (!transferrable) {
       object::disable_ungated_transfer(&transfer_ref);
     };
 
-    // 制御可能にしたい場合は、transfer_refを後で使用するために保存する必要があります
+    // If we want it to be controllable, we must store the transfer ref for later
     if (controllable) {
       move_to(&object_signer, ObjectController { transfer_ref });
     }
     // ...
   }
 
-  /// この例では、コントラクトの公開者のみが転送の
-  /// 権限を変更できるようにします
+  /// In this example, we'll only let the publisher of the contract change the
+  /// permissions of transferring
   entry fun toggle_transfer(
     caller: &signer,
     object: Object<ObjectController>
   ) acquires ObjectController {
-    // 公開者のみが転送を切り替えられるようにします
+    // Only let the publisher toggle transfers
     let caller_address = signer::address_of(caller);
     assert!(caller_address == @my_addr, E_NOT_PUBLISHER);
 
-    // transfer_refを取得
+    // Retrieve the transfer ref
     let object_address = object::object_address(&object);
     let transfer_ref = &borrow_global<ObjectController>(
       object_address
     ).transfer_ref;
 
-    // 現在の状態に基づいて切り替え
+    // Toggle it based on its current state
     if (object::ungated_transfer_allowed(object)) {
       object::disable_ungated_transfer(transfer_ref);
     } else {
@@ -266,14 +266,14 @@ module my_addr::object_playground {
 
 ### 一回限りの転送(`LinearTransferRef`)
 
-さらに,作成者がすべての転送を制御したい場合,`TransferRef`から`LinearTransferRef`を作成して,一回限りの転送機能を提供できます.これは,オブジェクト作成者から受信者への一回限りの転送によって"ソウルバウンド"オブジェクトを作成するために使用できます.`LinearTransferRef`はオブジェクトの所有者が使用する必要があります.
+さらに,作成者がすべての転送を制御したい場合,`TransferRef`から`LinearTransferRef`を作成して,一回限りの転送機能を提供できます.これは,オブジェクト作成者から受信者への一回限りの転送によって&quot;ソウルバウンド&quot;オブジェクトを作成するために使用できます.`LinearTransferRef`はオブジェクトの所有者が使用する必要があります.
 
 ```move filename="Example.move"
 module my_addr::object_playground {
   use std::signer;
   use aptos_framework::object::{Self, Object};
 
-  /// 呼び出し元がコントラクトの公開者ではありません
+  /// Caller is not the publisher of the contract
   const E_NOT_PUBLISHER: u64 = 1;
 
   #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
@@ -286,16 +286,16 @@ module my_addr::object_playground {
   ) {
     let caller_address = signer::address_of(caller);
 
-    // オブジェクトを作成
+    // Creates the object
     let constructor_ref = object::create_object(caller_address);
 
-    // オブジェクトのsignerを取得
+    // Retrieves a signer for the object
     let object_signer = object::generate_signer(&constructor_ref);
 
-    // 転送を制御するためのtransfer_refを作成
+    // Creates a transfer ref for controlling transfers
     let transfer_ref = object::generate_transfer_ref(&constructor_ref);
 
-    // 無制限の転送を無効化
+    // Disable ungated transfer
     object::disable_ungated_transfer(&transfer_ref);
     move_to(&object_signer, ObjectController {
       transfer_ref,
@@ -303,26 +303,26 @@ module my_addr::object_playground {
     // ...
   }
 
-  /// この例では、コントラクトの公開者のみが転送の
-  /// 権限を変更できるようにします
-  /// これで所有者は一度だけ転送できます
+  /// In this example, we'll only let the publisher of the contract change the
+  /// permissions of transferring
+  /// Now only owner can transfer exactly once
   entry fun transfer(
     caller: &signer,
     object: Object<ObjectController>,
     new_owner: address
   ) acquires ObjectController {
-    // 公開者のみが転送を切り替えられるようにします
+    // Only let the publisher toggle transfers
     let caller_address = signer::address_of(caller);
     assert!(caller_address == @my_addr, E_NOT_PUBLISHER);
 
     let object_address = object::object_address(&object);
 
-    // transfer_refを取得
+    // Retrieve the transfer ref
     let transfer_ref = &borrow_global<ObjectController>(
       object_address
     ).transfer_ref;
 
-    // 一回限りの`LinearTransferRef`を生成
+    // Generate a one time use `LinearTransferRef`
     let linear_transfer_ref = object::generate_linear_transfer_ref(
       transfer_ref
     );
@@ -343,7 +343,7 @@ module my_addr::object_playground {
   use std::signer;
   use aptos_framework::object::{Self, Object};
 
-  /// 呼び出し元がオブジェクトの所有者ではありません
+  /// Caller is not the owner of the object
   const E_NOT_OWNER: u64 = 1;
 
   #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
@@ -358,13 +358,13 @@ module my_addr::object_playground {
   ) {
     let caller_address = signer::address_of(caller);
 
-    // オブジェクトを作成
+    // Creates the object
     let constructor_ref = object::create_object(caller_address);
 
-    // オブジェクトのsignerを取得
+    // Retrieves a signer for the object
     let object_signer = object::generate_signer(&constructor_ref);
 
-    // delete_refを作成して保存
+    // Creates and store the delete ref
     let delete_ref = object::generate_delete_ref(&constructor_ref);
     move_to(&object_signer, ObjectController {
       delete_ref
@@ -372,26 +372,26 @@ module my_addr::object_playground {
     // ...
   }
 
-  /// 所有者のみがオブジェクトを削除できるようにします
+  /// Now only let the owner delete the object
   entry fun delete(
     caller: &signer,
     object: Object<ObjectController>,
   ) acquires ObjectController {
-    // 呼び出し元のみが削除できるようにします
+    // Only let caller delete
     let caller_address = signer::address_of(caller);
     assert!(object::is_owner(object, caller_address), E_NOT_OWNER);
 
     let object_address = object::object_address(&object);
 
-    // delete_refを取得します。消費されるため、リソースから
-    // 抽出する必要があります
+    // Retrieve the delete ref, it is consumed so it must be extracted
+    // from the resource
     let ObjectController {
       delete_ref
     } = move_from<ObjectController>(
       object_address
     );
 
-    // オブジェクトを永久に削除！
+    // Delete the object forever!
     object::delete(delete_ref);
   }
 }

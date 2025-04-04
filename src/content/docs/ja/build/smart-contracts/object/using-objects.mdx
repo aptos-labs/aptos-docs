@@ -18,13 +18,13 @@ module my_addr::object_playground {
 
   struct MyAwesomeStruct has key {}
 
-  /// オブジェクトがMyAwesomeStructを持っていない場合、これは失敗します
+  /// This will fail if the object doesn't have MyAwesomeStruct stored
   entry fun do_something(object: Object<MyAwesomeStruct>) {
     // ...
   }
 
-  /// すべてのオブジェクトはObjectCoreを持っているため、
-  /// これはアドレスがオブジェクトでない場合のみ失敗します
+  /// All Objects have ObjectCore, so this will only fail if the
+  /// address is not an object
   entry fun do_something_to_object_core(object: Object<ObjectCore>) {
     // ...
   }
@@ -37,7 +37,7 @@ module my_addr::object_playground {
 module my_addr::object_playground {
   use aptos_framework::object::Object;
 
-  /// オブジェクトが汎用型`T`を持っていない場合、これは失敗します
+  /// This will fail if the object doesn't have the generic `T` stored
   entry fun do_something<T>(object: Object<T>) {
     // ...
   }
@@ -114,7 +114,7 @@ module my_addr::object_playground {
   use std::signer;
   use aptos_framework::object::{Self, Object};
 
-  // 権限がありません！
+  // Not authorized!
   const E_NOT_AUTHORIZED: u64 = 1;
 
   fun check_owner_is_caller<T: key>(caller: &signer, object: Object<T>) {
@@ -133,19 +133,19 @@ module my_addr::object_playground {
     outside_object: Object<T>,
     inside_object: Object<U>
   ) {
-    // 期待される所有権
-    // 呼び出し元アカウント -> 外部オブジェクト -> 内部オブジェクト
+    // Ownership expected
+    // Caller account -> Outside object -> inside object
 
-    // 外部オブジェクトが内部オブジェクトを所有していることを確認
+    // Check outside object owns inside object
     let outside_address = object::object_address(&outside_object);
     assert!(object::owns(inside_object, outside_address), E_NOT_AUTHORIZED);
 
-    // 呼び出し元が外部オブジェクトを所有していることを確認
+    // Check that the caller owns the outside object
     let caller_address = signer::address_of(caller);
     assert!(object::owns(outside_object, caller_address), E_NOT_AUTHORIZED);
 
-    // 呼び出し元が内部オブジェクトを所有していることを確認（外部オブジェクトを介して）
-    // これは最初の2つの呼び出し（およびさらにネストされた場合はそれ以上）をスキップできます
+    // Check that the caller owns the inside object (via the outside object)
+    // This can skip the first two calls (and even more nested)
     assert!(object::owns(inside_object, caller_address), E_NOT_AUTHORIZED);
   }
 }
@@ -153,7 +153,7 @@ module my_addr::object_playground {
 
 ## 所有権の移転
 
-デフォルトでは,すべてのオブジェクトは転送可能です.一部のオブジェクトは,構築時に`ungated_transfer`を無効にするように設定されています(詳細については"オブジェクトの構築"を参照してください).
+デフォルトでは,すべてのオブジェクトは転送可能です.一部のオブジェクトは,構築時に`ungated_transfer`を無効にするように設定されています(詳細については&quot;オブジェクトの構築&quot;を参照してください).
 
 オブジェクトは以下のように転送できます:
 
@@ -161,12 +161,12 @@ module my_addr::object_playground {
 module my_addr::object_playground {
   use aptos_framework::object::{Self, Object};
 
-  /// 別のアドレスに転送します。これはオブジェクトまたはアカウントになります
+  /// Transfer to another address, this can be an object or account
   fun transfer<T: key>(owner: &signer, object: Object<T>, destination: address) {
     object::transfer(owner, object, destination);
   }
 
-  /// 別のオブジェクトに転送します
+  /// Transfer to another object
   fun transfer_to_object<T: key, U: key>(
     owner: &signer,
     object: Object<T>,
@@ -191,10 +191,10 @@ module my_addr::object_playground {
 
 ```move filename="example.move"
 module 0x1::object {
-  /// オブジェクトのguidを作成します。通常はイベントに使用されます
+  /// Create a guid for the object, typically used for events
   public fun create_guid(object: &signer): guid::GUID {}
 
-  /// 新しいイベントハンドルを生成します。
+  /// Generate a new event handle.
   public fun new_event_handle<T: drop + store>(object: &signer): event::EventHandle<T> {}
 }
 ```

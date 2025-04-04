@@ -10,7 +10,7 @@ TypeScript SDKには,複数の独立したトランザクションをバッチ�
 
 ```typescript filename="batch.ts"
 /**
- * この例では、Aptos SDKを使用して複数のトランザクションをバッチで送信する方法を示します。
+ * This example shows how to use the Aptos SDK to send several transactions in a batch.
  */
 
 import {
@@ -22,28 +22,28 @@ import {
 } from "@aptos-labs/ts-sdk";
 
 async function example() {
-    console.log("この例では、複数のトランザクションをバッチで送信します。");
+    console.log("This example will send several transactions in a batch.");
 
-    // クライアントとテストアカウントのセットアップ
+    // Setup the client and test accounts
     const config = new AptosConfig({ network: Network.DEVNET });
     const aptos = new Aptos(config);
 
     let sender = Account.generate();
 
-    console.log("=== アドレス ===\n");
-    console.log(`送信者のアドレス: ${sender.accountAddress}`);
+    console.log("=== Addresses ===\n");
+    console.log(`Sender's address is: ${sender.accountAddress}`);
 
-    console.log("\n=== 送信者への資金提供 ===\n");
+    console.log("\n=== Funding sender ===\n");
     await aptos.fundAccount({
         accountAddress: sender.accountAddress,
         amount: 100_000_000,
     });  
-    console.log("送信者アカウントに資金を提供しました！")
+    console.log("Funded the sender account!")
 
-    // APTを送信する複数の受信者を生成
+    // Generate several recipients to send APT to
     const recipients = [Account.generate(), Account.generate(), Account.generate()];
 
-    // 各アカウントにAPTを送信するトランザクションを作成
+    // Create transactions to send APT to each account
     const transactions: InputGenerateTransactionPayloadData[] = [];
 
     for (let i = 0; i < recipients.length; i += 1) {
@@ -54,7 +54,7 @@ async function example() {
         transactions.push(transaction);
     }
 
-    // 可能な限り速くすべてのトランザクションに署名して送信（エラーが発生した場合は例外をスロー）
+    // Sign and submit all transactions as fast as possible (throws if any error)
     await aptos.transaction.batch.forSingleAccount({ sender: sender, data: transactions });
 };
 
@@ -67,15 +67,15 @@ example();
 
 ```typescript filename="transaction-worker-events.ts"
 export enum TransactionWorkerEventsEnum {
-  // トランザクションがチェーンに送信された後に発火
+  // Fired after a transaction gets sent to the chain
   TransactionSent = "transactionSent",
-  // トランザクションのチェーンへの送信に失敗した場合に発火
+  // Fired if there is an error sending the transaction to the chain
   TransactionSendFailed = "transactionSendFailed",
-  // 単一のトランザクションが正常に実行された場合に発火
+  // Fired when a single transaction has executed successfully
   TransactionExecuted = "transactionExecuted",
-  // 単一のトランザクションの実行が失敗した場合に発火
+  // Fired if a single transaction fails in execution
   TransactionExecutionFailed = "transactionExecutionFailed",
-  // ワーカーが作業を完了した場合/キューが空になった場合に発火
+  // Fired when the worker has finished its job / when the queue has been emptied
   ExecutionFinish = "executionFinish",
 }
 ```

@@ -8,7 +8,7 @@ title: "Go SDK - トランザクションのシミュレーション"
 トランザクションをシミュレートするには,トランザクションと署名者となるアカウントを渡す必要があります:
 
 ```go filename="simulate_a_transaction.go"
-// transfer_coin は、最もシンプルな方法でコイン送金トランザクションを作成する方法の例です
+// transfer_coin is an example of how to make a coin transfer transaction in the simplest possible way
 package main
 
 import (
@@ -21,15 +21,15 @@ import (
 const FundAmount = 100_000_000
 const TransferAmount = 1_000
 
-// example この例は、最もシンプルな方法でAPT送金トランザクションを作成する方法を示しています
+// example This example shows you how to make an APT transfer transaction in the simplest possible way
 func example(networkConfig aptos.NetworkConfig) {
-	// Aptosのクライアントを作成
+	// Create a client for Aptos
 	client, err := aptos.NewClient(networkConfig)
 	if err != nil {
 		panic("Failed to create client:" + err.Error())
 	}
 
-	// aliceとbobのアカウントをローカルで作成
+	// Create accounts locally for alice and bob
 	alice, err := aptos.NewEd25519Account()
 	if err != nil {
 		panic("Failed to create alice:" + err.Error())
@@ -39,11 +39,11 @@ func example(networkConfig aptos.NetworkConfig) {
 		panic("Failed to create bob:" + err.Error())
 	}
 
-	fmt.Printf("\n=== アドレス ===\n")
+	fmt.Printf("\n=== Addresses ===\n")
 	fmt.Printf("Alice: %s\n", alice.Address.String())
 	fmt.Printf("Bob:%s\n", bob.Address.String())
 
-	// フォーセットで送信者に資金を提供し、オンチェーンで作成
+	// Fund the sender with the faucet to create it on-chain
 	err = client.Fund(alice.Address, FundAmount)
 	if err != nil {
 		panic("Failed to fund alice:" + err.Error())
@@ -57,11 +57,11 @@ func example(networkConfig aptos.NetworkConfig) {
 	if err != nil {
 		panic("Failed to retrieve bob balance:" + err.Error())
 	}
-	fmt.Printf("\n=== 初期残高 ===\n")
+	fmt.Printf("\n=== Initial Balances ===\n")
 	fmt.Printf("Alice: %d\n", aliceBalance)
 	fmt.Printf("Bob:%d\n", bobBalance)
 
-	// 1. トランザクションを構築
+	// 1. Build transaction
 	accountBytes, err := bcs.Serialize(&bob.Address)
 	if err != nil {
 		panic("Failed to serialize bob's address:" + err.Error())
@@ -90,19 +90,19 @@ func example(networkConfig aptos.NetworkConfig) {
 		panic("Failed to build transaction:" + err.Error())
 	}
 
-	// 2. トランザクションをシミュレート
-	// これは、トランザクションの費用を理解し、
-	// トランザクションが有効であることを確認するのに役立ちます
-	// これはオプションですが、推奨されます
+	// 2. Simulate transaction
+	// This is useful for understanding how much the transaction will cost
+	// and to ensure that the transaction is valid before sending it to the network
+	// This is optional, but recommended
 	simulationResult, err := client.SimulateTransaction(rawTxn, alice)
 	if err != nil {
 		panic("Failed to simulate transaction:" + err.Error())
 	}
-	fmt.Printf("\n=== シミュレーション ===\n")
-	fmt.Printf("ガスユニット価格: %d\n", simulationResult[0].GasUnitPrice)
-	fmt.Printf("使用されたガス: %d\n", simulationResult[0].GasUsed)
-	fmt.Printf("合計ガス料金: %d\n", simulationResult[0].GasUsed*simulationResult[0].GasUnitPrice)
-	fmt.Printf("ステータス: %s\n", simulationResult[0].VmStatus)
+	fmt.Printf("\n=== Simulation ===\n")
+	fmt.Printf("Gas unit price: %d\n", simulationResult[0].GasUnitPrice)
+	fmt.Printf("Gas used: %d\n", simulationResult[0].GasUsed)
+	fmt.Printf("Total gas fee: %d\n", simulationResult[0].GasUsed*simulationResult[0].GasUnitPrice)
+	fmt.Printf("Status: %s\n", simulationResult[0].VmStatus)
 }
 
 func main() {
@@ -110,7 +110,7 @@ func main() {
 }
 ```
 
-{ /* TODO: シミュレーション結果の詳細 */ }
+{ /_ TODO: シミュレーション結果の詳細 _/ }
 
 トランザクションの構築,シミュレーション,送信の完全な例については,[こちら](/ja/build/sdks/go-sdk/building-transactions)をご覧ください.
 

@@ -37,9 +37,9 @@ const fetchList = async () => {
           resourceType:`${moduleAddress}::todolist::TodoList`}
       );
     setAccountHasList(true);
-		// タスクテーブルのハンドル
+		// tasks table handle
     const tableHandle = (todoListResource as any).tasks.handle;
-		// タスクテーブルのカウンター
+		// tasks table counter
     const taskCounter = (todoListResource as any).task_counter;
 
     let tasks = [];
@@ -54,7 +54,7 @@ const fetchList = async () => {
       tasks.push(task);
       counter++;
     }
-		// ローカルステートにタスクを設定
+		// set tasks in local state
     setTasks(tasks);
   } catch (e: any) {
     setAccountHasList(false);
@@ -71,7 +71,7 @@ const tableHandle = (TodoListResource as any).data.tasks.handle;
 const taskCounter = (TodoListResource as any).data.task_counter;
 ```
 
-タスクテーブルのハンドルと`task_counter`変数を取得したので,`taskCounter`をループしましょう.`counter`を定義して1に設定します.これは,task\_counter / task\_idが1未満になることはないためです.
+タスクテーブルのハンドルと`task_counter`変数を取得したので,`taskCounter`をループしましょう.`counter`を定義して1に設定します.これは,task_counter / task_idが1未満になることはないためです.
 
 `counter`が`taskCounter`より小さい間ループし,テーブルアイテムを取得してタスク配列にプッシュします:
 
@@ -99,7 +99,7 @@ tasks: Table<u64, Task>,
 `key`タイプが`u64`で,`value`タイプが`Task`であることがわかります.また,新しいタスクを作成するたびに,インクリメントされたタスクカウンターを`key`として割り当てています.
 
 ```move filename="todolist.move"
-// 新しいタスクをタスクテーブルに追加
+// adds the new task into the tasks table
 table::upsert(&mut todo_list.tasks, counter, new_task);
 ```
 
@@ -185,7 +185,7 @@ table::upsert(&mut todo_list.tasks, counter, new_task);
   ...
 ) : (
   <Row gutter={[0, 32]} style={{ marginTop: "2rem" }}>
-		// これを追加！
+		// Add this!
     <Col span={8} offset={8}>
       <Input.Group compact>
         <Input
@@ -237,11 +237,11 @@ function App() {
 
 ```tsx filename="App.tsx"
 <Input
-  onChange={(event) => onWriteTask(event)} // これを追加
+  onChange={(event) => onWriteTask(event)} // add this
   style={{ width: "calc(100% - 60px)" }}
   placeholder="Add a Task"
   size="large"
-  value={newTask} // これを追加
+  value={newTask} // add this
 />
 ```
 
@@ -251,7 +251,7 @@ function App() {
 
 ```tsx filename="App.tsx"
 <Button
-  onClick={onTaskAdded} // これを追加
+  onClick={onTaskAdded} // add this
   type="primary"
   style={{ height: "40px", backgroundColor: "#3f67ff" }}
 >
@@ -273,7 +273,7 @@ function App() {
 
 ```tsx filename="App.tsx"
   const onTaskAdded = async () => {
-    // 接続されたアカウントを確認
+    // check for connected account
     if (!account) return;
     setTransactionInProgress(true);
     const transaction:InputTransactionData = {
@@ -283,10 +283,10 @@ function App() {
       }
     }
 
-    // ローカルステートから最新のtask.task_idを保持
+    // hold the latest task.task_id from our local state
     const latestId = tasks.length > 0 ? parseInt(tasks[tasks.length - 1].task_id) + 1 : 1;
 
-    // ローカルステートにプッシュする新しいタスクオブジェクトを構築
+    // build a newTaskToPush object into our local state
     const newTaskToPush = {
       address: account.address,
       completed: false,
@@ -295,19 +295,19 @@ function App() {
     };
 
     try {
-      // トランザクションに署名してチェーンに送信
+      // sign and submit transaction to chain
       const response = await signAndSubmitTransaction(transaction);
-      // トランザクションの完了を待つ
+      // wait for transaction
       await aptos.waitForTransaction({transactionHash:response.hash});
 
-      // 現在のステートに基づいて新しい配列を作成：
+      // Create a new array based on current state:
       let newTasks = [...tasks];
 
-      // タスク配列にアイテムを追加
+      // Add item to the tasks array
       newTasks.push(newTaskToPush);
-      // ステートを設定
+      // Set state
       setTasks(newTasks);
-      // 入力テキストをクリア
+      // clear input text
       setNewTask("");
     } catch (error: any) {
       console.log("error", error);
@@ -374,19 +374,19 @@ const onCheckboxChange = async (
     }
 
     try {
-      // トランザクションに署名してチェーンに送信
+      // sign and submit transaction to chain
       const response = await signAndSubmitTransaction(transaction);
-      // トランザクションの完了を待つ
+      // wait for transaction
       await aptos.waitForTransaction({transactionHash:response.hash});
 
       setTasks((prevState) => {
         const newState = prevState.map((obj) => {
-          // task_idがチェックされたtaskIdと一致する場合、completedプロパティを更新
+          // if task_id equals the checked taskId, update completed property
           if (obj.task_id === taskId) {
             return { ...obj, completed: true };
           }
 
-          // それ以外の場合はオブジェクトをそのまま返す
+          // otherwise return object as is
           return obj;
         });
 

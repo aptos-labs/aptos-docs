@@ -33,13 +33,13 @@ module 0x42::example {
 
     fun always_true(): bool {
         let s = S { f: 0, s: b"" };
-        // 括弧は必要ありませんが、この例では明確にするために追加しています
+        // parens are not needed but added for clarity in this example
         (copy s) == s
     }
 
     fun always_false(): bool {
         let s = S { f: 0, s: b"" };
-        // 括弧は必要ありませんが、この例では明確にするために追加しています
+        // parens are not needed but added for clarity in this example
         (copy s) != s
     }
 }
@@ -50,10 +50,10 @@ module 0x42::example {
 ```move
 script {
   fun example() {
-    1u8 == 1u128; // エラー！
-    //     ^^^^^ 'u8'型の引数が期待されています
-    b"" != 0; // エラー！
-    //     ^ 'vector<u8>'型の引数が期待されています
+    1u8 == 1u128; // ERROR!
+    //     ^^^^^ expected an argument of type 'u8'
+    b"" != 0; // ERROR!
+    //     ^ expected an argument of type 'vector<u8>'
   }
 }
 ```
@@ -65,7 +65,7 @@ script {
 ```move
 script {
   fun example() {
-    let i = &0;
+    let i = &amp;0;
     let m = &mut 1;
 
     i == m; // `false`
@@ -81,7 +81,7 @@ script {
 ```move
 script {
   fun example() {
-    let i = &0;
+    let i = &amp;0;
     let m = &mut 1;
 
     i == freeze(m); // `false`
@@ -97,11 +97,11 @@ script {
 ```move
 script {
   fun example() {
-    let i = &0;
+    let i = &amp;0;
     let s = &b"";
 
-    i == s; // エラー！
-    //   ^ '&u64'型の引数が期待されています
+    i == s; // ERROR!
+    //   ^ expected an argument of type '&u64'
   }
 }
 ```
@@ -114,19 +114,19 @@ script {
 module 0x42::example {
   struct Coin has store { value: u64 }
   fun invalid(c1: Coin, c2: Coin) {
-    c1 == c2 // エラー！
-//  ^^    ^^ これらのリソースが破棄されてしまいます！
+    c1 == c2 // ERROR!
+//  ^^    ^^ These resources would be destroyed!
   }
 }
 ```
 
-ただし,プログラマーは値を直接比較する代わりに,\_常に\_値を借用することができ,参照型は[`drop`アビリティ](/ja/build/smart-contracts/book/abilities)を持っています.例えば:
+ただし,プログラマーは値を直接比較する代わりに,_常に_値を借用することができ,参照型は[`drop`アビリティ](/ja/build/smart-contracts/book/abilities)を持っています.例えば:
 
 ```move
 module 0x42::example {
   struct Coin has store { value: u64 }
   fun swap_if_equal(c1: Coin, c2: Coin): (Coin, Coin) {
-    let are_equal = &c1 == &c2; // 有効
+    let are_equal = &c1 == &amp;c2; // valid
     if (are_equal) (c2, c1) else (c1, c2)
   }
 }
@@ -134,7 +134,7 @@ module 0x42::example {
 
 ## 不要なコピーを避ける
 
-プログラマーは[`drop`](/ja/build/smart-contracts/book/abilities)を持つ任意の値を比較\_できますが\_,高価なコピーを避けるために参照で比較することが多いでしょう.
+プログラマーは[`drop`](/ja/build/smart-contracts/book/abilities)を持つ任意の値を比較_できますが_,高価なコピーを避けるために参照で比較することが多いでしょう.
 
 ```move
 script {

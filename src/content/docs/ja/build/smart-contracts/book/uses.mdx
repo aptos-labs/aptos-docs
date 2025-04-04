@@ -127,7 +127,7 @@ module 0x42::example {
   };
 
   fun pop_twice<T>(v: &mut vector<T>): (T, T) {
-    // 上記の`use`で利用可能なすべてのオプション
+    // all options available given the `use` above
     assert!(vector::length(v) > 1, 42);
     assert!(V::length(v) > 1, 42);
     assert!(length(v) > 1, 42);
@@ -209,8 +209,8 @@ module 0x42::example {
       push_back(&mut v, 10);
       v
     };
-    let v2 = empty(); // エラー!
-//           ^^^^^ 関数'empty'が未定義
+    let v2 = empty(); // ERROR!
+//           ^^^^^ unbound function 'empty'
     result
   }
 }
@@ -223,11 +223,12 @@ script {
   fun example() {
     {
       let x = 0;
-      use std::vector; // エラー!
+      use std::vector; // ERROR!
       let v = vector::empty();
     }
   }
 }
+
 ```
 
 ## 命名規則
@@ -243,10 +244,10 @@ address 0x42 {
   }
   module example {
     use 0x42::data::{
-      S as s, // エラー!
-      FLAG as fLAG, // エラー!
-      foo as FOO,  // 有効
-      foo as bar, // 有効
+      S as s, // ERROR!
+      FLAG as fLAG, // ERROR!
+      foo as FOO,  // valid
+      foo as bar, // valid
     };
   }
 }
@@ -260,12 +261,12 @@ address 0x42 {
 
 ```move
 module 0x42::example {
-  use std::vector::{empty as foo, length as foo}; // エラー!
-  //                                        ^^^ 'foo'が重複しています
+  use std::vector::{empty as foo, length as foo}; // ERROR!
+  //                                        ^^^ duplicate 'foo'
 
   use std::vector::empty as bar;
-  use std::vector::length as bar; // エラー!
-  //                         ^^^ 'bar'が重複しています
+  use std::vector::length as bar; // ERROR!
+  //                         ^^^ duplicate 'bar'
 }
 ```
 
@@ -279,8 +280,8 @@ address 0x42 {
   module example {
     use 0x42::data::S;
 
-    struct S { value: u64 } // エラー!
-    //     ^ 上記のエイリアス'S'と競合します
+    struct S { value: u64 } // ERROR!
+    //     ^ conflicts with alias 'S' above
   }
 }
 ```
@@ -303,7 +304,7 @@ module 0x42::example {
   fun example1(): (WrappedVector, WrappedVector) {
     let vec = {
       use std::vector::{empty, push_back};
-      // 'empty'は今std::vector::emptyを参照します
+      // 'empty' now refers to std::vector::empty
 
       let v = empty();
       push_back(&mut v, 0);
@@ -311,7 +312,7 @@ module 0x42::example {
       push_back(&mut v, 10);
       v
     };
-    // 'empty'は今Self::emptyを参照します
+    // 'empty' now refers to Self::empty
 
     (empty(), WrappedVector { vec })
   }
@@ -342,8 +343,8 @@ module 0x42::example {
 
 ```move
 module 0x42::example {
-  use std::vector::{empty, push_back}; // エラー!
-  //                       ^^^^^^^^^ エイリアス'push_back'が未使用です
+  use std::vector::{empty, push_back}; // ERROR!
+  //                       ^^^^^^^^^ unused alias 'push_back'
 
   fun example(): vector<u8> {
     empty()

@@ -4,7 +4,7 @@ title: "列挙型（Enum）"
 
 _言語バージョン2.0以降_
 
-列挙型は構造体型に似ていますが,データレイアウトの複数&#x306E;_&#x30D0;リアン&#x30C8;_&#x3092;定義することができます.各バリアントには独自のフィールドセットがあります.列挙型のバリアントは,式,テスト用ツール,マッチング,分解などでサポートされています.
+列挙型は構造体型に似ていますが,データレイアウトの複数の_バリアント_&#x3092;定義することができます.各バリアントには独自のフィールドセットがあります.列挙型のバリアントは,式,テスト用ツール,マッチング,分解などでサポートされています.
 
 ## 列挙型の宣言
 
@@ -74,7 +74,7 @@ let color = Color::Blue;
 
 ```move
 fun f(data: VersionedData) {
-  match (data) { V1{..} => .., ..} // 単純なバリアント名でOK
+  match (data) { V1{..} => .., ..} // simple variant name OK
 }
 ```
 
@@ -94,11 +94,11 @@ fun area(self: &Shape): u64 {
 上記の例では,マッチされる値は列挙型値への不変参照です.マッチ式は値を消費することもできますし,内部更新のために可変参照に対してマッチすることもできます:
 
 ```move
-fun scale_radius(self: &mut Shape, factor: u64) {
+fun scale_radius(self: &mut Shape, factor:  u64) {
     match (self) {
         Circle{radius: r} => *r = *r * factor,
-        _                 => {} // Circleでない場合は何もしない
-    }
+        _                 => {} // do nothing if not a Circle
+  }
 }
 ```
 
@@ -128,7 +128,7 @@ let data: VersionedData;
 if (data is VersionedData::V1) { .. }
 ```
 
-この演算子では,"`|`"文字で区切られたバリアントのリストを指定できます.テストされる式の型が既知の場合,バリアントを列挙型名で修飾する必要はありません:
+この演算子では,&quot;`|`&quot;文字で区切られたバリアントのリストを指定できます.テストされる式の型が既知の場合,バリアントを列挙型名で修飾する必要はありません:
 
 ```move
 assert!(data is V1|V2);
@@ -167,7 +167,7 @@ enum VersionedData has key {
 }
 
 data.name
- // ^^^^^ `name`フィールドの選択が曖昧であるというコンパイル時エラー
+ // ^^^^^ compile time error that `name` field selection is ambiguous
 ```
 
 ## letでの列挙型パターンの使用
@@ -186,7 +186,7 @@ let V1{name} = data;
 構造体の値と同様に,列挙型の値は明示的に展開することで破棄できます.列挙型は,`match`式でのパターンマッチング,`let`バインディングでの列挙型パターン,または代入での列挙型パターンで展開できます.
 
 ```move
-// 注：`Shape`は`drop`アビリティを持たないため、明示的な展開で破棄する必要があります。
+// Note: `Shape` has no `drop` ability, so must be destroyed with explicit unpacking.
 enum Shape {
     Circle{radius: u64},
     Rectangle{width: u64, height: u64}
@@ -230,7 +230,7 @@ enum VersionedData has key {
 
 ```move
 enum VersionedData has key {
-  V2{name: String, age: u64}   // 互換性のないアップグレード
+  V2{name: String, age: u64}   // not a compatible upgrade
   V1{name: String}
 }
 ```

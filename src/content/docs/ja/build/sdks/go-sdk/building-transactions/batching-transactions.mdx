@@ -10,7 +10,7 @@ Go SDKには,多くのトランザクションを同時に送信し,順序付け
 ## 完全なGoの例
 
 ```go filename="batch.go"
-// sending_concurrent_transactions は、単一アカウントでトランザクションを直列または並行して送信する方法を示します
+// sending_concurrent_transactions shows how to submit transactions serially or concurrently on a single account
 package main
 
 import (
@@ -79,7 +79,7 @@ func sendManyTransactionsSerially(networkConfig aptos.NetworkConfig, numTransact
 		sequenceNumber++
 	}
 
-	// 最後のトランザクションを待ちます
+	// Wait on last transaction
 	response, err := client.WaitForTransaction(responses[numTransactions-1].Hash)
 	if err != nil {
 		panic("Failed to wait for transaction:" + err.Error())
@@ -93,12 +93,12 @@ func sendManyTransactionsConcurrently(networkConfig aptos.NetworkConfig, numTran
 	client, sender := setup(networkConfig)
 	payload := payload()
 
-	// 送信goroutineを開始
+	// start submission goroutine
 	payloads := make(chan aptos.TransactionBuildPayload, 50)
 	results := make(chan aptos.TransactionSubmissionResponse, 50)
 	go client.BuildSignAndSubmitTransactions(sender, payloads, results)
 
-	// トランザクションをgoroutineに送信
+	// Submit transactions to goroutine
 	go func() {
 		for i := uint64(0); i < numTransactions; i++ {
 			payloads <- aptos.TransactionBuildPayload{
@@ -110,7 +110,7 @@ func sendManyTransactionsConcurrently(networkConfig aptos.NetworkConfig, numTran
 		close(payloads)
 	}()
 
-	// すべてのトランザクションが処理されるのを待ちます
+	// Wait for all transactions to be processed
 	for result := range results {
 		if result.Err != nil {
 			panic("Failed to submit and wait for transaction:" + result.Err.Error())
@@ -118,23 +118,23 @@ func sendManyTransactionsConcurrently(networkConfig aptos.NetworkConfig, numTran
 	}
 }
 
-// example この例は、トランザクション送信のパフォーマンスを向上させる方法を示しています
+// example This example shows you how to improve performance of the transaction submission
 //
-// シーケンス番号、ガス価格、その他の要因をローカルで処理することで速度を向上させることができます
+// Speed can be improved by locally handling the sequence number, gas price, and other factors
 func example(networkConfig aptos.NetworkConfig, numTransactions uint64) {
-	println("直列に", numTransactions, "個のトランザクションを送信")
+	println("Sending", numTransactions, "transactions Serially")
 	startSerial := time.Now()
 	sendManyTransactionsSerially(networkConfig, numTransactions)
 	endSerial := time.Now()
-	println("直列:", time.Duration.Milliseconds(endSerial.Sub(startSerial)), "ms")
+	println("Serial:", time.Duration.Milliseconds(endSerial.Sub(startSerial)), "ms")
 
-	println("並行に", numTransactions, "個のトランザクションを送信")
+	println("Sending", numTransactions, "transactions Concurrently")
 	startConcurrent := time.Now()
 	sendManyTransactionsConcurrently(networkConfig, numTransactions)
 	endConcurrent := time.Now()
-	println("並行:", time.Duration.Milliseconds(endConcurrent.Sub(startConcurrent)), "ms")
+	println("Concurrent:", time.Duration.Milliseconds(endConcurrent.Sub(startConcurrent)), "ms")
 
-	println("並行処理は直列処理より", time.Duration.Milliseconds(endSerial.Sub(startSerial)-endConcurrent.Sub(startConcurrent)), "ms速い")
+	println("Concurrent is", time.Duration.Milliseconds(endSerial.Sub(startSerial)-endConcurrent.Sub(startConcurrent)), "ms faster than Serial")
 }
 
 func main() {

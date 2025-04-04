@@ -6,7 +6,7 @@ const labels = {
   // Top Level
   build: "Build",
   network: "Network",
-  smartContracts: "Smart Contracts (Move)",
+  smartContracts: "Smart Contracts",
   guides: "Guides",
   reference: "Reference",
 
@@ -31,6 +31,8 @@ const labels = {
   "guides.group.advanced": "Advanced",
 
   // Reference Sub-Groups (Only has generated API and glossary for now)
+  "reference.group.indexerApi": "Indexer API",
+  "reference.group.restApi": "REST API",
 } as const;
 
 type NavLabels = typeof labels;

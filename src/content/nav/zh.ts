@@ -9,7 +9,7 @@ export default navDictionary({
   // Top Level
   build: "构建", // Build
   network: "网络", // Network
-  smartContracts: "智能合约 & Move", // Smart Contracts & Move
+  smartContracts: "智能合约", // Smart Contracts
   guides: "指南", // Guides
   reference: "参考", // Reference
 
@@ -33,5 +33,7 @@ export default navDictionary({
   "guides.group.beginner": "初学者", // Beginner
   "guides.group.advanced": "高级", // Advanced
 
-  // Reference Sub-Groups (Currently none needed based on sidebar structure)
+  // Reference Sub-Groups (Only has generated API and glossary for now)
+  "reference.group.indexerApi": "Indexer API",
+  "reference.group.restApi": "REST API",
 });

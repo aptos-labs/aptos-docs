@@ -28,11 +28,8 @@ type BadgeConfig =
     };
 
 // Forward declaration to allow for recursive types
-type NestedSidebarItem =
-  | string
-  | SidebarLinkItem
-  | SidebarGroupWithItems
-  | SidebarGroupWithAutogenerate;
+export type NestedSidebarItem = // Export the type
+  string | SidebarLinkItem | SidebarGroupWithItems | SidebarGroupWithAutogenerate;
 
 // A sidebar group with manual items
 type SidebarGroupWithItems = SidebarItemCommon & {

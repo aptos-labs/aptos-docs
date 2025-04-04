@@ -9,7 +9,7 @@ export default navDictionary({
   // Top Level
   build: "構築", // Build
   network: "ネットワーク", // Network
-  smartContracts: "スマートコントラクト & Move", // Smart Contracts & Move
+  smartContracts: "スマートコントラクト", // Smart Contracts
   guides: "ガイド", // Guides
   reference: "リファレンス", // Reference
 
@@ -33,5 +33,7 @@ export default navDictionary({
   "guides.group.beginner": "初心者", // Beginner
   "guides.group.advanced": "上級者", // Advanced
 
-  // Reference Sub-Groups (Currently none needed based on sidebar structure)
+  // Reference Sub-Groups (Only has generated API and glossary for now)
+  "reference.group.indexerApi": "Indexer API",
+  "reference.group.restApi": "REST API",
 });

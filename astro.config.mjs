@@ -16,6 +16,7 @@ import react from "@astrojs/react";
 import Icons from "unplugin-icons/vite";
 import starlightLlmsTxt from "starlight-llms-txt";
 import favicons from "astro-favicons";
+import icon from "astro-icon";
 import { sidebar } from "./astro.sidebar.ts";
 import { ENV } from "./src/lib/env";
 import { ogImagesIntegration } from "./src/integrations/ogImages";
@@ -120,7 +121,7 @@ export default defineConfig({
                 [
                   {
                     base: "rest-api",
-                    label: "REST API",
+                    label: "REST API Reference",
                     schema: "./public/aptos-spec.json",
                     sidebarMethodBadges: true,
                   },
@@ -165,6 +166,11 @@ export default defineConfig({
         favicons: false,
         windows: true,
         yandex: true,
+      },
+    }),
+    icon({
+      include: {
+        ph: ["rocket-launch", "hard-drives", "brackets-curly", "file-text", "book-open"],
       },
     }),
   ],

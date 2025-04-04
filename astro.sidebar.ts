@@ -1,6 +1,6 @@
 import type { StarlightUserConfig } from "@astrojs/starlight/types";
 import { openAPISidebarGroups } from "starlight-openapi";
-import { group } from "./config/sidebar";
+import { group, type NestedSidebarItem } from "./config/sidebar";
 import { ENV } from "./src/lib/env";
 
 const ENABLE_API_REFERENCE = ENV.ENABLE_API_REFERENCE;
@@ -21,7 +21,6 @@ export const sidebar = [
         items: [
           "build/sdks", // SDK Overview
           group("build.group.sdks.official", {
-            // Removed explicit label
             items: [
               "build/sdks/ts-sdk",
               "build/sdks/python-sdk",
@@ -34,15 +33,12 @@ export const sidebar = [
             ],
           }),
           group("build.group.sdks.community", {
-            // Removed explicit label
             items: [
-              "build/sdks/community-sdks", // Community Overview
+              "build/sdks/community-sdks",
               "build/sdks/community-sdks/kotlin-sdk",
               "build/sdks/community-sdks/swift-sdk",
-              // REMOVED: "build/sdks/community-sdks/unity-opendive-sdk",
             ],
           }),
-          // REMOVED: "build/sdks/ts-sdk/legacy-ts-sdk",
         ],
       }),
       "build/indexer",
@@ -152,8 +148,8 @@ export const sidebar = [
           "build/smart-contracts/aptos-standards",
           "build/smart-contracts/digital-asset",
           "build/smart-contracts/fungible-asset",
-          "build/smart-contracts/aptos-coin", // Kept legacy standard concept pages
-          "build/smart-contracts/aptos-token", // Kept legacy standard concept pages
+          "build/smart-contracts/aptos-coin",
+          "build/smart-contracts/aptos-token",
           "build/smart-contracts/randomness",
           "build/smart-contracts/cryptography",
           "build/smart-contracts/resource-accounts",
@@ -172,12 +168,11 @@ export const sidebar = [
       }),
       group("smartContracts.group.reference", {
         items: [
-          { label: "View Frameworks", link: "/move-reference" }, // Entry point is fine
+          { label: "View Frameworks", link: "/move-reference" },
           { label: "Aptos Framework", link: "/move-reference/mainnet/aptos-framework" },
           { label: "Aptos Standard Library", link: "/move-reference/mainnet/aptos-stdlib" },
           { label: "Aptos Token Objects", link: "/move-reference/mainnet/aptos-token-objects" },
           { label: "Move Standard Library", link: "/move-reference/mainnet/move-stdlib" },
-          // { label: "Aptos Token (Legacy)", link: "/move-reference/mainnet/aptos-token"}, // Removed legacy ref link
         ],
       }),
       "build/smart-contracts/book/move-2", // Release Notes
@@ -216,11 +211,18 @@ export const sidebar = [
   // --- REFERENCE Tab (Focus: API/Tool Lookup) ---
   group("reference", {
     items: [
-      { label: "REST API", link: "/build/apis/fullnode-rest-api" },
-      { label: "Indexer API", link: "/build/indexer/indexer-api" },
+      group("reference.group.indexerApi", {
+        items: ["build/indexer/indexer-api", "build/indexer/indexer-api/indexer-reference"],
+      }),
+      group("reference.group.restApi", {
+        // Assert the type of the entire items array
+        items: [
+          { label: "REST API", link: "/build/apis/fullnode-rest-api" },
+          ...(enableApiReference ? openAPISidebarGroups : []),
+        ] as NestedSidebarItem[],
+      }),
+
       "network/glossary",
-      ...(enableApiReference ? openAPISidebarGroups : []),
-      { label: "Indexer API Reference", link: "build/indexer/indexer-api/indexer-reference" },
     ],
   }),
 ] satisfies StarlightUserConfig["sidebar"];

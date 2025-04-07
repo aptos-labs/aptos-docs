@@ -1,4 +1,4 @@
-import type keys from "../content/nav/en";
+import type keys from "../content/nav/en.ts";
 
 type NavKey = keyof typeof keys;
 
@@ -7,7 +7,7 @@ type NavKey = keyof typeof keys;
  *
  * @example
  * // src/content/nav/fr.ts
- * import { navDictionary } from '../../util/navDictionary';
+ * import { navDictionary } from '../../utils/navDictionary';
  *
  * export default navDictionary({
  * 	start: 'Démarrer',

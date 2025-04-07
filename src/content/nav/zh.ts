@@ -1,4 +1,4 @@
-import { navDictionary } from "../../util/navDictionary";
+import { navDictionary } from "../../utils/navDictionary.ts";
 
 /**
  * Simplified Chinese labels for navigation items

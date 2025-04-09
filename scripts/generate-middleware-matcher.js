@@ -22,7 +22,7 @@ const rootDir = path.resolve(__dirname, "..");
 async function getSupportedLanguages() {
   try {
     // Dynamically import the languages from config file
-    const { SUPPORTED_LANGUAGES } = await import("../src/config/18n.ts");
+    const { SUPPORTED_LANGUAGES } = await import("../src/config/i18n.ts");
     return SUPPORTED_LANGUAGES;
   } catch (error) {
     console.error(

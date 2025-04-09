@@ -20,7 +20,7 @@ import lunaria from "@lunariajs/starlight";
 import { sidebar } from "./astro.sidebar.ts";
 import { ENV } from "./src/lib/env";
 import { ogImagesIntegration } from "./src/integrations/ogImages";
-import { SUPPORTED_LANGUAGES, SITE_TITLES } from "./src/config/18n";
+import { SUPPORTED_LANGUAGES, SITE_TITLES } from "./src/config/i18n.ts";
 import { firebaseIntegration } from "./src/integrations/firebase";
 import { remarkClientOnly } from "./src/plugins";
 import { devServerFileWatcher } from "./src/integrations/dev-server-file-watcher";

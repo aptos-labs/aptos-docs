@@ -1,4 +1,4 @@
-import enLabels from "../src/content/nav/en";
+import enLabels from "../content/nav/en";
 
 // Define key types for navigation
 type NavKey = keyof typeof enLabels;

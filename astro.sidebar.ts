@@ -1,6 +1,6 @@
 import type { StarlightUserConfig } from "@astrojs/starlight/types";
 import { openAPISidebarGroups } from "starlight-openapi";
-import { group, type NestedSidebarItem } from "./config/sidebar";
+import { group, type NestedSidebarItem } from "./src/config/sidebar";
 import { ENV } from "./src/lib/env";
 
 // Define icons for top-level sidebar groups

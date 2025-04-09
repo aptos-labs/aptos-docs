@@ -16,6 +16,7 @@ import react from "@astrojs/react";
 import starlightLlmsTxt from "starlight-llms-txt";
 import favicons from "astro-favicons";
 import icon from "astro-icon";
+import lunaria from "@lunariajs/starlight";
 import { sidebar } from "./astro.sidebar.ts";
 import { ENV } from "./src/lib/env";
 import { ogImagesIntegration } from "./src/integrations/ogImages";
@@ -116,6 +117,10 @@ export default defineConfig({
           promote: ["index*", "get-started"],
           demote: ["404"],
           exclude: ["404"],
+        }),
+        lunaria({
+          sync: true,
+          route: "/i18n-status",
         }),
         ...(hasAlgoliaConfig
           ? [

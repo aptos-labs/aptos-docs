@@ -22,6 +22,7 @@ import { ogImagesIntegration } from "./src/integrations/ogImages";
 import { SUPPORTED_LANGUAGES, SITE_TITLES } from "./src/config/18n";
 import { firebaseIntegration } from "./src/integrations/firebase";
 import { remarkClientOnly } from "./src/plugins";
+import { devServerFileWatcher } from "./src/integrations/dev-server-file-watcher";
 // import { isMoveReferenceEnabled } from "./src/utils/isMoveReferenceEnabled";
 // import { rehypeAddDebug } from "./src/plugins";
 
@@ -43,6 +44,16 @@ export default defineConfig({
         : "http://localhost:4321",
   trailingSlash: "never",
   integrations: [
+    // Only include devServerFileWatcher in development mode
+    ...(process.env.NODE_ENV === "development" || !process.env.VERCEL
+      ? [
+          devServerFileWatcher([
+            "./integrations/*", // Custom integrations
+            "./astro.sidebar.ts", // Sidebar configuration file
+            "./src/content/nav/*.ts", // Sidebar labels
+          ]),
+        ]
+      : []),
     ogImagesIntegration(),
     firebaseIntegration(),
     starlight({

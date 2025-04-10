@@ -24,6 +24,7 @@ import { SUPPORTED_LANGUAGES, SITE_TITLES } from "./src/config/i18n.mjs";
 import { firebaseIntegration } from "./src/integrations/firebase";
 import { remarkClientOnly } from "./src/plugins";
 import { devServerFileWatcher } from "./src/integrations/dev-server-file-watcher";
+import { filterBoolean } from "./src/utils/filterBoolean";
 // import { isMoveReferenceEnabled } from "./src/utils/isMoveReferenceEnabled";
 // import { rehypeAddDebug } from "./src/plugins";
 
@@ -112,16 +113,18 @@ export default defineConfig({
         PageTitle: "./src/starlight-overrides/PageTitle.astro",
         Sidebar: "./src/starlight-overrides/Sidebar.astro",
       },
-      plugins: [
+      plugins: filterBoolean([
         starlightLlmsTxt({
           promote: ["index*", "get-started"],
           demote: ["404"],
           exclude: ["404"],
         }),
-        lunaria({
-          sync: true,
-          route: "/i18n-status",
-        }),
+        // Skip lunaria plugin on CI, since it tries to clone the repo in all workflows
+        !process.env.GITHUB_RUN_ID &&
+          lunaria({
+            sync: true,
+            route: "/i18n-status",
+          }),
         ...(hasAlgoliaConfig
           ? [
               starlightDocSearch({
@@ -147,7 +150,7 @@ export default defineConfig({
               ),
             ]
           : []),
-      ],
+      ]),
       sidebar,
       customCss: ["./src/globals.css", "katex/dist/katex.min.css"],
     }),

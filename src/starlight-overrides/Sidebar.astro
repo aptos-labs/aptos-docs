@@ -90,6 +90,10 @@ function assertGroups(sidebarItems: SidebarEntryType[]): SidebarEntryType[] {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sidebarGroups = Array.isArray(sidebarData) ? assertGroups(sidebarData as any) : [];
 
+// Debug log the sidebar groups
+// console.log("Sidebar Groups:", JSON.stringify(sidebarGroups, null, 2));
+// console.log("Sidebar Group Icons:", JSON.stringify(sidebarGroupIcons, null, 2));
+
 // Generate id for tab panel from label
 const makeId = (label: string): string => {
   if (!label) return "__tab-unknown";
@@ -125,12 +129,41 @@ Object.entries(labels).forEach(([key, val]) => {
   <TabbedContent class="tabbed-sidebar">
     <Fragment slot="tab-list">
       {
-        sidebarGroups.map(({ label, entries }) => {
-          // Look up the key for this label
-          const key = labelToKey[label] || label.toLowerCase().replace(/\s+/g, "");
+        sidebarGroups.map(({ label, entries }, index) => {
+          // Debug log the translations object
+          // console.log(`Translations for "${label}":`, translations);
+
+          // Try to find the key by looking at the translations object
+          let sidebarKey = "";
+
+          // First try to look up the key directly from English labels
+          if (label in labelToKey) {
+            sidebarKey = labelToKey[label] as string;
+          }
+
+          // If that fails, try to find the key by index in the sidebar groups
+          // This assumes the sidebar groups are in the same order as the keys in sidebarGroupIcons
+          if (!sidebarKey) {
+            // Get the keys of sidebarGroupIcons in order
+            const iconKeys = Object.keys(sidebarGroupIcons);
+            // Use the index to get the corresponding key
+            if (index < iconKeys.length) {
+              sidebarKey = iconKeys[index] as string;
+            }
+          }
+
+          // If all else fails, fall back to a simple transformation of the label
+          if (!sidebarKey) {
+            sidebarKey = label.toLowerCase().replace(/\s+/g, "");
+          }
 
           // Look up the icon from the mapping, or use a default
-          const iconName = sidebarGroupIcons[key] || "ph:rocket-launch";
+          const iconName = sidebarGroupIcons[sidebarKey] || "ph:rocket-launch";
+
+          // Debug log
+          // console.log(
+          //   `Sidebar item: ${label}, Index: ${index}, Key: ${sidebarKey}, Icon: ${iconName}`,
+          // );
 
           return (
             <TabListItem

@@ -55,27 +55,41 @@ const translations = (() => {
     result[key as NavKey] = {};
   });
 
-  // Load all language files
-  const langModules = import.meta.glob<{ default: NavDict }>("../src/content/nav/*.ts", {
-    eager: true,
-  });
-
-  // Process each language file's translations
-  Object.entries(langModules).forEach(([path, mod]) => {
-    const match = /\/([^/]+)\.ts$/.exec(path);
-    if (!match?.[1]) return;
-
-    const lang = match[1];
-    const dict = mod.default;
-
-    // Add translations to our result
-    Object.keys(dict).forEach((key) => {
-      if (Object.prototype.hasOwnProperty.call(result, key)) {
-        const navKey = key as NavKey;
-        result[navKey][lang] = dict[navKey];
-      }
+  try {
+    // Load all language files
+    const langModules = import.meta.glob<{ default: NavDict }>("../content/nav/*.ts", {
+      eager: true,
     });
-  });
+
+    // Check if we have any language modules
+    if (Object.keys(langModules).length === 0) {
+      console.warn(
+        "Warning: No translation files found in '../content/nav/*.ts'. " +
+          "This may indicate that the directory doesn't exist or is empty. " +
+          "Only English labels will be available.",
+      );
+    }
+
+    // Process each language file's translations
+    Object.entries(langModules).forEach(([path, mod]) => {
+      const match = /\/([^/]+)\.ts$/.exec(path);
+      if (!match?.[1]) return;
+
+      const lang = match[1];
+      const dict = mod.default;
+
+      // Add translations to our result
+      Object.keys(dict).forEach((key) => {
+        if (Object.prototype.hasOwnProperty.call(result, key)) {
+          const navKey = key as NavKey;
+          result[navKey][lang] = dict[navKey];
+        }
+      });
+    });
+  } catch (error) {
+    console.error("Error loading translation files:", error);
+    console.warn("Falling back to English-only labels");
+  }
 
   return result;
 })();

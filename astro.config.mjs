@@ -38,7 +38,7 @@ const enableApiReference = ENABLE_API_REFERENCE === "true";
 export default defineConfig({
   site:
     ENV.VERCEL_ENV === "production"
-      ? "https://aptos-docs-astro.vercel.app"
+      ? "https://preview.aptos.dev"
       : ENV.VERCEL_URL
         ? `https://${ENV.VERCEL_URL}`
         : "http://localhost:4321",

@@ -1,4 +1,5 @@
 // @ts-check
+import { fileURLToPath } from "url";
 import { defineConfig, envField } from "astro/config";
 import starlight from "@astrojs/starlight";
 import tailwindcss from "@tailwindcss/vite";
@@ -212,6 +213,11 @@ export default defineConfig({
     optimizeDeps: {
       exclude: ["@rollup/browser"],
     },
+    resolve: {
+      alias: {
+        "~/images": fileURLToPath(new URL("./src/assets/images", import.meta.url)),
+      },
+    },
   },
   markdown: {
     remarkPlugins: [
@@ -229,6 +235,10 @@ export default defineConfig({
     rehypePlugins: [rehypeRaw, rehypeKatex],
   },
   prefetch: true,
+  image: {
+    domains: ["preview.aptos.dev", "aptos.dev"],
+    remotePatterns: [{ protocol: "https" }],
+  },
   env: {
     schema: {
       ALGOLIA_APP_ID: envField.string({

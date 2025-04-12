@@ -197,6 +197,12 @@ export default defineConfig({
   adapter: process.env.VERCEL
     ? vercel({
         edgeMiddleware: false,
+        imageService: true,
+        imagesConfig: {
+          domains: [],
+          sizes: [320, 640, 1280],
+          formats: ["image/avif", "image/webp"],
+        },
       })
     : node({
         mode: "standalone",

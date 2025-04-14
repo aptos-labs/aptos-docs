@@ -95,13 +95,14 @@ export default defineConfig({
           { label, lang: code },
         ]),
       ),
-      social: {
-        github: "https://github.com/aptos-labs/",
-        "x.com": "https://x.com/aptos",
-        discord: "https://discord.com/invite/aptosnetwork",
-        reddit: "https://www.reddit.com/r/Aptos/",
-        telegram: "https://t.me/aptos",
-      },
+      social: [
+        { label: "GitHub", icon: "github", href: "https://github.com/aptos-labs" },
+        { label: "X", icon: "x.com", href: "https://x.com/aptos" },
+        { label: "Discord", icon: "discord", href: "https://discord.com/invite/aptosnetwork" },
+        { label: "Forum", icon: "discourse", href: "https://forum.aptosfoundation.org" },
+        { label: "Reddit", icon: "reddit", href: "https://www.reddit.com/r/Aptos" },
+        { label: "Telegram", icon: "telegram", href: "https://t.me/aptos" },
+      ],
       components: {
         Head: "./src/starlight-overrides/Head.astro",
         // Header: "./src/starlight-overrides/Header.astro",

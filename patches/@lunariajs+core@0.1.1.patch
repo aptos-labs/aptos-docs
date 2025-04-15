@@ -1,0 +1,26 @@
+diff --git a/dist/status/git.mjs b/dist/status/git.mjs
+index 0000000000000000000000000000000000000000..0000000000000000000000000000000000000000 100644
+--- a/dist/status/git.mjs
++++ b/dist/status/git.mjs
+@@ -22,7 +22,20 @@ async function handleShallowRepo({ cloneDir, repository }) {
+     const target = resolve(cloneDir);
+     if (existsSync(target))
+       rmSync(target, { recursive: true, force: true });
+-    await git.clone(gitHostingLinks.clone(), target, ["--bare", "--filter=blob:none"]);
++    // Try to use authentication token if available
++    const token = process.env.GITHUB_TOKEN_LUNARIA;
++    const originalCloneUrl = gitHostingLinks.clone();
++    const cloneUrl = token && repository.hosting === "github"
++      ? `https://${token}@github.com/${repository.name}.git`
++      : originalCloneUrl;
++    
++    try {
++      await git.clone(cloneUrl, target, ["--bare", "--filter=blob:none"]);
++    } catch (e) {
++      // If authentication fails, fall back to the original URL
++      console.log(info("Authentication failed, falling back to public URL"));
++      await git.clone(originalCloneUrl, target, ["--bare", "--filter=blob:none"]);
++    }
+     await git.cwd({ path: target, root: true });
+   }
+   return isShallowRepo;

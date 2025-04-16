@@ -278,6 +278,31 @@ export default defineConfig({
     },
     validateSecrets: true,
   },
+  experimental: {
+    fonts: [
+      {
+        provider: "local",
+        name: "Atkinson Hyperlegible Next",
+        cssVariable: "--font-atkinson-hyperlegible-next",
+        variants: [
+          {
+            weight: "100 900",
+            style: "normal",
+            src: ["./src/assets/fonts/AtkinsonHyperlegibleNext-VariableFont_wght.woff2"],
+            variationSettings: "'wght' 400",
+            display: "swap",
+          },
+          {
+            weight: "100 900",
+            style: "italic",
+            src: ["./src/assets/fonts/AtkinsonHyperlegibleNext-Italic-VariableFont_wght.woff2"],
+            variationSettings: "'wght' 400",
+            display: "swap",
+          },
+        ],
+      },
+    ],
+  },
   redirects: {
     /**
      * Development-only redirects when Move Reference is disabled

@@ -146,7 +146,7 @@ export default defineConfig({
           : []),
       ],
       sidebar,
-      customCss: ["./src/globals.css", "katex/dist/katex.min.css"],
+      customCss: ["./src/styles/global.css", "katex/dist/katex.min.css"],
     }),
     sitemap({
       serialize(item) {

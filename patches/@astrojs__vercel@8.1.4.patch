@@ -1,0 +1,42 @@
+diff --git a/dist/image/build-service.js b/dist/image/build-service.js
+index e342c899f43abbdf132e3a92ef3d53ca636ec51a..ae2123ac14ed3744437bafc4497bc88f60f1a94d 100644
+--- a/dist/image/build-service.js
++++ b/dist/image/build-service.js
+@@ -31,7 +31,17 @@ const service = {
+     };
+   },
+   getURL(options) {
+-    const fileSrc = isESMImportedImage(options.src) ? removeLeadingForwardSlash(options.src.src) : options.src;
++    // For SVG files, return the original source path
++    if (isESMImportedImage(options.src) && 
++        options.src.format === "svg") {
++      return options.src.src;
++    }
++    
++    // For non-SVG files, continue with the current implementation
++    const fileSrc = isESMImportedImage(options.src) ? 
++      removeLeadingForwardSlash(options.src.src) : 
++      options.src;
++    
+     const searchParams = new URLSearchParams();
+     searchParams.append("url", fileSrc);
+     options.width && searchParams.append("w", options.width.toString());
+diff --git a/dist/image/shared.js b/dist/image/shared.js
+index 86eb4ffdb9a8d5ecb0cf967cbea82bbb34d21275..bd9cae8d450a4863f6b032a00dc5a41bd1016384 100644
+--- a/dist/image/shared.js
++++ b/dist/image/shared.js
+@@ -7,7 +7,7 @@ function getDefaultImageConfig(astroImageConfig) {
+   };
+ }
+ function isESMImportedImage(src) {
+-  return typeof src === "object";
++  return typeof src === "object" || (typeof src === "function" && "src" in src);
+ }
+ const qualityTable = {
+   low: 25,
+@@ -87,5 +87,5 @@ export {
+   getAstroImageConfig,
+   getDefaultImageConfig,
+   isESMImportedImage,
+   sharedValidateOptions
+ };

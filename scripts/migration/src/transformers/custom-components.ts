@@ -18,6 +18,7 @@ export class CustomComponentTransformer extends BaseTransformer {
     "YouTube",
     "Faucet",
     "GraphQLEditor",
+    "NFTGraphQLEditor",
     "RemoteCodeblock",
   ];
 
@@ -25,6 +26,7 @@ export class CustomComponentTransformer extends BaseTransformer {
   protected readyComponents: Record<string, string> = {
     Faucet: "~/components/react/Faucet",
     GraphQLEditor: "~/components/react/GraphQLEditor",
+    NFTGraphQLEditor: "~/components/react/GraphQLEditor", // Map to the same component
     RemoteCodeblock: "~/components/RemoteCodeblock",
     YouTube: "astro-embed",
   };
@@ -64,8 +66,36 @@ export class CustomComponentTransformer extends BaseTransformer {
     // Second pass: handle components
     visit(ast, ["mdxJsxFlowElement", "mdxJsxElement"], (node) => {
       if ("name" in node && typeof node.name === "string") {
+        // Handle NFTGraphQLEditor transformation to GraphQLEditor with endpoint
+        if (node.name === "NFTGraphQLEditor") {
+          node.name = "GraphQLEditor";
+
+          // Add endpoint attribute if it doesn't exist
+          const mdxNode = node as MdxJsxFlowElement;
+          const hasEndpoint = mdxNode.attributes?.some(
+            (attr) => attr.type === "mdxJsxAttribute" && attr.name === "endpoint",
+          );
+
+          if (!hasEndpoint && mdxNode.attributes) {
+            mdxNode.attributes.push({
+              type: "mdxJsxAttribute",
+              name: "endpoint",
+              value: "https://api.mainnet.aptoslabs.com/nft-aggregator-staging/v1/graphql",
+            });
+
+            // Add showNetworkSelector attribute
+            mdxNode.attributes.push({
+              type: "mdxJsxAttribute",
+              name: "showNetworkSelector",
+              value: "{false}",
+            });
+          }
+
+          // Track that we need to import GraphQLEditor
+          importsNeeded.add("GraphQLEditor");
+        }
         // If it's a ready component, keep it and track for import
-        if (this.readyComponents[node.name]) {
+        else if (this.readyComponents[node.name]) {
           importsNeeded.add(node.name);
         }
         // If it's a component to be commented out

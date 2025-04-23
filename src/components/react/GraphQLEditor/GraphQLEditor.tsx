@@ -5,12 +5,19 @@ import GraphQLLogo from "./GraphQLLogo";
 import "graphiql/graphiql.min.css";
 import "./styles.css";
 
+// Helper to check if variables are empty
+const isEmptyVariables = (variables?: string): boolean => {
+  if (!variables) return true;
+  const trimmed = variables.trim();
+  return trimmed === "" || trimmed === "{}" || trimmed === "null";
+};
+
 interface GraphQLEditorProps {
   network?: "mainnet" | "testnet" | "devnet";
   query?: string;
   variables?: string;
   endpoint?: string;
-  showNetworkSelector?: boolean;
+  hideNetworkSelector?: boolean; // Changed prop name
   showFullscreenButton?: boolean;
 }
 
@@ -24,7 +31,7 @@ export const GraphQLEditor: React.FC<GraphQLEditorProps> = ({
   query,
   variables,
   endpoint,
-  showNetworkSelector = true,
+  hideNetworkSelector = false,
   showFullscreenButton = true,
 }) => {
   const [network, setNetwork] = useState(initialNetwork);
@@ -105,31 +112,32 @@ export const GraphQLEditor: React.FC<GraphQLEditorProps> = ({
         <div className="graphiql-header flex justify-between gap-4 py-2 items-center pr-2 lg:pl-11">
           <GraphQLLogo className="h-6 text-[var(--sl-color-gray-4)] hidden md:block" />
           <div className="flex items-center gap-4">
-            {showNetworkSelector && !endpoint && (
-              <label className="flex items-center gap-1">
-                <select
-                  value={network}
-                  onChange={(e) => {
-                    setNetwork(e.target.value as typeof network);
-                  }}
-                  className="graphiql-select"
-                >
-                  <option value="mainnet">Mainnet</option>
-                  <option value="testnet">Testnet</option>
-                  <option value="devnet">Devnet</option>
-                </select>
-                <svg
-                  aria-hidden="true"
-                  className="icon caret"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                >
-                  <path d="M17 9.17a1 1 0 0 0-1.41 0L12 12.71 8.46 9.17a1 1 0 1 0-1.41 1.42l4.24 4.24a1.002 1.002 0 0 0 1.42 0L17 10.59a1.002 1.002 0 0 0 0-1.42Z"></path>
-                </svg>
-              </label>
-            )}
+            {!hideNetworkSelector && // Show network selector only if hideNetworkSelector is false
+              endpoint && ( // Show network selector only if endpoint is provided
+                <label className="flex items-center gap-1">
+                  <select
+                    value={network}
+                    onChange={(e) => {
+                      setNetwork(e.target.value as typeof network);
+                    }}
+                    className="graphiql-select"
+                  >
+                    <option value="mainnet">Mainnet</option>
+                    <option value="testnet">Testnet</option>
+                    <option value="devnet">Devnet</option>
+                  </select>
+                  <svg
+                    aria-hidden="true"
+                    className="icon caret"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                  >
+                    <path d="M17 9.17a1 1 0 0 0-1.41 0L12 12.71 8.46 9.17a1 1 0 1 0-1.41 1.42l4.24 4.24a1.002 1.002 0 0 0 1.42 0L17 10.59a1.002 1.002 0 0 0 0-1.42Z"></path>
+                  </svg>
+                </label>
+              )}
             {showFullscreenButton && (
               <button
                 onClick={toggleFullscreen}
@@ -174,10 +182,10 @@ export const GraphQLEditor: React.FC<GraphQLEditorProps> = ({
         </div>
 
         <GraphiQL
-          key={theme} // Force re-mount when the theme changes
+          key={`${theme}-${network}-${endpoint ?? "default"}`} // Use ?? 'default' for key, pass undefined for variables
           fetcher={fetcher}
           query={query}
-          variables={variables}
+          variables={isEmptyVariables(variables) ? undefined : variables} // Pass undefined when empty
           isHeadersEditorEnabled={false}
           shouldPersistHeaders={false}
           disableTabs={true}

@@ -65,7 +65,7 @@ export default defineConfig({
         replacesTitle: false,
       },
       editLink: {
-        baseUrl: "https://github.com/aptos-labs/developer-docs/edit/main/",
+        baseUrl: "https://github.com/aptos-labs/aptos-docs/edit/main/",
       },
       lastUpdated: true,
       expressiveCode: {

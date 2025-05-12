@@ -45,11 +45,16 @@ export class MarkdownProcessor {
 
   async processContent(fileName: string, content: string): Promise<ContentEntry> {
     const { data: frontmatter, content: markdownContent } = matter(content);
-    // Keep just the filename without extension for the ID
     const id = fileName.split("/").pop()?.replace(".md", "") ?? "";
 
-    // Process with remark plugins
-    const processed = await this.processor.render(markdownContent);
+    const virtualFilePath = `/virtual/move-reference/${fileName}`;
+
+    const renderOptions = {
+      frontmatter,
+      fileURL: new URL(`file://${virtualFilePath}`),
+    } satisfies { frontmatter: Record<string, unknown>; fileURL: URL };
+
+    const processed = await this.processor.render(markdownContent, renderOptions);
 
     return {
       id,

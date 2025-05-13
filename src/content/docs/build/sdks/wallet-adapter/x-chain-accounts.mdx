@@ -2,7 +2,7 @@
 title: "X-Chain Accounts"
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+import { Aside, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
 
 <Aside type="note">
   The feature is currently only available on devnet and is considered an alpha version; therefore, you can expect breaking changes.
@@ -18,7 +18,7 @@ This functionality enables a variety of use cases for dApps, enhancing user expe
 When a user enters a dApp that supports x-chain accounts, the interaction and experience feel the same as with any Aptos wallet.
 The user connects with a x-chain account (e.g., Phantom for Solana) and can view their Derivable Abstracted Account (DAA) details, sign messages, and submit transactions to the Aptos chain.
 
-When a dapp submits a transaction using a x-chain account, the wallet adapter utilizes the `signIn` function (defined in the x-chain account standard) for domain verification and security.
+When a dapp submits a transaction using a x-chain account, the wallet adapter utilizes the `signIn` function (defined in the x-chain account standard) for domain verification and security. If a specific wallet does not support the `signIn` method, the adapter falls back to using the default `signMessage`.
 The wallet is requested to sign a message to submit a transaction on the Aptos network. Once the wallet approves the transaction, it is submitted to the Aptos chain, where it undergoes a signature verification process.
 
 ### How does DAA work in a x-chain account?
@@ -31,7 +31,7 @@ The computation of the DAA address is done using the `authenticationFunction` an
 - `authenticationFunction`: This is a function that exists on-chain and is used to verify the signature of the x-chain account.
 - `accountIdentity`: This represents the identity of the account used in the on-chain authentication function to verify the signature of the x-chain account.
   In the Wallet Adapter, the `accountIdentity` is based on the original x-chain account's public key and the dApp domain (e.g., mydomain.com). The format is:
-  `${originWallet.publicKey}${domain}`
+  `${originWalletAddress}${domain}`
 
 <Aside type="note">
   Since the account identity is based on the dApp domain, it is scoped to the dApp context. As a result, each account has a different DAA address on different dApps.
@@ -39,38 +39,107 @@ The computation of the DAA address is done using the `authenticationFunction` an
 
 ### How to integrate x-chain accounts in my dApp?
 
-Make sure you integrate with the Aptos Wallet Adapter by following these [steps](/build/sdks/wallet-adapter/dapp)
-
-Supporting x-chain accounts in a dApp requires only a 2-step installation process.
-
-```shellscript
-npm install @aptos-labs/derived-wallet-solana
-```
-
-Once you have installed the `@aptos-labs/derived-wallet-solana` package, you can import and use it.
-In the same file where you import the other wallets, such as `WalletProvider.tsx`, you can add the following:
-
-```typescript
-import { setupAutomaticSolanaWalletDerivation } from "@aptos-labs/derived-wallet-solana";
-
-setupAutomaticSolanaWalletDerivation({ defaultNetwork: Network.TESTNET }); // this is the Aptos network your dapp is working with
-
-.....
-
-<AptosWalletAdapterProvider
- dappConfig={{
-    network: Network.TESTNET,
-  }}
->
-  {children}
-<AptosWalletAdapterProvider/>
-```
-
-That will handle the logic and implementation to include the x-chain accounts as if they were Aptos wallets.
+Currently, the adapter supports Solana and EVM chains
 
 <Aside type="note">
-  It is highly recommended to use the `@aptos-labs/wallet-adapter-react` package for the best experience.
+  It is highly recommended to use the `@aptos-labs/wallet-adapter-react` package for the best experience. Make sure you integrate with the Aptos Wallet Adapter by following these [steps](/build/sdks/wallet-adapter/dapp)
 </Aside>
+
+<Tabs>
+  {/* Solana */}
+
+  <TabItem label="Solana">
+    The wallet adapter follows the [Solana Wallet Standard](https://github.com/wallet-standard/wallet-standard/blob/master/DESIGN.md) to discover wallets.
+    Currently, the wallets that have been tested and support cross-chain accounts are:
+
+    |          | Aptos Devnet | Aptos Testnet | Aptos Mainnet |
+    | -------- | ------------ | ------------- | ------------- |
+    | Phantom  | ✅            |               |               |
+    | Solflare | ✅            |               |               |
+    | Backpack | ✅            |               |               |
+    | OKX      | ✅            |               |               |
+
+    Supporting x-chain accounts in a dApp requires only a 2-step installation process.
+
+    <Steps>
+      1. Install the @aptos-labs/derived-wallet-solana package
+
+         ```shellscript
+         npm install @aptos-labs/derived-wallet-solana
+         ```
+
+      2. Import the setupAutomaticSolanaWalletDerivation function
+
+         Once you have installed the `@aptos-labs/derived-wallet-solana` package, you can import and use it.
+         In the same file where you import the other wallets, such as `WalletProvider.tsx`, you can add the following:
+
+         ```tsx filename="WalletProvider.tsx"
+         import { setupAutomaticSolanaWalletDerivation } from "@aptos-labs/derived-wallet-solana";
+
+         setupAutomaticSolanaWalletDerivation({ defaultNetwork: Network.DEVNET }); // this is the Aptos network your dapp is working with
+
+         .....
+
+         <AptosWalletAdapterProvider
+          dappConfig={{
+             network: Network.DEVNET,
+           }}
+         >
+           {children}
+         <AptosWalletAdapterProvider/>
+         ```
+    </Steps>
+  </TabItem>
+
+  {/* EVM */}
+
+  <TabItem label="EVM">
+    The wallet adapter follows the [EIP-1193](https://eips.ethereum.org/EIPS/eip-1193) to discover wallets.
+    Currently, the wallets that have been tested and support cross-chain accounts are:
+
+    |          | Aptos Devnet | Aptos Testnet | Aptos Mainnet |
+    | -------- | ------------ | ------------- | ------------- |
+    | Metamask | ✅            |               |               |
+    | Phantom  | ✅            |               |               |
+    | Coinbase | ✅            |               |               |
+    | OKX      | ✅            |               |               |
+    | Exodus   | ✅            |               |               |
+    | Backpack | ✅            |               |               |
+
+    Supporting x-chain accounts in a dApp requires only a 2-step installation process.
+
+    <Steps>
+      1. Install the @aptos-labs/derived-wallet-ethereum package
+
+         ```shellscript
+         npm install @aptos-labs/derived-wallet-ethereum
+         ```
+
+      2. Import the setupAutomaticEthereumWalletDerivation function
+
+         Once you have installed the `@aptos-labs/derived-wallet-ethereum` package, you can import and use it.
+         In the same file where you import the other wallets, such as `WalletProvider.tsx`, you can add the following:
+
+         ```tsx filename="WalletProvider.tsx"
+         import { setupAutomaticEthereumWalletDerivation } from "@aptos-labs/derived-wallet-ethereum";
+
+         setupAutomaticEthereumWalletDerivation({ defaultNetwork: Network.DEVNET }); // this is the Aptos network your dapp is working with
+
+         .....
+
+         <AptosWalletAdapterProvider
+          dappConfig={{
+             network: Network.DEVNET,
+           }}
+         >
+           {children}
+         <AptosWalletAdapterProvider/>
+         ```
+    </Steps>
+  </TabItem>
+</Tabs>
+
+That will handle the logic and implementation to include the x-chain accounts as if they were Aptos wallets.
 
 #### Submitting a transaction
 
@@ -154,7 +223,6 @@ export default SignAndSubmit;
 ### Considerations
 
 - Since the origin wallet creates an x-chain account and is most likely not integrated with Aptos, simulation is not available in the wallet.
-- Due to the use of the `signIn` standard available on other chains, wallets that have not implemented this flow are not supported.
 - While the x-chain account prioritizes DAA, each account also retains the origin wallet, so developers should be able to use it and interact with it
 
 ### Resources

@@ -8,31 +8,11 @@ const selectStyles = cva("cursor-pointer appearance-none text-inherit truncate b
       bordered: cx("border border-[var(--sl-color-gray-5)]"),
     },
     size: {
-      sm: "py-1 pl-3 pr-7 text-xs",
-      md: "py-2 pl-4 pr-7 text-sm",
-      lg: "py-2.5 px-7 text-sm",
-    },
-    iconOnly: {
-      true: "",
+      sm: "pl-4 py-2 max-h-9 pl-3 pr-8 text-sm",
+      md: "pl-5 py-2.5 max-h-11 pr-10 text-md",
+      lg: "pl-5 py-4 max-h-14 pr-10 text-lg",
     },
   },
-  compoundVariants: [
-    {
-      size: "sm",
-      iconOnly: true,
-      class: "p-1.5 max-h-10 max-w-8",
-    },
-    {
-      size: "md",
-      iconOnly: true,
-      class: "p-2.5 max-h-10 max-w-10",
-    },
-    {
-      size: "lg",
-      iconOnly: true,
-      class: "p-3 max-h-10 max-w-12",
-    },
-  ],
   defaultVariants: { variant: "ghost", size: "md" },
 });
 

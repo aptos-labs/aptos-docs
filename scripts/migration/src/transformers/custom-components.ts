@@ -1,6 +1,10 @@
 import { visit } from "unist-util-visit";
 import type { Root, Paragraph } from "mdast";
-import type { MdxJsxFlowElement } from "mdast-util-mdx-jsx";
+import type {
+  MdxJsxAttribute,
+  MdxJsxFlowElement,
+  MdxJsxAttributeValueExpression,
+} from "mdast-util-mdx-jsx";
 import type { TransformerOptions, MdxjsEsm } from "../types/index.js";
 import { BaseTransformer } from "./base.js";
 
@@ -18,6 +22,7 @@ export class CustomComponentTransformer extends BaseTransformer {
     "YouTube",
     "Faucet",
     "GraphQLEditor",
+    "NFTGraphQLEditor",
     "RemoteCodeblock",
   ];
 
@@ -25,6 +30,7 @@ export class CustomComponentTransformer extends BaseTransformer {
   protected readyComponents: Record<string, string> = {
     Faucet: "~/components/react/Faucet",
     GraphQLEditor: "~/components/react/GraphQLEditor",
+    NFTGraphQLEditor: "~/components/react/GraphQLEditor", // Map to the same component
     RemoteCodeblock: "~/components/RemoteCodeblock",
     YouTube: "astro-embed",
   };
@@ -48,6 +54,33 @@ export class CustomComponentTransformer extends BaseTransformer {
     return new Map(Object.entries(this.readyComponents));
   }
 
+  // Helper function to check if variables attribute value represents an empty object
+  // FOCUS ONLY ON THE KNOWN EMPTY PATTERN FROM THE SOURCE FILE: variables={`{}`}
+  private isEmptyNftVariablesAttr(attr: MdxJsxAttribute): boolean {
+    if (!attr || attr.name !== "variables") return false;
+
+    // Check specifically for the pattern variables={`{}`} which might be parsed as an expression
+    if (
+      typeof attr.value === "object" &&
+      attr.value !== null &&
+      attr.value.type === "mdxJsxAttributeValueExpression"
+    ) {
+      const expression = attr.value as MdxJsxAttributeValueExpression;
+      if (expression.value) {
+        const exprTrimmed = expression.value.trim();
+        // Check if the expression itself is just '{}' or '`{}`'
+        return exprTrimmed === "{}" || exprTrimmed === "`{}`";
+      }
+    }
+    // Check for simple string value `{}`
+    if (typeof attr.value === "string") {
+      const trimmed = attr.value.trim();
+      return trimmed === "{}";
+    }
+
+    return false;
+  }
+
   protected transformComponents(ast: Root, options: TransformerOptions): void {
     // Track components that need imports
     const importsNeeded = new Set<string>();
@@ -64,15 +97,68 @@ export class CustomComponentTransformer extends BaseTransformer {
     // Second pass: handle components
     visit(ast, ["mdxJsxFlowElement", "mdxJsxElement"], (node) => {
       if ("name" in node && typeof node.name === "string") {
-        // If it's a ready component, keep it and track for import
-        if (this.readyComponents[node.name]) {
+        const mdxNode = node as MdxJsxFlowElement;
+        let componentName = node.name;
+        let isTransformedNftEditor = false;
+
+        // Handle NFTGraphQLEditor transformation
+        if (componentName === "NFTGraphQLEditor") {
+          node.name = "GraphQLEditor"; // Rename the component
+          componentName = "GraphQLEditor"; // Update local variable
+          isTransformedNftEditor = true;
+          importsNeeded.add("GraphQLEditor");
+
+          // Process attributes ONLY for the transformed NFT editor
+          if (mdxNode.attributes) {
+            const originalAttributes = [...mdxNode.attributes];
+            const newAttributes = [];
+            let hasEndpoint = false;
+
+            for (const attr of originalAttributes) {
+              // Skip empty 'variables' attributes specifically for NFT editor transformation
+              if (attr.type === "mdxJsxAttribute" && this.isEmptyNftVariablesAttr(attr)) {
+                console.log(
+                  "[NFT Transform] Skipping empty variables attribute:",
+                  JSON.stringify(attr),
+                );
+                continue; // Skip this attribute
+              }
+
+              // Keep endpoint if present
+              if (attr.type === "mdxJsxAttribute" && attr.name === "endpoint") {
+                hasEndpoint = true;
+              }
+
+              // Keep all other attributes (including non-empty variables)
+              newAttributes.push(attr);
+            }
+
+            // Add endpoint if it wasn't present
+            if (!hasEndpoint) {
+              newAttributes.push({
+                type: "mdxJsxAttribute",
+                name: "endpoint",
+                value: "https://api.mainnet.aptoslabs.com/nft-aggregator-staging/v1/graphql",
+              } as MdxJsxAttribute);
+            }
+
+            // Assign the processed list of attributes back to the node
+            mdxNode.attributes = newAttributes;
+          }
+        }
+        // If it's an original GraphQLEditor component, DO NOT TOUCH variables for now
+        else if (componentName === "GraphQLEditor") {
+          // We are not modifying original GraphQLEditor variables in this pass
+          // to avoid breaking existing ones until the NFT transform is perfect.
+          importsNeeded.add("GraphQLEditor");
+        }
+        // Handle other ready components
+        else if (this.readyComponents[node.name]) {
           importsNeeded.add(node.name);
         }
-        // If it's a component to be commented out
+        // Handle components to be commented out
         else if (this.componentNames.includes(node.name)) {
-          const mdxNode = node as MdxJsxFlowElement;
-
-          // Convert node to string representation
+          // ... (commenting out logic remains the same)
           let nodeStr = `<${node.name}`;
           if (mdxNode.attributes && mdxNode.attributes.length > 0) {
             nodeStr +=
@@ -80,27 +166,25 @@ export class CustomComponentTransformer extends BaseTransformer {
               mdxNode.attributes
                 .map((attr) => {
                   if (attr.type === "mdxJsxAttribute") {
+                    // Handle boolean attributes correctly
+                    if (attr.value === null || attr.value === undefined) {
+                      return attr.name;
+                    }
                     return `${attr.name}=${JSON.stringify(attr.value)}`;
                   }
-                  return "";
+                  return ""; // Handle other attribute types if necessary
                 })
+                .filter(Boolean) // Remove empty strings
                 .join(" ");
           }
 
-          // Handle both self-closing and regular tags
           if (mdxNode.children && mdxNode.children.length > 0) {
             nodeStr += ">";
-            // Convert children to string if needed
             const childContent = mdxNode.children
               .map((child: any) => {
-                // Handle text content
-                if ("value" in child) {
-                  return child.value;
-                }
-                // Handle nested components
-                if ("name" in child) {
-                  return `<${child.name} />`;
-                }
+                if (child.type === "text") return child.value;
+                if (child.type === "mdxJsxFlowElement" || child.type === "mdxJsxElement")
+                  return `<${child.name} />`; // Simplified representation
                 return "";
               })
               .filter(Boolean)
@@ -111,13 +195,10 @@ export class CustomComponentTransformer extends BaseTransformer {
             nodeStr += " />";
           }
 
-          // Create a text node with the commented content
           const commentNode = {
             type: "html",
             value: `{/* ${nodeStr} */}`,
           };
-
-          // Replace the original node properties
           Object.assign(node, commentNode);
         }
       }

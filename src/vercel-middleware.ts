@@ -1,6 +1,9 @@
+import { next } from "@vercel/edge";
+
 /* eslint-disable @typescript-eslint/no-invalid-void-type */
 // Edge-compatible middleware that implements a middleware chain pattern
 import i18nRedirect from "./middlewares/i18n-redirect";
+import enRedirect from "./middlewares/en-redirect";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore - auto-generated import
 import { matcher } from "./middlewares/matcher-routes-dynamic";
@@ -29,7 +32,9 @@ async function applyMiddleware(
 // The main middleware function
 export default async function middleware(req: Request) {
   return await applyMiddleware(req, [
+    enRedirect,
     i18nRedirect,
     // Add more middleware functions here as needed
+    next,
   ]);
 }

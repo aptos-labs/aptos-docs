@@ -1,4 +1,5 @@
 // @ts-check
+import { fileURLToPath } from "url";
 import { defineConfig, envField } from "astro/config";
 import starlight from "@astrojs/starlight";
 import tailwindcss from "@tailwindcss/vite";
@@ -13,15 +14,16 @@ import sitemap from "@astrojs/sitemap";
 import partytown from "@astrojs/partytown";
 import node from "@astrojs/node";
 import react from "@astrojs/react";
-import Icons from "unplugin-icons/vite";
 import starlightLlmsTxt from "starlight-llms-txt";
 import favicons from "astro-favicons";
+import icon from "astro-icon";
 import { sidebar } from "./astro.sidebar.ts";
 import { ENV } from "./src/lib/env";
 import { ogImagesIntegration } from "./src/integrations/ogImages";
 import { SUPPORTED_LANGUAGES, SITE_TITLES } from "./src/config/18n";
 import { firebaseIntegration } from "./src/integrations/firebase";
 import { remarkClientOnly } from "./src/plugins";
+import { devServerFileWatcher } from "./src/integrations/dev-server-file-watcher";
 // import { isMoveReferenceEnabled } from "./src/utils/isMoveReferenceEnabled";
 // import { rehypeAddDebug } from "./src/plugins";
 
@@ -37,12 +39,22 @@ const enableApiReference = ENABLE_API_REFERENCE === "true";
 export default defineConfig({
   site:
     ENV.VERCEL_ENV === "production"
-      ? "https://aptos-docs-astro.vercel.app"
+      ? "https://preview.aptos.dev"
       : ENV.VERCEL_URL
         ? `https://${ENV.VERCEL_URL}`
         : "http://localhost:4321",
   trailingSlash: "never",
   integrations: [
+    // Only include devServerFileWatcher in development mode
+    ...(process.env.NODE_ENV === "development" || !process.env.VERCEL
+      ? [
+          devServerFileWatcher([
+            "./integrations/*", // Custom integrations
+            "./astro.sidebar.ts", // Sidebar configuration file
+            "./src/content/nav/*.ts", // Sidebar labels
+          ]),
+        ]
+      : []),
     ogImagesIntegration(),
     firebaseIntegration(),
     starlight({
@@ -53,7 +65,7 @@ export default defineConfig({
         replacesTitle: false,
       },
       editLink: {
-        baseUrl: "https://github.com/aptos-labs/developer-docs/edit/main/",
+        baseUrl: "https://github.com/aptos-labs/aptos-docs/edit/main/",
       },
       lastUpdated: true,
       expressiveCode: {
@@ -83,13 +95,14 @@ export default defineConfig({
           { label, lang: code },
         ]),
       ),
-      social: {
-        github: "https://github.com/aptos-labs/",
-        "x.com": "https://x.com/aptos",
-        discord: "https://discord.com/invite/aptosnetwork",
-        reddit: "https://www.reddit.com/r/Aptos/",
-        telegram: "https://t.me/aptos",
-      },
+      social: [
+        { label: "GitHub", icon: "github", href: "https://github.com/aptos-labs" },
+        { label: "X", icon: "x.com", href: "https://x.com/aptos" },
+        { label: "Discord", icon: "discord", href: "https://discord.com/invite/aptosnetwork" },
+        { label: "Forum", icon: "discourse", href: "https://forum.aptosfoundation.org" },
+        { label: "Reddit", icon: "reddit", href: "https://www.reddit.com/r/Aptos" },
+        { label: "Telegram", icon: "telegram", href: "https://t.me/aptos" },
+      ],
       components: {
         Head: "./src/starlight-overrides/Head.astro",
         // Header: "./src/starlight-overrides/Header.astro",
@@ -120,7 +133,7 @@ export default defineConfig({
                 [
                   {
                     base: "rest-api",
-                    label: "REST API",
+                    label: "REST API Reference",
                     schema: "./public/aptos-spec.json",
                     sidebarMethodBadges: true,
                   },
@@ -133,7 +146,7 @@ export default defineConfig({
           : []),
       ],
       sidebar,
-      customCss: ["./src/globals.css", "katex/dist/katex.min.css"],
+      customCss: ["./src/styles/global.css", "katex/dist/katex.min.css"],
     }),
     sitemap({
       serialize(item) {
@@ -167,18 +180,44 @@ export default defineConfig({
         yandex: true,
       },
     }),
+    icon({
+      include: {
+        ph: [
+          "rocket-launch",
+          "hard-drives",
+          "brackets-curly",
+          "file-text",
+          "book-open",
+          "circle-dashed",
+          "lightning",
+          "terminal",
+          "globe-simple",
+        ],
+      },
+    }),
   ],
   adapter: process.env.VERCEL
     ? vercel({
         edgeMiddleware: false,
+        imageService: true,
+        imagesConfig: {
+          domains: [],
+          sizes: [320, 640, 1280],
+          formats: ["image/avif", "image/webp"],
+        },
       })
     : node({
         mode: "standalone",
       }),
   vite: {
-    plugins: [tailwindcss(), Icons({ compiler: "astro" })],
+    plugins: [tailwindcss()],
     optimizeDeps: {
       exclude: ["@rollup/browser"],
+    },
+    resolve: {
+      alias: {
+        "~/images": fileURLToPath(new URL("./src/assets/images", import.meta.url)),
+      },
     },
   },
   markdown: {
@@ -197,6 +236,10 @@ export default defineConfig({
     rehypePlugins: [rehypeRaw, rehypeKatex],
   },
   prefetch: true,
+  image: {
+    domains: ["preview.aptos.dev", "aptos.dev"],
+    remotePatterns: [{ protocol: "https" }],
+  },
   env: {
     schema: {
       ALGOLIA_APP_ID: envField.string({
@@ -234,6 +277,31 @@ export default defineConfig({
       }),
     },
     validateSecrets: true,
+  },
+  experimental: {
+    fonts: [
+      {
+        provider: "local",
+        name: "Atkinson Hyperlegible Next",
+        cssVariable: "--font-atkinson-hyperlegible-next",
+        variants: [
+          {
+            weight: "100 900",
+            style: "normal",
+            src: ["./src/assets/fonts/AtkinsonHyperlegibleNext-VariableFont_wght.woff2"],
+            variationSettings: "'wght' 400",
+            display: "swap",
+          },
+          {
+            weight: "100 900",
+            style: "italic",
+            src: ["./src/assets/fonts/AtkinsonHyperlegibleNext-Italic-VariableFont_wght.woff2"],
+            variationSettings: "'wght' 400",
+            display: "swap",
+          },
+        ],
+      },
+    ],
   },
   redirects: {
     /**

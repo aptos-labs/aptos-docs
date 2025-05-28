@@ -76,12 +76,7 @@ export function OperationExamplesIsland({
           onChange={setCurrentClient}
           options={clientOptions}
         />
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={openScalarModal}
-          className="self-stretch !max-h-none !leading-none"
-        >
+        <Button variant="secondary" size="sm" onClick={openScalarModal} className="self-stretch">
           <svg
             xmlns="http://www.w3.org/2000/svg"
             fill="currentColor"

@@ -8,44 +8,29 @@ const defaultDefinitionTypes = [
  * Helper function to remove a prefix from a heading node's text content
  */
 function removePrefix(node, prefix, depth) {
-  return {
-    ...node,
-    depth,
-    children: node.children.map((child) => {
-      if (child.type === "text") {
-        return {
-          ...child,
-          value: child.value.substring(prefix.length).trim(),
-        };
-      }
-      return child;
-    }),
-  };
-}
-
-/**
- * Helper function to save a section to the appropriate group
- */
-function saveSection(groups, currentSection, currentContent) {
-  if (currentSection) {
-    const group = currentSection.groupHeading;
-    if (!groups.has(group)) {
-      groups.set(group, []);
-    }
-    groups.get(group).push({
-      heading: currentSection.heading,
-      content: currentContent,
-    });
+  const firstChild = node.children?.[0];
+  if (firstChild?.type === "text") {
+    return {
+      ...node,
+      depth,
+      children: [
+        {
+          ...firstChild,
+          value: firstChild.value.substring(prefix.length).trim(),
+        },
+        ...node.children.slice(1),
+      ],
+    };
   }
+  return { ...node, depth };
 }
 
 /**
  * Helper function to check if a heading starts with any of the definition prefixes
- * Returns the matching definition type or null
  */
 function getDefinitionType(headingText, definitionTypes) {
   for (const defType of definitionTypes) {
-    if (headingText.startsWith(defType.prefix + " ")) {
+    if (headingText && headingText.startsWith(defType.prefix + " ")) {
       return defType;
     }
   }
@@ -53,124 +38,186 @@ function getDefinitionType(headingText, definitionTypes) {
 }
 
 /**
+ * Processes nodes within the Specification section, removing prefixes from definition headings.
+ */
+function processSpecificationNodes(nodes, definitionTypes) {
+  return nodes.map((node) => {
+    if (node.type === "heading") {
+      const headingText = node.children?.[0]?.value || "";
+      const defType = getDefinitionType(headingText, definitionTypes);
+      if (defType) {
+        // Remove prefix but keep original depth within spec
+        return removePrefix(node, defType.prefix, node.depth);
+      }
+    }
+    return node; // Keep other nodes as is
+  });
+}
+
+/**
  * A remark plugin that groups Move definitions by type and removes repetitive prefixes.
- * For example, multiple "Function" prefixed headings will be grouped under a single "Functions" heading.
+ * Refactored for clarity and maintainability.
  */
 export default function remarkGroupMoveDefinitions(options = {}) {
   const definitionTypes = options.definitionTypes || defaultDefinitionTypes;
+  const finalSectionOrder = [
+    "intro",
+    "Constants",
+    "Structs",
+    "Resources",
+    "Functions",
+    "Specification",
+    "other",
+  ];
 
   return (tree) => {
-    const groups = new Map(); // type -> array of sections
-    const introNodes = [];
-    const nodesToRemove = new Set();
+    const sections = {
+      intro: [],
+      Functions: [], // Will store { heading, content } objects
+      Resources: [], // Will store { heading, content } objects
+      Structs: [], // Will store { heading, content } objects
+      Constants: [], // Will store raw nodes
+      Specification: [], // Will store raw nodes initially
+      other: [], // Will store raw nodes
+    };
 
-    let currentSection = null;
-    let currentContent = [];
-    let isIntro = true;
-    let inSpecificationSection = false;
-    let specificationNodes = [];
+    let currentSectionNodes = [];
+    let currentSectionType = "intro"; // Start with intro
 
-    // First pass: collect sections
-    tree.children.forEach((node, index) => {
+    // Add a sentinel node to trigger processing of the last section
+    const processingNodes = [...tree.children, { type: "sentinel" }];
+
+    processingNodes.forEach((node) => {
+      let isNewSectionStart = false;
+      let newSectionType = null;
+      let newSectionHeadingNode = null;
+
       if (node.type === "heading" && node.depth === 2) {
+        isNewSectionStart = true;
         const headingText = node.children?.[0]?.value || "";
+        newSectionHeadingNode = node; // Keep track of the heading node
 
-        // Check if this is the Specification section
-        if (headingText === "Specification") {
-          saveSection(groups, currentSection, currentContent);
-          inSpecificationSection = true;
-          currentSection = null;
-          currentContent = [];
-          specificationNodes.push(node);
-          return;
-        }
-
-        // Check if this is a definition heading
-        const defType = getDefinitionType(headingText, definitionTypes);
-        if (defType) {
-          isIntro = false;
-          saveSection(groups, currentSection, currentContent);
-
-          // Create new heading with prefix removed
-          const newHeading = removePrefix(
-            node,
-            defType.prefix,
-            inSpecificationSection ? 2 : 3, // Keep h2 for Specification section
-          );
-
-          if (inSpecificationSection) {
-            specificationNodes.push(newHeading);
-            currentSection = null;
-            currentContent = [];
-          } else {
-            currentSection = {
-              heading: newHeading,
-              groupHeading: defType.groupHeading,
-            };
-            currentContent = [];
-            nodesToRemove.add(index);
-          }
-          return;
-        }
-
-        // Non-definition heading, end current section
-        saveSection(groups, currentSection, currentContent);
-        currentSection = null;
-        currentContent = [];
-
-        // If we hit a new h2, we're exiting the Specification section
-        inSpecificationSection = false;
-      } else if (inSpecificationSection) {
-        // If this is a heading in the Specification section, check for prefixes
-        if (node.type === "heading") {
-          const headingText = node.children?.[0]?.value || "";
+        if (headingText === "Constants") {
+          newSectionType = "Constants";
+        } else if (headingText === "Specification") {
+          newSectionType = "Specification";
+        } else {
           const defType = getDefinitionType(headingText, definitionTypes);
           if (defType) {
-            // Remove prefix but keep the original depth
-            specificationNodes.push(removePrefix(node, defType.prefix, node.depth));
-            return;
+            newSectionType = defType.groupHeading;
+          } else {
+            // If still in intro phase or no definitions encountered yet
+            const noDefinitionsYet =
+              !sections.Functions.length &&
+              !sections.Resources.length &&
+              !sections.Structs.length &&
+              !sections.Constants.length &&
+              !sections.Specification.length;
+            if (currentSectionType === "intro" && noDefinitionsYet) {
+              // Still part of the intro if it's the first H2
+              isNewSectionStart = false;
+              newSectionType = "intro";
+            } else {
+              // Unexpected H2, treat as 'other'
+              newSectionType = "other";
+            }
           }
         }
-        specificationNodes.push(node);
-      } else if (currentSection) {
-        currentContent.push(node);
-        nodesToRemove.add(index);
-      } else if (isIntro) {
-        introNodes.push(node);
+      } else if (node.type === "sentinel") {
+        // Force processing of the last section
+        isNewSectionStart = true;
+        newSectionType = "end"; // Special type to signal end
+      }
+
+      // If a new section starts (or it's the end), process the collected nodes for the *previous* section
+      if (isNewSectionStart && currentSectionNodes.length > 0) {
+        const firstNode = currentSectionNodes[0];
+
+        if (
+          currentSectionType === "Functions" ||
+          currentSectionType === "Resources" ||
+          currentSectionType === "Structs"
+        ) {
+          // Process grouped definition section
+          const headingText = firstNode.children?.[0]?.value || "";
+          const defType = getDefinitionType(headingText, definitionTypes);
+          if (defType) {
+            // Should always find one here
+            const newHeading = removePrefix(firstNode, defType.prefix, 3); // Definitions become h3
+            sections[currentSectionType].push({
+              heading: newHeading,
+              content: currentSectionNodes.slice(1),
+            });
+          } else {
+            // Fallback: shouldn't happen if logic is correct, but add raw nodes to 'other'
+            sections.other.push(...currentSectionNodes);
+          }
+        } else if (currentSectionType === "Specification") {
+          // Process specification nodes (heading + content)
+          const processedNodes = processSpecificationNodes(
+            currentSectionNodes.slice(1),
+            definitionTypes,
+          );
+          sections.Specification.push(firstNode, ...processedNodes); // Keep original H2, add processed content
+        } else {
+          // For Intro, Constants, Other - add raw nodes directly
+          sections[currentSectionType].push(...currentSectionNodes);
+        }
+        currentSectionNodes = []; // Reset for the new section
+      }
+
+      // Update current section type and add the new heading node if applicable
+      if (isNewSectionStart && newSectionType !== "end") {
+        currentSectionType = newSectionType;
+        if (newSectionHeadingNode) {
+          currentSectionNodes.push(newSectionHeadingNode);
+        }
+      }
+      // Add content node to the current section (if not a heading that started a new section)
+      else if (!isNewSectionStart && node.type !== "sentinel") {
+        currentSectionNodes.push(node);
       }
     });
 
-    // Save last section if exists
-    saveSection(groups, currentSection, currentContent);
+    // --- REBUILD TREE ---
+    const finalChildren = [];
 
-    // Build new tree
-    const newChildren = [...introNodes];
-
-    // Add each group
-    for (const [groupHeading, sections] of groups) {
-      // Add group heading
-      newChildren.push({
-        type: "heading",
-        depth: 2,
-        children: [{ type: "text", value: groupHeading }],
-      });
-
-      // Add sections
-      for (const { heading, content } of sections) {
-        newChildren.push(heading);
-        newChildren.push(...content);
+    finalSectionOrder.forEach((sectionName) => {
+      const sectionNodes = sections[sectionName];
+      if (sectionNodes && sectionNodes.length > 0) {
+        if (
+          sectionName === "Functions" ||
+          sectionName === "Resources" ||
+          sectionName === "Structs"
+        ) {
+          // Add the group H2 heading
+          finalChildren.push({
+            type: "heading",
+            depth: 2,
+            children: [{ type: "text", value: sectionName }],
+          });
+          // Add the processed {heading, content} items
+          sectionNodes.forEach(({ heading, content }) => {
+            finalChildren.push(heading);
+            finalChildren.push(...content);
+          });
+        } else {
+          // For Intro, Constants, Specification, Other - add the collected raw nodes
+          finalChildren.push(...sectionNodes);
+        }
+        // Add spacing after the section if it's not the very last one
+        finalChildren.push({ type: "text", value: "\n\n" });
       }
+    });
 
-      // Add spacing between groups
-      newChildren.push({ type: "text", value: "\n\n" });
+    // Remove trailing newline if it exists
+    if (finalChildren.length > 0) {
+      const lastNode = finalChildren[finalChildren.length - 1];
+      if (lastNode.type === "text" && lastNode.value === "\n\n") {
+        finalChildren.pop();
+      }
     }
 
-    // Add Specification section at the end if it exists
-    if (specificationNodes.length > 0) {
-      newChildren.push(...specificationNodes);
-      newChildren.push({ type: "text", value: "\n\n" });
-    }
-
-    tree.children = newChildren;
+    tree.children = finalChildren;
   };
 }

@@ -6,4 +6,8 @@ export const routes = [
   // '/custom-page/:path*',
   // '/api/:path*',
   // Add your custom routes below
+
+  // Routes for /en/* redirects
+  "/en",
+  "/en/:path*",
 ];

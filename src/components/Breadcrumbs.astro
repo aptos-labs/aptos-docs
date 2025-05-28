@@ -1,0 +1,494 @@
+---
+import { getPathMaps } from "../loaders/breadcrumbsLoader";
+
+// Extract locale from the URL path
+import { SUPPORTED_LANGUAGES } from "~/config/18n";
+
+// --- Component Props ---
+interface Props {
+  /** The semantic path of the current page, relative to the docs root and without locale prefix.
+   * e.g., '/guides/getting-started', '/components/button', or just '/' */
+  currentPath: string;
+  /** Custom separator to use between breadcrumb items.
+   * Can be a string or an SVG string for inline SVG. Default is "/" */
+  separator?: string;
+  /** Whether to use an SVG separator. If true and no separator is provided, a default chevron SVG will be used */
+  useSvg?: boolean;
+  /** Whether to use an SVG home icon for the home item. If true, a home icon will be used instead of text */
+  useHomeIcon?: boolean;
+  /** Custom home icon to use. Can be a string or an SVG string for inline SVG */
+  homeIcon?: string;
+  /** Array of path prefixes for dynamically generated content where all segments should be clickable */
+  dynamicPrefixes?: string[];
+  /** Whether to enable truncation for mobile devices */
+  truncated?: boolean;
+  /** Aria label for the ellipsis button when truncated */
+  ellipsisAriaLabel?: string;
+  /** Array of path prefixes where intermediate paths should not be clickable */
+  disableIntermediatePaths?: string[];
+}
+const {
+  currentPath,
+  separator,
+  useSvg = true,
+  useHomeIcon = false,
+  homeIcon,
+  dynamicPrefixes = [],
+  truncated = false,
+  ellipsisAriaLabel = "Show hidden breadcrumbs",
+  disableIntermediatePaths = [],
+} = Astro.props;
+
+// Default SVG separator - a simple chevron
+const defaultSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="breadcrumb-svg"><polyline points="9 18 15 12 9 6"></polyline></svg>`;
+
+// Default SVG home icon - Aptos logo
+const defaultHomeIcon = `<svg width="64" height="65" viewBox="0 0 64 65" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+<path d="M49.5678 22.5137H43.9056C43.2471 22.5137 42.6189 22.2516 42.1808 21.7961L39.8857 19.4017C39.544 19.0455 39.0508 18.8394 38.5356 18.8394C38.0203 18.8394 37.5271 19.0429 37.1855 19.4017L35.2154 21.4577C34.5707 22.1294 33.6449 22.5162 32.6723 22.5162H1.68624C0.804545 24.8394 0.228689 27.2923 0 29.8394H29.253C29.7682 29.8394 30.2586 29.646 30.6141 29.3025L33.3391 26.679C33.678 26.3508 34.1491 26.1651 34.6396 26.1651H34.7525C35.2678 26.1651 35.761 26.3686 36.1026 26.7274L38.3978 29.1218C38.8359 29.5773 39.4613 29.8394 40.1226 29.8394H64C63.7713 27.2923 63.1954 24.8394 62.3137 22.5162H49.5678V22.5137Z" fill="currentColor"/>
+<path d="M17.9561 46.8366C18.4622 46.8366 18.944 46.627 19.2931 46.2547L21.9698 43.4112C22.3027 43.0554 22.7655 42.8541 23.2473 42.8541H23.3582C23.8643 42.8541 24.3488 43.0747 24.6844 43.4636L26.9389 46.0588C27.3692 46.5525 27.9836 46.8366 28.6332 46.8366H60.418C61.6089 44.3296 62.4804 41.6378 63 38.8219H32.4926C31.8457 38.8219 31.2287 38.5378 30.7983 38.0441L28.5438 35.4489C28.2082 35.0628 27.7238 34.8394 27.2177 34.8394C26.7115 34.8394 26.2271 35.06 25.8915 35.4489L23.9563 37.6773C23.323 38.4054 22.4137 38.8246 21.4583 38.8246H1C1.51964 41.6433 2.39114 44.3323 3.58199 46.8394H17.9561V46.8366Z" fill="currentColor"/>
+<path d="M40.0967 13.8394C40.6083 13.8394 41.0953 13.6272 41.4483 13.2502L44.1542 10.3716C44.4908 10.0114 44.9586 9.80757 45.4457 9.80757H45.5578C46.0695 9.80757 46.5592 10.0309 46.8985 10.4246L49.1776 13.052C49.6127 13.5518 50.2338 13.8394 50.8904 13.8394H57C51.1804 5.9461 41.9244 0.839355 31.5 0.839355C21.0757 0.839355 11.8196 5.9461 6 13.8394H40.0994H40.0967Z" fill="currentColor"/>
+<path d="M27.7966 54.7633H19.375C18.7159 54.7633 18.0872 54.4834 17.6487 53.997L15.3517 51.4399C15.0097 51.0595 14.5161 50.8394 14.0005 50.8394C13.4848 50.8394 12.9912 51.0567 12.6493 51.4399L10.6776 53.6356C10.0323 54.3529 9.1058 54.766 8.13237 54.766H8C13.8681 60.9616 22.2208 64.8394 31.5 64.8394C40.7792 64.8394 49.1319 60.9616 55 54.766H27.7966V54.7633Z" fill="currentColor"/>
+</svg>`;
+
+// Determine which separator to use
+const finalSeparator = useSvg ? separator || defaultSvg : separator || "/";
+
+// Determine which home icon to use
+const finalHomeIcon = useHomeIcon ? homeIcon || defaultHomeIcon : null;
+
+// --- Helper Functions ---
+
+// Function to format segment for display (fallback)
+function formatSegment(segment: string): string {
+  return segment
+    .split("-")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+// Function to normalize a path (remove leading slash)
+function normalizePath(path: string): string {
+  return path.startsWith("/") ? path.slice(1) : path;
+}
+
+// Function to check if a path has a valid landing page
+function hasValidLandingPage(
+  path: string,
+  validLandingPaths: Set<string>,
+  dynamicPrefixes: string[],
+  disableIntermediatePaths: string[] = [],
+): boolean {
+  // Root path always has an index
+  if (path === "/") return true;
+
+  // Check if this is a localized home path (e.g., /zh, /ja)
+  // These should always be considered valid landing pages
+  const pathSegments = path.split("/").filter(Boolean);
+  if (
+    pathSegments.length === 1 &&
+    SUPPORTED_LANGUAGES.some((lang) => lang.code === pathSegments[0])
+  ) {
+    return true;
+  }
+
+  // Normalize the path for comparison
+  const normalizedPath = normalizePath(path);
+
+  // Check if this is an intermediate path that should be disabled
+  for (const prefix of disableIntermediatePaths) {
+    const normalizedPrefix = normalizePath(prefix);
+
+    // If the path starts with this prefix but isn't exactly the prefix
+    // and isn't the final path segment (which would be a leaf node)
+    if (normalizedPath.startsWith(normalizedPrefix + "/") && normalizedPath !== normalizedPrefix) {
+      // This is an intermediate path that should be disabled
+      return false;
+    }
+  }
+
+  // Check if the path starts with any of the dynamic prefixes
+  if (
+    dynamicPrefixes.some((prefix) => {
+      const normalizedPrefix = normalizePath(prefix);
+      return normalizedPath.startsWith(normalizedPrefix) || normalizedPath === normalizedPrefix;
+    })
+  ) {
+    return true;
+  }
+
+  // Check if the path is in the validLandingPaths set
+  return validLandingPaths.has(normalizedPath);
+}
+
+// Function to get a translated string with fallback
+function getTranslation(t: unknown, key: string, fallback: string): string {
+  if (typeof t !== "function") return fallback;
+
+  try {
+    const result = t(key);
+    return result && typeof result === "string" ? result : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+// We now use getPathMaps() from "../loaders/breadcrumbsLoader" instead of building the maps here
+
+// Function to generate breadcrumb items from a path
+function generateBreadcrumbs(
+  currentPath: string,
+  pathToTitleMap: Map<string, string>,
+  t: unknown,
+): BreadcrumbItem[] {
+  const breadcrumbs: BreadcrumbItem[] = [];
+  const segments = currentPath.split("/").filter(Boolean);
+
+  // Add home breadcrumb
+  const homeLabel = getTranslation(t, "breadcrumb.home", "Home");
+  breadcrumbs.push({
+    href: "/",
+    label: homeLabel,
+    isCurrent: currentPath === "/",
+  });
+
+  // Add segment breadcrumbs
+  if (segments.length > 0) {
+    let pathAccumulator = "";
+
+    for (let i = 0; i < segments.length; i++) {
+      const segment = segments[i];
+      pathAccumulator += `/${segment}`;
+      const isLast = i === segments.length - 1;
+
+      // Default to formatting the segment
+      let label = segment ? formatSegment(segment) : "Unknown";
+
+      // Try to find a title from frontmatter data
+      const potentialPaths = [pathAccumulator.slice(1), `${pathAccumulator.slice(1)}/index`];
+
+      for (const path of potentialPaths) {
+        const title = pathToTitleMap.get(path);
+        if (title) {
+          label = title;
+          break;
+        }
+      }
+
+      // Add this segment to breadcrumbs
+      breadcrumbs.push({
+        href: pathAccumulator,
+        label,
+        isCurrent: isLast,
+      });
+    }
+  }
+
+  return breadcrumbs;
+}
+
+// --- i18n & Starlight Data ---
+const t = Astro.locals.t;
+const textDirection = typeof t?.dir === "function" ? t.dir() : "ltr";
+
+// --- Breadcrumb Logic ---
+interface BreadcrumbItem {
+  href: string;
+  label: string;
+  isCurrent: boolean;
+}
+const pathSegments = currentPath.split("/").filter(Boolean);
+const firstSegment = pathSegments[0] || "";
+const locale = SUPPORTED_LANGUAGES.find((lang) => lang.code === firstSegment)?.code;
+const localePrefix = locale ? `/${locale}` : "";
+
+// Build path maps and generate breadcrumbs
+const { pathToTitleMap, validLandingPaths } = await getPathMaps();
+const breadcrumbs = generateBreadcrumbs(currentPath, pathToTitleMap, t);
+
+// If we're on a localized page, modify the home breadcrumb to point to the localized home
+if (locale && breadcrumbs.length > 0) {
+  // Update the home breadcrumb to point to the localized home
+  if (breadcrumbs[0]) {
+    breadcrumbs[0].href = localePrefix;
+    // Make sure the home breadcrumb is not marked as current unless we're at the localized home page
+    breadcrumbs[0].isCurrent = currentPath === localePrefix;
+  }
+
+  // If the second breadcrumb is just the locale, remove it
+  if (breadcrumbs.length > 1 && breadcrumbs[1] && breadcrumbs[1].href === localePrefix) {
+    breadcrumbs.splice(1, 1);
+  }
+}
+
+// Get aria-label for the breadcrumb navigation
+const navAriaLabel = getTranslation(t, "breadcrumb.label", "Breadcrumb");
+
+// Generate a unique ID for the breadcrumbs
+const breadcrumbsId = `breadcrumbs-${Math.random().toString(36).substring(2, 9)}`;
+---
+
+{
+  breadcrumbs.length > 1 && (
+    <astro-breadcrumbs
+      data-main-class="breadcrumbs-nav"
+      data-id={breadcrumbsId}
+      data-truncated={truncated ? "true" : null}
+    >
+      <nav
+        aria-label={navAriaLabel ?? "Breadcrumb"}
+        dir={textDirection}
+        class="breadcrumbs-nav"
+        id={breadcrumbsId}
+      >
+        <ol class="breadcrumb-list">
+          {breadcrumbs.map((crumb, index) => {
+            const isFirst = index === 0;
+            const isLast = index === breadcrumbs.length - 1;
+            const isMiddle = !isFirst && !isLast;
+
+            // Show ellipsis after the first item when truncated
+            const showEllipsis = truncated && index === 1 && breadcrumbs.length > 2;
+
+            return (
+              <>
+                {/* Show ellipsis button between first and second items when truncated */}
+                {showEllipsis && (
+                  <li class="breadcrumb-item has-ellipsis">
+                    <span class="separator" set:html={finalSeparator} />
+                    <button type="button" class="ellipsis-button" aria-label={ellipsisAriaLabel}>
+                      <span class="ellipsis-text">...</span>
+                    </button>
+                  </li>
+                )}
+
+                <li
+                  class:list={[
+                    "breadcrumb-item",
+                    {
+                      "first-crumb": isFirst,
+                      "last-crumb": isLast,
+                      "middle-crumb": isMiddle,
+                    },
+                  ]}
+                >
+                  {/* Render the breadcrumb content */}
+                  {(() => {
+                    // Determine the content (icon or label)
+                    const content =
+                      isFirst && finalHomeIcon ? (
+                        <span class="home-icon-wrapper" set:html={finalHomeIcon} />
+                      ) : (
+                        crumb.label
+                      );
+
+                    // Render the appropriate element based on state
+                    if (crumb.isCurrent) {
+                      return (
+                        <span aria-current="page" class="crumb-text">
+                          {content}
+                        </span>
+                      );
+                    } else if (
+                      hasValidLandingPage(
+                        crumb.href,
+                        validLandingPaths,
+                        dynamicPrefixes,
+                        disableIntermediatePaths,
+                      )
+                    ) {
+                      return (
+                        <a href={crumb.href} class="crumb-text">
+                          {content}
+                        </a>
+                      );
+                    } else {
+                      return <span class="non-link-breadcrumb crumb-text">{content}</span>;
+                    }
+                  })()}
+
+                  {/* Always add separator after each item except the last one */}
+                  {!isLast && (
+                    <span
+                      class:list={[
+                        "separator",
+                        { "hide-on-mobile": isFirst && truncated && breadcrumbs.length > 2 },
+                      ]}
+                      set:html={finalSeparator}
+                    />
+                  )}
+                </li>
+              </>
+            );
+          })}
+        </ol>
+      </nav>
+    </astro-breadcrumbs>
+  )
+}
+
+<style>
+  .breadcrumbs-nav {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .breadcrumb-list {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    list-style: none;
+    padding: 0;
+    margin: 1rem 0;
+    gap: 0.5rem;
+    font-size: var(--sl-text-sm, 0.875rem);
+    line-height: var(--sl-line-height-headings, 1.3);
+    overflow-x: auto;
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE and Edge */
+  }
+
+  .breadcrumb-list::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
+  }
+
+  .breadcrumb-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    white-space: nowrap;
+  }
+
+  /* Remove the default pseudo-element separator */
+  .breadcrumb-item:not(:first-child)::before {
+    content: none;
+  }
+
+  .separator {
+    display: inline-flex;
+    align-items: center;
+    margin-right: 0.5rem;
+    color: var(--sl-color-gray-4, #9ca3af);
+    user-select: none;
+  }
+
+  .separator :global(svg) {
+    height: 1em;
+    width: auto;
+    display: inline-block;
+    vertical-align: middle;
+  }
+
+  /* Home icon styles */
+  .home-icon-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--sl-color-gray-3);
+  }
+
+  a:hover .home-icon-wrapper,
+  a:focus .home-icon-wrapper {
+    color: var(--sl-color-white);
+  }
+
+  span[aria-current="page"] .home-icon-wrapper {
+    color: var(--sl-color-text-accent, var(--sl-color-text, inherit));
+  }
+
+  .home-icon-wrapper :global(svg) {
+    width: 1em;
+    height: 1em;
+  }
+
+  a {
+    color: var(--sl-color-gray-3);
+    text-decoration: none;
+    padding: 0.1rem 0.2rem;
+    margin: -0.1rem -0.2rem;
+  }
+
+  a:hover,
+  a:focus {
+    color: var(--sl-color-white);
+  }
+
+  span[aria-current="page"] {
+    color: var(--sl-color-text-accent, var(--sl-color-text, inherit));
+    font-weight: 600;
+    padding: 0.1rem 0.2rem;
+    margin: -0.1rem -0.2rem;
+  }
+
+  .non-link-breadcrumb {
+    color: var(--sl-color-gray-3);
+    padding: 0.1rem 0.2rem;
+    margin: -0.1rem -0.2rem;
+  }
+
+  /* Truncation styles */
+  .has-ellipsis {
+    display: var(--display-ellipsis-breadcrumbs, none);
+  }
+
+  .breadcrumbs-nav.is-truncated .has-ellipsis {
+    --display-ellipsis-breadcrumbs: flex;
+  }
+
+  .breadcrumbs-nav.is-truncated .breadcrumb-item {
+    visibility: var(--visibility-truncated-breadcrumbs, hidden);
+    position: var(--position-truncated-breadcrumbs, absolute);
+  }
+
+  .breadcrumbs-nav.is-truncated .breadcrumb-item.first-crumb,
+  .breadcrumbs-nav.is-truncated .breadcrumb-item.last-crumb,
+  .breadcrumbs-nav.is-truncated .breadcrumb-item.has-ellipsis {
+    --visibility-truncated-breadcrumbs: visible;
+    --position-truncated-breadcrumbs: relative;
+  }
+
+  .ellipsis-button {
+    background: transparent;
+    border: none;
+    color: var(--sl-color-gray-3);
+    cursor: pointer;
+    padding: 0.1rem 0.2rem;
+    margin: -0.1rem -0.2rem;
+    font-size: inherit;
+    line-height: inherit;
+  }
+
+  .ellipsis-text {
+    font-weight: bold;
+  }
+
+  /* Hide separator on mobile when truncated */
+  .breadcrumbs-nav.is-truncated .hide-on-mobile {
+    display: none;
+  }
+
+  /* On desktop, show all items and hide ellipsis */
+  @media (min-width: 640px) {
+    .breadcrumbs-nav.is-truncated .breadcrumb-item {
+      --visibility-truncated-breadcrumbs: visible;
+      --position-truncated-breadcrumbs: relative;
+    }
+
+    .breadcrumbs-nav.is-truncated .has-ellipsis {
+      --display-ellipsis-breadcrumbs: none;
+    }
+
+    /* Always show separators on desktop */
+    .breadcrumbs-nav.is-truncated .hide-on-mobile {
+      display: inline-flex;
+    }
+  }
+</style>
+
+<script>
+  import { Truncated } from "./breadcrumbs/Truncated";
+
+  // Register the custom element if it's not already registered
+  if (!customElements.get("astro-breadcrumbs")) {
+    customElements.define("astro-breadcrumbs", Truncated);
+  }
+</script>

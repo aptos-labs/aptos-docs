@@ -18,9 +18,7 @@ export const groupPagesByLang = <T extends CollectionEntry<"docs">>(
       const lang = idParts[0] ?? "unknown";
 
       // Initialize the array for this language if it doesn't exist yet
-      if (!accumulator[lang]) {
-        accumulator[lang] = [];
-      }
+      accumulator[lang] ??= [];
 
       // Add the entry to the appropriate language group
       accumulator[lang].push(entry);

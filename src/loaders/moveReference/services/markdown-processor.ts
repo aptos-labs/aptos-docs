@@ -4,6 +4,7 @@ import matter from "gray-matter";
 import remarkRemoveAnchorLinks from "../plugins/remark-remove-anchor-links.js";
 import remarkGroupMoveDefinitions from "../plugins/remark-group-move-definitions.js";
 import remarkConvertCodeBlocks from "../plugins/remark-convert-codeblocks.js";
+import remarkFixMoveLinks from "../plugins/remark-fix-move-links.js";
 import type { ContentEntry } from "../types.js";
 
 export class MarkdownProcessor {
@@ -21,6 +22,7 @@ export class MarkdownProcessor {
       remarkPlugins: [
         remarkConvertCodeBlocks,
         remarkRemoveAnchorLinks,
+        remarkFixMoveLinks,
         ...remarkPlugins,
         [
           remarkGroupMoveDefinitions,
@@ -43,11 +45,16 @@ export class MarkdownProcessor {
 
   async processContent(fileName: string, content: string): Promise<ContentEntry> {
     const { data: frontmatter, content: markdownContent } = matter(content);
-    // Keep just the filename without extension for the ID
     const id = fileName.split("/").pop()?.replace(".md", "") ?? "";
 
-    // Process with remark plugins
-    const processed = await this.processor.render(markdownContent);
+    const virtualFilePath = `/virtual/move-reference/${fileName}`;
+
+    const renderOptions = {
+      frontmatter,
+      fileURL: new URL(`file://${virtualFilePath}`),
+    } satisfies { frontmatter: Record<string, unknown>; fileURL: URL };
+
+    const processed = await this.processor.render(markdownContent, renderOptions);
 
     return {
       id,

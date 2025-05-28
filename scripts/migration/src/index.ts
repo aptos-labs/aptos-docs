@@ -498,11 +498,11 @@ async function copyDirectory(source: string, destination: string): Promise<void>
 }
 
 async function copyImages(sourcePath: string): Promise<void> {
-  const imagesDestPath = path.join(projectRoot, "public", "images");
+  const imagesDestPath = path.join(projectRoot, "src", "assets", "images");
   const tempDir = path.join(projectRoot, "temp-nextra-docs");
 
   try {
-    // Create the public/images directory if it doesn't exist
+    // Create the src/assets/images directory if it doesn't exist
     await fs.mkdir(imagesDestPath, { recursive: true });
 
     // Find the extracted directory (same as used in getSourcePath)

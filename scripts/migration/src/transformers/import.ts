@@ -27,7 +27,13 @@ export class ImportTransformer implements Transformer {
     // Find used components recursively
     const usedComponents = new Set<string>();
     const checkNode = (node: any) => {
-      if (node.type === "mdxJsxFlowElement" && "name" in node && node.name) {
+      // Check both flow and text elements for component usage
+      if (
+        "type" in node &&
+        (node.type === "mdxJsxFlowElement" || node.type === "mdxJsxTextElement") &&
+        "name" in node &&
+        node.name
+      ) {
         // If it's a mapped component, add the target component
         if (this.componentMappings.has(node.name)) {
           usedComponents.add(this.componentMappings.get(node.name)!);

@@ -1,11 +1,12 @@
 ---
 // Handle Starlight sidebar integration
-import { Icon } from "@astrojs/starlight/components";
+import { Icon } from "astro-icon/components";
 import SidebarPersister from "@astrojs/starlight/components/SidebarPersister.astro";
 import SidebarSublist from "@astrojs/starlight/components/SidebarSublist.astro";
 import MobileMenuFooter from "@astrojs/starlight/components/MobileMenuFooter.astro";
-import type { StarlightIcon } from "@astrojs/starlight/types";
 import { stripLeadingAndTrailingSlashes } from "node_modules/@astrojs/starlight/utils/path";
+import { sidebarGroupIcons } from "../../astro.sidebar.ts";
+import labels from "../../src/content/nav/en";
 import TabbedContent from "~/components/tabs/TabbedContent.astro";
 import TabListItem from "~/components/tabs/TabListItem.astro";
 import TabPanel from "~/components/tabs/TabPanel.astro";
@@ -89,33 +90,15 @@ function assertGroups(sidebarItems: SidebarEntryType[]): SidebarEntryType[] {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sidebarGroups = Array.isArray(sidebarData) ? assertGroups(sidebarData as any) : [];
 
+// Debug log the sidebar groups
+// console.log("Sidebar Groups:", JSON.stringify(sidebarGroups, null, 2));
+// console.log("Sidebar Group Icons:", JSON.stringify(sidebarGroupIcons, null, 2));
+
 // Generate id for tab panel from label
 const makeId = (label: string): string => {
   if (!label) return "__tab-unknown";
   return "__tab-" + label.toLowerCase().replaceAll(/\s+/g, "-");
 };
-
-// Define specific icon names that are valid StarlightIcon values
-// These are guaranteed to be valid Starlight icons
-const ROCKET: StarlightIcon = "rocket";
-const BOOK: StarlightIcon = "seti:xml";
-const DOC: StarlightIcon = "open-book";
-const SETTING: StarlightIcon = "document";
-
-// Get an icon name based on index - always returns a valid StarlightIcon
-function getIcon(index: number): StarlightIcon {
-  // Default for invalid input
-  if (typeof index !== "number" || index < 0) {
-    return ROCKET;
-  }
-
-  // Safe index calculation
-  const modIndex = index % 4;
-  if (modIndex === 0) return ROCKET;
-  if (modIndex === 1) return BOOK;
-  if (modIndex === 2) return DOC;
-  return SETTING;
-}
 
 // Check if a sidebar section contains the current page
 function isCurrent(sidebarItems: SidebarEntryType[]): boolean {
@@ -132,17 +115,66 @@ function isCurrent(sidebarItems: SidebarEntryType[]): boolean {
     return false;
   });
 }
+
+// Create a reverse mapping from label to key
+const labelToKey: Record<string, string> = {};
+Object.entries(labels).forEach(([key, val]) => {
+  if (typeof val === "string") {
+    labelToKey[val] = key;
+  }
+});
 ---
 
 <SidebarPersister {...Astro.props}>
   <TabbedContent class="tabbed-sidebar">
     <Fragment slot="tab-list">
       {
-        sidebarGroups.map(({ label, entries }, index) => (
-          <TabListItem id={makeId(label)} initial={entries && isCurrent(entries)} class="tab-item">
-            <Icon class="icon" name={getIcon(index)} /> {label}
-          </TabListItem>
-        ))
+        sidebarGroups.map(({ label, entries }, index) => {
+          // Debug log the translations object
+          // console.log(`Translations for "${label}":`, translations);
+
+          // Try to find the key by looking at the translations object
+          let sidebarKey = "";
+
+          // First try to look up the key directly from English labels
+          if (label in labelToKey) {
+            sidebarKey = labelToKey[label] as string;
+          }
+
+          // If that fails, try to find the key by index in the sidebar groups
+          // This assumes the sidebar groups are in the same order as the keys in sidebarGroupIcons
+          if (!sidebarKey) {
+            // Get the keys of sidebarGroupIcons in order
+            const iconKeys = Object.keys(sidebarGroupIcons);
+            // Use the index to get the corresponding key
+            if (index < iconKeys.length) {
+              sidebarKey = iconKeys[index] as string;
+            }
+          }
+
+          // If all else fails, fall back to a simple transformation of the label
+          if (!sidebarKey) {
+            sidebarKey = label.toLowerCase().replace(/\s+/g, "");
+          }
+
+          // Look up the icon from the mapping, or use a default
+          const iconName = sidebarGroupIcons[sidebarKey] || "ph:rocket-launch";
+
+          // Debug log
+          // console.log(
+          //   `Sidebar item: ${label}, Index: ${index}, Key: ${sidebarKey}, Icon: ${iconName}`,
+          // );
+
+          return (
+            <TabListItem
+              id={makeId(label)}
+              initial={entries && isCurrent(entries)}
+              class="tab-item"
+            >
+              <Icon size="24" class="icon" name={iconName} /> {label}
+            </TabListItem>
+          );
+        })
       }
     </Fragment>
     {

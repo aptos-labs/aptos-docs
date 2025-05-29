@@ -11,7 +11,6 @@ import { BaseTransformer } from "./base.js";
 export class CustomComponentTransformer extends BaseTransformer {
   // Components that are not ready for use with their new import paths
   protected componentNames = [
-    "ThemedImage",
     "permalinkFetch",
     "IndexerBetaNotice",
     "AptosFrameworkReference",
@@ -19,6 +18,7 @@ export class CustomComponentTransformer extends BaseTransformer {
     "DynamicApiReference",
     "fetchApiReference",
     // Add ready components here too so BaseTransformer doesn't try to import them"
+    "ThemedImage",
     "YouTube",
     "Faucet",
     "GraphQLEditor",
@@ -28,6 +28,7 @@ export class CustomComponentTransformer extends BaseTransformer {
 
   // Components that are ready for use with their new import paths
   protected readyComponents: Record<string, string> = {
+    ThemedImage: "~/components/ThemedImage",
     Faucet: "~/components/react/Faucet",
     GraphQLEditor: "~/components/react/GraphQLEditor",
     NFTGraphQLEditor: "~/components/react/GraphQLEditor", // Map to the same component
@@ -52,6 +53,38 @@ export class CustomComponentTransformer extends BaseTransformer {
   getComponentMap(): Map<string, string> {
     // Return ready components as a Map
     return new Map(Object.entries(this.readyComponents));
+  }
+
+  // Transform ThemedImage sources paths from /docs to ~/images
+  private transformThemedImagePaths(node: MdxJsxFlowElement): void {
+    if (!node.attributes || node.name !== "ThemedImage") return;
+
+    for (const attr of node.attributes) {
+      if (attr.type === "mdxJsxAttribute" && attr.name === "sources") {
+        if (
+          attr.value &&
+          typeof attr.value === "object" &&
+          attr.value.type === "mdxJsxAttributeValueExpression"
+        ) {
+          const expression = attr.value as MdxJsxAttributeValueExpression;
+          if (expression.value) {
+            // Only transform /docs paths to ~/images within ThemedImage sources attribute
+            const originalValue = expression.value;
+            expression.value = expression.value.replace(/(['"`])\/docs\//g, "$1~/images/");
+
+            // Log the transformation for debugging
+            if (originalValue !== expression.value) {
+              console.log(
+                "[ThemedImage Transform] Transformed paths in sources:",
+                originalValue,
+                "→",
+                expression.value,
+              );
+            }
+          }
+        }
+      }
+    }
   }
 
   // Helper function to check if variables attribute value represents an empty object
@@ -151,6 +184,11 @@ export class CustomComponentTransformer extends BaseTransformer {
           // We are not modifying original GraphQLEditor variables in this pass
           // to avoid breaking existing ones until the NFT transform is perfect.
           importsNeeded.add("GraphQLEditor");
+        }
+        // Handle ThemedImage path transformation
+        else if (componentName === "ThemedImage") {
+          this.transformThemedImagePaths(mdxNode);
+          importsNeeded.add("ThemedImage");
         }
         // Handle other ready components
         else if (this.readyComponents[node.name]) {

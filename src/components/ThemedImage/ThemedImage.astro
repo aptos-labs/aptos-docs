@@ -1,0 +1,120 @@
+---
+import { Image } from "astro:assets";
+import type { ImageMetadata } from "astro";
+
+interface Props {
+  alt: string;
+  sources: {
+    light: string | ImageMetadata;
+    dark: string | ImageMetadata;
+  };
+  width?: number;
+  height?: number;
+  loading?: "lazy" | "eager";
+  decoding?: "async" | "sync" | "auto";
+  class?: string;
+}
+
+const {
+  alt,
+  sources,
+  width,
+  height,
+  loading = "lazy",
+  decoding = "async",
+  class: className = "",
+} = Astro.props;
+
+// Import images as URLs (processed by Astro) dynamically only when needed
+const imageUrls = import.meta.glob<string>("/src/assets/images/**/*", {
+  // eager: true,
+  query: "?url",
+  import: "default",
+});
+
+// Helper function to resolve image sources
+async function resolveImageSrc(src: string | ImageMetadata): Promise<string | ImageMetadata> {
+  if (typeof src !== "string") {
+    return src; // Already an ImageMetadata object
+  }
+
+  // Handle ~/images alias by converting to processed URL
+  if (src.startsWith("~/images")) {
+    const imagePath = src.replace("~/images", "/src/assets/images");
+    const imageLoader = imageUrls[imagePath];
+
+    if (!imageLoader) {
+      console.warn(`Image not found: ${imagePath}. Available images:`, Object.keys(imageUrls));
+      return src; // Fallback to original string
+    }
+
+    const processedUrl = await imageLoader();
+    return processedUrl;
+  }
+
+  return src; // Return as-is for other string paths
+}
+
+const lightSrc = await resolveImageSrc(sources.light);
+const darkSrc = await resolveImageSrc(sources.dark);
+
+// Check if resolved sources are strings or ImageMetadata
+const isLightString = typeof lightSrc === "string";
+const isDarkString = typeof darkSrc === "string";
+---
+
+<div class="themed-image-container">
+  {
+    isLightString ? (
+      <img
+        src={lightSrc as string}
+        alt={alt}
+        width={width}
+        height={height}
+        loading={loading}
+        decoding={decoding}
+        class={`light:sl-block dark:sl-hidden ${className}`}
+      />
+    ) : (
+      <Image
+        src={lightSrc as ImageMetadata}
+        alt={alt}
+        width={width}
+        height={height}
+        loading={loading}
+        decoding={decoding}
+        class={`light:sl-block dark:sl-hidden ${className}`}
+      />
+    )
+  }
+
+  {
+    isDarkString ? (
+      <img
+        src={darkSrc as string}
+        alt={alt}
+        width={width}
+        height={height}
+        loading={loading}
+        decoding={decoding}
+        class={`light:sl-hidden dark:sl-block ${className}`}
+      />
+    ) : (
+      <Image
+        src={darkSrc as ImageMetadata}
+        alt={alt}
+        width={width}
+        height={height}
+        loading={loading}
+        decoding={decoding}
+        class={`light:sl-hidden dark:sl-block ${className}`}
+      />
+    )
+  }
+</div>
+
+<style>
+  .themed-image-container {
+    display: contents;
+  }
+</style>

@@ -7,8 +7,9 @@ import { navDictionary } from "../../utils/navDictionary.ts";
 
 export default navDictionary({
   // Top Level
-  build: "構築", // Build
-  network: "ネットワーク", // Network
+  sdksAndTools: "SDKとツール",
+  nodes: "ノード",
+  concepts: "コンセプト",
   smartContracts: "スマートコントラクト", // Smart Contracts
   guides: "ガイド", // Guides
   reference: "リファレンス", // Reference
@@ -17,10 +18,6 @@ export default navDictionary({
   "build.group.sdks": "SDK", // SDKs
   "build.group.sdks.official": "公式", // Official
   "build.group.sdks.community": "コミュニティ", // Community (Removed & Legacy)
-
-  // Network Sub-Groups
-  "network.group.blockchain": "ブロックチェーン", // Blockchain
-  "network.group.nodes": "ノード", // Nodes
 
   // Smart Contracts & Move Sub-Groups
   "smartContracts.group.moveBook": "Move言語の概念", // Move Language Concepts

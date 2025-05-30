@@ -185,6 +185,7 @@ export default defineConfig({
         ph: [
           "rocket-launch",
           "hard-drives",
+          "crane-tower",
           "brackets-curly",
           "file-text",
           "book-open",

@@ -99,8 +99,8 @@ export default defineConfig({
         { label: "GitHub", icon: "github", href: "https://github.com/aptos-labs" },
         { label: "X", icon: "x.com", href: "https://x.com/aptos" },
         { label: "Discord", icon: "discord", href: "https://discord.com/invite/aptosnetwork" },
-        { label: "Forum", icon: "discourse", href: "https://forum.aptosfoundation.org" },
-        { label: "Reddit", icon: "reddit", href: "https://www.reddit.com/r/Aptos" },
+        //{ label: "Forum", icon: "discourse", href: "https://forum.aptosfoundation.org" },
+        //{ label: "Reddit", icon: "reddit", href: "https://www.reddit.com/r/Aptos" },
         { label: "Telegram", icon: "telegram", href: "https://t.me/aptos" },
       ],
       components: {

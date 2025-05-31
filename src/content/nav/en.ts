@@ -4,20 +4,17 @@
  */
 const labels = {
   // Top Level
-  build: "Build",
-  network: "Network",
+  sdksAndTools: "SDKs & Tools",
   smartContracts: "Smart Contracts",
   guides: "Guides",
+  nodes: "Nodes",
+  concepts: "Concepts",
   reference: "Reference",
 
   // Build Sub-Groups
   "build.group.sdks": "SDKs",
   "build.group.sdks.official": "Official",
   "build.group.sdks.community": "Community",
-
-  // Network Sub-Groups
-  "network.group.blockchain": "Blockchain",
-  "network.group.nodes": "Nodes",
 
   // Smart Contracts & Move Sub-Groups
   "smartContracts.group.moveBook": "Move Book",
@@ -27,6 +24,7 @@ const labels = {
   "smartContracts.group.reference": "Move Reference",
 
   // Guides Sub-Groups
+  "guides.group.getStarted": "Get Started",
   "guides.group.beginner": "Beginner",
   "guides.group.advanced": "Advanced",
 

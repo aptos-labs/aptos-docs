@@ -7,8 +7,9 @@ import { navDictionary } from "../../utils/navDictionary.ts";
 
 export default navDictionary({
   // Top Level
-  build: "构建", // Build
-  network: "网络", // Network
+  sdksAndTools: "SDK 和工具",
+  nodes: "节点",
+  concepts: "概念",
   smartContracts: "智能合约", // Smart Contracts
   guides: "指南", // Guides
   reference: "参考", // Reference
@@ -17,10 +18,6 @@ export default navDictionary({
   "build.group.sdks": "SDK", // SDKs (often kept as "SDK" or "开发工具包")
   "build.group.sdks.official": "官方", // Official
   "build.group.sdks.community": "社区", // Community
-
-  // Network Sub-Groups
-  "network.group.blockchain": "区块链", // Blockchain
-  "network.group.nodes": "节点", // Nodes
 
   // Smart Contracts & Move Sub-Groups
   "smartContracts.group.moveBook": "Move 语言概念", // Move Language Concepts

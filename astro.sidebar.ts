@@ -6,10 +6,11 @@ import { ENV } from "./src/lib/env";
 // Define icons for top-level sidebar groups
 // This is separate from the sidebar configuration to avoid Starlight schema validation errors
 export const sidebarGroupIcons: Record<string, string> = {
-  build: "ph:rocket-launch",
-  network: "ph:hard-drives",
+  nodes: "ph:hard-drives",
   smartContracts: "ph:brackets-curly",
-  guides: "ph:file-text",
+  guides: "ph:rocket-launch",
+  sdksAndTools: "ph:crane-tower",
+  concepts: "ph:file-text",
   reference: "ph:book-open",
 };
 
@@ -20,11 +21,41 @@ const enableApiReference = ENABLE_API_REFERENCE === "true";
  * Starlight sidebar configuration object for the global site sidebar.
  */
 export const sidebar = [
-  // --- BUILD Tab (Focus: Tools & APIs for Integration) ---
-  group("build", {
+  // --- GUIDES Tab (Focus: Task-Oriented Tutorials) ---
+  group("guides", {
     items: [
-      "build/get-started",
-      "build/get-started/developer-setup",
+      group("guides.group.getStarted", {
+        items: ["build/get-started", "build/get-started/developer-setup"],
+      }),
+      // "build/guides", // Guides overview page
+      group("guides.group.beginner", {
+        items: [
+          "build/guides/first-transaction",
+          "build/guides/your-first-nft",
+          "build/guides/first-coin",
+          "build/guides/first-fungible-asset",
+          "build/guides/first-move-module",
+          "build/guides/first-multisig",
+          "build/guides/build-e2e-dapp",
+        ],
+      }),
+      group("guides.group.advanced", {
+        items: [
+          "build/guides/multisig-managed-fungible-asset",
+          "build/guides/aptos-keyless",
+          "build/guides/sponsored-transactions",
+          "build/guides/transaction-management",
+          "build/guides/key-rotation",
+          "build/guides/exchanges",
+          "build/guides/oracles",
+        ],
+      }),
+    ],
+  }),
+
+  // --- SDKS & TOOLS Tab (Focus: Tools & APIs for Integration) ---
+  group("sdksAndTools", {
+    items: [
       "build/apis",
       // SDKs Grouped
       group("build.group.sdks", {
@@ -54,54 +85,12 @@ export const sidebar = [
       "build/indexer",
       "build/cli",
       "build/create-aptos-dapp",
-
+      "network/faucet",
       {
         label: "LLMs Text",
         link: "/llms-txt",
         badge: { text: "NEW", variant: "tip" },
       },
-    ],
-  }),
-
-  // --- NETWORK Tab (Focus: Blockchain Infrastructure & Concepts) ---
-  group("network", {
-    items: [
-      // "network/blockchain", // blockchain overview
-      group("network.group.blockchain", {
-        items: [
-          "network/blockchain/aptos-white-paper",
-          "network/blockchain/blockchain-deep-dive",
-          "network/blockchain/execution",
-          "network/blockchain/gas-txn-fee",
-          "network/blockchain/events",
-          "network/blockchain/accounts",
-          "network/blockchain/validator-nodes",
-          "network/blockchain/fullnodes",
-          "network/blockchain/node-networks-sync",
-          "network/blockchain/resources",
-          "network/blockchain/txns-states",
-          "network/blockchain/base-gas",
-          "network/blockchain/blocks",
-          "network/blockchain/staking",
-          "network/blockchain/delegated-staking",
-          "network/blockchain/governance",
-        ],
-      }),
-      group("network.group.nodes", {
-        items: [
-          "network/nodes", // Added Nodes Overview/Landing page
-          "network/nodes/localnet",
-          "network/nodes/validator-node",
-          "network/nodes/full-node",
-          "network/nodes/bootstrap-fullnode",
-          "network/nodes/configure",
-          "network/nodes/measure",
-          "network/nodes/building-from-source",
-          "network/nodes/networks",
-        ],
-      }),
-      "network/releases",
-      "network/faucet",
     ],
   }),
 
@@ -188,33 +177,39 @@ export const sidebar = [
       "build/smart-contracts/book/move-2", // Release Notes
     ],
   }),
-
-  // --- GUIDES Tab (Focus: Task-Oriented Tutorials) ---
-  group("guides", {
+  group("nodes", {
     items: [
-      // "build/guides", // Guides overview page
-      group("guides.group.beginner", {
-        items: [
-          "build/guides/first-transaction",
-          "build/guides/your-first-nft",
-          "build/guides/first-coin",
-          "build/guides/first-fungible-asset",
-          "build/guides/first-move-module",
-          "build/guides/first-multisig",
-          "build/guides/build-e2e-dapp",
-        ],
-      }),
-      group("guides.group.advanced", {
-        items: [
-          "build/guides/multisig-managed-fungible-asset",
-          "build/guides/aptos-keyless",
-          "build/guides/sponsored-transactions",
-          "build/guides/transaction-management",
-          "build/guides/key-rotation",
-          "build/guides/exchanges",
-          "build/guides/oracles",
-        ],
-      }),
+      "network/nodes", // Added Nodes Overview/Landing page
+      "network/nodes/localnet",
+      "network/nodes/validator-node",
+      "network/nodes/full-node",
+      "network/nodes/bootstrap-fullnode",
+      "network/nodes/configure",
+      "network/nodes/measure",
+      "network/nodes/building-from-source",
+      "network/nodes/networks",
+      "network/releases",
+    ],
+  }),
+  group("concepts", {
+    // "network/blockchain", // blockchain overview
+    items: [
+      "network/blockchain/aptos-white-paper",
+      "network/blockchain/blockchain-deep-dive",
+      "network/blockchain/execution",
+      "network/blockchain/gas-txn-fee",
+      "network/blockchain/events",
+      "network/blockchain/accounts",
+      "network/blockchain/validator-nodes",
+      "network/blockchain/fullnodes",
+      "network/blockchain/node-networks-sync",
+      "network/blockchain/resources",
+      "network/blockchain/txns-states",
+      "network/blockchain/base-gas",
+      "network/blockchain/blocks",
+      "network/blockchain/staking",
+      "network/blockchain/delegated-staking",
+      "network/blockchain/governance",
     ],
   }),
 

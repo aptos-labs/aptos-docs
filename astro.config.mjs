@@ -215,9 +215,6 @@ export default defineConfig({
     optimizeDeps: {
       exclude: ["@rollup/browser"],
     },
-    build: {
-      cssCodeSplit: false,
-    },
     resolve: {
       alias: {
         "~/images": fileURLToPath(new URL("./src/assets/images", import.meta.url)),

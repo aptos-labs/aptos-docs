@@ -1,8 +1,35 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { getRegExpFromMatchers } from "@vercel/node";
+
 import { config } from "../middleware.js";
+
+// Implement getRegExpFromMatchers since it doesn't exist in @vercel/node
+function getRegExpFromMatchers(matchers) {
+  if (!Array.isArray(matchers)) {
+    return new RegExp(matchers);
+  }
+
+  // Convert Next.js/Vercel route patterns to regex patterns
+  const regexPatterns = matchers.map((pattern) => {
+    let regexPattern = pattern
+      // Escape special regex characters except * and :
+      .replace(/[.+?^${}()|[\]\\]/g, "\\$&")
+      // Convert :path* to match any path segments
+      .replace(/:path\*/g, ".*")
+      // Convert other :param patterns to match single segments
+      .replace(/:[^/*]+/g, "[^/]*")
+      // Ensure exact match
+      .replace(/^/, "^")
+      .replace(/$/, "$");
+
+    return regexPattern;
+  });
+
+  // Join all patterns with OR operator
+  const combinedPattern = `(${regexPatterns.join("|")})`;
+  return new RegExp(combinedPattern);
+}
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const rootDir = path.resolve(__dirname, "..");

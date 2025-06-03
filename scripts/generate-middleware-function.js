@@ -4,16 +4,30 @@ import { fileURLToPath } from "node:url";
 
 import { config } from "../middleware.js";
 
-// Implement getRegExpFromMatchers since it doesn't exist in @vercel/node
+// Implement getRegExpFromMatchers based on Vercel middleware patterns
 function getRegExpFromMatchers(matchers) {
-  if (!Array.isArray(matchers)) {
-    return new RegExp(matchers);
+  if (!matchers) {
+    return "^/.*$";
   }
 
-  // Convert Next.js/Vercel route patterns to regex patterns
-  const regexPatterns = matchers.map((pattern) => {
-    let regexPattern = pattern
-      // Escape special regex characters except * and :
+  const matcherArray = Array.isArray(matchers) ? matchers : [matchers];
+
+  const regexPatterns = matcherArray.map((matcher) => {
+    if (typeof matcher !== "string") {
+      throw new Error(
+        "Middleware's `config.matcher` must be a path matcher (string) or an array of path matchers (string[])",
+      );
+    }
+
+    if (!matcher.startsWith("/")) {
+      throw new Error(
+        `Middleware's \`config.matcher\` values must start with "/". Received: ${matcher}`,
+      );
+    }
+
+    // Convert Next.js route patterns to regex
+    let regexPattern = matcher
+      // Escape special regex characters
       .replace(/[.+?^${}()|[\]\\]/g, "\\$&")
       // Convert :path* to match any path segments
       .replace(/:path\*/g, ".*")
@@ -27,8 +41,7 @@ function getRegExpFromMatchers(matchers) {
   });
 
   // Join all patterns with OR operator
-  const combinedPattern = `(${regexPatterns.join("|")})`;
-  return new RegExp(combinedPattern);
+  return regexPatterns.join("|");
 }
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));

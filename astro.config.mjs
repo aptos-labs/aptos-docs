@@ -213,7 +213,7 @@ export default defineConfig({
   vite: {
     plugins: [tailwindcss()],
     optimizeDeps: {
-      exclude: ["@rollup/browser"],
+      exclude: ["@rollup/browser", "@scalar/openapi-parser"],
     },
     resolve: {
       alias: {

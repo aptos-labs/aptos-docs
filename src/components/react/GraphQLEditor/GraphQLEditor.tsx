@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import type { FetcherParams, FetcherResult } from "@graphiql/toolkit";
 import { GraphiQL } from "graphiql";
 import GraphQLLogo from "./GraphQLLogo";
-import "graphiql/graphiql.min.css";
+import "graphiql/graphiql.css";
 import "./styles.css";
 
 // Helper to check if variables are empty
@@ -188,7 +188,6 @@ export const GraphQLEditor: React.FC<GraphQLEditorProps> = ({
           variables={isEmptyVariables(variables) ? undefined : variables} // Pass undefined when empty
           isHeadersEditorEnabled={false}
           shouldPersistHeaders={false}
-          disableTabs={true}
           defaultTheme={theme} // Syncs with Starlight theme
           defaultEditorToolsVisibility={false}
           response={`/* Query will render here */`}

@@ -134,12 +134,42 @@ const config = [
     },
     {
       files: ["**/*.?(c|m)js", "vite.config.ts", "vitest.config.ts"],
-      extends: [pluginTypeScript.configs.disableTypeChecked],
+      rules: {
+        ...pluginTypeScript.configs.disableTypeChecked.rules,
+      },
     },
     {
       files: ["**/*.?(c|m)js"],
       name: "typescript:javascript-overrides",
       rules: {
+        "@typescript-eslint/no-require-imports": "off",
+        "@typescript-eslint/no-var-requires": "off",
+      },
+    },
+    {
+      files: ["scripts/**/*.ts", "scripts/**/*.js"],
+      name: "typescript:scripts-overrides",
+      languageOptions: {
+        parserOptions: {
+          project: false,
+        },
+      },
+      rules: {
+        ...pluginTypeScript.configs.disableTypeChecked.rules,
+        "@typescript-eslint/no-require-imports": "off",
+        "@typescript-eslint/no-var-requires": "off",
+      },
+    },
+    {
+      files: ["*.mjs", "*.cjs"],
+      name: "typescript:config-files-overrides",
+      languageOptions: {
+        parserOptions: {
+          project: false,
+        },
+      },
+      rules: {
+        ...pluginTypeScript.configs.disableTypeChecked.rules,
         "@typescript-eslint/no-require-imports": "off",
         "@typescript-eslint/no-var-requires": "off",
       },

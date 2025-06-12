@@ -44,6 +44,24 @@ export default defineConfig({
         ? `https://${ENV.VERCEL_URL}`
         : "http://localhost:4321",
   trailingSlash: "never",
+  // server: {
+  //   headers: {
+  //     // CSP with 'unsafe-inline' for script-src to allow inline scripts, but improved with additional directives
+  //     "Content-Security-Policy":
+  //       "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com https://pagead2.googlesyndication.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://www.google-analytics.com https://region1.google-analytics.com; frame-src 'self' https://www.youtube.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none';",
+  //     // Improved Permissions Policy - cleaned up and added more restrictions
+  //     "Permissions-Policy":
+  //       "accelerometer=(), autoplay=(), camera=(), cross-origin-isolated=(), display-capture=(), encrypted-media=(), fullscreen=(self), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(self), publickey-credentials-get=(), screen-wake-lock=(), sync-xhr=(self), usb=(), web-share=(self), xr-spatial-tracking=(), clipboard-read=(self), clipboard-write=(self), gamepad=(), hid=(self), idle-detection=(), serial=()",
+  //     // Improved Referrer Policy - changed from 'no-referrer-when-downgrade' to 'strict-origin-when-cross-origin'
+  //     "Referrer-Policy": "strict-origin-when-cross-origin",
+  //     // Added Cross-Origin-Resource-Policy for better security
+  //     "Cross-Origin-Resource-Policy": "cross-origin",
+  //     "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload",
+  //     "X-Content-Type-Options": "nosniff",
+  //     "X-Frame-Options": "DENY",
+  //     "X-XSS-Protection": "1; mode=block",
+  //   },
+  // },
   integrations: [
     // Only include devServerFileWatcher in development mode
     ...(process.env.NODE_ENV === "development" || !process.env.VERCEL

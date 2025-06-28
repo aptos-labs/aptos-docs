@@ -23,12 +23,12 @@ export const sidebar = [
         collapsed: true,
         items: [
           "build/get-started",
+          "build/guides",
           "build/get-started/developer-setup",
           "build/get-started/ethereum-cheatsheet",
           "build/get-started/solana-cheatsheet",
         ],
       }),
-      "build/guides", // Guides overview page
       group("guides.group.beginner", {
         collapsed: true,
         items: [
@@ -44,15 +44,10 @@ export const sidebar = [
             items: [
               "build/guides/build-e2e-dapp",
               "build/guides/build-e2e-dapp/1-create-smart-contract",
-              "build/guides/build-e2e-dapp/2-set-up-react-app",
               "build/guides/build-e2e-dapp/2-set-up-the-frontend",
-              "build/guides/build-e2e-dapp/3-add-wallet-support",
               "build/guides/build-e2e-dapp/3-fetch-data-from-chain",
-              "build/guides/build-e2e-dapp/4-fetch-data-from-chain",
               "build/guides/build-e2e-dapp/4-submit-data-to-chain",
               "build/guides/build-e2e-dapp/5-handle-tasks",
-              "build/guides/build-e2e-dapp/5-submit-data-to-chain",
-              "build/guides/build-e2e-dapp/6-handle-tasks",
             ],
           },
         ],
@@ -61,27 +56,45 @@ export const sidebar = [
         collapsed: true,
         items: [
           "build/guides/multisig-managed-fungible-asset",
-          "build/guides/aptos-keyless",
-          "build/guides/aptos-keyless/federated-keyless",
-          "build/guides/aptos-keyless/federated-keyless/integration-guide",
-          "build/guides/aptos-keyless/federated-keyless/key-considerations",
-          "build/guides/aptos-keyless/federated-keyless/other",
-          "build/guides/aptos-keyless/federated-keyless/simple-example",
-          "build/guides/aptos-keyless/how-keyless-works",
-          "build/guides/aptos-keyless/integration-guide",
-          "build/guides/aptos-keyless/introduction",
-          "build/guides/aptos-keyless/oidc-support",
-          "build/guides/aptos-keyless/other",
-          "build/guides/aptos-keyless/simple-example",
+          {
+            label: "Aptos Keyless",
+            collapsed: true,
+            items: [
+              "build/guides/aptos-keyless",
+              "build/guides/aptos-keyless/introduction",
+              "build/guides/aptos-keyless/how-keyless-works",
+              "build/guides/aptos-keyless/integration-guide",
+              "build/guides/aptos-keyless/simple-example",
+              "build/guides/aptos-keyless/oidc-support",
+              "build/guides/aptos-keyless/other",
+              {
+                label: "Federated Keyless",
+                collapsed: true,
+                items: [
+                  "build/guides/aptos-keyless/federated-keyless",
+                  "build/guides/aptos-keyless/federated-keyless/integration-guide",
+                  "build/guides/aptos-keyless/federated-keyless/key-considerations",
+                  "build/guides/aptos-keyless/federated-keyless/simple-example",
+                  "build/guides/aptos-keyless/federated-keyless/other",
+                ],
+              },
+            ],
+          },
           "build/guides/sponsored-transactions",
           "build/guides/transaction-management",
           "build/guides/key-rotation",
-          "build/guides/exchanges",
-          "build/guides/oracles",
-          "build/guides/system-integrators-guide",
           "build/guides/orderless-transactions",
         ],
       }),
+      {
+        label: "Integration",
+        collapsed: true,
+        items: [
+          "build/guides/exchanges",
+          "build/guides/system-integrators-guide",
+          "build/guides/oracles",
+        ],
+      },
       "guides/example",
     ],
   }),
@@ -122,6 +135,7 @@ export const sidebar = [
             label: "Account",
             collapsed: true,
             items: [
+              "build/sdks/ts-sdk/account",
               "build/sdks/ts-sdk/account/account-abstraction",
               "build/sdks/ts-sdk/account/derivable-account-abstraction",
             ],
@@ -130,6 +144,7 @@ export const sidebar = [
             label: "Building Transactions",
             collapsed: true,
             items: [
+              "build/sdks/ts-sdk/building-transactions",
               "build/sdks/ts-sdk/building-transactions/batching-transactions",
               "build/sdks/ts-sdk/building-transactions/bcs-format",
               "build/sdks/ts-sdk/building-transactions/multi-agent-transactions",
@@ -142,7 +157,10 @@ export const sidebar = [
           {
             label: "Legacy TS SDK",
             collapsed: true,
-            items: ["build/sdks/ts-sdk/legacy-ts-sdk/migration-guide"],
+            items: [
+              "build/sdks/ts-sdk/legacy-ts-sdk",
+              "build/sdks/ts-sdk/legacy-ts-sdk/migration-guide",
+            ],
           },
         ],
       },
@@ -161,6 +179,7 @@ export const sidebar = [
             label: "Building Transactions",
             collapsed: true,
             items: [
+              "build/sdks/go-sdk/building-transactions",
               "build/sdks/go-sdk/building-transactions/batching-transactions",
               "build/sdks/go-sdk/building-transactions/simulating-transactions",
               "build/sdks/go-sdk/building-transactions/bcs-format",
@@ -380,12 +399,13 @@ export const sidebar = [
           {
             label: "Setup CLI",
             collapsed: true,
-            items: ["build/cli/setup-cli/install-move-prover"],
+            items: ["build/cli/setup-cli", "build/cli/setup-cli/install-move-prover"],
           },
           {
             label: "Trying Things On Chain",
             collapsed: true,
             items: [
+              "build/cli/trying-things-on-chain",
               "build/cli/trying-things-on-chain/create-test-accounts",
               "build/cli/trying-things-on-chain/ledger",
               "build/cli/trying-things-on-chain/looking-up-account-info",
@@ -395,6 +415,7 @@ export const sidebar = [
             label: "Working with Move Contracts",
             collapsed: true,
             items: [
+              "build/cli/working-with-move-contracts",
               "build/cli/working-with-move-contracts/arguments-in-json-tutorial",
               "build/cli/working-with-move-contracts/local-simulation-benchmarking-and-gas-profiling",
               "build/cli/working-with-move-contracts/multi-signature-tutorial",

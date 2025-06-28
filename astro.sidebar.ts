@@ -95,7 +95,6 @@ export const sidebar = [
           "build/guides/oracles",
         ],
       },
-      "guides/example",
     ],
   }),
 

@@ -20,6 +20,7 @@ export const sidebar = [
   group("guides", {
     items: [
       group("guides.group.getStarted", {
+        collapsed: true,
         items: [
           "build/get-started",
           "build/get-started/developer-setup",
@@ -29,6 +30,7 @@ export const sidebar = [
       }),
       "build/guides", // Guides overview page
       group("guides.group.beginner", {
+        collapsed: true,
         items: [
           "build/guides/first-transaction",
           "build/guides/your-first-nft",
@@ -36,20 +38,27 @@ export const sidebar = [
           "build/guides/first-fungible-asset",
           "build/guides/first-move-module",
           "build/guides/first-multisig",
-          "build/guides/build-e2e-dapp",
-          "build/guides/build-e2e-dapp/1-create-smart-contract",
-          "build/guides/build-e2e-dapp/2-set-up-react-app",
-          "build/guides/build-e2e-dapp/2-set-up-the-frontend",
-          "build/guides/build-e2e-dapp/3-add-wallet-support",
-          "build/guides/build-e2e-dapp/3-fetch-data-from-chain",
-          "build/guides/build-e2e-dapp/4-fetch-data-from-chain",
-          "build/guides/build-e2e-dapp/4-submit-data-to-chain",
-          "build/guides/build-e2e-dapp/5-handle-tasks",
-          "build/guides/build-e2e-dapp/5-submit-data-to-chain",
-          "build/guides/build-e2e-dapp/6-handle-tasks",
+          {
+            label: "Build E2E DApp",
+            collapsed: true,
+            items: [
+              "build/guides/build-e2e-dapp",
+              "build/guides/build-e2e-dapp/1-create-smart-contract",
+              "build/guides/build-e2e-dapp/2-set-up-react-app",
+              "build/guides/build-e2e-dapp/2-set-up-the-frontend",
+              "build/guides/build-e2e-dapp/3-add-wallet-support",
+              "build/guides/build-e2e-dapp/3-fetch-data-from-chain",
+              "build/guides/build-e2e-dapp/4-fetch-data-from-chain",
+              "build/guides/build-e2e-dapp/4-submit-data-to-chain",
+              "build/guides/build-e2e-dapp/5-handle-tasks",
+              "build/guides/build-e2e-dapp/5-submit-data-to-chain",
+              "build/guides/build-e2e-dapp/6-handle-tasks",
+            ],
+          },
         ],
       }),
       group("guides.group.advanced", {
+        collapsed: true,
         items: [
           "build/guides/multisig-managed-fungible-asset",
           "build/guides/aptos-keyless",
@@ -83,6 +92,7 @@ export const sidebar = [
       // Aptos APIs
       {
         label: "Aptos APIs",
+        collapsed: true,
         items: [
           "build/apis",
           "build/apis/fullnode-rest-api",
@@ -97,6 +107,7 @@ export const sidebar = [
       "build/sdks",
       {
         label: "TypeScript SDK",
+        collapsed: true,
         items: [
           "build/sdks/ts-sdk",
           "build/sdks/ts-sdk/account",
@@ -109,6 +120,7 @@ export const sidebar = [
           "build/sdks/ts-sdk/type-safe-contract",
           {
             label: "Account",
+            collapsed: true,
             items: [
               "build/sdks/ts-sdk/account/account-abstraction",
               "build/sdks/ts-sdk/account/derivable-account-abstraction",
@@ -116,6 +128,7 @@ export const sidebar = [
           },
           {
             label: "Building Transactions",
+            collapsed: true,
             items: [
               "build/sdks/ts-sdk/building-transactions/batching-transactions",
               "build/sdks/ts-sdk/building-transactions/bcs-format",
@@ -128,6 +141,7 @@ export const sidebar = [
           },
           {
             label: "Legacy TS SDK",
+            collapsed: true,
             items: ["build/sdks/ts-sdk/legacy-ts-sdk/migration-guide"],
           },
         ],
@@ -136,6 +150,7 @@ export const sidebar = [
       "build/sdks/python-sdk",
       {
         label: "Go SDK",
+        collapsed: true,
         items: [
           "build/sdks/go-sdk",
           "build/sdks/go-sdk/account",
@@ -144,6 +159,7 @@ export const sidebar = [
           "build/sdks/go-sdk/go-examples",
           {
             label: "Building Transactions",
+            collapsed: true,
             items: [
               "build/sdks/go-sdk/building-transactions/batching-transactions",
               "build/sdks/go-sdk/building-transactions/simulating-transactions",
@@ -158,6 +174,7 @@ export const sidebar = [
       "build/sdks/rust-sdk",
       {
         label: "Dotnet SDK",
+        collapsed: true,
         items: [
           "build/sdks/dotnet-sdk",
           "build/sdks/dotnet-sdk/dotnet-examples",
@@ -166,6 +183,7 @@ export const sidebar = [
           "build/sdks/dotnet-sdk/unity-integration",
           {
             label: "Accounts",
+            collapsed: true,
             items: [
               "build/sdks/dotnet-sdk/accounts/ed25519",
               "build/sdks/dotnet-sdk/accounts/keyless",
@@ -174,10 +192,12 @@ export const sidebar = [
           },
           {
             label: "Queries",
+            collapsed: true,
             items: ["build/sdks/dotnet-sdk/queries/view"],
           },
           {
             label: "Transactions",
+            collapsed: true,
             items: [
               "build/sdks/dotnet-sdk/transactions/basic-transactions",
               "build/sdks/dotnet-sdk/transactions/sponsored-transactions",
@@ -191,6 +211,7 @@ export const sidebar = [
       "build/sdks/cpp-sdk",
       {
         label: "Wallet Adapter",
+        collapsed: true,
         items: [
           "build/sdks/wallet-adapter",
           "build/sdks/wallet-adapter/browser-extension-wallets",
@@ -203,6 +224,7 @@ export const sidebar = [
       // Community SDKs
       {
         label: "Community SDKs",
+        collapsed: true,
         items: [
           "build/sdks/community-sdks",
           "build/sdks/community-sdks/kotlin-sdk",
@@ -214,6 +236,7 @@ export const sidebar = [
           "build/sdks/community-sdks/kotlin-sdk/sponsored-transactions",
           {
             label: "For iOS Developers",
+            collapsed: true,
             items: [
               "build/sdks/community-sdks/kotlin-sdk/for-ios-devs/aptos-kit",
               "build/sdks/community-sdks/kotlin-sdk/for-ios-devs/getting-started",
@@ -227,62 +250,112 @@ export const sidebar = [
       // Indexer
       {
         label: "Indexer",
+        collapsed: true,
         items: [
           "build/indexer",
-          "build/indexer/indexer-api",
-          "build/indexer/indexer-api/architecture",
-          "build/indexer/indexer-api/indexer-reference",
-          "build/indexer/indexer-api/self-hosted",
-          "build/indexer/indexer-api/account-transactions",
-          "build/indexer/indexer-api/ans-lookup",
-          "build/indexer/indexer-api/fungible-asset-balances",
-          "build/indexer/indexer-api/fungible-asset-info",
-          "build/indexer/indexer-api/get-delegators",
-          "build/indexer/indexer-api/get-nft-collections",
-          "build/indexer/indexer-api/get-nfts",
-          "build/indexer/indexer-api/token-metadata",
-          "build/indexer/indexer-sdk",
-          "build/indexer/indexer-sdk/quickstart",
-          "build/indexer/indexer-sdk/documentation",
-          "build/indexer/indexer-sdk/documentation/setup",
-          "build/indexer/indexer-sdk/documentation/connect-steps",
-          "build/indexer/indexer-sdk/documentation/define-schema",
-          "build/indexer/indexer-sdk/documentation/create-processor",
-          "build/indexer/indexer-sdk/documentation/run-processor",
-          "build/indexer/indexer-sdk/documentation/steps",
-          "build/indexer/indexer-sdk/documentation/steps/parsing-txns",
-          "build/indexer/indexer-sdk/documentation/steps/transaction-stream",
-          "build/indexer/indexer-sdk/documentation/advanced-tutorials",
-          "build/indexer/indexer-sdk/documentation/version-tracking",
-          "build/indexer/indexer-sdk/advanced-tutorials/migration-guide",
-          "build/indexer/indexer-sdk/advanced-tutorials/processor-test",
-          "build/indexer/indexer-sdk/advanced-tutorials/test-transactions",
-          "build/indexer/indexer-sdk/advanced-tutorials/txn-importer",
-          "build/indexer/indexer-sdk/advanced-tutorials/txn-script",
-          "build/indexer/nft-aggregator",
-          "build/indexer/nft-aggregator/analytics-api",
-          "build/indexer/nft-aggregator/graphql-api",
-          "build/indexer/nft-aggregator/marketplaces",
-          "build/indexer/nft-aggregator/marketplaces/bluemove",
-          "build/indexer/nft-aggregator/marketplaces/rarible",
-          "build/indexer/nft-aggregator/marketplaces/topaz",
-          "build/indexer/nft-aggregator/marketplaces/tradeport",
-          "build/indexer/nft-aggregator/marketplaces/wapal",
-          "build/indexer/nft-aggregator/nft-aggregator-table",
-          "build/indexer/txn-stream",
-          "build/indexer/txn-stream/aptos-hosted-txn-stream",
-          "build/indexer/txn-stream/local-development",
-          "build/indexer/txn-stream/self-hosted",
-          "build/indexer/legacy",
-          "build/indexer/legacy/custom-data-model",
-          "build/indexer/legacy/indexer-fullnode",
-          "build/indexer/legacy/migration",
+          {
+            label: "Indexer API",
+            collapsed: true,
+            items: [
+              "build/indexer/indexer-api",
+              "build/indexer/indexer-api/architecture",
+              "build/indexer/indexer-api/indexer-reference",
+              "build/indexer/indexer-api/self-hosted",
+              "build/indexer/indexer-api/account-transactions",
+              "build/indexer/indexer-api/ans-lookup",
+              "build/indexer/indexer-api/fungible-asset-balances",
+              "build/indexer/indexer-api/fungible-asset-info",
+              "build/indexer/indexer-api/get-delegators",
+              "build/indexer/indexer-api/get-nft-collections",
+              "build/indexer/indexer-api/get-nfts",
+              "build/indexer/indexer-api/token-metadata",
+            ],
+          },
+          {
+            label: "Indexer SDK",
+            collapsed: true,
+            items: [
+              "build/indexer/indexer-sdk",
+              "build/indexer/indexer-sdk/quickstart",
+              {
+                label: "Documentation",
+                collapsed: true,
+                items: [
+                  "build/indexer/indexer-sdk/documentation",
+                  "build/indexer/indexer-sdk/documentation/setup",
+                  "build/indexer/indexer-sdk/documentation/connect-steps",
+                  "build/indexer/indexer-sdk/documentation/define-schema",
+                  "build/indexer/indexer-sdk/documentation/create-processor",
+                  "build/indexer/indexer-sdk/documentation/run-processor",
+                  "build/indexer/indexer-sdk/documentation/steps",
+                  "build/indexer/indexer-sdk/documentation/steps/parsing-txns",
+                  "build/indexer/indexer-sdk/documentation/steps/transaction-stream",
+                  "build/indexer/indexer-sdk/documentation/advanced-tutorials",
+                  "build/indexer/indexer-sdk/documentation/version-tracking",
+                ],
+              },
+              {
+                label: "Advanced Tutorials",
+                collapsed: true,
+                items: [
+                  "build/indexer/indexer-sdk/advanced-tutorials/migration-guide",
+                  "build/indexer/indexer-sdk/advanced-tutorials/processor-test",
+                  "build/indexer/indexer-sdk/advanced-tutorials/test-transactions",
+                  "build/indexer/indexer-sdk/advanced-tutorials/txn-importer",
+                  "build/indexer/indexer-sdk/advanced-tutorials/txn-script",
+                ],
+              },
+            ],
+          },
+          {
+            label: "NFT Aggregator",
+            collapsed: true,
+            items: [
+              "build/indexer/nft-aggregator",
+              "build/indexer/nft-aggregator/analytics-api",
+              "build/indexer/nft-aggregator/graphql-api",
+              "build/indexer/nft-aggregator/marketplaces",
+              "build/indexer/nft-aggregator/nft-aggregator-table",
+              {
+                label: "Marketplaces",
+                collapsed: true,
+                items: [
+                  "build/indexer/nft-aggregator/marketplaces/bluemove",
+                  "build/indexer/nft-aggregator/marketplaces/rarible",
+                  "build/indexer/nft-aggregator/marketplaces/topaz",
+                  "build/indexer/nft-aggregator/marketplaces/tradeport",
+                  "build/indexer/nft-aggregator/marketplaces/wapal",
+                ],
+              },
+            ],
+          },
+          {
+            label: "Transaction Stream",
+            collapsed: true,
+            items: [
+              "build/indexer/txn-stream",
+              "build/indexer/txn-stream/aptos-hosted-txn-stream",
+              "build/indexer/txn-stream/local-development",
+              "build/indexer/txn-stream/self-hosted",
+            ],
+          },
+          {
+            label: "Legacy",
+            collapsed: true,
+            items: [
+              "build/indexer/legacy",
+              "build/indexer/legacy/custom-data-model",
+              "build/indexer/legacy/indexer-fullnode",
+              "build/indexer/legacy/migration",
+            ],
+          },
         ],
       },
 
       // CLI
       {
         label: "CLI",
+        collapsed: true,
         items: [
           "build/cli",
           "build/cli/setup-cli",
@@ -296,6 +369,7 @@ export const sidebar = [
           "build/cli/working-with-move-contracts",
           {
             label: "Install CLI",
+            collapsed: true,
             items: [
               "build/cli/install-cli/install-cli-linux",
               "build/cli/install-cli/install-cli-mac",
@@ -305,10 +379,12 @@ export const sidebar = [
           },
           {
             label: "Setup CLI",
+            collapsed: true,
             items: ["build/cli/setup-cli/install-move-prover"],
           },
           {
             label: "Trying Things On Chain",
+            collapsed: true,
             items: [
               "build/cli/trying-things-on-chain/create-test-accounts",
               "build/cli/trying-things-on-chain/ledger",
@@ -317,6 +393,7 @@ export const sidebar = [
           },
           {
             label: "Working with Move Contracts",
+            collapsed: true,
             items: [
               "build/cli/working-with-move-contracts/arguments-in-json-tutorial",
               "build/cli/working-with-move-contracts/local-simulation-benchmarking-and-gas-profiling",
@@ -329,6 +406,7 @@ export const sidebar = [
       // Create Aptos DApp
       {
         label: "Create Aptos DApp",
+        collapsed: true,
         items: ["build/create-aptos-dapp", "build/create-aptos-dapp/faq"],
       },
 
@@ -343,6 +421,7 @@ export const sidebar = [
 
   // --- SMART CONTRACTS & MOVE Tab (NEW - Focus: Writing On-Chain Code) ---
   group("smartContracts", {
+    collapsed: true,
     items: [
       "build/smart-contracts", // Overview page
       "build/smart-contracts/why-move",
@@ -350,6 +429,7 @@ export const sidebar = [
       // Move Book - Individual entries
       {
         label: "Move Book",
+        collapsed: true,
         items: [
           "build/smart-contracts/book/modules-and-scripts",
           "build/smart-contracts/book/structs-and-resources",
@@ -384,6 +464,7 @@ export const sidebar = [
       // Development
       {
         label: "Development",
+        collapsed: true,
         items: [
           "build/smart-contracts/create-package",
           "build/smart-contracts/compiling",
@@ -404,6 +485,7 @@ export const sidebar = [
       // Aptos Features
       {
         label: "Aptos Features",
+        collapsed: true,
         items: [
           "build/smart-contracts/objects",
           "build/smart-contracts/object/creating-objects",
@@ -431,6 +513,7 @@ export const sidebar = [
       // Tooling
       {
         label: "Tooling",
+        collapsed: true,
         items: [
           "build/smart-contracts/prover",
           "build/smart-contracts/prover/prover-guide",
@@ -444,6 +527,7 @@ export const sidebar = [
       // Reference
       {
         label: "Reference",
+        collapsed: true,
         items: [
           { label: "View Frameworks", link: "/move-reference" },
           { label: "Aptos Framework", link: "/move-reference/mainnet/aptos-framework" },
@@ -462,12 +546,14 @@ export const sidebar = [
 
   // --- NODES Tab ---
   group("nodes", {
+    collapsed: true,
     items: [
       "network/nodes", // Added Nodes Overview/Landing page
 
       // Localnet
       {
         label: "Localnet",
+        collapsed: true,
         items: [
           "network/nodes/localnet",
           "network/nodes/localnet/local-development-network",
@@ -478,6 +564,7 @@ export const sidebar = [
       // Validator Node
       {
         label: "Validator Node",
+        collapsed: true,
         items: [
           "network/nodes/validator-node",
           "network/nodes/validator-node/node-requirements",
@@ -506,6 +593,7 @@ export const sidebar = [
       // Full Node
       {
         label: "Full Node",
+        collapsed: true,
         items: [
           "network/nodes/full-node",
           "network/nodes/full-node/pfn-requirements",
@@ -524,6 +612,7 @@ export const sidebar = [
       // Bootstrap Fullnode
       {
         label: "Bootstrap Fullnode",
+        collapsed: true,
         items: [
           "network/nodes/bootstrap-fullnode",
           "network/nodes/bootstrap-fullnode/bootstrap-fullnode",
@@ -534,6 +623,7 @@ export const sidebar = [
       // Configure
       {
         label: "Configure",
+        collapsed: true,
         items: [
           "network/nodes/configure",
           "network/nodes/configure/consensus-observer",
@@ -550,6 +640,7 @@ export const sidebar = [
       // Measure
       {
         label: "Measure",
+        collapsed: true,
         items: [
           "network/nodes/measure",
           "network/nodes/measure/important-metrics",
@@ -567,10 +658,12 @@ export const sidebar = [
 
   // --- CONCEPTS Tab ---
   group("concepts", {
+    collapsed: true,
     items: [
       // Blockchain Fundamentals
       {
         label: "Blockchain Fundamentals",
+        collapsed: true,
         items: [
           "network/blockchain",
           "network/blockchain/aptos-white-paper",
@@ -583,6 +676,7 @@ export const sidebar = [
       // Execution & Transactions
       {
         label: "Execution & Transactions",
+        collapsed: true,
         items: [
           "network/blockchain/execution",
           "network/blockchain/gas-txn-fee",
@@ -595,12 +689,14 @@ export const sidebar = [
       // Accounts & Resources
       {
         label: "Accounts & Resources",
+        collapsed: true,
         items: ["network/blockchain/accounts", "network/blockchain/resources"],
       },
 
       // Network & Nodes
       {
         label: "Network & Nodes",
+        collapsed: true,
         items: [
           "network/blockchain/validator-nodes",
           "network/blockchain/fullnodes",
@@ -611,6 +707,7 @@ export const sidebar = [
       // Staking & Governance
       {
         label: "Staking & Governance",
+        collapsed: true,
         items: [
           "network/blockchain/staking",
           "network/blockchain/delegated-staking",

@@ -232,9 +232,13 @@ const SUPPORTED_LANGUAGES = [
     label: "简体中文",
   },
   {
-    code: "ja",
-    label: "日本語",
+    code: "es",
+    label: "Español",
   },
+  //{
+  //   code: "ja",
+  //   label: "日本語",
+  // },
 ];
 const LANGUAGE_CODES = SUPPORTED_LANGUAGES.map((lang) => lang.code);
 const DEFAULT_LANG = "en";
@@ -360,9 +364,10 @@ export const config = {
     "/build/:path*",
     "/contribute/:path*",
     "/guides/:path*",
-    "/ja/:path*",
+    //"/ja/:path*",
     "/network/:path*",
     "/zh/:path*",
+    "/es/:path*",
     "/move-reference",
     "/move-reference/:path*",
     "/en",

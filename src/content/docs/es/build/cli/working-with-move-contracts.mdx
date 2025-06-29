@@ -1,0 +1,241 @@
+---
+title: "Trabajar con Contratos Move"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+La CLI de Aptos se usa principalmente para compilar, probar y verificar formalmente contratos Move. Si aún no has instalado la CLI de Aptos, puedes hacerlo siguiendo los pasos aquí [Instalar la CLI de Aptos](/build/cli.mdx#-install-the-aptos-cli).
+
+Puedes saltar a secciones específicas usando la tabla de contenidos a la derecha.
+
+Para ver cómo encadenar contratos Move en la cadena usando la CLI, puedes seguir este tutorial ["Argumentos de CLI"](/build/cli/working-with-move-contracts/arguments-in-json-tutorial).
+
+<Aside type="note" emoji="ℹ️">
+  A lo largo de este documento hay partes de comandos que tendrás que modificar para adaptarse a tu situación. Esas variables estarán envueltas en corchetes angulares `<como esto>`.
+</Aside>
+
+## 1. Compilar Move
+
+Puedes compilar un paquete Move ejecutando:
+
+```shellscript filename="Terminal"
+aptos move compile --package-dir <tu-directorio-de-paquete>
+```
+
+<Aside type="note" emoji="ℹ️">
+  El directorio del paquete es la carpeta que contiene el archivo `Move.toml`.
+</Aside>
+
+Basado en la configuración en tu archivo `Move.toml`, es posible que necesites pasar información adicional a ese comando de compilación.
+
+Por ejemplo, si miras el [ejemplo de contrato Move hello\_blockchain](https://github.com/aptos-labs/aptos-core/tree/main/aptos-move/move-examples/hello_blockchain), en el archivo `Move.toml` especifica una dirección nombrada llamada `hello_blockchain`.
+
+```toml filename="Move.toml"
+[addresses]
+hello_blockchain = "_"
+```
+
+Entonces, para compilar esto, necesitarás pasar el valor para `hello_blockchain` con el parámetro `--named-addresses`.
+Puedes usar ya sea una dirección completa e.g. `0x123456...7890` o un nombre de un perfil en la CLI e.g. `default` o `superuser`.
+
+A continuación usaremos `default` en nuestro ejemplo:
+
+```shellscript filename="Terminal"
+aptos move compile --package-dir aptos-move/move-examples/hello_blockchain/ --named-addresses hello_blockchain=default
+```
+
+Puedes aprender más sobre parámetros opcionales al compilar contratos Move ejecutando `aptos move compile --help`.
+
+## 2. Probar Contratos Move
+
+La CLI de Aptos también se puede usar para compilar y ejecutar pruebas unitarias localmente ejecutando:
+
+```shellscript filename="Terminal"
+aptos move test --package-dir <tu-directorio-de-paquete>
+```
+
+Este comando tanto compila como ejecuta pruebas, por lo que necesita todos los mismos parámetros opcionales que usas al compilar.
+
+Puedes aprender más sobre los parámetros opcionales para probar contratos move ejecutando `aptos move test --help`.
+
+### Imprimir Información de Depuración
+
+Al escribir pruebas, puede ser útil imprimir información de depuración o trazas de pila. Puedes hacer eso usando `debug::print` y `debug::print_stack_trace` para imprimir información cuando uses `aptos move test`. Ve un ejemplo de cómo se usan en [DebugDemo.move](https://github.com/aptos-labs/aptos-core/blob/main/crates/aptos/debug-move-example/sources/DebugDemo.move).
+
+Para ver la salida de probar el paquete de [DebugDemo.move](https://github.com/aptos-labs/aptos-core/blob/main/crates/aptos/debug-move-example/sources/DebugDemo.move):
+
+1. Clona `[aptos-core](https://github.com/aptos-labs/aptos-core)`.
+2. Navega al [debug-move-example](https://github.com/aptos-labs/aptos-core/tree/main/crates/aptos/debug-move-example) ejecutando `cd crates/aptos/debug-move-example`.
+3. Ejecuta `aptos move test`.
+
+Deberías ver:
+
+```shellscript filename="Terminal"
+Running Move unit tests
+[debug] 0000000000000000000000000000000000000000000000000000000000000001
+Call Stack:
+    [0] 0000000000000000000000000000000000000000000000000000000000000001::Message::sender_can_set_message
+
+        Code:
+            [4] CallGeneric(0)
+            [5] MoveLoc(0)
+            [6] LdConst(0)
+          > [7] Call(1)
+            [8] Ret
+
+        Locals:
+            [0] -
+            [1] 0000000000000000000000000000000000000000000000000000000000000001
+
+Operand Stack:
+```
+
+Para más información sobre cómo escribir pruebas unitarias con Move, sigue este [tutorial de Move](https://github.com/aptos-labs/aptos-core/tree/main/aptos-move/move-examples/move-tutorial) (el paso 2 se enfoca en pruebas unitarias).
+
+## 3. Generar Reportes de Cobertura de Pruebas
+
+La CLI de Aptos se puede usar para analizar y mejorar las pruebas de tus módulos Move. Para usar esta característica:
+
+Para ver la cobertura de código de tus pruebas ejecuta el siguiente comando desde el directorio de tu paquete Move:
+
+```shellscript filename="Terminal"
+aptos move test --coverage
+```
+
+Si quieres enfocar tu cobertura a paquetes específicos, puedes hacerlo con la opción `--filter`. Para estrechar aún más a módulos Move específicos, usa el parámetro `--module`.
+
+Para información más detallada / avanzada de cobertura (como tu cobertura de pruebas en el bytecode compilado) puedes ejecutar `aptos move coverage` . Con ese comando, la CLI te pedirá más detalles sobre qué específicamente quieres más información de cobertura.
+
+Puedes aprender más sobre parámetros opcionales para cobertura de pruebas ejecutando `aptos move test --help` y `aptos move coverage --help`.
+
+## 4. Publicar Contratos Move
+
+Para publicar un contrato Move, necesitarás ejecutar:
+
+```shellscript filename="Terminal"
+aptos move publish --package-dir <tu-directorio-de-paquete>
+```
+
+Ten en cuenta que cuando estés publicando en la red principal, las credenciales que pases en parámetros opcionales como `--named-addresses` necesitarán reflejar cuentas en esa red en lugar de credenciales de prueba.
+
+El paquete se publicará en tu perfil predeterminado en la CLI. Puedes anular eso para especificar a qué cuenta publicar usando `--profile` en el comando. Para generar un nuevo perfil para una cuenta específica, usa `aptos init --profile <nombre_del_perfil>` y sigue las indicaciones.
+
+También ten en cuenta que al publicar módulos Move, si múltiples módulos están en un paquete, entonces todos los módulos en ese paquete deben usar la misma cuenta. Si usan diferentes cuentas, entonces la publicación fallará a nivel de transacción.
+
+Puedes estimar las tarifas de gas asociadas con publicar tu contrato Move usando el [Gas Profiler](/build/cli/working-with-move-contracts/local-simulation-benchmarking-and-gas-profiling). {/* TODO: Fix this link */}
+
+<Aside type="caution">
+  Por defecto los contratos Move publican su código fuente. Para evitar publicar con código fuente, publica con el argumento `--included-artifacts none`.
+
+  Dado que la blockchain de Aptos es inherentemente abierta por diseño, ten en cuenta que incluso sin acceso al código fuente es posible regenerar código fuente Move desde bytecode Move publicado.
+</Aside>
+
+## 5. Ejecutar Contratos Publicados
+
+Ahora que has publicado tu paquete Move, puedes ejecutarlo directamente desde la CLI.
+
+Primero necesitarás construir tu `function-id` combinando:
+
+```jsx
+<la-dirección-a-la-que-publicaste>::<nombre_del_módulo>::<nombre_de_la_función>
+```
+
+Luego puedes pasar argumentos usando el parámetro `--args`.
+
+Como ejemplo, si fueras a publicar el [paquete de ejemplo hello\_blockchain](https://github.com/aptos-labs/aptos-core/tree/main/aptos-move/move-examples/hello_blockchain) a una cuenta con una dirección `b9bd2cfa58ca29bce1d7add25fce5c62220604cd0236fe3f90d9de91ed9fb8cb` podrías ejecutar su función `set_message` vía el siguiente comando:
+
+```shellscript filename="Terminal"
+aptos move run --function-id 0xb9bd2cfa58ca29bce1d7add25fce5c62220604cd0236fe3f90d9de91ed9fb8cb::message::set_message --args string:hello!
+```
+
+Lo cual debería resultar en:
+
+```json
+{
+  "Result": {
+    "changes": [
+      {
+        "address": "b9bd2cfa58ca29bce1d7add25fce5c62220604cd0236fe3f90d9de91ed9fb8cb",
+        "data": {
+          "authentication_key": "0xb9bd2cfa58ca29bce1d7add25fce5c62220604cd0236fe3f90d9de91ed9fb8cb",
+          "self_address": "0xb9bd2cfa58ca29bce1d7add25fce5c62220604cd0236fe3f90d9de91ed9fb8cb",
+          "sequence_number": "3"
+        },
+        "event": "write_resource",
+        "resource": "0x1::account::Account"
+      },
+      {
+        "address": "b9bd2cfa58ca29bce1d7add25fce5c62220604cd0236fe3f90d9de91ed9fb8cb",
+        "data": {
+          "coin": {
+            "value": "9777"
+          },
+          "deposit_events": {
+            "counter": "1",
+            "guid": {
+              "id": {
+                "addr": "0xb9bd2cfa58ca29bce1d7add25fce5c62220604cd0236fe3f90d9de91ed9fb8cb",
+                "creation_num": "1"
+              }
+            }
+          },
+          "withdraw_events": {
+            "counter": "1",
+            "guid": {
+              "id": {
+                "addr": "0xb9bd2cfa58ca29bce1d7add25fce5c62220604cd0236fe3f90d9de91ed9fb8cb",
+                "creation_num": "2"
+              }
+            }
+          }
+        },
+        "event": "write_resource",
+        "resource": "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>"
+      },
+      {
+        "address": "b9bd2cfa58ca29bce1d7add25fce5c62220604cd0236fe3f90d9de91ed9fb8cb",
+        "data": {
+          "counter": "4"
+        },
+        "event": "write_resource",
+        "resource": "0x1::guid::Generator"
+      },
+      {
+        "address": "b9bd2cfa58ca29bce1d7add25fce5c62220604cd0236fe3f90d9de91ed9fb8cb",
+        "data": {
+          "message": "hello!",
+          "message_change_events": {
+            "counter": "0",
+            "guid": {
+              "id": {
+                "addr": "0xb9bd2cfa58ca29bce1d7add25fce5c62220604cd0236fe3f90d9de91ed9fb8cb",
+                "creation_num": "3"
+              }
+            }
+          }
+        },
+        "event": "write_resource",
+        "resource": "0xb9bd2cfa58ca29bce1d7add25fce5c62220604cd0236fe3f90d9de91ed9fb8cb::Message::MessageHolder"
+      }
+    ],
+    "gas_used": 41,
+    "success": true,
+    "version": 3488,
+    "vm_status": "Executed successfully"
+  }
+}
+```
+
+## 6. (Opcional) Verificar Formalmente Scripts Move
+
+Para casos donde quieres garantizar que tu código funciona como se espera más allá de las pruebas unitarias, puedes usar el [Move Prover](/build/smart-contracts/prover) para verificar formalmente tu código de contrato Move.
+
+Puedes instalar el Move Prover siguiendo [estos pasos](/build/cli/setup-cli/install-move-prover).
+
+Una vez que hayas instalado el Move Prover, puedes usarlo desde la CLI de Aptos ejecutando:
+
+```shellscript filename="Terminal"
+aptos move prove --package-dir <tu-directorio-de-paquete>
+```
+
+Para aprender cómo verificar formalmente tu código, por favor sigue el tutorial detallado de Move [aquí](https://github.com/aptos-labs/aptos-core/tree/main/aptos-move/move-examples/move-tutorial) (los pasos 7 y 8 cubren cómo usar el Move Prover y escribir especificaciones formales en el código de ejemplo).

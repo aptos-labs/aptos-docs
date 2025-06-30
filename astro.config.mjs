@@ -37,6 +37,9 @@ const enableApiReference = ENABLE_API_REFERENCE === "true";
 
 // https://astro.build/config
 export default defineConfig({
+  //    build: {
+  //   inlineStylesheets: "never"
+  // },
   site:
     ENV.VERCEL_ENV === "production"
       ? "https://preview.aptos.dev"
@@ -199,6 +202,7 @@ export default defineConfig({
   ],
   adapter: process.env.VERCEL
     ? vercel({
+        experimentalStaticHeaders: true,
         edgeMiddleware: false,
         imageService: true,
         imagesConfig: {
@@ -280,6 +284,34 @@ export default defineConfig({
     validateSecrets: true,
   },
   experimental: {
+    csp: {
+      directives: [
+        "default-src 'self'",
+        "img-src 'self' data:",
+        "font-src 'self' data:",
+        "worker-src 'self'",
+        "style-src-attr 'unsafe-inline'",
+      ],
+      styleDirective: {
+        resources: ["'self'"],
+        hashes: [
+          "sha256-YHT1jUHAddeNbVhTRyJuCJfbjmpROILZQOglULzQitY=",
+          "sha256-HbLGDDoR3fyPDUzbXpO+GR7loKgo/THIA5k7UUzvMe4=",
+          "sha256-UIdhXy1YXpRQIKhWtib5mCOI9NtmkoDso/QjV4p7Ulo=",
+        ],
+      },
+      scriptDirective: {
+        resources: ["'self'"],
+        hashes: [
+          "sha256-tS7/WqSwEFaHIQmDc9NqlnAXlhA4+mtXnP7s6/KeUO4=",
+          "sha256-VWo5Wp4aqSj6nSgMpeAp9cKieaoIfwFUAunAVugI5gA=",
+          "sha256-GkZBRnvSuhtx/cvzvukVkX2JJZW+DdPlVr7BX8Tefqo=",
+          "sha256-wX2yOADeV+NMngflD5uYi3vl50SHC4sfM1EmylVjlX4=",
+          "sha256-7eCV4jtsr4t4knb3c4FCRPeu7GGZeOUGE3XvWix0XOQ=",
+          "sha256-GkZBRnvSuhtx/cvzvukVkX2JJZW+DdPlVr7BX8Tefqo=",
+        ],
+      },
+    },
     fonts: [
       {
         provider: "local",

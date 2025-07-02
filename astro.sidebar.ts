@@ -587,26 +587,44 @@ export const sidebar = [
         collapsed: true,
         items: [
           "network/nodes/validator-node",
-          "network/nodes/validator-node/node-requirements",
-          "network/nodes/validator-node/operator",
-          "network/nodes/validator-node/connect-nodes",
-          "network/nodes/validator-node/connect-nodes/connect-to-aptos-network",
-          "network/nodes/validator-node/connect-nodes/delegation-pool-operations",
-          "network/nodes/validator-node/connect-nodes/staking-pool-operations",
-          "network/nodes/validator-node/connect-nodes/staking-pool-voter",
-          "network/nodes/validator-node/deploy-nodes",
-          "network/nodes/validator-node/deploy-nodes/using-aws",
-          "network/nodes/validator-node/deploy-nodes/using-azure",
-          "network/nodes/validator-node/deploy-nodes/using-docker",
-          "network/nodes/validator-node/deploy-nodes/using-gcp",
-          "network/nodes/validator-node/deploy-nodes/using-source-code",
-          "network/nodes/validator-node/modify-nodes",
-          "network/nodes/validator-node/modify-nodes/rotate-consensus-key",
-          "network/nodes/validator-node/modify-nodes/shutting-down-nodes",
-          "network/nodes/validator-node/modify-nodes/update-validator-node",
-          "network/nodes/validator-node/verify-nodes",
-          "network/nodes/validator-node/verify-nodes/leaderboard-metrics",
-          "network/nodes/validator-node/verify-nodes/node-liveness-criteria",
+          {
+            label: "Run Validators",
+            collapsed: true,
+            items: [
+              "network/nodes/validator-node/node-requirements",
+              "network/nodes/validator-node/operator",
+              "network/nodes/validator-node/connect-nodes",
+              "network/nodes/validator-node/connect-nodes/connect-to-aptos-network",
+              "network/nodes/validator-node/connect-nodes/delegation-pool-operations",
+              "network/nodes/validator-node/connect-nodes/staking-pool-operations",
+              "network/nodes/validator-node/connect-nodes/staking-pool-voter",
+              "network/nodes/validator-node/deploy-nodes",
+              "network/nodes/validator-node/deploy-nodes/using-aws",
+              "network/nodes/validator-node/deploy-nodes/using-azure",
+              "network/nodes/validator-node/deploy-nodes/using-docker",
+              "network/nodes/validator-node/deploy-nodes/using-gcp",
+              "network/nodes/validator-node/deploy-nodes/using-source-code",
+            ],
+          },
+          {
+            label: "Configure Validators",
+            collapsed: true,
+            items: [
+              "network/nodes/validator-node/modify-nodes",
+              "network/nodes/validator-node/modify-nodes/rotate-consensus-key",
+              "network/nodes/validator-node/modify-nodes/shutting-down-nodes",
+              "network/nodes/validator-node/modify-nodes/update-validator-node",
+            ],
+          },
+          {
+            label: "Monitor Validators",
+            collapsed: true,
+            items: [
+              "network/nodes/validator-node/verify-nodes",
+              "network/nodes/validator-node/verify-nodes/leaderboard-metrics",
+              "network/nodes/validator-node/verify-nodes/node-liveness-criteria",
+            ],
+          },
         ],
       },
 
@@ -616,33 +634,43 @@ export const sidebar = [
         collapsed: true,
         items: [
           "network/nodes/full-node",
-          "network/nodes/full-node/pfn-requirements",
-          "network/nodes/full-node/verify-pfn",
-          "network/nodes/full-node/deployments",
-          "network/nodes/full-node/deployments/using-docker",
-          "network/nodes/full-node/deployments/using-gcp",
-          "network/nodes/full-node/deployments/using-source-code",
-          "network/nodes/full-node/modify",
-          "network/nodes/full-node/modify/fullnode-network-connections",
-          "network/nodes/full-node/modify/network-identity-fullnode",
-          "network/nodes/full-node/modify/update-fullnode-with-new-releases",
-        ],
-      },
-
-      // Bootstrap Fullnode
-      {
-        label: "Bootstrap Fullnode",
-        collapsed: true,
-        items: [
-          "network/nodes/bootstrap-fullnode",
-          "network/nodes/bootstrap-fullnode/bootstrap-fullnode",
-          "network/nodes/bootstrap-fullnode/aptos-db-restore",
+          {
+            label: "Run Full Nodes",
+            collapsed: true,
+            items: [
+              "network/nodes/full-node/pfn-requirements",
+              "network/nodes/full-node/verify-pfn",
+              "network/nodes/full-node/deployments",
+              "network/nodes/full-node/deployments/using-docker",
+              "network/nodes/full-node/deployments/using-gcp",
+              "network/nodes/full-node/deployments/using-source-code",
+            ],
+          },
+          {
+            label: "Modify Full Nodes",
+            collapsed: true,
+            items: [
+              "network/nodes/full-node/modify",
+              "network/nodes/full-node/modify/fullnode-network-connections",
+              "network/nodes/full-node/modify/network-identity-fullnode",
+              "network/nodes/full-node/modify/update-fullnode-with-new-releases",
+            ],
+          },
+          {
+            label: "Bootstrap Full Nodes",
+            collapsed: true,
+            items: [
+              "network/nodes/bootstrap-fullnode",
+              "network/nodes/bootstrap-fullnode/bootstrap-fullnode",
+              "network/nodes/bootstrap-fullnode/aptos-db-restore",
+            ],
+          },
         ],
       },
 
       // Configure
       {
-        label: "Configure",
+        label: "Configure Nodes",
         collapsed: true,
         items: [
           "network/nodes/configure",
@@ -654,12 +682,13 @@ export const sidebar = [
           "network/nodes/configure/node-files-all-networks/node-files-devnet",
           "network/nodes/configure/node-files-all-networks/node-files-mainnet",
           "network/nodes/configure/node-files-all-networks/node-files-testnet",
+          "network/nodes/building-from-source",
         ],
       },
 
-      // Measure
+      // Monitor
       {
-        label: "Measure",
+        label: "Monitor Nodes",
         collapsed: true,
         items: [
           "network/nodes/measure",
@@ -669,10 +698,11 @@ export const sidebar = [
           "network/nodes/measure/node-inspection-service",
         ],
       },
-
-      "network/nodes/building-from-source",
-      "network/nodes/networks",
-      "network/releases",
+      {
+        label: "Network Information",
+        collapsed: true,
+        items: ["network/nodes/networks", "network/releases"],
+      },
     ],
   }),
 

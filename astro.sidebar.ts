@@ -740,6 +740,11 @@ export const sidebar = [
   // --- REFERENCE Tab (Focus: API/Tool Lookup) ---
   group("reference", {
     items: [
+      // AIPs
+      group("build.group.aips", {
+        collapsed: true,
+        items: ["build/aips", "build/aips/aip-88", "build/aips/aip-115"],
+      }),
       "build/indexer/indexer-api",
       "build/indexer/indexer-api/indexer-reference",
       { label: "REST API", link: "/build/apis/fullnode-rest-api" },

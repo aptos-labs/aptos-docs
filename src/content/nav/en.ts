@@ -20,6 +20,7 @@ const labels = {
   "build.group.indexer": "Indexer",
   "build.group.cli": "CLI",
   "build.group.createAptosDapp": "Create Aptos DApp",
+  "build.group.aips": "AIPs",
 
   // Smart Contracts & Move Sub-Groups
   "smartContracts.group.moveBook": "Move Book",

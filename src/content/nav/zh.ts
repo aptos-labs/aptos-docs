@@ -22,6 +22,7 @@ export default navDictionary({
   "build.group.apis": "API", // APIs
   "build.group.indexer": "索引器", // Indexer
   "build.group.cli": "命令行工具", // CLI
+  "build.group.aips": "AIP", // AIPs
   "build.group.createAptosDapp": "创建 Aptos 应用", // Create Aptos DApp
 
   // Smart Contracts & Move Sub-Groups

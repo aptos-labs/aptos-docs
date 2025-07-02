@@ -753,7 +753,8 @@ export const sidebar = [
   }),
 
   // --- CONTRIBUTE Tab ---
-  group("contribute", {
+  // TODO" For now hide the contribute section until we have more content and a better icon
+  /*group("contribute", {
     items: ["contribute/components/themed-image"],
-  }),
+  }),*/
 ] satisfies StarlightUserConfig["sidebar"];

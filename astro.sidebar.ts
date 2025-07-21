@@ -451,6 +451,8 @@ export const sidebar = [
         label: "Move Book",
         collapsed: true,
         items: [
+          "build/start-contracts/book",
+          "build/start-contracts/book/SUMMARY",
           "build/smart-contracts/book/modules-and-scripts",
           "build/smart-contracts/book/structs-and-resources",
           "build/smart-contracts/book/integers",

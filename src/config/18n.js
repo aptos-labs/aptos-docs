@@ -1,3 +1,4 @@
+// This file must stay as a JavaScript file
 export const SUPPORTED_LANGUAGES = [
   { code: "en", label: "English", default: true },
   { code: "zh", label: "简体中文" },

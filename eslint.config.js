@@ -26,6 +26,7 @@ const config = [
       "**/package-lock.json",
       "**/pnpm-lock.yaml",
       "**/public",
+      "**/scripts",
       "**/scripts/migration",
       "**/nextra-migration",
       "middleware.js", // Ignore the generated middleware file

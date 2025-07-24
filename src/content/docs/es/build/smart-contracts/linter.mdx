@@ -1,0 +1,249 @@
+---
+title: "Aptos Move Lint"
+---
+
+La herramienta "Aptos Move Lint" se ejecuta en un paquete Move para encontrar y advertir sobre problemas comunes en programas Move, ayudando a mejorar tu código Move.
+
+Puedes ejecutarla con el comando de la CLI de aptos: `aptos move lint`.
+
+Si encuentras algún problema, por favor envía [bugs y retroalimentación](https://github.com/aptos-labs/aptos-core/issues/new?title=%5Blinter%5D%20%3CDescriptive%20Title%3E\&body=%3CDetailed%20description%20of%20the%20issue%20or%20feature%20request%3E\&labels=move-linter\&projects=aptos-labs/16). También, estamos rastreando ideas y solicitudes de priorización para nuevas reglas de lint [aquí](https://github.com/aptos-labs/aptos-core/issues/15221), damos la bienvenida a tus contribuciones.
+
+## Verificaciones de Lint
+
+### `aborting_overflow_checks`
+
+Verifica patrones que parecen verificaciones de desbordamiento hechas en estilo C:
+
+```move
+// Verificación de desbordamiento
+if (x > x + y) {
+  abort 1;
+};
+
+// Verificación de subdesbordamiento
+if (x < x - y) {
+  abort 1;
+};
+```
+
+Este patrón en Move no tiene sentido, ya que o aborta inmediatamente o es siempre verdadero/falso.
+
+### `almost_swapped`
+
+Verifica patrones de expresión que parecen un intento fallido de intercambio y notifica al usuario. Estos patrones son probablemente código erróneo. Actualmente solo detecta patrones de acceso simples como asignaciones a una variable o un campo de un struct. Los ejemplos incluyen:
+
+- `a = b; b = a;` que puede ser correctamente intercambiado con `(a, b) = (b, a);`
+- `a.x = b.x; b.x = a.x;` que puede ser correctamente intercambiado con `(a.x, b.x) = (b.x, a.x);`
+
+### `assert_const`
+
+Verifica aserciones triviales, es decir, `assert!(false)` y `assert!(true)`. La última es equivalente a una no-operación, por lo que puede ser removida completamente, mientras que la primera puede ser reemplazada por un abort.
+
+### `avoid_copy_on_identity_comparison`
+
+Verifica comparaciones de identidad (`==` o `!=`) entre valores copiados de tipo `vector` o `struct` (es decir, tipos para los cuales la copia puede ser costosa). En su lugar sugiere usar comparación de identidad basada en referencias (es decir, usar `&x == &y` en lugar de `x == y`, cuando se cumplen las condiciones mencionadas anteriormente).
+
+[Esta recomendación](/build/smart-contracts/book/equality.mdx#avoid-extra-copies) también se da en el libro de Move. Debido a la inferencia automática de copia, puede no ser obvio cuándo se está haciendo una copia mientras se usa `==` o `!=` en valores con tipos que tienen la capacidad `copy`. Este lint identifica casos donde copias extra en vectores o structs podrían ser omitidas usando comparaciones de identidad basadas en referencias.
+
+### `blocks_in_conditions`
+
+Verifica el uso de bloques en condiciones (ej., en condiciones `if`, `match`, y `while`), que pueden hacer el código difícil de leer. Un ejemplo de patrón de código capturado por este lint es:
+
+```move
+if ({let x = foo(); !x}) { // usa un bloque en condición
+  bar();
+}
+```
+
+Tal código generalmente puede ser reescrito para elevar el bloque fuera y arriba de la condición, generalmente haciéndolo más legible.
+
+Es un patrón común de Move proporcionar especificaciones en línea en condiciones, especialmente invariantes de bucle, que requiere crear bloques en condiciones. Excluimos este patrón en la verificación de lint para continuar permitiendo este patrón de especificación.
+
+Ten en cuenta que un `assert!` se traduce a un abort condicional, por lo que bloques en la condición de `assert!` también son reportados por este lint.
+
+### `equal_operands_in_bin_op`
+
+Verifica operaciones binarias donde ambos operandos son los mismos, lo cual es probablemente un error. Por ejemplo `x % x`, `x ^ x`,  `x > x`, `x >= x`, `x == x`, `x | x`, `x & x`, `x / x`, y `x != x` son todos capturados por este lint. El lint sugiere reemplazar estos con un valor o expresión más apropiada, como `0`, `true`, o `false`.
+
+Este lint no captura casos donde los operandos son acceso a vector.
+
+### `find_unnecessary_casts`
+
+Verifica conversiones de tipo innecesarias donde la expresión fuente ya tiene el mismo tipo que el tipo objetivo. Estas conversiones son redundantes y pueden ser removidas para mejorar la legibilidad del código.
+
+Por ejemplo:
+
+```move
+let x: u64 = 42;
+let y = x as u64; // conversión innecesaria, x ya es u64
+```
+
+Lo anterior puede ser simplificado a:
+
+```move
+let x: u64 = 42;
+let y = x; // conversión removida
+```
+
+### `known_to_abort`
+
+Verifica expresiones que siempre abortarán en tiempo de ejecución debido a valores constantes conocidos que violan restricciones de tiempo de ejecución. Este lint ayuda a identificar código que fallará determinísticamente antes de que llegue a producción.
+
+Los siguientes casos son detectados:
+
+- **Desplazamientos de bits con cantidades excesivas de desplazamiento**: `x << n` o `x >> n` donde `n` es una constante que es mayor o igual al ancho de bits del tipo de `x`. Por ejemplo, `value << 64` cuando `value` es de tipo `u64` siempre abortará.
+- **División o módulo por cero**: Las operaciones `x / 0` o `x % 0` siempre abortarán en tiempo de ejecución.
+- **Conversión de tipo fuera de rango**: `constant as type` donde el valor `constant` está fuera del rango representable del `type` objetivo. Por ejemplo, `300 as u8` abortará ya que `u8` solo puede representar valores 0-255.
+
+### `needless_bool`
+
+Verifica patrones de la forma (donde `x` es cualquier expresión booleana arbitraria):
+
+- `if (x) true else false`, que puede ser reemplazado con solo `x`.
+- `if (x) false else true`, que puede ser reemplazado con solo `!x`.
+- `if (x) { return true } else { return false }`, que puede ser reemplazado con solo `return x`.
+- `if (x) { return false } else { return true }`, que puede ser reemplazado con solo `return !x`.
+- `if (x) true else true` o `if (x) false else false`, que deberían ser reescritos para remover la rama redundante.
+
+### `needless_deref_ref`
+
+Verifica patrones donde las referencias tomadas son inmediatamente desreferenciadas, y sugiere remover el par de operadores de desreferencia-referencia:
+
+- `*&x.f` puede ser simplificado a `x.f`
+- `*&mut x.f` puede ser simplificado a `x.f`
+- `*&mut x.f = 5;` puede ser simplificado a `x.f = 5;`
+
+### `needless_mutable_reference`
+
+Verifica referencias mutables o préstamos (actualmente: parámetros de referencia mutable, préstamo mutable de locales, `borrow_global_mut`) que no son usados mutablemente, y sugiere usar la referencia o préstamo inmutable en su lugar.
+
+Por ejemplo, en la función `foo` de abajo, `&mut` puede ser reemplazado por `&` porque la referencia no es usada mutablemente.
+
+```move
+fun foo(x: u64): u64 {
+  let y = &mut x;
+  *y
+}
+
+```
+
+### `needless_ref_deref`
+
+Verifica patrones donde se toman referencias inmutables para una desreferencia, y sugiere remover el par de operadores de referencia-desreferencia: `&*x` puede ser simplificado a `x`.
+
+### `needless_ref_in_field_access`
+
+Verifica patrones donde hay referencias innecesarias tomadas al acceder a un campo de un struct o un enum, y sugiere remover la referencia explícita tomada:
+
+- `(&s).f` puede ser simplificado a `s.f`
+- `(&mut s).f = 42;` puede ser simplificado a `s.f = 42;`
+
+### `nested_if`
+
+Verifica declaraciones if anidadas que pueden ser simplificadas usando el operador `&&`. Este lint identifica patrones donde una declaración if interna sin rama else está contenida dentro de una declaración if externa que tampoco tiene rama else.
+
+```move
+if (a) {
+    if (b) {
+        // algún código
+    }
+}
+```
+
+Este patrón puede ser simplificado a:
+
+```move
+if (a && b) {
+    // algún código
+}
+```
+
+La versión simplificada es más legible y evita anidamiento innecesario mientras mantiene el mismo comportamiento lógico.
+
+### `nonminimal_bool`
+
+Verifica expresiones booleanas que pueden ser simplificadas cuando un literal booleano (ya sea `true` o `false`) es parte de un operador booleano binario o unario. Ejemplos:
+
+- `x && true` es lógicamente equivalente a `x`
+- `x || true` es lógicamente equivalente a `true`
+- `x => false` es lógicamente equivalente a `!x`
+- `x <==> true` es lógicamente equivalente a `x`
+- `! true` es lógicamente equivalente a `false`
+
+NO considera efectos secundarios/cortocircuito en las simplificaciones recomendadas. Ejemplo:
+
+- `1/0 || true` es lógicamente equivalente a `true`, pero aplicar esta simplificación afecta la semántica del programa.
+
+### `self_assignment`
+
+Verifica patrones donde una variable o un campo de un struct es asignado a sí mismo y sugiere remover la asignación. Estas asignaciones no afectan el estado del programa. Los ejemplos incluyen:
+
+- `let x = x;`
+- `x = x;`
+- `a.x = a.x;`
+
+### `simpler_bool_expression`
+
+Verifica patrones booleanos que pueden ser simplificados a través de diferentes leyes del álgebra booleana. Los ejemplos incluyen:
+
+- Ley de absorción:
+  - `a && b || a` puede ser simplificado a `a`
+  - `a || a && b` puede ser simplificado a `a`
+- Idempotencia:
+  - `a && a` puede ser simplificado a `a`
+  - `a || a` puede ser simplificado a `a`
+- Contradicción
+  - `a && !a` puede ser simplificado a `false`
+  - `!a && a` puede ser simplificado a `false`
+- Tautología:
+  - `a || !a` puede ser simplificado a `true`
+  - `!a || a` puede ser simplificado a `true`
+- Ley distributiva:
+  - `(a && b) || (a && c)` puede ser simplificado a `a && (b || c)`
+  - `(a || b) && (a || c)` puede ser simplificado a `a || (b && c)`
+
+Donde `a`, `b` y `c` pueden ser expresiones simples o compuestas.
+
+### `simpler_numeric_expression`
+
+Verifica varios patrones donde una expresión numérica más simple puede ser usada en su lugar. En todos estos casos, el código ya debe verificar tipos, y `x` puede ser cualquier expresión numérica.
+
+- `x & 0`, `x * 0`, `0 & x`, `0 * x`, `0 << x`, `0 >> x`, `x % 1` pueden todos ser reemplazados con solo `0`.
+- `x | 0`, `x ^ 0`, `x >> 0`, `x << 0`, `x + 0`, `x - 0`, `x / 1`, `x * 1`, `0 | x`, `0 ^ x`, `0 + x`, `1 * x` pueden todos ser reemplazados con solo `x`.
+
+### `unnecessary_boolean_identity_comparison`
+
+Verifica comparaciones de identidad booleana de la forma:
+
+- `x == true`, `true == x`, que pueden ser reemplazadas con solo `x`.
+- `x == false`, `false == x`, que pueden ser reemplazadas con solo `!x`.
+
+En todos estos casos, `x` puede ser cualquier expresión booleana arbitraria.
+
+### `unnecessary_numerical_extreme_comparison`
+
+Verifica si hay comparaciones numéricas con valores extremos (es decir, valor mínimo y máximo representable por ese tipo numérico) que son innecesarias o pueden ser hechas más precisas y claras. Dependiendo de la comparación, se hacen varias recomendaciones.
+
+Considera las siguientes expresiones de ejemplo que son capturadas por el lint, y las correspondientes recomendaciones hechas (en todos estos casos, `x` es un marcador de posición para una expresión numérica de tipo `u8`, `u16`, `u32`, `u64`, `u128`, o `u256`, y `MAX` es un marcador de posición para el valor máximo representable para ese tipo numérico):
+
+- `x < 0`, `0 > x`, `x > MAX`, `MAX < x`, son siempre falsos, reescribe el código para remover esta comparación
+- `x >= 0`, `0 <= x`, `x <= MAX`, `MAX >= x`, son siempre verdaderos, reescribe el código para remover esta comparación
+- `x <= 0`, `0 >= x`, `x >= MAX`, `MAX <= x`, pueden todos ser simplificados para usar `==` en su lugar
+- `x > 0`, `0 < x`, `x < MAX`, `MAX > x`, pueden todos ser aclarados para usar `!=` en su lugar
+
+### `while_true`
+
+Verifica patrones `while (true) { .... }` y sugiere usar la construcción más explícita `loop { .... }` en su lugar.
+
+## Suprimiendo Advertencias de Lint
+
+Para suprimir una o más verificaciones de lint nombradas `check1`, `check2`, ... (y así sucesivamente), puedes agregar el atributo `#[lint::skip(check1, check2, ...)]` a una función o un módulo. El linter entonces no realizará las verificaciones nombradas `check1`, `check2`, ... (y así sucesivamente) para esa función o módulo.
+
+Por ejemplo, la función de abajo generalmente obtendría una advertencia del linter sobre un `needless_bool`, pero debido al atributo en la función, el linter no emite una advertencia.
+
+```move
+#[lint::skip(needless_bool)]
+fun violation(): bool {
+    if (foo()) true else false
+}
+```

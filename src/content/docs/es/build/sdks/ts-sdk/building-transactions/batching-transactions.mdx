@@ -1,0 +1,83 @@
+---
+title: "Transacciones en Lote"
+---
+
+El SDK de TypeScript tiene una forma integrada de enviar varias transacciones independientes juntas en un lote. Esto puede ser una herramienta conveniente cuando intentas ejecutar múltiples transacciones rápidamente desde la misma cuenta.
+
+Esto se puede hacer con `aptos.transaction.batch.forSingleAccount` como se puede ver en el ejemplo de abajo.
+
+## Ejemplo Completo de TypeScript
+
+```typescript filename="batch.ts"
+/**
+ * Este ejemplo muestra cómo usar el SDK de Aptos para enviar varias transacciones en un lote.
+ */
+
+import {
+    Account,
+    Aptos,
+    AptosConfig,
+    Network,
+    InputGenerateTransactionPayloadData,
+} from "@aptos-labs/ts-sdk";
+
+async function example() {
+    console.log("Este ejemplo enviará varias transacciones en un lote.");
+
+    // Configurar el cliente y cuentas de prueba
+    const config = new AptosConfig({ network: Network.DEVNET });
+    const aptos = new Aptos(config);
+
+    let sender = Account.generate();
+
+    console.log("=== Direcciones ===\n");
+    console.log(`La dirección del remitente es: ${sender.accountAddress}`);
+
+    console.log("\n=== Financiando al remitente ===\n");
+    await aptos.fundAccount({
+        accountAddress: sender.accountAddress,
+        amount: 100_000_000,
+    });  
+    console.log("¡Cuenta del remitente financiada!")
+
+    // Generar varios destinatarios para enviar APT
+    const recipients = [Account.generate(), Account.generate(), Account.generate()];
+
+    // Crear transacciones para enviar APT a cada cuenta
+    const transactions: InputGenerateTransactionPayloadData[] = [];
+
+    for (let i = 0; i < recipients.length; i += 1) {
+        const transaction: InputGenerateTransactionPayloadData = {
+            function: "0x1::aptos_account::transfer",
+            functionArguments: [recipients[i].accountAddress, 10],
+        };
+        transactions.push(transaction);
+    }
+
+    // Firmar y enviar todas las transacciones lo más rápido posible (lanza error si hay algún problema)
+    await aptos.transaction.batch.forSingleAccount({ sender: sender, data: transactions });
+};
+
+example();
+```
+
+## Verificar el Estado de las Transacciones en Lote
+
+Para saber cuándo las transacciones enviadas en un lote han sido ejecutadas en la cadena, debes escuchar eventos mientras el proceso se ejecuta.
+
+```typescript filename="transaction-worker-events.ts"
+export enum TransactionWorkerEventsEnum {
+  // Se dispara después de que una transacción se envía a la cadena
+  TransactionSent = "transactionSent",
+  // Se dispara si hay un error enviando la transacción a la cadena
+  TransactionSendFailed = "transactionSendFailed",
+  // Se dispara cuando una sola transacción se ha ejecutado exitosamente
+  TransactionExecuted = "transactionExecuted",
+  // Se dispara si una sola transacción falla en la ejecución
+  TransactionExecutionFailed = "transactionExecutionFailed",
+  // Se dispara cuando el worker ha terminado su trabajo / cuando la cola ha sido vaciada
+  ExecutionFinish = "executionFinish",
+}
+```
+
+Puedes encontrar un ejemplo de cómo escuchar estos eventos [aquí](https://github.com/aptos-labs/aptos-ts-sdk/blob/main/examples/typescript/batch_funds.ts#L108).

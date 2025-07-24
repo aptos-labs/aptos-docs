@@ -1,0 +1,26 @@
+---
+title: "Formato BCS"
+---
+
+Detrás de escena, el SDK de Aptos tiene dos formatos para los parámetros de transacción:
+
+1. **Simple** - Representa los parámetros de transacción usando tipos primitivos como cadenas, enteros, etc.
+2. **Serialización Canónica Binaria (BCS)** - Este es el formato que la cadena de Aptos reconoce, con tipos específicos (ej. en vez de un entero, usa tipos como `U64` o `U128`)
+
+Normalmente, el SDK de TypeScript convertirá automáticamente los tipos simples en los parámetros de función a BCS para comunicarse con la red. Sin embargo, para algunos contratos, tendrás que usar BCS directamente para especificar tipos más complejos.
+
+Usar BCS directamente puede tener una ligera ventaja de rendimiento ya que el SDK puede saltarse una llamada API para transformar el formato primitivo de TypeScript a formato BCS.
+
+Puedes usar directamente el formato BCS para construir transacciones especificando los tipos de argumento explícitamente así:
+
+```typescript filename="example.ts"
+const transaction = await aptos.transaction.build.simple({
+    sender: alice.accountAddress,
+    data: {
+      function: "0x1::aptos_account::transfer",
+      functionArguments: [AccountAddress.fromString("0x123"), new U64(1_000_000)],
+    },
+  });
+```
+
+Puedes aprender más sobre BCS explorando el [repositorio de BCS en GitHub](https://github.com/aptos-labs/bcs).

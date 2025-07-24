@@ -39,7 +39,7 @@ const enableApiReference = ENABLE_API_REFERENCE === "true";
 export default defineConfig({
   site:
     ENV.VERCEL_ENV === "production"
-      ? "https://preview.aptos.dev"
+      ? "https://aptos.dev"
       : ENV.VERCEL_URL
         ? `https://${ENV.VERCEL_URL}`
         : "http://localhost:4321",
@@ -99,8 +99,8 @@ export default defineConfig({
         { label: "GitHub", icon: "github", href: "https://github.com/aptos-labs" },
         { label: "X", icon: "x.com", href: "https://x.com/aptos" },
         { label: "Discord", icon: "discord", href: "https://discord.com/invite/aptosnetwork" },
-        { label: "Forum", icon: "discourse", href: "https://forum.aptosfoundation.org" },
-        { label: "Reddit", icon: "reddit", href: "https://www.reddit.com/r/Aptos" },
+        //{ label: "Forum", icon: "discourse", href: "https://forum.aptosfoundation.org" },
+        //{ label: "Reddit", icon: "reddit", href: "https://www.reddit.com/r/Aptos" },
         { label: "Telegram", icon: "telegram", href: "https://t.me/aptos" },
       ],
       components: {
@@ -185,6 +185,7 @@ export default defineConfig({
         ph: [
           "rocket-launch",
           "hard-drives",
+          "crane-tower",
           "brackets-curly",
           "file-text",
           "book-open",
@@ -212,7 +213,7 @@ export default defineConfig({
   vite: {
     plugins: [tailwindcss()],
     optimizeDeps: {
-      exclude: ["@rollup/browser"],
+      exclude: ["@rollup/browser", "@scalar/openapi-parser"],
     },
     resolve: {
       alias: {

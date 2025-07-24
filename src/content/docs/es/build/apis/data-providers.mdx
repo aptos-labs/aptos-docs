@@ -1,0 +1,90 @@
+---
+title: "Proveedores de Datos"
+---
+
+Si quieres acceder a datos de la blockchain de Aptos pero no los necesitas en tiempo real.
+Tenemos algunas opciones que te permitirán acceder a estos datos usando SQL o UIs para construir dashboards.
+Este tipo de datos a menudo se usa para análisis ya que permite agregaciones.
+
+## Revisión de endpoints de datos
+
+Acceder directamente al nodo completo te dará los datos más recientes (faltarán históricos a menos que sea un nodo completo de archivo) usando la [API REST](/build/apis.mdx#aptos-fullnode)
+
+La capa del indexador sobre esto proporcionará una [transmisión de transacciones GRPC](/build/indexer/txn-stream/aptos-hosted-txn-stream)
+
+Sobre esta transmisión de transacciones, hemos construido algunas tablas de lógica de producto que pueden ser consultadas a través de [GraphQL](/build/indexer/)
+
+Dado que la lógica para analizar transacciones es [pública](https://github.com/aptos-labs/aptos-indexer-processors-v2), algunos proveedores han implementado lógica de análisis similar para crear un subconjunto de tablas y las han hecho disponibles para consulta.
+
+## Tablas SQL
+
+El Indexador define varios procesadores que crean diferentes tablas de base de datos.
+
+### Tablas core
+
+Estas son analizadas directamente desde la respuesta de la API del nodo, una opción es dividirlas en las siguientes tablas:
+
+- Bloques - versión, altura del bloque, época, timestamp
+- Transacciones - versión, remitente, función de entrada, gas
+- Firmas - tipos de firma, firmante, dirección del pagador de tarifa
+- Eventos - tipo y datos para eventos
+
+Almacenamos datos como elementos de tabla, recursos o módulos
+
+- (write set) cambios - índice de cambio, tipo de cambio, dirección del recurso
+- Elementos de tabla - clave de tabla, manejador de tabla, clave (contenido y tipo), valor (contenido y tipo)
+- (move) recursos - dirección del recurso, tipo de recurso, datos
+- (move) módulos - bytecode para módulos desplegados
+
+## Proveedores de datos fuera de la cadena
+
+La mayoría de nuestros proveedores de datos solo proporcionan conjuntos de datos core.
+Un [subconjunto de proveedores](https://aptosfoundation.org/currents/aptos-on-chain-data-capabilities-with-dune-nansen-and-other-providers) se lista abajo
+
+### Conjunto de datos público de Google BigQuery
+
+Proporciona datos a través de [datos públicos de Google](https://console.cloud.google.com/marketplace/product/bigquery-public-data/crypto-aptos-mainnet-us)
+
+![bq\_sql](~/images/screenshots/bq_sql.png)
+
+También tenemos consultas de análisis de ejemplo [usando los recursos anteriores](https://github.com/aptos-labs/explorer/tree/main/analytics)
+
+### Dune
+
+Tenemos un dashboard aquí: https://dune.com/aptos/aptos-chain-metrics-overview
+
+### Allium
+
+Fuente de datos para muchos proveedores aguas abajo como defillama y rwa.xyz. Los datos sin procesar están disponibles: https://docs.allium.so/historical-data/supported-blockchains/move-ecosystem/aptos
+También tienen transferencias para stablecoins https://docs.allium.so/historical-data/stablecoins#stablecoin-metrics
+
+### Artemis
+
+Proporciona [métricas principales](https://app.artemis.xyz/asset/aptos) así como constructor de gráficos
+
+### Nansen
+
+Proporciona [métricas principales](https://app.nansen.ai/macro/blockchains?chain=aptos) con funcionalidad adicional con cuenta.
+
+### Sentio
+
+Tienen una guía aquí: https://docs.sentio.xyz/docs/aptos
+Los datos se encuentran en fuente de datos -> proyecto externo -> sentio/aptos-overview
+También proporcionan seguimiento de pila de transacciones
+
+### RWA.xyz
+
+Los datos se pueden encontrar aquí: https://app.rwa.xyz/networks/aptos
+Necesitarás hacer una cuenta para acceder a detalles de stablecoins.
+
+### Flipside
+
+Ha cambiado de proveedor de dashboard a más una herramienta de codificación de vibra. https://flipsidecrypto.xyz/home/
+
+## Otros proveedores
+
+También tenemos algunos socios que apuntan a casos de uso más empresariales
+
+- [Token Terminal](https://tokenterminal.com/resources/articles/aptos-data-partnership)
+- [The Tie](https://www.thetie.io/insights/news/introducing-aptos-ecosystem-dashboard-and-on-chain-data/)
+- [Elliptic](https://www.elliptic.co/media-center/elliptic-partners-with-aptos-foundation-as-a-data-integration-provider-to-offer-compliance-screening-and-risk-services-for-aptos-network)

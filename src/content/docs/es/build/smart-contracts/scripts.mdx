@@ -1,0 +1,42 @@
+---
+title: "Construyendo con Scripts de Move"
+---
+
+Los Scripts de Move son una forma de ejecutar múltiples funciones públicas en Aptos en una sola
+transacción. Esto es similar a desplegar un módulo auxiliar que haría tareas comunes,
+pero permite la flexibilidad de no tener que desplegar de antemano.
+
+Un ejemplo sería una función para transferir la mitad del balance de un usuario a otra
+cuenta. Esto es algo que es fácilmente programable, pero probablemente no
+necesitaría un módulo desplegado para ello:
+
+```move
+script {
+  use std::signer;
+  use aptos_framework::coin;
+  use aptos_framework::aptos_account;
+
+  fun transfer_half<Coin>(caller: &signer, receiver_address: address) {
+    // Recuperar el balance del llamador
+    let caller_address: address = signer::address_of(caller);
+    let balance: u64 = coin::balance<Coin>(caller_address);
+
+    // Enviar la mitad al receptor
+    let half = balance / 2;
+    aptos_account::transfer_coins<Coin>(caller, receiver_address, half);
+  }
+}
+```
+
+# Aprende más sobre usar Scripts de Move
+
+- [Escribir scripts](/build/smart-contracts/scripts/writing-scripts)
+- [Compilar scripts](/build/smart-contracts/scripts/compiling-scripts)
+- [Ejecutar scripts](/build/smart-contracts/scripts/running-scripts)
+
+# Más detalles
+
+Para más detalles sobre Scripts de Move, consulta:
+
+- [Libro de Move sobre Scripts](/build/smart-contracts/book/modules-and-scripts)
+- [Tutorial sobre Scripts](/build/smart-contracts/scripts/script-tutorial)

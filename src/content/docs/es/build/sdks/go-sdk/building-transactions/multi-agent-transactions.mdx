@@ -1,0 +1,95 @@
+---
+title: "SDK de Go - Transacciones Multi-Agente"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+Las transacciones multi-agente permiten que múltiples cuentas participen en la lógica de
+un contrato Move.
+
+Esto se puede usar para requerir que múltiples partes estén de acuerdo con una transacción antes de
+ejecutarla o para usar recursos de múltiples cuentas.
+
+## Escribir Transacciones Multi-Agente
+
+Crear y ejecutar una transacción multi-agente sigue un flujo similar al
+[flujo de transacción regular](/build/sdks/go-sdk/building-transactions), pero con varias
+diferencias notables.
+
+<Aside type="note">
+  En lugar de `client.BuildTransaction`, las transacciones multi-agente y patrocinadas
+  usan `client.BuildTransactionMultiAgent`.
+</Aside>
+
+<Steps>
+  1. Construir la transacción incluyendo aptos.AdditionalSigners con una lista de cada firmante adicional.
+
+     <Aside type="note">
+       Asegúrate de reemplazar el campo `Function` de abajo con tu función de entrada
+       que requiere que múltiples agentes firmen.
+     </Aside>
+
+     ```go filename="multi_agent.go"
+     transaction, err := client.BuildTransactionMultiAgent(alice.AccountAddress(), aptos.TransactionPayload{
+       Payload: &aptos.EntryFunction{
+         // Reemplaza módulo y función con tu función multi-agente
+         Module: aptos.ModuleId{
+           Address: aptos.AccountOne,
+           Name:    "aptos_account",
+         },
+         Function: "transfer",
+         ArgTypes: []aptos.TypeTag{},
+         Args: [][]byte{
+           accountBytes,
+           amountBytes,
+         },
+       },
+       AdditionalSigners: []aptos.AccountAddress{bob.AccountAddress()},
+     })
+     ```
+
+     {/* TODO Soporte para simulación de multiagente */}
+
+  2. Firmar una vez para cada firmante.
+
+     Combinarás estas firmas en el siguiente paso.
+
+     ```go filename="multi_agent.go"
+     aliceAuth, err := rawTxn.Sign(alice)
+     if err != nil {
+         panic("Failed to sign transaction as sender:" + err.Error())
+     }
+     bobAuth, err := rawTxn.Sign(bob)
+     if err != nil {
+         panic("Failed to sign transaction as second signer:" + err.Error())
+     }
+     ```
+
+  3. Combinar las firmas con la transacción raw para crear una transacción multi-agente firmada.
+
+     ```go filename="multi_agent.go"
+     signedTxn, ok := rawTxn.ToMultiAgentSignedTransaction(aliceAuth, []crypto.AccountAuthenticator{bobAuth})
+     ```
+
+  4. Enviar la transacción combinando todas las firmas de agentes a través del parámetro aptos.AdditionalSigners.
+
+     ```go filename="multi_agent.go"
+     submitResponse, err := client.SubmitTransaction(signedTxn)
+     ```
+
+  5. Finalmente, esperar a que la transacción se resuelva.
+
+     ```go filename="multi_agent.go"
+     txnResult, err := client.WaitForTransaction(submitResponse.Hash)
+     ```
+</Steps>
+
+{/* TODO: Agregar fragmento completo de código para Go */}
+
+## Errores Comunes
+
+`NUMBER_OF_SIGNER_ARGUMENTS_MISMATCH` - Esto sucede cuando intentas
+hacer firma multi-agente para una función que no requiere ese número de
+cuentas. Por ejemplo, si intentas usar múltiples firmas para una
+función `0x1::aptos_account::transfer` - solo espera una dirección, y por eso
+produce un error cuando se proporciona más de una.

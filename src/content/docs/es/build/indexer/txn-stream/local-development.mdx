@@ -1,0 +1,146 @@
+---
+title: "Ejecutando Localmente"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+{/* <IndexerBetaNotice /> */}
+
+<Aside type="note">
+  Esto ha sido probado en macOS 13 en ARM y Debian 11 en x86\_64.
+</Aside>
+
+Cuando construyes un procesador personalizado, podrías encontrar útil desarrollar contra una pila de desarrollo local. El Servicio de Stream de Transacciones es un sistema complicado de múltiples componentes. Para asistir con el desarrollo local, ofrecemos un script de Python que envuelve un archivo Docker compose para configurar todo el sistema.
+
+Este script configura lo siguiente:
+
+- Nodo único testnet con el stream GRPC del indexador habilitado.
+- Una instancia de Redis.
+- Servicio de Stream de Transacciones, incluyendo los siguientes componentes:
+  - [cache-worker](https://github.com/aptos-labs/aptos-core/tree/main/ecosystem/indexer-grpc/indexer-grpc-cache-worker): Extrae transacciones del nodo y las almacena en Redis.
+  - [file-store](https://github.com/aptos-labs/aptos-core/tree/main/ecosystem/indexer-grpc/indexer-grpc-file-store): Obtiene transacciones de Redis y las almacena en un sistema de archivos.
+  - [data-service](https://github.com/aptos-labs/aptos-core/tree/main/ecosystem/indexer-grpc/indexer-grpc-data-service): Sirve transacciones vía un stream GRPC a clientes downstream. Extrae de la caché o del file store dependiendo de la edad de la transacción.
+- Volúmenes compartidos y redes para conectarlo todo.
+
+Puedes aprender más sobre la arquitectura del Servicio de Stream de Transacciones [aquí](/build/indexer/txn-stream) y el archivo Docker compose [aquí](https://github.com/aptos-labs/aptos-core/blob/main/docker/compose/indexer-grpc/docker-compose.yaml).
+
+## Prerrequisitos
+
+Para usar el script de desarrollo local debes tener instalado lo siguiente:
+
+- Python 3.8+: [Guía de Instalación](https://docs.python-guide.org/starting/installation/#python-3-installation-guides).
+- Poetry: [Guía de Instalación](https://python-poetry.org/docs/#installation).
+- Docker: [Guía de Instalación](https://docs.docker.com/get-docker/).
+- Docker Compose v2: Esto debería estar instalado por defecto con instalaciones modernas de Docker, verifica con este comando:
+
+```shellscript filename="Terminal"
+docker-compose version --short
+```
+
+- grpcurl: [Guía de Instalación](https://github.com/fullstorydev/grpcurl#installation)
+- OpenSSL
+
+## Preparación
+
+Clona el repositorio aptos-core:
+
+```shellscript filename="Terminal"
+# HTTPS
+git clone https://github.com/aptos-labs/aptos-core.git
+
+# SSH
+git clone git@github.com:aptos-labs/aptos-core.git
+```
+
+Navega al directorio `testsuite`:
+
+```shellscript filename="Terminal"
+cd aptos-core
+cd testsuite
+```
+
+Instala las dependencias de Python:
+
+```shellscript filename="Terminal"
+poetry install
+```
+
+## Ejecutando el script
+
+### Iniciando el servicio
+
+```shellscript filename="Terminal"
+poetry run python indexer_grpc_local.py start
+```
+
+Sabrás que esto tuvo éxito si el comando sale, y ves lo siguiente:
+
+```shellscript filename="Terminal"
+Attempting to stream from indexer grpc for 10s
+Stream finished successfully
+```
+
+### Deteniendo el servicio
+
+```shellscript filename="Terminal"
+poetry run python indexer_grpc_local.py stop
+```
+
+### Limpiando los datos
+
+Cuando inicias, detienes e inicias el servicio nuevamente, reutilizará los mismos datos de localnet. Si deseas limpiar el localnet y comenzar desde cero puedes ejecutar el siguiente comando:
+
+```shellscript filename="Terminal"
+poetry run python indexer_grpc_local.py wipe
+```
+
+## Usando el servicio local
+
+Puedes conectarte al Servicio de Stream de Transacciones local, ej. desde un procesador personalizado, usando los siguientes valores de configuración:
+
+```shellscript filename="Terminal"
+indexer_grpc_data_service_address: 127.0.0.1:50052
+auth_token: dummy_token
+```
+
+Puedes conectarte al nodo en la siguiente dirección:
+
+```shellscript filename="Terminal"
+http://127.0.0.1:8080/v1
+```
+
+## Debugging
+
+### Uso en sistemas ARM
+
+Si tienes una máquina con un procesador ARM, por ejemplo, un M1/M2 Mac, el script debería detectar esto y establecer las variables de entorno apropiadas para asegurar que se usen las imágenes correctas. Si tienes problemas con esto, intenta establecer la siguiente variable de entorno:
+
+```shellscript filename="Terminal"
+export DOCKER_DEFAULT_PLATFORM=linux/amd64
+```
+
+Además, asegúrate de que las siguientes configuraciones sean correctas en Docker Desktop:
+
+- Habilitado: Preferencias > General > Usar el marco de virtualización
+- Habilitado: Preferencias > General > Usar Docker Compose V2
+- Deshabilitado: Características en desarrollo -> Usar Rosetta para emulación x86/amd64 en Apple Silicon
+
+Este script no ha sido probado en sistemas Linux ARM.
+
+### Redis falla para iniciar
+
+Intenta establecer la siguiente variable de entorno antes de ejecutar el script:
+
+```shellscript filename="Terminal"
+export REDIS_IMAGE_REPO=arm64v8/redis
+```
+
+### Cache worker está en bucle de crash o `Redis actualización de la última versión fallida.` en el log
+
+Limpia los datos:
+
+```shellscript filename="Terminal"
+poetry run python indexer_grpc_local.py wipe
+```
+
+Esto significa que se perderán los datos históricos.

@@ -1,0 +1,103 @@
+---
+title: "Depuración de Move"
+---
+
+Move fue diseñado para ser simple y seguro, pero como con todos los lenguajes de programación,
+los bugs aún pueden ocurrir. Esta guía te ayudará a depurar tu código Move y averiguar
+qué salió mal.
+
+No dudes en contribuir con herramientas e información adicional que pueda
+ayudar a otros en la comunidad.
+
+## Depuración con la CLI de Aptos
+
+### Simulación al enviar transacciones
+
+Puedes usar la CLI de Aptos para simular funciones de entrada antes de ejecutarlas.
+
+Normalmente, una transacción fallará en simulación si no funcionará en la cadena. Por ejemplo:
+
+```shellscript name="Terminal"
+aptos move run --function-id 0x1::aptos_account::transfer --args address:0x1 u64:1000000000000000000
+{
+  "Error": "Simulation failed with status: Move abort in 0x1::coin: EINSUFFICIENT_BALANCE(0x10006): Not enough coins to complete transaction"
+}
+```
+
+Lo mismo aplica para scripts de Move también. Por ejemplo:
+
+```shellscript name="Terminal"
+ aptos move run-script --script-path <ruta_script> ...
+```
+
+### Simulación Local
+
+Adicionalmente, para algunas situaciones, la simulación local puede dar información adicional y
+[imprimir cualquier declaración de depuración que tengas en tu código](https://aptos.dev/en/build/cli/working-with-move-contracts#printing-debugging-information).
+
+```shellscript name="Terminal"
+aptos move run --function-id 0x1::aptos_account::transferred --args address:0x1 u64:1000000000000000000 --local
+
+Simulando transacción localmente...
+{
+  "Result": {
+    "transaction_hash": "0x4115316915d409ba4106632c82d4b09220035ffdbd0b86bbe29a586d03d06318",
+    "gas_used": 3,
+    "gas_unit_price": 100,
+    "sender": "78077fe8db589e1a3407170cf8af3bd60a8c95737918c15dd6f49dcbecc7900a",
+    "success": false,
+    "version": 56634003,
+    "vm_status": "status FUNCTION_RESOLUTION_FAILURE of type Verification with message Function 0x1::aptos_account::transferred does not exist"
+  }
+}
+```
+
+### Perfilado y Trazado de Gas
+
+Agregar el perfil de gas añadirá la capacidad de rastrear cuántas unidades de gas se
+usan en la computación:
+
+```shellscript name="Terminal"
+aptos move run --function-id 0x1::aptos_account::transferred --args address:0x1 u64:1000000000000000000 --profile-gas
+
+Simulando transacción localmente usando el perfilador de gas...
+Gas report guardado en gas-profiling/txn-a90ca655-0x1-aptos_account-transferred.
+{
+  "Result": {
+    "transaction_hash": "0xa90ca6550dcdd7f514f4cdcdee7dc1fbee17082fcf68f3db3e5755a93b89bcfc",
+    "gas_used": 3,
+    "gas_unit_price": 100,
+    "sender": "78077fe8db589e1a3407170cf8af3bd60a8c95737918c15dd6f49dcbecc7900a",
+    "success": false,
+    "version": 56651618,
+    "vm_status": "status FUNCTION_RESOLUTION_FAILURE of type Verification with message Function 0x1::aptos_account::transferred does not exist"
+  }
+}
+```
+
+Y esto generará un reporte de gas visualizable en formato HTML:
+
+```shellscript name="Terminal"
+open  gas-profiling/txn-a90ca655-0x1-aptos_account-transferred/index.html
+```
+
+## Evaluando el rendimiento
+
+```shellscript name="Terminal"
+aptos move run --function-id 0x1::aptos_account::transfer --args address:0x1 u64:1 --benchmark
+
+Benchmarking transacción localmente...
+Tiempo de ejecución (caché de código fría): 22.144458ms
+Tiempo de ejecución (caché de código caliente): 669.5µs
+{
+  "Result": {
+    "transaction_hash": "0x7cdf37ff4d798b3ac3f1e860a40428853e381598a511b9291f2a49e5ff6262a0",
+    "gas_used": 11,
+    "gas_unit_price": 100,
+    "sender": "78077fe8db589e1a3407170cf8af3bd60a8c95737918c15dd6f49dcbecc7900a",
+    "success": true,
+    "version": 56679764,
+    "vm_status": "status EXECUTED of type Execution"
+  }
+}
+```

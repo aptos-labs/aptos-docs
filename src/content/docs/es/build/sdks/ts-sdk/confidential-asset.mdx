@@ -1,0 +1,498 @@
+---
+title: "Activo Confidencial (CA)"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Puedes usar la propiedad `confidentialCoin` del cliente `Aptos` para interactuar con `CA`
+
+### Inicialización
+
+Las operaciones en CA requieren generar pruebas zk (ZKPs), y dependiendo de tu entorno, necesitas definir un cálculo de `Range Proof`.
+
+Para la web, podrías usar `confidential-asset-wasm-bindings/confidential-asset-wasm-bindings`:
+
+Vamos a preparar la generación de range-proof y configurar el SDK para usarlo:
+
+```typescript
+import initWasm, {
+  batch_range_proof as batchRangeProof,
+  batch_verify_proof as batchVerifyProof,
+  range_proof as rangeProof,
+  verify_proof as verifyProof,
+} from '@aptos-labs/confidential-asset-wasm-bindings/range-proofs'
+import {
+  BatchRangeProofInputs,
+  BatchVerifyRangeProofInputs,
+  RangeProofInputs,
+  VerifyRangeProofInputs,
+} from '@lukachi/aptos-labs-ts-sdk'
+
+const RANGE_PROOF_WASM_URL =
+  'https://unpkg.com/@aptos-labs/confidential-asset-wasm-bindings@0.3.16/range-proofs/aptos_rp_wasm_bg.wasm'
+
+export async function genBatchRangeZKP(
+  opts: BatchRangeProofInputs,
+): Promise<{ proof: Uint8Array; commitments: Uint8Array[] }> {
+  await initWasm({ module_or_path: RANGE_PROOF_WASM_URL })
+
+  const proof = batchRangeProof(
+    new BigUint64Array(opts.v),
+    opts.rs,
+    opts.val_base,
+    opts.rand_base,
+    opts.num_bits,
+  )
+
+  return {
+    proof: proof.proof(),
+    commitments: proof.comms(),
+  }
+}
+
+export async function verifyBatchRangeZKP(
+  opts: BatchVerifyRangeProofInputs,
+): Promise<boolean> {
+  await initWasm({ module_or_path: RANGE_PROOF_WASM_URL })
+
+  return batchVerifyProof(
+    opts.proof,
+    opts.comm,
+    opts.val_base,
+    opts.rand_base,
+    opts.num_bits,
+  )
+}
+```
+
+Y luego, simplemente coloca esto al principio de tu aplicación:
+
+```typescript
+import { RangeProofExecutor } from '@aptos-labs/ts-sdk'
+
+RangeProofExecutor.setGenBatchRangeZKP(genBatchRangeZKP);
+RangeProofExecutor.setVerifyBatchRangeZKP(verifyBatchRangeZKP);
+RangeProofExecutor.setGenerateRangeZKP(generateRangeZKP);
+RangeProofExecutor.setVerifyRangeZKP(verifyRangeZKP);
+```
+
+Para aplicaciones nativas:
+
+Genera los bindings de `android` e `ios` [aquí](https://github.com/aptos-labs/confidential-asset-wasm-bindings) e intégralos en tu aplicación como prefieras.
+
+Y la última, pero no menos importante parte:
+
+Para obtener un valor "numérico" del balance confidencial, también necesitas resolver un Problema de Logaritmo Discreto (DLP).
+CA implementa el método Pollard's Kangaroo para resolver DLPs en la curva Ristretto.
+[Fuente](https://cr.yp.to/dlog/cuberoot-20120919.pdf)
+
+Así que también necesitamos inicializar una función de descifrado para eso:
+
+```typescript
+// Copyright © Aptos Foundation
+// SPDX-License-Identifier: Apache-2.0
+
+import initWasm, {
+  create_kangaroo,
+  WASMKangaroo,
+} from '@aptos-labs/confidential-asset-wasm-bindings/pollard-kangaroo'
+import {
+  ConfidentialAmount,
+  TwistedEd25519PrivateKey,
+  TwistedElGamal,
+  TwistedElGamalCiphertext,
+} from '@lukachi/aptos-labs-ts-sdk'
+import { bytesToNumberLE } from '@noble/curves/abstract/utils'
+
+const POLLARD_KANGAROO_WASM_URL =
+  'https://unpkg.com/@aptos-labs/confidential-asset-wasm-bindings@0.3.15/pollard-kangaroo/aptos_pollard_kangaroo_wasm_bg.wasm'
+
+export async function createKangaroo(secret_size: number) {
+  await initWasm({ module_or_path: POLLARD_KANGAROO_WASM_URL })
+
+  return create_kangaroo(secret_size)
+}
+
+export const preloadTables = async () => {
+  const kangaroo16 = await createKangaroo(16)
+  const kangaroo32 = await createKangaroo(32)
+  const kangaroo48 = await createKangaroo(48)
+
+  TwistedElGamal.setDecryptionFn(async pk => {
+    if (bytesToNumberLE(pk) === 0n) return 0n
+
+    let result = kangaroo16.solve_dlp(pk, 500n)
+
+    if (!result) {
+      result = kangaroo32.solve_dlp(pk, 1500n)
+    }
+
+    if (!result) {
+      result = kangaroo48.solve_dlp(pk)
+    }
+
+    if (!result) throw new TypeError('Decryption failed')
+
+    return result
+  })
+}
+```
+
+[//]: # "TODO: update to 16->32->48 usage"
+
+Ahora, coloca esto al principio de tu aplicación:
+
+```typescript
+const init = async () => {
+  await preloadTables();
+}
+```
+
+Para aplicaciones nativas, puedes generar los bindings de `android` e `ios` [aquí](https://github.com/aptos-labs/confidential-asset-wasm-bindings) para usar en lugar de WASM.
+
+***
+
+Ahora estamos listos para definir el cliente Aptos:
+
+```typescript
+const APTOS_NETWORK: Network = NetworkToNetworkName[Network.TESTNET];
+const config = new AptosConfig({ network: APTOS_NETWORK });
+export const aptos = new Aptos(config);
+```
+
+### Crear Clave de Descifrado (DK)
+
+Para interactuar con el activo confidencial, primero crea un [par de claves único](/build/sdks/ts-sdk/confidential-asset.mdx#confidential-asset-store)
+
+Genera uno nuevo:
+
+```typescript
+const dk = TwistedEd25519PrivateKey.generate();
+```
+
+O importa uno existente:
+
+```typescript
+const dk = new TwistedEd25519PrivateKey("0x...");
+```
+
+También puedes derivarlo usando tu `firma` (para propósitos de prueba, no usar en producción):
+
+```typescript
+const user = Account.generate()
+
+const signature = user.sign(TwistedEd25519PrivateKey.decryptionKeyDerivationMessage);
+
+const dk = TwistedEd25519PrivateKey.fromSignature(signature);
+```
+
+O usa [`pepper`](/build/guides/aptos-keyless/how-keyless-works) de [Cuenta Keyless](/build/guides/aptos-keyless)
+
+### Registro
+
+Luego, necesitas [registrar](/build/sdks/ts-sdk/confidential-asset.mdx#register) la clave de encriptación generada anteriormente (EK) en los contratos:
+
+```typescript
+export const registerConfidentialBalance = async (
+  account: Account,
+  publicKeyHex: string,
+  tokenAddress = "0x...",
+) => {
+  const txBody = await aptos.confidentialAsset.deposit({
+    sender: account.accountAddress,
+    to: AccountAddress.from(to),
+    tokenAddress: tokenAddress,
+    amount: amount,
+  })
+
+  const txResponse = await aptos.signAndSubmitTransaction({ signer: user, transaction: userRegisterCBTxBody });
+
+  const txReceipt = await aptos.waitForTransaction({ transactionHash: txResponse.hash });
+
+  return txReceipt;
+}
+```
+
+Verifica si un usuario ya ha registrado un token específico:
+
+```typescript
+export const getIsAccountRegisteredWithToken = async (
+  account: Account,
+  tokenAddress = "0x...",
+) => {
+  const isRegistered = await aptos.confidentialAsset.hasUserRegistered({
+    accountAddress: account.accountAddress,
+    tokenAddress: tokenAddress,
+  })
+
+  return isRegistered
+}
+```
+
+### Depósito
+
+Supongamos que ya tienes tokens.
+
+Esto depositará sus tokens en tu balance confidencial
+
+```typescript
+export const depositConfidentialBalance = async (
+  account: Account,
+  amount: bigint,
+  to: string,
+  tokenAddress = "0x...",
+) => {
+  const txBody = await aptos.confidentialAsset.deposit({
+    sender: account.accountAddress,
+    to: AccountAddress.from(to),
+    tokenAddress: tokenAddress,
+    amount: amount,
+  })
+  // Firmar y enviar transacción
+}
+```
+
+### Obtener saldo del usuario
+
+Vamos a verificar el saldo del usuario después del depósito.
+
+```typescript
+const userConfidentialBalance = await aptos.confidentialAsset.getBalance({ accountAddress: user.accountAddress, tokenAddress: TOKEN_ADDRESS });
+```
+
+Este método te devuelve el `pending` y `actual` balance confidencial del usuario, y para [descifrar](/build/sdks/ts-sdk/confidential-asset.mdx#encryption-and-decryption)los, puedes usar la clase `ConfidentialAmount`
+
+```typescript
+export const getConfidentialBalances = async (
+  account: Account,
+  decryptionKeyHex: string,
+  tokenAddress = "0x...",
+) => {
+  const decryptionKey = new TwistedEd25519PrivateKey(decryptionKeyHex)
+
+  const { pending, actual } = await aptos.confidentialAsset.getBalance({
+    accountAddress: account.accountAddress,
+    tokenAddress,
+  })
+
+  try {
+    const [confidentialAmountPending, confidentialAmountActual] =
+      await Promise.all([
+        ConfidentialAmount.fromEncrypted(pending, decryptionKey),
+        ConfidentialAmount.fromEncrypted(actual, decryptionKey),
+      ])
+
+    return {
+      pending: confidentialAmountPending,
+      actual: confidentialAmountActual,
+    }
+  } catch (error) {
+    return {
+      pending: ConfidentialAmount.fromAmount(0n),
+      actual: ConfidentialAmount.fromAmount(0n),
+    }
+  }
+}
+```
+
+### Rollover
+
+Después de depositar en el balance confidencial del usuario, puedes ver que tiene, por ejemplo, `5n` en su `pending` balance y `0n` en su `actual` balance.
+
+El usuario no puede operar con el balance `pending`, por lo que podrías [rollover](/build/sdks/ts-sdk/confidential-asset.mdx#rollover-pending-balance)lo a un `actual` balance.
+
+Y para hacerlo, usa `aptos.confidentialAsset.rolloverPendingBalance`.
+
+<Aside type="caution">
+  Nota importante, que el balance `actual` del usuario necesita ser [normalizado](/build/sdks/ts-sdk/confidential-asset.mdx#normalize) antes de la operación de `rollover`.
+</Aside>
+
+Para cubrir [normalización](#normalization) & `rollover` simultáneamente, podrías usar `aptos.confidentialAsset.safeRolloverPendingCB`.
+
+```typescript
+export const safelyRolloverConfidentialBalance = async (
+  account: Account,
+  decryptionKeyHex: string,
+  tokenAddress = "0x...",
+) => {
+  const rolloverTxPayloads = await aptos.confidentialAsset.safeRolloverPendingCB({
+    sender: account.accountAddress,
+    tokenAddress,
+    decryptionKey: new TwistedEd25519PrivateKey(decryptionKeyHex),
+  })
+
+  // Firmar y enviar transacciones por lotes
+}
+```
+
+***
+
+### Normalización
+
+Normalmente no necesitas llamar explícitamente a [normalización](/build/sdks/ts-sdk/confidential-asset.mdx#normalize)
+
+En caso de que quieras:
+
+<Aside type="caution">
+  Primero, verifica si un balance confidencial está normalizado, porque intentar normalizar un balance ya normalizado te devolverá una excepción
+</Aside>
+
+```typescript
+export const getIsBalanceNormalized = async (
+  account: Account,
+  tokenAddress = "0x...",
+) => {
+  const isNormalized = await aptos.confidentialAsset.isUserBalanceNormalized({
+    accountAddress: account.accountAddress,
+    tokenAddress: tokenAddress,
+  })
+
+  return isNormalized
+}
+```
+
+Obtén tu balance y finalmente llama al método `aptos.confidentialAsset.normalizeUserBalance`:
+
+```typescript
+export const normalizeConfidentialBalance = async (
+  account: Account,
+  decryptionKeyHex: string,
+  encryptedPendingBalance: TwistedElGamalCiphertext[],
+  amount: bigint,
+  tokenAddress = "0x...",
+) => {
+  const normalizeTx = await aptos.confidentialAsset.normalizeUserBalance({
+    tokenAddress,
+    decryptionKey: new TwistedEd25519PrivateKey(decryptionKeyHex),
+    unnormalizedEncryptedBalance: encryptedPendingBalance,
+    balanceAmount: amount,
+
+    sender: account.accountAddress,
+  })
+
+  // Firmar y enviar transacción
+}
+```
+
+### Retiro
+
+Para [retirar](/build/sdks/ts-sdk/confidential-asset.mdx#withdraw) tus activos del balance confidencial:
+
+```typescript
+export const withdrawConfidentialBalance = async (
+  account: Account,
+  receiver: string,
+  decryptionKeyHex: string,
+  withdrawAmount: bigint,
+  encryptedActualBalance: TwistedElGamalCiphertext[],
+  tokenAddress = '0x...',
+) => {
+  const withdrawTx = await aptos.confidentialAsset.withdraw({
+    sender: account.accountAddress,
+    to: receiver,
+    tokenAddress,
+    decryptionKey: decryptionKey,
+    encryptedActualBalance,
+    amountToWithdraw: withdrawAmount,
+  })
+
+  // Firmar y enviar transacción
+}
+```
+
+### Transferencia
+
+Para [transferir](/build/sdks/ts-sdk/confidential-asset.mdx#confidential-transfer) necesitas conocer la clave de encriptación y la dirección de cuenta de `aptos`
+
+Supongamos que tienes la dirección de cuenta del destinatario, vamos a obtener su clave de encriptación.
+
+```typescript
+export const getEkByAddr = async (addrHex: string, tokenAddress: string) => {
+  return aptos.confidentialAsset.getEncryptionByAddr({
+    accountAddress: AccountAddress.from(addrHex),
+    tokenAddress,
+  })
+}
+```
+
+Ahora, envuélvelo todo junto y transfiere:
+
+```typescript
+export const transferConfidentialCoin = async (
+  account: Account,
+  decryptionKeyHex: string,
+  encryptedActualBalance: TwistedElGamalCiphertext[],
+  amountToTransfer: bigint,
+  recipientAddressHex: string,
+  auditorsEncryptionKeyHexList: string[],
+  tokenAddress = "0x...",
+) => {
+  const decryptionKey = new TwistedEd25519PrivateKey(decryptionKeyHex)
+
+  const recipientEncryptionKeyHex = await getEkByAddr(
+    recipientAddressHex,
+    tokenAddress,
+  )
+
+  const transferTx = await aptos.confidentialAsset.transferCoin({
+    senderDecryptionKey: decryptionKey,
+    recipientEncryptionKey: new TwistedEd25519PublicKey(
+      recipientEncryptionKeyHex,
+    ),
+    encryptedActualBalance: encryptedActualBalance,
+    amountToTransfer,
+    sender: account.accountAddress,
+    tokenAddress,
+    recipientAddress: recipientAddressHex,
+    auditorEncryptionKeys: auditorsEncryptionKeyHexList.map(
+      hex => new TwistedEd25519PublicKey(hex),
+    ),
+  })
+
+  // Firmar y enviar transacción
+}
+```
+
+### Rotación de Clave
+
+Para hacer [rotación de clave](/build/sdks/ts-sdk/confidential-asset.mdx#rotate-encryption-key), necesitas crear una nueva clave de descifrado y usar `aptos.confidentialAsset.rotateCBKey`
+
+<Aside type="caution">
+  Pero ten en cuenta, que la `rotación de clave` verifica que el balance `pending` sea igual a 0.
+  En ese caso, podríamos hacer un `rollover` con la opción `freeze`, para mover los activos del balance `pending` al `actual` y bloquear nuestro balance.
+
+  ```typescript
+  aptos.confidentialAsset.safeRolloverPendingCB({
+    ...,
+    withFreezeBalance: false,
+  })
+  ```
+</Aside>
+
+Ahora, crea una nueva clave de descifrado y rota nuestra clave de encriptación:
+
+```typescript
+const balances = await getBalances(user.accountAddress.toString(), myDecryptionKey, TOKEN_ADDRESS);
+
+const NEW_DECRYPTION_KEY = TwistedEd25519PrivateKey.generate();
+const keyRotationAndUnfreezeTxResponse = await ConfidentialCoin.safeRotateCBKey(aptos, user, {
+  sender: user.accountAddress,
+
+  currDecryptionKey: currentDecryptionKey,
+  newDecryptionKey: NEW_DECRYPTION_KEY,
+
+  currEncryptedBalance: balances.actual.amountEncrypted,
+
+  withUnfreezeBalance: true, // si quieres desbloquear el balance después
+  tokenAddress: TOKEN_ADDRESS,
+});
+
+// guardar: nueva clave de descifrado
+console.log(NEW_DECRYPTION_KEY.toString());
+
+// verificar nuevos balances
+const newBalance = await getBalances(user.accountAddress.toString(), NEW_DECRYPTION_KEY, TOKEN_ADDRESS);
+
+console.log(newBalance.pending.amount);
+console.log(newBalance.actual.amount);
+```

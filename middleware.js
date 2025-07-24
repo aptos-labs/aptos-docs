@@ -228,13 +228,17 @@ const SUPPORTED_LANGUAGES = [
     default: true,
   },
   {
+    code: "es",
+    label: "Español",
+  },
+  {
     code: "zh",
     label: "简体中文",
   },
-  {
-    code: "ja",
-    label: "日本語",
-  },
+  //{
+  //  code: "ja",
+  //  label: "日本語",
+  //},
 ];
 const LANGUAGE_CODES = SUPPORTED_LANGUAGES.map((lang) => lang.code);
 const DEFAULT_LANG = "en";

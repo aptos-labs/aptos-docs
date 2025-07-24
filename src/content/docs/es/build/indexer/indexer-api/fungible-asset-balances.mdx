@@ -1,0 +1,46 @@
+---
+title: "Obtener Balances de Activos Fungibles"
+---
+
+import { GraphQLEditor } from '~/components/react/GraphQLEditor';
+
+import { Aside } from '@astrojs/starlight/components';
+
+`GetFungibleAssetBalances` recupera los balances actuales para varios tipos de activos fungibles asociados con una dirección de cuenta especificada. Esto es crucial para plataformas que requieren información en tiempo real sobre las tenencias de activos de la cuenta. Esto es compatible hacia atrás con la búsqueda de `Coin`s.
+
+<Aside type="note">
+  ¡Pruébalo tú mismo! Ajusta las variables de consulta de abajo en el editor para obtener datos para diferentes direcciones.
+</Aside>
+
+<GraphQLEditor
+  query={`query GetFungibleAssetBalances(
+  $address: String
+  $offset: Int
+  $token_standard: String
+) {
+  current_fungible_asset_balances(
+    where: {
+      owner_address: { _eq: $address }
+      token_standard: { _eq: $token_standard }
+    }
+    offset: $offset
+    limit: 100
+    order_by: { amount: desc }
+  ) {
+    asset_type
+    amount
+    __typename
+  }
+}`}
+  variables={`{
+  "address": "0x0000000000000000000000000000000000000000000000000000000000000001",
+  "token_standard": "v1",
+  "offset": 0
+}`}
+/>
+
+#### Variables:
+
+- `$address`: **String** - La dirección de cuenta para la cual obtener balances de activos fungibles. Ejemplo: `"0x0000000000000000000000000000000000000000000000000000000000000001"`.
+- `token_standard`: **String** - El estándar de token para el activo: `"v1"` es el estándar de token anterior y `"v2"` es el nuevo estándar.
+- `$offset`: **Integer** (Opcional) - El offset de paginación para comenzar a obtener balances desde. Por defecto: `0`.

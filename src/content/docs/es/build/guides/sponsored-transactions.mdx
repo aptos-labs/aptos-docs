@@ -1,0 +1,80 @@
+---
+title: "Transacciones Patrocinadas"
+---
+
+Como se describe en [AIP-39](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-39.md), las transacciones patrocinadas permiten que una cuenta pague las tarifas asociadas con la ejecución de una transacción para otra cuenta, esencialmente configurando un pagador de tarifas. Las transacciones patrocinadas simplifican el proceso de incorporación de usuarios a las aplicaciones al permitir que la aplicación cubra todas las tarifas asociadas para interactuar con la blockchain de Aptos. Aquí hay dos ejemplos:
+
+- [MerkleTrade](https://merkle.trade/) ofrece trading de bajo costo a quienes tienen wallets de Ethereum creando una wallet de Aptos para los usuarios y cubriendo todas las tarifas de transacción para que el usuario no necesite adquirir tokens de utilidad para Aptos.
+- Aplicaciones de participación comunitaria como [Graffio](https://medium.com/aptoslabs/graffio-web3s-overnight-sensation-81a6cf18b626) ofrecieron cubrir las tarifas de transacción para cuentas de custodia para apoyar la aplicación de dibujo colaborativo para quienes no tienen wallets.
+
+## Resumen del Proceso
+
+El proceso para enviar una transacción patrocinada es el siguiente:
+
+- El remitente de la transacción determina la operación, como se define por un `RawTransaction`.
+- El remitente genera una estructura `RawTransactionWithData::MultiAgentWithFeePayer`
+  - Antes del lanzamiento del framework 1.8, esto debe contener la dirección del pagador de tarifas.
+  - Después del lanzamiento del framework 1.8, esto puede establecerse opcionalmente en `0x0`.
+- (Opcionalmente) el remitente agrega firmas de otros firmantes.
+- El remitente puede reenviar la transacción firmada al pagador de tarifas para que la firme y la reenvíe a la blockchain.
+- Al ejecutar la transacción, el número de secuencia de la cuenta remitente se incrementa, todas las tarifas de gas se deducen del pagador de tarifas, y todos los reembolsos se envían al pagador de tarifas.
+
+Alternativamente, si el pagador de tarifas conoce la operación y todos los firmantes involucrados, el pagador de tarifas podría generar y firmar la transacción y enviarla de vuelta a los otros firmantes para que la firmen.
+
+## Detalles Técnicos
+
+En Aptos, una transacción patrocinada reutiliza la misma SignedTransaction que cualquier otra transacción de usuario:
+
+```rust
+pub struct SignedTransaction {
+    /// La transacción raw
+    raw_txn: RawTransaction,
+
+    /// Clave pública y firma para autenticar
+    authenticator: TransactionAuthenticator,
+}
+```
+
+La diferencia está en el `TransactionAuthenticator`, que almacena la autorización del pagador de tarifas de la transacción para extraer tarifas de utilidad de su cuenta:
+
+```rust
+pub enum TransactionAuthenticator {
+...
+    /// Transacción multi-agente opcional con un pagador de tarifas.
+    FeePayer {
+        sender: AccountAuthenticator,
+        secondary_signer_addresses: Vec<AccountAddress>,
+        secondary_signers: Vec<AccountAuthenticator>,
+        fee_payer_address: AccountAddress,
+        fee_payer_signer: AccountAuthenticator,
+    },
+...
+}
+```
+
+Para preparar una transacción patrocinada para una cuenta, la cuenta debe existir primero on-chain. Este es un requisito que se está eliminando con el lanzamiento del framework 1.8.
+
+A partir del lanzamiento del framework 1.8, una cuenta no necesita existir on-chain. Sin embargo, la primera transacción para una cuenta requiere suficiente gas para no solo ejecutar la transacción y cubrir los costos asociados con la creación de la cuenta, incluso si una cuenta ya existe. Las mejoras futuras al modelo de cuenta pretenden eliminar este requisito.
+
+Durante la firma de la transacción, todas las partes firman lo siguiente:
+
+```rust
+pub enum RawTransactionWithData {
+...
+    MultiAgentWithFeePayer {
+        raw_txn: RawTransaction,
+        secondary_signer_addresses: Vec<AccountAddress>,
+        fee_payer_address: AccountAddress,
+    },
+}
+```
+
+Antes del lanzamiento del framework 1.8, todos los firmantes debían conocer la dirección real del pagador de tarifas antes de firmar. A partir del lanzamiento del framework 1.8, los firmantes pueden establecer opcionalmente la dirección en `0x0` y solo el pagador de tarifas debe firmar con su dirección establecida.
+
+## Soporte de SDK
+
+Estas son demostraciones de transacciones patrocinadas:
+
+- La SDK de TypeScript tiene [varios ejemplos](https://github.com/aptos-labs/aptos-ts-sdk/tree/main/examples/typescript-esm/sponsored_transactions)
+- La SDK de Python tiene un ejemplo en [fee\_payer\_transfer\_coin.py](https://github.com/aptos-labs/aptos-python-sdk/blob/main/examples/fee_payer_transfer_coin.py).
+- La SDK de Rust tiene un caso de prueba en [las pruebas de API](https://github.com/aptos-labs/aptos-core/blob/0a62e54e13bc5da604ceaf39efed5c012a292078/api/src/tests/transactions_test.rs#L255).

@@ -1,0 +1,200 @@
+---
+title: "Maps"
+---
+
+Hay múltiples implementaciones diferentes de mapas clave-valor dentro del framework, adaptadas para diferentes casos de uso.
+Revisaremos sus diferencias y similitudes, y cómo elegir cuál usar.
+
+## Consideraciones de rendimiento y costo de gas de la Blockchain de Aptos
+
+El estado de la Blockchain de Aptos se mantiene en **slots de almacenamiento**.
+Además, el rendimiento de las transacciones y el costo de gas está fuertemente influenciado por cómo estos **slots** son leídos y escritos.
+Desglosando los costos de gas aún más, tenemos:
+
+1. Tarifa de almacenamiento, que están determinadas por el número y tamaño de los **slots** (es decir, escribir a un nuevo **slot** incurre en la tarifa de almacenamiento más alta, mientras que eliminar un **slot** existente proporciona el mayor reembolso.)
+2. Costos de gas de IO —generalmente mucho más bajos— que dependen del número y tamaño de los recursos leídos y modificados.
+3. Los costos de gas de ejecución se basan en la computación necesaria, y generalmente están en una escala similar a los costos de gas de io.
+
+Las transacciones que modifican el mismo **slot** no pueden ejecutarse concurrentemente (con algunas excepciones, como agregadores y recursos como parte del mismo grupo de recursos), ya que entran en conflicto entre sí.
+
+Una analogía útil es pensar en cada **slot** como un archivo en un disco,
+entonces el rendimiento del contrato inteligente se correlacionaría bien con un programa que
+opera en archivos de la misma manera.
+
+## Diferentes implementaciones de Map
+
+| Implementación    | Límite de Tamaño                          | Estructura de Almacenamiento                                                                                                                               | Características Clave                                                                                                                                                                                                  |
+| ----------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `OrderedMap`      | Limitado (cabe en un solo **slot**) | Almacenado completamente dentro del recurso que lo contiene                                                                                            | Soporta acceso ordenado (frente/atrás, anterior/siguiente), implementado como vector ordenado, pero las operaciones son efectivamente O(log(n)) debido a optimizaciones internas                                                         |
+| `Table`           | Ilimitado                           | Cada (clave, valor) almacenado en un **slot** separado                                                                                                 | Soporta operaciones básicas, como `add`, `remove`, `contains`, pero **no iteración**, y **no puede ser destruido**; útil para claves/valores grandes/ilimitados y donde se necesita alta concurrencia                  |
+| `TableWithLength` | Ilimitado                           | igual que `Table`                                                                                                                                 | Variante de `Table`, con seguimiento adicional de longitud, que agrega métodos `length`, `empty`, y `destroy_empty`; Agregar o remover elementos **no puede** hacerse concurrentemente, modificar elementos existentes sí puede. |
+| `BigOrderedMap`   | Ilimitado                           | Combina múltiples claves en un solo **slot**, inicialmente almacenado dentro del recurso que lo contiene, y crece dinámicamente a múltiples **slots** | Implementado como árbol B+; **oportunísticamente concurrente** para claves no adyacentes; soporta acceso ordenado (frente/atrás, anterior/siguiente); capacidades de nodo configurables para balancear almacenamiento y rendimiento              |
+
+Nota:
+
+- `SimpleMap` ha sido deprecado, y reemplazado con `OrderedMap`.
+- `SmartTable` ha sido deprecado, y reemplazado con `BigOrderedMap`.
+
+#### Comparación de rendimiento
+
+Medimos el rendimiento a pequeña escala, midiendo microsegundos tomados para un solo par de operaciones `insert` + `remove`, en un mapa de tamaño variado.
+
+| num elementos | OrderedMap | BigOrderedMap max\_degree>10000 | BigOrderedMap max\_degree=16 |
+| ------------ | ---------- | --------------------------------- | --------------------------- |
+| 10           | 65         | 123                               | 123                         |
+| 100          | 85         | 146                               | 455                         |
+| 1000         | 105        | 168                               | 567                         |
+| 10000        | 142        | 210                               | 656                         |
+
+Puedes ver que la sobrecarga de `BigOrderedMap` comparada con `OrderedMap`, cuando ambos están en el **slot** único, es alrededor de 1.5-2x.
+Entonces generalmente puedes usar `BigOrdredMap` cuando se desconoce si los datos serán demasiado grandes para ser almacenados en un solo **slot**.
+
+## Operaciones comunes de mapas:
+
+La mayoría de los mapas anteriores soportan el mismo conjunto de funciones (para firmas reales y restricciones, consulta las implementaciones correspondientes):
+
+#### Creando Mapas
+
+- `new<K, V>(): Self`: crea un mapa vacío
+
+#### Destruyendo Mapas
+
+- `destroy_empty<K, V>(self: Self<K, V>)`: Destruye un mapa vacío. (**no** soportado por `Table`)
+- `destroy<K, V>(self: Self<K, V>, dk: |K|, dv: |V|)`: Destruye un mapa con funciones dadas que destruyen los elementos correspondientes. (**no** soportado por `Table` y `TableWithLength`)
+
+#### Gestionando Entradas
+
+- `add<K, V>(self: &mut Self<K, V>, key: K, value: V)`: Agrega un par clave-valor al mapa.
+- `remove<K, V>(self: &mut Self<K, V>, key: K): V`: Remueve y retorna el valor asociado con una clave.
+- `upsert<K, V>(self: &mut Self<K, V>, key: K, value: V): Option<V>`: Inserta o actualiza un par clave-valor.
+- `add_all<K, V>(self: &mut Self<K, V>, keys: vector<K>, values: vector<V>)`: Agrega múltiples pares clave-valor al mapa. (**no** soportado por `Table` y `TableWithLength`)
+
+#### Recuperando Entradas
+
+- `contains<K, V>(self: &Self<K, V>, key: &K): bool`: Verifica si la clave existe en el mapa.
+- `borrow<K, V>(self: &Self<K, V>, key: &K): &V`: Retorna una referencia inmutable al valor asociado con una clave.
+- `borrow_mut<K: drop, V>(self: &mut Self<K, V>, key: K): &mut V`: Retorna una referencia mutable al valor asociado con una clave.
+  (`BigOrderedMap` solo permite `borrow_mut` cuando el tipo de valor tiene un tamaño constante estático, debido a que la modificación puede romper sus invariantes de otra manera. Usa la combinación `remove()` y `add()` en su lugar)
+
+#### Funciones dependientes del orden
+
+Este conjunto de funciones solo está implementado por `OrderedMap` y `BigOrderedMap`.
+
+- `borrow_front<K, V>(self: &Self<K, V>): (&K, &V)`
+- `borrow_back<K, V>(self: &Self<K, V>): (&K, &V)`
+- `pop_front<K, V>(self: &mut Self<K, V>): (K, V)`
+- `pop_back<K, V>(self: &mut Self<K, V>): (K, V)`
+- `prev_key<K: copy, V>(self: &Self<K, V>, key: &K): Option<K>`
+- `next_key<K: copy, V>(self: &Self<K, V>, key: &K): Option<K>`
+
+#### Funciones de Utilidad
+
+- `length<K, V>(self: &Self<K, V>): u64`: Retorna el número de entradas en el mapa. (no soportado por `Table`)
+
+#### Funciones de Traversal
+
+Este conjunto de funciones no está implementado por `Table` y `TableWithLength`.
+
+- `keys<K: copy, V>(self: &Self<K, V>): vector<K>`
+
+- `values<K, V: copy>(self: &Self<K, V>): vector<V>`
+
+- `to_vec_pair<K, V>(self: Self<K, V>): (vector<K>, vector<V>)`
+
+- `for_each_ref<K, V>(self: &Self<K, V>, f: |&K, &V|)`
+
+- `to_ordered_map<K, V>(self: &BigOrderedMap<K, V>): OrderedMap<K, V>`: Convierte `BigOrderedMap` en `OrderedMap`
+
+## Ejemplo de Uso
+
+### Creando y Usando un OrderedMap
+
+```move filename="map_usage.move"
+module 0x42::map_usage {
+    use aptos_framework::ordered_map;
+
+    public entry fun main() {
+        let map = ordered_map::new<u64, u64>();
+        map.add(1, 100);
+        map.add(2, 200);
+
+        let length = map.length();
+        assert!(length == 2, 0);
+
+        let value1 = map.borrow(&1);
+        assert!(*value1 == 100, 0);
+
+        let value2 = map.borrow(&2);
+        assert!(*value2 == 200, 0);
+
+        let removed_value = map.remove(&1);
+        assert!(removed_value == 100, 0);
+
+        map.destroy_empty();
+    }
+}
+```
+
+## Detalles adicionales para `BigOrderedMap`
+
+Su implementación actual es árbol B+, que se elige porque es el más adecuado para el diseño de almacenamiento onchain - donde la mayoría del costo viene de cargar y escribir a elementos de almacenamiento, y no hay lectura/escritura parcial de ellos.
+
+La implementación tiene pocas características que la hacen muy versátil y útil en una amplia gama de casos de uso:
+
+- Cuando tiene pocos elementos, almacena todos ellos dentro del recurso que lo contiene, proporcionando rendimiento comparable al propio OrderedMap, mientras luego crece dinámicamente a múltiples recursos a medida que se agregan más y más elementos
+- Reduce la cantidad de conflictos: las modificaciones a una parte diferente del espacio de claves generalmente se pueden hacer concurrentemente, y proporciona perillas para ajustar entre concurrencia y tamaño
+- Todas las operaciones tienen límites superiores garantizados en el rendimiento (cuánto tiempo toman, así como cuánto gas de ejecución e io consumen), permitiendo un uso seguro en una variedad de casos de uso.
+  - Una advertencia, es la tarifa de almacenamiento reembolsable. Por defecto, la operación que requiere que el mapa crezca a más recursos necesita pagar la tarifa de almacenamiento por ello. La implementación aquí tiene una opción para prepagar slots de almacenamiento, y reutilizarlos a medida que se agregan/remueven elementos, permitiendo que las aplicaciones logren cargos de gas totalmente predecibles, si es necesario.
+- Si la clave/valor está dentro de los límites de tamaño con los que el mapa fue configurado, las inserciones nunca fallarán impredeciblemente, ya que el mapa entiende y gestiona internamente los límites máximos de tamaño de **slot**.
+
+### Estructura de `BigOrderedMap`
+
+`BigOrderedMap` se representa como un árbol, donde los nodos internos dividen el "espacio de claves" en rangos separados para cada uno de sus hijos, y los nodos hoja contienen los pares clave-valor reales.
+Internamente tiene `inner_max_degree` representando el mayor número de hijos que un nodo interno puede tener, y `leaf_max_degree` representando el mayor número de pares clave-valor que un nodo hoja puede tener.
+
+#### Creando `BigOrderedMap`
+
+Debido a que su diseño afecta qué se puede insertar y el rendimiento, hay algunas formas de crearlo y configurarlo:
+
+- `new<K, V>(): Self<K, V>`: Retorna un nuevo `BigOrderedMap` con la configuración por defecto. Solo se permite llamar con tipos de tamaño constante. Para tipos de tamaño variable, se necesita otro constructor, para seleccionar explícitamente selección de grado automática o específica.
+- `new_with_type_size_hints<K, V>(avg_key_bytes: u64, max_key_bytes: u64, avg_value_bytes: u64, max_value_bytes: u64): Self<K, V>`: Retorna un mapa que está configurado para funcionar mejor cuando las claves y valores son de tamaños `avg` dados, y garantiza que se ajusten elementos hasta los tamaños `max` dados.
+- `new_with_config<K, V>(inner_max_degree: u16, leaf_max_degree: u16, reuse_slots: bool): Self<K, V>`: Retorna un nuevo `BigOrderedMap` con las constantes de grado máximo proporcionadas (el máximo # de hijos que un nodo puede tener, tanto interno como hoja). Si se pasa 0 para cualquiera, entonces se computa dinámicamente basado en el tamaño de la primera clave y valor, y se aceptarán claves y valores hasta 100x veces más grandes.
+  Si se pasa no-0, los tamaños de todos los elementos deben respetar (o sus adiciones serán rechazadas):
+
+  - `key_size * inner_max_degree <= MAX_NODE_BYTES`
+  - `entry_size * leaf_max_degree <= MAX_NODE_BYTES`
+
+  `reuse_slots` significa que remover elementos del mapa no libera los slots de almacenamiento y retorna el reembolso.
+  Junto con `allocate_spare_slots`, permite preasignar slots y tener inserciones con costos de gas predecibles.
+  (de lo contrario, las inserciones que requieren que el mapa agregue nuevos nodos, cuestan significativamente más, comparado con el resto)
+
+## Código Fuente
+
+- [ordered\_map.move](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/datastructures/ordered_map.move)
+- [table.move](https://github.com/aptos-labs/aptos-core/blob/6f5872b567075fe3615e1363d35f89dc5eb45b0d/aptos-move/framework/aptos-stdlib/sources/table.move)
+- [table\_with\_length.move](https://github.com/aptos-labs/aptos-core/blob/6f5872b567075fe3615e1363d35f89dc5eb45b0d/aptos-move/framework/aptos-stdlib/sources/table.move)
+- [big\_ordered\_map.move](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/datastructures/big_ordered_map.move)
+
+## Detalles adicionales de (deprecado) SmartTable
+
+La Smart Table es una implementación de tabla hash escalable basada en hashing lineal.
+Esta estructura de datos tiene como objetivo optimizar el almacenamiento y el rendimiento utilizando hashing lineal, que divide un bucket a la vez en lugar de duplicar el número de buckets, evitando así costos de gas inesperados.
+Desafortunadamente, su implementación hace que cada adición/eliminación sea un conflicto, haciendo que tales transacciones sean completamente secuenciales.
+La Smart Table usa la función SipHash para computaciones de hash más rápidas mientras tolera colisiones. Desafortunadamente, esto también significa que las colisiones son predecibles, lo que significa que si los usuarios finales pueden controlar las claves que se insertan, puede tener un gran número de colisiones en un solo bucket.
+
+### Estructura de SmartTable
+
+El struct `SmartTable` está diseñado para manejar datos dinámicos eficientemente:
+
+- `buckets`: Una tabla con una longitud que almacena vectores de entradas.
+- `num_buckets`: El número actual de buckets.
+- `level`: El número de bits que representan `num_buckets`.
+- `size`: El número total de elementos en la tabla.
+- `split_load_threshold`: El umbral de carga porcentual que activa las divisiones de bucket.
+- `target_bucket_size`: El tamaño objetivo de cada bucket, que no se aplica estrictamente.
+
+### Ejemplos de uso de SmartTable
+
+- [Smart Table de Move Spiders](https://movespiders.com/courses/modules/datastructures/lessonId/7)
+- [Consultando Smart Table vía APIs de FullNode de Move Spiders](https://movespiders.com/courses/modules/datastructures/lessonId/9)
+- [Consultando Smart Table vía Función View de Move Spiders](https://movespiders.com/courses/modules/datastructures/lessonId/10)

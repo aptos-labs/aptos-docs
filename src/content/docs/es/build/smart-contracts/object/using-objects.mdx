@@ -1,0 +1,284 @@
+---
+title: "Usando Objetos"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Una vez que hayas creado tu Objeto, puedes usarlo en funciones de entrada de Move, estructuras, transferirlo, y modificarlo usando cualquier ref que generaste durante la [construcción del Objeto](/build/smart-contracts/object/creating-objects). A continuación se muestran varias formas de utilizar, gestionar e interactuar con Objetos en Move.
+
+## Usando un Objeto como argumento de función de entrada
+
+Los Objetos en funciones de move tienen el tipo `Object<T>`, donde `T` es el tipo de un recurso propiedad del Objeto. Todos los Objetos tienen un tipo `ObjectCore` que contiene los metadatos del Objeto.
+
+Para usar un parámetro de Objeto, los usuarios pueden pasar la dirección del Objeto o una referencia al Objeto. En tiempo de ejecución el contrato verificará que el Objeto existe en esa dirección, y tiene un recurso de tipo T antes de ejecutar la función.
+
+```move filename="Example.move"
+module my_addr::object_playground {
+  use aptos_framework::object::{Object, ObjectCore};
+
+  struct MyAwesomeStruct has key {}
+
+  /// Esto fallará si el objeto no tiene MyAwesomeStruct almacenado
+  entry fun do_something(object: Object<MyAwesomeStruct>) {
+    // ...
+  }
+
+  /// Todos los Objetos tienen ObjectCore, así que esto solo fallará si la
+  /// dirección no es un objeto
+  entry fun do_something_to_object_core(object: Object<ObjectCore>) {
+    // ...
+  }
+}
+```
+
+Para permitir que el usuario de la función de entrada especifique el tipo de recurso, puedes mantener el tipo genérico `T` así:
+
+```move filename="Example.move"
+module my_addr::object_playground {
+  use aptos_framework::object::Object;
+
+  /// Esto fallará si el objeto no tiene el genérico `T` almacenado
+  entry fun do_something<T>(object: Object<T>) {
+    // ...
+  }
+}
+```
+
+### Tipos de Objeto
+
+Puedes referirte a un Objeto por cualquier tipo de recurso que sea propiedad del Objeto. Por conveniencia, puedes convertir una dirección a un Objeto, o convertir un Objeto entre tipos siempre que los recursos estén disponibles usando `address_to_object` y `convert` así:
+
+```move filename="Example.move"
+module my_addr::object_playground {
+  use aptos_framework::object::{Self, Object, ObjectCore};
+
+  struct MyAwesomeStruct has key {}
+
+  fun convert_type(object: Object<ObjectCore>): Object<MyAwesomeStruct> {
+    object::convert<ObjectCore, MyAwesomeStruct>(object)
+  }
+
+  fun address_to_type(object_address: address): Object<MyAwesomeStruct> {
+    object::address_to_object<MyAwesomeStruct>(object_address)
+  }
+}
+```
+
+<Aside type="note">
+  Los Objetos pueden ser propiedad de cualquier dirección, incluyendo Objetos, Cuentas, y Cuentas de recurso. Esto permite composabilidad entre objetos y relaciones complejas entre ellos.
+</Aside>
+
+## Usando un Objeto como tipo de un campo en estructura
+
+Los Objetos pueden ayudar a representar tipos complicados usándolos en estructuras. Por ejemplo,
+
+```move filename="Example.move"
+module my_addr::object_playground {
+  use aptos_framework::object::{Self, Object};
+  use aptos_framework::fungible_asset::Metadata;
+  use aptos_framework::primary_fungible_store;
+  use std::signer;
+  use std::option;
+  use std::string::utf8;
+
+  struct MyStruct has key {
+    fungible_asset_object: Object<Metadata>
+  }
+
+  entry fun create_fungible_asset(creator: &signer) {
+    let fa_obj_constructor_ref = &object::create_sticky_object(@my_addr);
+    let fa_obj_signer = object::generate_signer(fa_obj_constructor_ref);
+    let fa_obj_addr = signer::address_of(&fa_obj_signer);
+    primary_fungible_store::create_primary_store_enabled_fungible_asset(
+        fa_obj_constructor_ref, 
+        option::none(),
+        utf8(b"Asset name"),
+        utf8(b"Asset symbol"),
+        2,
+        utf8(b"Icon uri"),
+        utf8(b"Project uri")
+    );
+    move_to(creator, MyStruct {
+      fungible_asset_object: object::address_to_object(fa_obj_addr)
+    });
+  }
+}
+```
+
+## Buscando quién posee un Objeto
+
+Al escribir contratos para Objetos, a menudo es importante verificar la propiedad antes de modificar el Objeto. Debido a que un Objeto puede ser propiedad de cualquier dirección, verificar la propiedad necesita tener en cuenta si el propietario es una Cuenta, una Cuenta de recurso o otro Objeto como así:
+
+```move filename="Example.move"
+module my_addr::object_playground {
+  use std::signer;
+  use aptos_framework::object::{Self, Object};
+
+  // No autorizado!
+  const E_NOT_AUTHORIZED: u64 = 1;
+
+  fun check_owner_is_caller<T: key>(caller: &signer, object: Object<T>) {
+    assert!(
+      object::is_owner(object, signer::address_of(caller)),
+      E_NOT_AUTHORIZED
+    );
+  }
+
+  fun check_is_owner_of_object<T: key>(addr: address, object: Object<T>) {
+    assert!(object::owner(object) == addr, E_NOT_AUTHORIZED);
+  }
+
+  fun check_is_nested_owner_of_object<T: key, U: key>(
+    caller: &signer,
+    outside_object: Object<T>,
+    inside_object: Object<U>
+  ) {
+    // Propiedad esperada
+    // Cuenta del llamador -> Objeto externo -> objeto interno
+
+    // Verificar que el objeto externo posee el objeto interno
+    let outside_address = object::object_address(&outside_object);
+    assert!(object::owns(inside_object, outside_address), E_NOT_AUTHORIZED);
+
+    // Verificar que el llamador posee el objeto externo
+    let caller_address = signer::address_of(caller);
+    assert!(object::owns(outside_object, caller_address), E_NOT_AUTHORIZED);
+
+    // Verificar que el llamador posee el objeto interno (a través del objeto externo)
+    // Esto puede omitir las primeras dos llamadas (y aún más anidadas)
+    assert!(object::owns(inside_object, caller_address), E_NOT_AUTHORIZED);
+  }
+}
+```
+
+## Transferencia de propiedad
+
+Por defecto, todos los Objetos son transferibles. Algunos Objetos están configurados para deshabilitar `ungated_transfer`s cuando se construyen (ver Constructing Objects para más detalles).
+
+Puedes transferir un Objeto así:
+
+```move filename="Example.move"
+module my_addr::object_playground {
+  use aptos_framework::object::{Self, Object};
+
+  /// Transferir a otra dirección, esto puede ser un objeto o cuenta
+  fun transfer<T: key>(owner: &signer, object: Object<T>, destination: address) {
+    object::transfer(owner, object, destination);
+  }
+
+  /// Transferir a otro objeto
+  fun transfer_to_object<T: key, U: key>(
+    owner: &signer,
+    object: Object<T>,
+    destination: Object<U>
+  ) {
+    object::transfer_to_object(owner, object, destination);
+  }
+}
+```
+
+<Aside type="caution">
+  Si `ungated_transfer` está **deshabilitado**, entonces todas las transferencias necesitan usar una permiso especial dado por un `TransferRef` o `LinearTransferRef`.
+</Aside>
+
+## Eventos
+
+Por defecto, los Objetos solo tienen un `TransferEvent` que se activa cada vez que el Objeto se transfiere.
+
+Los Objetos pueden ser extendidos para tener eventos adicionales.
+
+Puedes usar las siguientes funciones para crear manejadores de eventos para Objetos:
+
+```move filename="example.move"
+module 0x1::object {
+  /// Crear un GUID para el objeto, típicamente usado para eventos
+  public fun create_guid(object: &signer): guid::GUID {}
+
+  /// Generar un nuevo manejador de eventos.
+  public fun new_event_handle<T: drop + store>(object: &signer): event::EventHandle<T> {}
+}
+```
+
+Los manejadores de eventos generados pueden ser transferidos al Objeto siempre que tengas el `SignerRef` del Objeto. Por ejemplo:
+
+```move filename="example.move"
+module 0x42::example {
+  use aptos_framework::event;
+  use aptos_framework::fungible_asset::Metadata;
+  use aptos_framework::object::{Self, Object};
+
+  #[resource_group_member(group = aptos_framework::object::ObjectGroup)]  
+  struct LiquidityPoolResourceGroup has key {
+    pool: LiquidityPool,
+    event_store: LiquidityPoolEventStore,
+  }
+
+  struct LiquidityPool has store {
+    metadata_token_a: Object<Metadata>,
+    metadata_token_b: Object<Metadata>,
+    reserves_a: u128,
+    reserves_b: u128,
+  }
+
+  struct LiquidityPoolEventStore has store {
+    create_events: event::EventHandle<CreateLiquidityPoolEvent>,
+  }
+
+  #[event]
+  struct CreateLiquidityPoolEvent has store, drop {
+    token_a: address,
+    token_b: address,
+    reserves_a: u128,
+    reserves_b: u128,
+  }
+
+  public entry fun create_liquidity_pool_with_events(
+        account_signer: &signer,
+        metadata_token_a: Object<Metadata>,
+        metadata_token_b: Object<Metadata>,
+        reserves_a: u128,
+        reserves_b: u128
+  ) {
+    let liquidity_pool_constructor_ref = &object::create_object_from_account(
+      account_signer
+    );
+    let liquidity_pool_signer = &object::generate_signer(
+      liquidity_pool_constructor_ref
+    );
+    let event_handle = object::new_event_handle<CreateLiquidityPoolEvent>(
+      liquidity_pool_signer
+    );
+
+    event::emit_event<CreateLiquidityPoolEvent>(&mut event_handle, CreateLiquidityPoolEvent {
+      token_a: object::object_address(&metadata_token_a),
+      token_b: object::object_address(&metadata_token_b),
+      reserves_a,
+      reserves_b,
+    });
+
+    move_to(liquidity_pool_signer, LiquidityPoolResourceGroup {
+      pool: LiquidityPool {
+        metadata_token_a,
+        metadata_token_b,
+        reserves_a,
+        reserves_b
+      },
+      event_store: LiquidityPoolEventStore {
+        create_events: event_handle
+      }
+    });
+  }
+}
+```
+
+## Modificación de Objetos después de la creación
+
+En general, los Objetos solo pueden ser modificados con `Refs` generados durante la construcción. Ver [Creating and Configuring Objects](/build/smart-contracts/object/creating-objects) para más detalles sobre qué `Refs` están disponibles, cómo generarlos, y cómo usarlos. Esto es cómo agregar recursos adicionales a un Objeto, eliminarlo, y extenderlo.
+
+## Ejemplos de contratos
+
+Aquí están tres fragmentos de código reales que usan Objetos:
+
+- [Digital Asset Marketplace Example](https://github.com/aptos-labs/aptos-core/tree/main/aptos-move/move-examples/marketplace)
+- [Digital Assets Examples](https://github.com/aptos-labs/aptos-core/tree/main/aptos-move/move-examples/token_objects)
+- [Fungible Asset Examples](https://github.com/aptos-labs/aptos-core/tree/main/aptos-move/move-examples/fungible_asset)

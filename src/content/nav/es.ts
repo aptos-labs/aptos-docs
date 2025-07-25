@@ -10,6 +10,7 @@ const labels = {
   nodes: "Nodos",
   concepts: "Conceptos",
   reference: "Referencia",
+  ai: "IA y LLMs",
   contribute: "Contribuir",
 
   // Sub-Grupos de Build

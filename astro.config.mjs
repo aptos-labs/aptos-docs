@@ -193,6 +193,7 @@ export default defineConfig({
           "lightning",
           "terminal",
           "globe-simple",
+          "robot",
         ],
       },
     }),

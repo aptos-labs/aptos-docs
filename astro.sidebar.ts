@@ -9,6 +9,7 @@ export const sidebarGroupIcons: Record<string, string> = {
   guides: "ph:rocket-launch",
   sdksAndTools: "ph:crane-tower",
   concepts: "ph:file-text",
+  ai: "ph:robot",
   reference: "ph:book-open",
 };
 
@@ -429,13 +430,7 @@ export const sidebar = [
         collapsed: true,
         items: ["build/create-aptos-dapp", "build/create-aptos-dapp/faq"],
       },
-
       "network/faucet",
-      {
-        label: "LLMs Text",
-        link: "llms-txt",
-        badge: { text: "NEW", variant: "tip" },
-      },
     ],
   }),
 
@@ -779,6 +774,23 @@ export const sidebar = [
       "build/indexer/indexer-api/indexer-reference",
       "build/apis/fullnode-rest-api",
       "network/glossary",
+    ],
+  }),
+
+  group("ai", {
+    items: [
+      {
+        label: "Aptos MCP",
+        link: "build/ai/aptos-mcp",
+        badge: { text: "NEW", variant: "tip" },
+      },
+      "build/ai/aptos-mcp/claude",
+      "build/ai/aptos-mcp/cursor",
+      {
+        label: "LLMs Txt",
+        link: "llms-txt",
+        badge: { text: "NEW", variant: "tip" },
+      },
     ],
   }),
 

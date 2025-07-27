@@ -146,9 +146,9 @@ This tutorial will guide you through creating and submitting your first transact
            // Initialize the Aptos client
            const config = new AptosConfig({ network: Network.DEVNET });
            const aptos = new Aptos(config);
-           
+
            console.log("Connected to Aptos devnet");
-           
+
            // More code will go here
          }
 
@@ -257,9 +257,9 @@ This tutorial will guide you through creating and submitting your first transact
              # Initialize the clients
              rest_client = RestClient(NODE_URL)
              faucet_client = FaucetClient(FAUCET_URL, rest_client)
-             
+
              print("Connected to Aptos devnet")
-             
+
              # More code will go here
 
          if __name__ == "__main__":
@@ -592,7 +592,7 @@ This tutorial will guide you through creating and submitting your first transact
          ```
 
          <Aside type="note">
-           The transaction hash is a unique identifier for your transaction, similar to a tracking number for a package. When submitting a transaction, the Aptos blockchain performs several validation checks, including verifying the transaction signature and ensuring the sequence number hasn't been used before (preventing replay attacks). You can use the hash to check the status of your transaction on the [Aptos Explorer](https://explorer.aptoslabs.com/) or via the [REST API](/build/apis/fullnode-rest-api-reference).
+           The transaction hash is a unique identifier for your transaction, similar to a tracking number for a package. When submitting a transaction, the Aptos blockchain performs several validation checks, including verifying the transaction signature and ensuring the sequence number hasn't been used before (preventing replay attacks). You can use the hash to check the status of your transaction on the [Aptos Explorer](https://explorer.aptoslabs.com/) or via the [REST API](/build/apis/fullnode-rest-api).
          </Aside>
     </Steps>
   </TabItem>
@@ -644,7 +644,7 @@ This tutorial will guide you through creating and submitting your first transact
          ```
 
          <Aside type="note">
-           The transaction hash is a unique identifier for your transaction, similar to a tracking number for a package. When submitting a transaction, the Aptos blockchain performs several validation checks, including verifying the transaction signature and ensuring the sequence number hasn't been used before (preventing replay attacks). You can use the hash to check the status of your transaction on the [Aptos Explorer](https://explorer.aptoslabs.com/) or via the [REST API](/build/apis/fullnode-rest-api-reference).
+           The transaction hash is a unique identifier for your transaction, similar to a tracking number for a package. When submitting a transaction, the Aptos blockchain performs several validation checks, including verifying the transaction signature and ensuring the sequence number hasn't been used before (preventing replay attacks). You can use the hash to check the status of your transaction on the [Aptos Explorer](https://explorer.aptoslabs.com/) or via the [REST API](/build/apis/fullnode-rest-api).
          </Aside>
     </Steps>
   </TabItem>
@@ -1024,8 +1024,8 @@ The complete code samples below combine all the snippets we've covered in this t
       console.log("Transaction signed successfully");
       // Use type assertion to bypass TypeScript's type checking
       const authAny = senderAuthenticator as any;
-      const signatureStr = typeof authAny.signature === 'string' 
-        ? authAny.signature 
+      const signatureStr = typeof authAny.signature === 'string'
+        ? authAny.signature
         : JSON.stringify(authAny.signature || '');
       console.log(`Signature: ${signatureStr.slice(0, 20)}...`);
 
@@ -1090,13 +1090,13 @@ The complete code samples below combine all the snippets we've covered in this t
         # Initialize the clients
         rest_client = RestClient(NODE_URL)
         faucet_client = FaucetClient(FAUCET_URL, rest_client)
-        
+
         print("Connected to Aptos devnet")
 
         # Generate two accounts
         alice = Account.generate()
         bob = Account.generate()
-        
+
         print("=== Addresses ===")
         print(f"Alice's address: {alice.address()}")
         print(f"Bob's address: {bob.address()}")
@@ -1105,22 +1105,22 @@ The complete code samples below combine all the snippets we've covered in this t
         print("\n=== Funding accounts ===")
         alice_amount = 100_000_000  # 1 APT = 100,000,000 octas
         bob_amount = 0  # Bob starts with 0 APT
-        
+
         await faucet_client.fund_account(alice.address(), alice_amount)
         await faucet_client.fund_account(bob.address(), bob_amount)
         print("Accounts funded successfully")
-        
+
         # Check initial balances
         alice_balance = await rest_client.account_balance(alice.address())
         bob_balance = await rest_client.account_balance(bob.address())
-        
+
         print("\n=== Initial Balances ===")
         print(f"Alice: {alice_balance} octas")
         print(f"Bob: {bob_balance} octas")
 
         # 1. Build the transaction
         print("\n=== 1. Building the transaction ===")
-        
+
         # Create the entry function payload
         # This specifies which function to call and with what arguments
         entry_function = EntryFunction.natural(
@@ -1133,14 +1133,14 @@ The complete code samples below combine all the snippets we've covered in this t
                 TransactionArgument(1000, Serializer.u64),              # Amount to transfer (1000 octas)
             ],
         )
-        
+
         # Get the chain ID for the transaction
         chain_id = await rest_client.chain_id()
-        
+
         # Get the sender's current sequence number
         account_data = await rest_client.account(alice.address())
         sequence_number = int(account_data["sequence_number"])
-        
+
         # Create the raw transaction with all required fields
         raw_transaction = RawTransaction(
             sender=alice.address(),                                    # Sender's address
@@ -1151,7 +1151,7 @@ The complete code samples below combine all the snippets we've covered in this t
             expiration_timestamps_secs=int(time.time()) + 600,         # Expires in 10 minutes
             chain_id=chain_id,                                         # Chain ID to ensure correct network
         )
-        
+
         print("Transaction built successfully")
         print(f"Sender: {raw_transaction.sender}")
         print(f"Sequence Number: {raw_transaction.sequence_number}")
@@ -1161,26 +1161,26 @@ The complete code samples below combine all the snippets we've covered in this t
 
         # 2. Simulate the transaction
         print("\n=== 2. Simulating the transaction ===")
-        
+
         # Create a BCS transaction for simulation
         # This doesn't actually submit the transaction to the blockchain
         simulation_transaction = await rest_client.create_bcs_transaction(alice, TransactionPayload(entry_function))
-        
+
         # Simulate the transaction to estimate gas costs and check for errors
         simulation_result = await rest_client.simulate_transaction(simulation_transaction, alice)
-        
+
         # Extract and display the simulation results
         gas_used = int(simulation_result[0]['gas_used'])
         gas_unit_price = int(simulation_result[0]['gas_unit_price'])
         success = simulation_result[0]['success']
-        
+
         print(f"Estimated gas units: {gas_used}")
         print(f"Estimated gas cost: {gas_used * gas_unit_price} octas")
         print(f"Transaction would {'succeed' if success else 'fail'}")
 
         # 3. Sign the transaction
         print("\n=== 3. Signing the transaction ===")
-        
+
         # Sign the raw transaction with the sender's private key
         # This creates a cryptographic signature that proves the sender authorized this transaction
         signed_transaction = await rest_client.create_bcs_signed_transaction(
@@ -1188,33 +1188,33 @@ The complete code samples below combine all the snippets we've covered in this t
             TransactionPayload(entry_function),     # The payload from our transaction
             sequence_number=sequence_number         # Use the same sequence number as before
         )
-        
+
         print("Transaction signed successfully")
         # We can't easily extract the signature from the signed transaction object,
         # but we can confirm it was created
 
         # 4. Submit the transaction
         print("\n=== 4. Submitting the transaction ===")
-        
+
         # Submit the signed transaction to the blockchain
         # This broadcasts the transaction to the network for processing
         tx_hash = await rest_client.submit_bcs_transaction(signed_transaction)
-        
+
         print(f"Transaction submitted with hash: {tx_hash}")
 
         # 5. Wait for the transaction to complete
         print("\n=== 5. Waiting for transaction completion ===")
-        
+
         # Wait for the transaction to be processed by the blockchain
         # This polls the blockchain until the transaction is confirmed
         await rest_client.wait_for_transaction(tx_hash)
-        
+
         # Get the transaction details to check its status
         transaction_details = await rest_client.transaction_by_hash(tx_hash)
         success = transaction_details["success"]
         vm_status = transaction_details["vm_status"]
         gas_used = transaction_details["gas_used"]
-        
+
         print(f"Transaction completed with status: {'SUCCESS' if success else 'FAILURE'}")
         print(f"VM Status: {vm_status}")
         print(f"Gas used: {gas_used}")
@@ -1222,7 +1222,7 @@ The complete code samples below combine all the snippets we've covered in this t
         # Check final balances
         alice_final_balance = await rest_client.account_balance(alice.address())
         bob_final_balance = await rest_client.account_balance(bob.address())
-        
+
         print("\n=== Final Balances ===")
         print(f"Alice: {alice_final_balance} octas (spent {alice_balance - alice_final_balance} octas on transfer and gas)")
         print(f"Bob: {bob_final_balance} octas (received 1000 octas)")

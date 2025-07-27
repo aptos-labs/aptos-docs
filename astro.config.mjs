@@ -316,5 +316,6 @@ export default defineConfig({
     //   "/move-reference/[network]/[framework]": "/move-reference",
     //   "/move-reference/[network]/[framework]/[slug]": "/move-reference",
     // },
+    "/build/smart-contracts/move-reference": "/move-reference",
   },
 });

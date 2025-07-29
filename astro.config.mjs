@@ -316,9 +316,9 @@ export default defineConfig({
     //   "/move-reference/[network]/[framework]": { src: "/move-reference/[network]/[framework]", destination: "/move-reference", status: 301 },
     //   "/move-reference/[network]/[framework]/[slug]": { src: "/move-reference/[network]/[framework]/[slug]", destination: "/move-reference", status: 301 },
     // },
-    "/build/smart-contracts/move-reference": {
-      destination: "/move-reference",
-      status: 301,
-    },
+    //"/build/smart-contracts/move-reference": {
+    //  destination: "/move-reference",
+    //  status: 301,
+    //},
   },
 });

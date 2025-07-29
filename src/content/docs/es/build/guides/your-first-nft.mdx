@@ -1,0 +1,386 @@
+---
+title: "Tu Primer NFT"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+Este tutorial te guiará a través del proceso de usar el SDK de TypeScript de Aptos (`@aptos-labs/ts-sdk`) para crear un nuevo activo digital (a menudo llamado NFT) en Aptos. Al final de este tutorial, sabrás cómo:
+
+1. Crear una colección de activos digitales (NFTs).
+2. Acuñar un nuevo activo digital (NFT) dentro de esa colección.
+3. Transferir el activo digital (NFT) entre cuentas.
+4. Verificar el movimiento del activo digital (NFT) comprobando los balances actualizados.
+
+<Aside type="note">
+  Este tutorial asume que te sientes cómodo usando la [CLI de Aptos](/build/cli), tienes Node.js y npm instalados, y entiendes conceptos básicos de JavaScript/TypeScript. Si necesitas más información, revisa la [Introducción a Node.js](https://nodejs.org/en/learn/getting-started/introduction-to-nodejs) o la documentación del [SDK de TypeScript de Aptos](/build/sdks/ts-sdk).
+</Aside>
+
+## Recorriendo el Código
+
+A continuación se muestra la explicación paso a paso de cómo crear, transferir e interactuar con un activo digital en la cadena. Veremos cómo lo hace el código de ejemplo (mostrado completo al final). Para ir directamente a ejecutar el código, ve a [**Ejecutar un Ejemplo**](#running-an-example).
+
+### Recorrido del Código
+
+<Steps>
+  1. Configurar el Cliente
+
+     Importamos y configuramos el cliente `Aptos` del SDK para conectarnos a la red especificada:
+
+     ```tsx filename="index.ts"
+     const APTOS_NETWORK = NetworkToNetworkName[process.env.APTOS_NETWORK] || Network.DEVNET;
+     const config = new AptosConfig({ network: APTOS_NETWORK });
+     const aptos = new Aptos(config);
+     ```
+
+     Este objeto `aptos` nos permite interactuar con la blockchain de Aptos (financiar cuentas, crear activos, enviar transacciones, etc.).
+
+  2. Crear y Financiar Cuentas
+
+     Generamos dos cuentas, Alice y Bob. En devnet, podemos financiarlas fácilmente con APT de prueba.
+
+     ```tsx filename="index.ts"
+     const alice = Account.generate();
+     const bob = Account.generate();
+
+     await aptos.fundAccount({ accountAddress: alice.accountAddress, amount: INITIAL_BALANCE });
+     await aptos.fundAccount({ accountAddress: bob.accountAddress, amount: INITIAL_BALANCE });
+     ```
+
+  3. Crear una Colección
+
+     Creamos una colección en la cuenta de Alice. Una colección actúa como "carpeta" o "categoría" para activos digitales. En este caso, estamos creando `"Ejemplo de Colección"`.
+
+     ```tsx filename="index.ts"
+     const createCollectionTransaction = await aptos.createCollectionTransaction({
+       creator: alice,
+       description: "Esta es una colección de ejemplo.",
+       name: "Ejemplo de Colección",
+       uri: "aptos.dev",
+     });
+
+     const committedTxn = await aptos.signAndSubmitTransaction({
+       signer: alice,
+       transaction: createCollectionTransaction,
+     });
+     await aptos.waitForTransaction({ transactionHash: committedTxn.hash });
+     ```
+
+     <Aside type="note">
+       Siempre espera a que la transacción se complete usando `waitForTransaction` antes de proceder. Esto asegura que la colección esté lista antes de intentar acuñar.
+     </Aside>
+
+  4. Acuñar un Activo Digital
+
+     Con la colección creada, ahora podemos acuñar un activo digital (un NFT) para la colección. Esto implica proporcionar detalles como el nombre, la descripción y un URI (a menudo vinculando metadatos como imágenes).
+
+     ```tsx filename="index.ts"
+     const mintTokenTransaction = await aptos.mintDigitalAssetTransaction({
+       creator: alice,
+       collection: "Ejemplo de Colección",
+       description: "Este es un activo digital de ejemplo.",
+       name: "Ejemplo de Activo",
+       uri: "https://aptos.dev/asset.png",
+     });
+
+     const mintTxn = await aptos.signAndSubmitTransaction({
+       signer: alice,
+       transaction: mintTokenTransaction,
+     });
+     await aptos.waitForTransaction({ transactionHash: mintTxn.hash });
+     ```
+
+     <Aside type="note">
+       Puedes cambiar estos valores para personalizar tu activo digital en la cadena.
+     </Aside>
+
+  5. Transferir el Activo Digital
+
+     Una vez acuñado, el activo pertenece a Alice. Podemos verificar esto consultando los activos digitales de Alice. Luego, construimos y enviamos una transacción para transferir este activo a Bob.
+
+     ```tsx filename="index.ts"
+     const aliceDigitalAssets = await aptos.getOwnedDigitalAssets({ ownerAddress: alice.accountAddress });
+     const digitalAssetAddress = aliceDigitalAssets[0].token_data_id;
+
+     const transferTransaction = await aptos.transferDigitalAssetTransaction({
+       sender: alice,
+       digitalAssetAddress,
+       recipient: bob.accountAddress,
+     });
+
+     const transferTxn = await aptos.signAndSubmitTransaction({
+       signer: alice,
+       transaction: transferTransaction,
+     });
+     await aptos.waitForTransaction({ transactionHash: transferTxn.hash });
+     ```
+
+     Después de la finalización, el activo debería ahora aparecer en la cuenta de Bob.
+
+  6. Verificar los Balances
+
+     Finalmente, comprobamos ambas cuentas de Alice y Bob para asegurarnos de que Alice ya no tiene el activo y Bob ahora lo tiene.
+
+     ```tsx filename="index.ts"
+     const aliceDigitalAssetsAfter = await aptos.getOwnedDigitalAssets({ ownerAddress: alice.accountAddress });
+     const bobDigitalAssetsAfter = await aptos.getOwnedDigitalAssets({ ownerAddress: bob.accountAddress });
+
+     console.log(`Balance de activos digitales de Alice: ${aliceDigitalAssetsAfter.length}`);
+     console.log(`Balance de activos digitales de Bob: ${bobDigitalAssetsAfter.length}`);
+     ```
+</Steps>
+
+## Ejecutar un Ejemplo
+
+### Empezando
+
+<Steps>
+  1. Configurar tu Proyecto
+
+     Crea un nuevo directorio para tu proyecto y inicializa un proyecto Node.js:
+
+     ```shellscript filename="Terminal"
+     mkdir aptos-digital-asset-tutorial
+     cd aptos-digital-asset-tutorial
+     npm init -y
+     ```
+
+     Esto creará un archivo `package.json`, lo que te permitirá instalar dependencias y ejecutar scripts.
+
+  2. Instalar Dependencias
+
+     Necesitarás el SDK de TypeScript de Aptos y `dotenv` para administrar las variables de entorno:
+
+     ```shellscript filename="Terminal"
+     npm install @aptos-labs/ts-sdk dotenv
+     npm install --save-dev @types/node
+     ```
+
+  3. Crear tsconfig.json
+
+     Crea un archivo `tsconfig.json` con lo siguiente:
+
+     ```json filename="tsconfig.json"
+     {
+       "compilerOptions": {
+         "target": "es2020",
+         "module": "commonjs",
+         "esModuleInterop": true,
+         "forceConsistentCasingInFileNames": true,
+         "strict": true,
+         "skipLibCheck": true,
+         "types": ["node"],
+         "lib": ["es2020"]
+       }
+     }
+     ```
+
+     Esta configuración asegura que TypeScript reconozca correctamente los tipos de Node.js y proporcione la comprobación de tipos adecuada.
+
+  4. Configurar Variables de Entorno
+
+     Crea un archivo `.env` con lo siguiente:
+
+     ```shellscript filename="Terminal"
+     APTOS_NETWORK=devnet
+     ```
+
+     <Aside type="note">
+       Por defecto, usaremos `devnet`, pero también puedes elegir `testnet` o `mainnet` según tus necesidades.
+     </Aside>
+
+  5. Añadir index.ts
+
+     Crea un archivo `index.ts` con lo siguiente:
+
+     ```tsx filename="index.ts"
+     // Actualiza los TODOs a continuación para personalizar este activo digital a tus necesidades.
+     // Querrás personalizar los valores de la Colección y los activos digitales individuales.
+     // Este ejemplo demuestra la creación de una colección, la población con activos digitales y su transferencia.
+
+     import "dotenv/config";
+     import {
+         Account,
+         Aptos,
+         AptosConfig,
+         Network,
+         NetworkToNetworkName,
+     } from "@aptos-labs/ts-sdk";
+
+     // Verifica que las variables de entorno estén cargadas
+     console.log("Variables de entorno cargadas:", {
+         APTOS_NETWORK: process.env.APTOS_NETWORK || "no establecido"
+     });
+
+     const INITIAL_BALANCE = 100_000_000;
+
+     console.log("Paso 1: Configurar un cliente para conectarse a Aptos");
+     const APTOS_NETWORK = NetworkToNetworkName[process.env.APTOS_NETWORK!] || Network.DEVNET;
+     const config = new AptosConfig({ network: APTOS_NETWORK });
+     const aptos = new Aptos(config);
+
+     async function example() {
+         console.log("\n=== Paso 2: Crear y financiar cuentas ===\n");
+         const alice = Account.generate();
+         const bob = Account.generate();
+
+         console.log(`Dirección de Alice: ${alice.accountAddress}`);
+         console.log(`Dirección de Bob: ${bob.accountAddress}`);
+
+         console.log("Financiando la cuenta de Alice...");
+         await aptos.fundAccount({ accountAddress: alice.accountAddress, amount: INITIAL_BALANCE });
+         console.log("Cuenta de Alice financiada!");
+
+         console.log("Financiando la cuenta de Bob...");
+         await aptos.fundAccount({ accountAddress: bob.accountAddress, amount: INITIAL_BALANCE });
+         console.log("Cuenta de Bob financiada!");
+
+         console.log("\n=== Paso 3: Crear una colección ===\n");
+         // TODO: Actualiza estos valores para personalizar tu activo digital!
+         const collectionName = "Ejemplo de Colección";
+         const collectionDescription = "Esta es una colección de ejemplo.";
+         const collectionURI = "aptos.dev";
+
+         console.log("Construyendo la transacción de creación de colección...");
+         const createCollectionTransaction = await aptos.createCollectionTransaction({
+             creator: alice,
+             description: collectionDescription,
+             name: collectionName,
+             uri: collectionURI,
+         });
+
+         console.log("Presentando la transacción de creación de colección...");
+         const committedTxn = await aptos.signAndSubmitTransaction({
+             signer: alice,
+             transaction: createCollectionTransaction,
+         });
+
+         console.log("Esperando a que la transacción de creación de colección se complete...");
+         await aptos.waitForTransaction({ transactionHash: committedTxn.hash });
+         console.log("Colección creada con éxito!");
+
+         console.log("\n=== Paso 4: Acuñar un activo digital ===\n");
+         // TODO: Actualiza los valores de los activos digitales que estás acuñando!
+         const tokenName = "Ejemplo de Activo";
+         const tokenDescription = "Este es un activo digital de ejemplo.";
+         const tokenURI = "aptos.dev/asset";
+
+         console.log("Construyendo la transacción de acuñación...");
+         const mintTokenTransaction = await aptos.mintDigitalAssetTransaction({
+             creator: alice,
+             collection: collectionName,
+             description: tokenDescription,
+             name: tokenName,
+             uri: tokenURI,
+         });
+         console.log(mintTokenTransaction)
+
+         console.log("Presentando la transacción de acuñación...");
+         const mintTxn = await aptos.signAndSubmitTransaction({
+             signer: alice,
+             transaction: mintTokenTransaction,
+         });
+         console.log(mintTxn)
+
+         console.log("Esperando a que la transacción de acuñación se complete...");
+         await aptos.waitForTransaction({ transactionHash: mintTxn.hash });
+         console.log("Activo digital acuñado con éxito!");
+
+         console.log("\n=== Paso 5: Transferir el activo digital ===\n");
+         
+         // Espera a que el indexador actualice con los datos más recientes de la cadena
+         await new Promise((resolve) => setTimeout(resolve, 5000));
+         
+         const aliceDigitalAssets = await aptos.getOwnedDigitalAssets({
+             ownerAddress: alice.accountAddress,
+         });
+
+         // Comprueba si Alice tiene algún activo digital antes de acceder a ellos
+         if (aliceDigitalAssets.length === 0) {
+             console.error("No se encontraron activos digitales para Alice. Asegúrate de que la acuñación fue exitosa.");
+             return;
+         }
+
+         const digitalAssetAddress = aliceDigitalAssets[0].token_data_id;
+
+         console.log("Construyendo la transacción de transferencia...");
+         const transferTransaction = await aptos.transferDigitalAssetTransaction({
+             sender: alice,
+             digitalAssetAddress,
+             recipient: bob.accountAddress,
+         });
+
+         console.log("Presentando la transacción de transferencia...");
+         const transferTxn = await aptos.signAndSubmitTransaction({
+             signer: alice,
+             transaction: transferTransaction,
+         });
+
+         console.log("Esperando a que la transacción de transferencia se complete...");
+         await aptos.waitForTransaction({ transactionHash: transferTxn.hash });
+         console.log("Activo digital transferido con éxito!");
+
+         console.log("\n=== Paso 6: Verificar balances de activos digitales ===\n");
+         const aliceDigitalAssetsAfter = await aptos.getOwnedDigitalAssets({
+             ownerAddress: alice.accountAddress,
+         });
+         const bobDigitalAssetsAfter = await aptos.getOwnedDigitalAssets({
+             ownerAddress: bob.accountAddress,
+         });
+
+         console.log(`Balance de activos digitales de Alice: ${aliceDigitalAssetsAfter.length}`);
+         console.log(`Balance de activos digitales de Bob: ${bobDigitalAssetsAfter.length}`);
+         
+         console.log("\n=== Paso 7: Hashes de transacciones para el explorador ===\n");
+         console.log(`Transacción de creación de colección: ${committedTxn.hash}`);
+         console.log(`Transacción de acuñación: ${mintTxn.hash}`);
+         console.log(`Transacción de transferencia: ${transferTxn.hash}`);
+         console.log("\nPuedes ver estas transacciones en el Explorador de Aptos:");
+         console.log("https://explorer.aptoslabs.com/?network=devnet");
+     }
+
+     example();
+     ```
+
+  6. Ejecutar el código
+
+     ```shellscript filename="Terminal"
+     npx ts-node index.ts
+     ```
+
+     Si todo está configurado correctamente, verás registros de salida detallando cada paso, hashes de transacciones y balances finales.
+
+  7. Ver tus Transacciones en el Explorador
+
+     Después de ejecutar el código, verás hashes de transacciones en la salida de la consola, especialmente en el Paso 7 que muestra todos los hashes de transacciones para una fácil referencia:
+
+     ```shellscript filename="Terminal"
+     === Paso 7: Hashes de transacciones para el explorador ===
+
+     Transacción de creación de colección: 0x8c5d2a4ce32d76349bfb4f3830740c1c103399e8cbc31d6e2c7a871c88e6ad48
+     Transacción de acuñación: 0x673d2cbb9fef468fe41f271c0fcf20872e9fa79afb6a2000368394000071b02e
+     Transacción de transferencia: 0x3a1e99d6fd3f8e7e962c311f3dfd92c11e468da5b6084123b8f7e0248a37ffa7
+
+     Puedes ver estas transacciones en el Explorador de Aptos:
+     https://explorer.aptoslabs.com/?network=devnet
+     ```
+
+     Puedes ver estas transacciones en el Explorador de Aptos:
+
+     1. Copia el hash de la transacción de tu consola
+     2. Visita [Aptos Explorer](https://explorer.aptoslabs.com/?network=devnet)
+     3. Asegúrate de que estás en la red correcta (Devnet)
+     4. Pega el hash de la transacción en la barra de búsqueda
+     5. Ver los detalles de tu transacción, incluyendo:
+        - Las direcciones del remitente y del destinatario
+        - La hora exacta en que se procesó la transacción
+        - Los gastos de gas pagados
+        - El activo digital que se transfirió
+
+     Esto es una excelente manera de verificar tus transacciones y entender cómo se registran en la blockchain.
+</Steps>
+
+### Lectura Adicional y Recursos
+
+- [Documentación de aptos ts-sdk](https://aptos.dev/es/build/sdks/ts-sdk)
+- [Conceptos básicos de cuenta](/network/blockchain/accounts)
+- [Especificación de la API REST](/network/nodes/aptos-api-spec)

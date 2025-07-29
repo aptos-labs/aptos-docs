@@ -1,0 +1,59 @@
+---
+title: "Invocar cadenas de llamadas Move con el Compositor de Scripts Dinámico"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="caution" emoji="ℹ️">
+  Debido al tamaño actual del bundle del ts-sdk, estamos removiendo temporalmente la característica del Compositor de Scripts del ts-sdk.
+
+  En el futuro, proporcionaremos esta característica como un paquete de extensión separado.
+
+  Si deseas continuar usando el Compositor de Scripts, por favor instala la versión 1.39.0:
+  [https://www.npmjs.com/package/@aptos-labs/ts-sdk/v/1.39.0](https://www.npmjs.com/package/@aptos-labs/ts-sdk/v/1.39.0)
+</Aside>
+
+En la API ingenua, solo puedes especificar una función de entrada para invocar en una transacción. Un constructor avanzado podría querer poder invocar múltiples funciones **públicas** de Move dentro de una transacción. Esto ahora está habilitado por la nueva API `scriptComposer` proporcionada en el constructor de transacciones.
+
+Aquí hay un ejemplo de cómo puedes invocar la API:
+
+```typescript filename="example.ts"
+const transaction = await aptos.transaction.build.scriptComposer({
+    sender: singleSignerED25519SenderAccount.accountAddress,
+    // El constructor espera un closure para construir la secuencia de llamadas move.
+    builder: async (builder) => {
+        // invocar 0x1::coin::withdraw. Esta función devolvería un valor de tipo `coin`.
+        const coin = await builder.addBatchedCalls({
+            function: "0x1::coin::withdraw",
+            functionArguments: [CallArgument.newSigner(0), 1],
+            typeArguments: ["0x1::aptos_coin::AptosCoin"],
+        });
+
+        // Pasando el valor coin a 0x1::coin::coin_to_fungible_asset para convertir una moneda
+        // en activo fungible.
+        const fungibleAsset = await builder.addBatchedCalls({
+            function: "0x1::coin::coin_to_fungible_asset",
+            // coin[0] representa el primer valor de retorno de la primera llamada que agregaste.
+            functionArguments: [coin[0]],
+            typeArguments: ["0x1::aptos_coin::AptosCoin"],
+        });
+
+        // Depositar el fungibleAsset convertido de la segunda llamada.
+        await builder.addBatchedCalls({
+            function: "0x1::primary_fungible_store::deposit",
+            functionArguments: [singleSignerED25519SenderAccount.accountAddress, fungibleAsset[0]],
+            typeArguments: [],
+        });
+        return builder;
+    },
+});
+```
+
+Detrás de escena, el SDK invocará un binario WASM para compilar la serie de llamadas Move en un `CompiledScript`. Esto garantizará que la seguridad de tipos y habilidades de Move siga siendo honrada durante el proceso de construcción. Para los usuarios del SDK, esto significa:
+
+1. seguridad de habilidades:
+   a. Si el valor devuelto no tiene la habilidad Drop, el valor devuelto necesita ser consumido por llamadas posteriores.
+   b. Si el valor devuelto no tiene la habilidad Copy, el valor devuelto solo puede ser pasado a llamadas posteriores una vez.
+2. El llamador necesitará asegurarse de que pase los valores correctos como argumentos a llamadas posteriores. En el ejemplo anterior, `0x1::coin::coin_to_fungible_asset` esperará un argumento de `Coin<AptosCoin>`.
+
+Esto implementa [AIP-102](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-102.md)

@@ -15,7 +15,7 @@ function getDocFiles(dir: string): string[] {
     const filePath = path.join(dir, file);
     const stat = fs.statSync(filePath);
     if (stat.isDirectory()) {
-      if (file !== "zh") {
+      if (file !== "zh" && file !== "es") {
         results = results.concat(getDocFiles(filePath));
       }
     } else if (

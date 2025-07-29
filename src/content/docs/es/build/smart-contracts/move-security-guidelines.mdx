@@ -1,0 +1,830 @@
+---
+title: "Directrices de Seguridad de Move"
+---
+
+El lenguaje Move está diseñado con seguridad y ofrece inherentemente varias características incluyendo un sistema de tipos y una lógica lineal. A pesar de esto, su novedad y las complejidades de alguna lógica de negocio significan que los desarrolladores podrían no estar siempre familiarizados con los patrones de codificación segura de Move, potencialmente llevando a errores.
+
+Esta guía aborda esta brecha detallando anti-patrones comunes y sus alternativas seguras. Proporciona ejemplos prácticos para ilustrar cómo pueden surgir problemas de seguridad y recomienda mejores prácticas para codificación segura. Esta guía tiene como objetivo agudizar la comprensión de los desarrolladores sobre los mecanismos de seguridad de Move y asegurar el desarrollo robusto de contratos inteligentes.
+
+## Control de Acceso
+
+### Verificación de Propiedad de Objeto
+
+Cada `Object<T>` puede ser accedido por cualquiera, lo que significa que cualquier `Object<T>` puede ser pasado a cualquier función, incluso si el llamador no lo posee.
+Es importante verificar que el `signer` es el propietario legítimo del objeto.
+
+#### Ejemplo de Código Inseguro
+
+En este módulo, un usuario debe comprar una suscripción antes de realizar ciertas acciones. El usuario invoca la función de registro para adquirir un `Object<Subscription>`, que pueden usar más tarde para ejecutar operaciones.
+
+```move filename="object_example.move"
+module 0x42::example {
+
+    struct Subscription has key {
+        end_subscription: u64
+    }
+
+    entry fun registration(user: &signer, end_subscription: u64) {
+        let price = calculate_subscription_price(end_subscription);
+        payment(user,price);
+
+        let user_address = address_of(user);
+        let constructor_ref = object::create_object(user_address);
+        let subscription_signer = object::generate_signer(&constructor_ref);
+        move_to(&subscription_signer, Subscription { end_subscription });
+    }
+
+    entry fun execute_action_with_valid_subscription(
+        user: &signer, obj: Object<Subscription>
+    ) acquires Subscription {
+        let object_address = object::object_address(&obj);
+        let subscription = borrow_global<Subscription>(object_address);
+        assert!(subscription.end_subscription >= aptos_framework::timestamp::now_seconds(),1);
+        // Usar la suscripción
+        [...]
+    }
+}
+```
+
+En este ejemplo inseguro, `execute_action_with_valid_subscription` no verifica si el usuario posee el `obj` pasado a él. En consecuencia, cualquiera puede usar la suscripción de otra persona, evitando el requisito de pago.
+
+#### Ejemplo de Código Seguro
+
+Asegúrate de que el signer posee el objeto.
+
+```move filename="object_example.move"
+module 0x42::example {
+
+    struct Subscription has key {
+        end_subscription: u64
+    }
+
+    entry fun registration(user: &signer, end_subscription: u64) {
+        let price = calculate_subscription_price(end_subscription);
+        payment(user,price);
+
+        let user_address = address_of(user);
+        let constructor_ref = object::create_object(user_address);
+        let subscription_signer = object::generate_signer(&constructor_ref);
+        move_to(&subscription_signer, Subscription { end_subscription });
+    }
+
+    entry fun execute_action_with_valid_subscription(
+        user: &signer, obj: Object<Subscription>
+    ) acquires Subscription {
+        //asegúrate de que el signer posee el objeto.
+        assert!(object::owner(&obj)==address_of(user),ENOT_OWNWER);
+        let object_address = object::object_address(&obj);
+        let subscription = borrow_global<Subscription>(object_address);
+        assert!(subscription.end_subscription >= aptos_framework::timestamp::now_seconds(),1);
+        // Usar la suscripción
+        [...]
+    }
+}
+```
+
+### Control de Acceso al Almacenamiento Global
+
+Aceptar un `&signer` no siempre es suficiente para propósitos de control de acceso. Asegúrate de afirmar que el signer es la cuenta esperada, especialmente cuando realizas operaciones sensibles.
+
+Los usuarios sin autorización adecuada pueden ejecutar acciones privilegiadas.
+
+#### Ejemplo de Código Inseguro
+
+Este fragmento de código permite que cualquier usuario que invoque la función `delete` elimine un `Object`, sin verificar que el llamador tiene los permisos necesarios.
+
+```move
+module 0x42::example {
+  struct Object has key{
+    data: vector<u8>
+  }
+
+  public fun delete(user: &signer, obj: Object) {
+    let Object { data } = obj;
+  }
+}
+```
+
+#### Ejemplo de Código Seguro
+
+Una mejor alternativa es usar el almacenamiento global proporcionado por Move, simplemente prestando datos de `signer::address_of(signer)`. Este enfoque asegura un control de acceso robusto, ya que solo accede a los datos contenidos dentro de la dirección del signer de la transacción. Este método minimiza el riesgo de errores de control de acceso, asegurando que solo los datos propiedad del `signer` puedan ser manipulados.
+
+```move
+module 0x42::example {
+  struct Object has key{
+    data: vector<u8>
+  }
+
+  public fun delete(user: &signer) {
+    let Object { data } = move_from<Object>(signer::address_of(user));
+  }
+}
+```
+
+### Visibilidad de Funciones
+
+Adhiere al principio de privilegio mínimo:
+
+- Siempre comience con funciones privadas, cambie su visibilidad según sea necesario por la lógica de negocio.
+- Utilice `entry` para funciones destinadas a ser utilizadas solo desde la CLI o SDK de Aptos.
+- Utilice `friend` para funciones que solo puedan ser accesibles por módulos específicos.
+- Utilice el decorador `#[view]` con funciones que lean datos de almacenamiento sin alterar el estado. #\[view] las funciones pueden ser invocadas indirectamente y en este caso podrían cambiar el almacenamiento.
+
+La visibilidad de las funciones determina quién puede llamar a una función. Es una forma de aplicar el control de acceso y es crítica para la seguridad de los contratos inteligentes:
+
+- Las funciones privadas solo son llamables dentro del módulo en el que se definen. No son accesibles desde otros módulos o desde la CLI/SDK, lo que previene interacciones no intencionadas con los internos del contrato.
+
+```move
+module 0x42::example {
+  fun sample_function() { /* ... */ }
+}
+```
+
+- `public(friend)` las funciones expanden esto permitiendo que ciertos _amigos_ módulos llamen a la función, permitiendo una interacción controlada entre diferentes contratos mientras aún restringiendo el acceso general.
+
+```move
+module 0x42::example {
+  friend package::mod;
+
+  public(friend) fun sample_function() { /* ... */ }
+}
+```
+
+- Las funciones `public` son llamables por cualquier módulo publicado o script.
+
+```move
+module 0x42::example {
+  public fun sample_function() { /* ... */ }
+}
+```
+
+- Las funciones decoradas con `#[view]` no pueden alterar el almacenamiento; solo leen los datos, proporcionando una forma segura de acceder a la información sin riesgo de modificación del estado.
+
+```move
+module 0x42::example {
+  #[view]
+  public fun read_only() { /* ... */ }
+}
+```
+
+- El modificador `entry` en Move se utiliza para indicar los puntos de entrada para las transacciones. Las funciones con el modificador `entry` sirven como punto de inicio de ejecución cuando una transacción se envía a la blockchain.
+
+```move
+module 0x42::example {
+  entry fun f(){}
+}
+```
+
+Para resumir:
+
+|                | Módulo en sí | Otros Módulos                | CLI/SDK de Aptos |
+| -------------- | ------------- | ---------------------------- | ------------- |
+| privado        | ✅             | ⛔                            | ⛔             |
+| public(friend) | ✅             | ✅ si friend<br />⛔ de lo contrario | ⛔             |
+| public         | ✅             | ✅                            | ⛔             |
+| entry          | ✅             | ⛔                            | ✅             |
+
+Esta capa de visibilidad asegura que solo las entidades autorizadas puedan ejecutar ciertas funciones, reduciendo significativamente el riesgo de errores o ataques que comprometan la integridad del contrato.
+
+Tenga en cuenta que es posible combinar `entry` con `public` o `public(friend)`
+
+```move
+module 0x42::example {
+  public(friend) entry fun sample_function() { /* ... */ }
+}
+```
+
+En este caso, `sample_function` puede ser llamado tanto por la CLI/SDK de Aptos como por cualquier módulo declarado como amigo.
+
+#### Impacto
+
+Adherirse a este principio asegura que las funciones no estén sobrexponerse, restringiendo el alcance del acceso a las funciones solo a lo necesario para la lógica de negocio.
+
+## Tipos y Estructuras de Datos
+
+### Verificación de Tipos Genéricos
+
+Los tipos genéricos pueden ser utilizados para definir funciones y estructuras sobre diferentes tipos de datos de entrada. Al usarlos, asegúrate de que los tipos genéricos sean válidos y sean lo que se espera. [Leer más](/build/smart-contracts/book/generics) sobre generics.
+
+Los tipos genéricos no verificados pueden llevar a acciones no autorizadas o abortos de transacciones, potencialmente comprometiendo la integridad del protocolo.
+
+#### Ejemplo de Código Inseguro
+
+El código a continuación describe una versión simplificada de un préstamo flash.
+
+En la función `flash_loan<T>`, un usuario puede pedir prestado una cantidad de tipo de moneda **`T`** junto con un `Receipt` que registra la cantidad prestada más una tarifa que debe ser devuelta al protocolo antes de que termine la transacción.
+
+La función `repay_flash_loan<T>` acepta un `Receipt` y un `Coin<T>` como parámetros. La función extrae la cantidad de reembolso del `Receipt` y afirma que el valor de la `Coin<T>` devuelta es mayor o igual a la cantidad especificada en el `Receipt`, sin embargo, no hay una verificación para asegurar que la `Coin<T>` devuelta sea la misma que la `Coin<T>` que se prestó originalmente, dando la capacidad de reembolsar el préstamo con una moneda de menor valor.
+
+```move
+module 0x42::example {
+  struct Coin<T> {
+    amount: u64
+  }
+
+  struct Receipt {
+    amount: u64
+  }
+
+  public fun flash_loan<T>(user: &signer, amount: u64): (Coin<T>, Receipt) {
+    let (coin, fee) = withdraw(user, amount);
+    ( coin, Receipt {amount: amount + fee} )
+  }
+
+  public fun repay_flash_loan<T>(rec: Receipt, coins: Coin<T>) {
+    let Receipt{ amount } = rec;
+    assert!(coin::value<T>(&coin) >= rec.amount, 0);
+    deposit(coin);
+  }
+}
+```
+
+#### Ejemplo de Código Seguro
+
+El ejemplo de Aptos Framework a continuación crea una tabla de clave-valor que consta de dos tipos genéricos `K` y `V` . Su `add` funciones relacionadas aceptan como parámetros un `Table<K, V>` objeto, una `key`, y un `value` de tipos `K` y `V` . El `phantom` sintaxis asegura que los tipos de clave y valor no puedan ser diferentes a los de la tabla, evitando errores de tipo. [Leer más](/build/smart-contracts/book/generics#phantom-type-parameters) sobre parámetros de tipo `phantom`.
+
+```move
+module 0x42::example {
+  struct Table<phantom K: copy + drop, phantom V> has store {
+    handle: address,
+  }
+
+  public fun add<K: copy + drop, V>(table: &mut Table<K, V>, key: K, val: V) {
+    add_box<K, V, Box<V>>(table, key, Box { val })
+  }
+}
+```
+
+Dado el chequeo de tipos por diseño proporcionado por el lenguaje Move, podemos refinar el código de nuestro protocolo de préstamo flash. El código a continuación asegura que las monedas pasadas a `repay_flash_loan` coincidan con las monedas originalmente prestadas.
+
+```move
+module 0x42::example {
+  struct Coin<T> {
+    amount: u64
+  }
+  struct Receipt<phantom T> {
+    amount: u64
+  }
+
+  public fun flash_loan<T>(_user: &signer, amount:u64): (Coin<T>, Receipt<T>) {
+    let (coin, fee) = withdraw(user, amount);
+    (coin,Receipt { amount: amount + fee})
+  }
+
+  public fun repay_flash_loan<T>(rec: Receipt<T>, coins: Coin<T>) {
+    let Receipt{ amount } = rec;
+    assert!(coin::value<T>(&coin) >= rec.amount, 0);
+    deposit(coin);
+  }
+}
+```
+
+### Gestión de Recursos y Ejecución Ilimitada
+
+La gestión de recursos efectiva y la prevención de la ejecución ilimitada son importantes para mantener la seguridad y la eficiencia de gas en el protocolo. Es esencial considerar estos aspectos en el diseño del contrato:
+
+1. Evita iterar sobre una estructura públicamente accesible que permita entradas ilimitadas, donde cualquier número de usuarios puede contribuir sin restricciones.
+2. Almacena activos específicos de usuarios, como monedas y NFTs, dentro de las cuentas de usuarios individuales.
+3. Mantén la información relacionada con módulos o paquetes dentro de Objetos, separada de los datos de los usuarios.
+4. En lugar de combinar todas las operaciones de usuarios en un espacio global compartido, sepáralas por usuarios individuales.
+
+#### Impacto
+
+La negligencia de estos aspectos permite que un atacante consuma el gas y aborte la transacción. Esto puede bloquear las funcionalidades de la aplicación.
+
+#### Ejemplo de Código Inseguro
+
+El código a continuación muestra un bucle iterando sobre cada orden abierta y podría potencialmente ser bloqueado registrando muchas órdenes:
+
+```move
+module 0x42::example {
+  public fun get_order_by_id(order_id: u64): Option<Order> acquires OrderStore {
+    let order_store = borrow_global_mut<OrderStore>(@admin);
+    let i = 0;
+    let len = vector::length(&order_store.orders);
+    while (i < len) {
+      let order = vector::borrow<Order>(&order_store.orders, i);
+      if (order.id == order_id) {
+        return option::some(*order)
+      };
+      i = i + 1;
+    };
+    return option::none<Order>()
+  }
+  //O(1) en tiempo y gas operación.
+  public entry fun create_order(buyer: &signer) { /* ... */ }
+}
+```
+
+#### Ejemplo de Código Seguro
+
+Se recomienda estructurar el sistema de gestión de órdenes de manera que las órdenes de cada usuario se almacenen en su respectiva cuenta en lugar de un almacén de órdenes global. Este enfoque no solo mejora la seguridad al aislar los datos de los usuarios, sino que también mejora la escalabilidad al distribuir la carga de datos. En lugar de usar **`borrow_global_mut<OrderStore>(@admin)`** que accede a un almacén global, las órdenes deberían ser accedidas a través de la cuenta individual del usuario.
+
+```move
+module 0x42::example {
+  public fun get_order_by_id(user: &signer, order_id: u64): Option<Order> acquires OrderStore {
+    let order_store = borrow_global_mut<OrderStore>(signer::address_of(user));
+    if (smart_table::contains(&order_store.orders, order_id)) {
+      let order = smart_table::borrow(&order_store.orders, order_id);
+      option::some(*order)
+    } else {
+      option::none<Order>()
+    }
+  }
+}
+```
+
+También es aconsejable utilizar estructuras de datos eficientes adaptadas a las necesidades específicas de las operaciones que se realizan. Por ejemplo, una **`SmartTable`** puede ser particularmente efectiva en este contexto.
+
+### Capacidades de Move
+
+Las capacidades de Move son un conjunto de permisos que controlan las acciones posibles en las estructuras de datos dentro del lenguaje. Los desarrolladores de contratos inteligentes deben manejar estas capacidades con cuidado, asegurándose de que solo se asignen donde sea necesario y entendiendo sus implicaciones para prevenir vulnerabilidades de seguridad.
+
+| Capacidad | Descripción                                                                                                            |
+| ------- | ---------------------------------------------------------------------------------------------------------------------- |
+| copy    | Permite la duplicación de valores, lo que permite usarlos múltiples veces dentro del contrato.                        |
+| drop    | Permite descartar valores de la memoria, lo que es necesario para controlar los recursos y prevenir pérdidas.          |
+| store   | Permite guardar datos en el almacenamiento global, crítico para persistir datos a través de las transacciones.                          |
+| key     | Otorga la capacidad de servir como clave en operaciones de almacenamiento global, importante para la recuperación y manipulación de datos. |
+
+[Leer más](/build/smart-contracts/book/abilities) sobre capacidades.
+
+El uso incorrecto de capacidades puede llevar a problemas de seguridad como la copia no autorizada de datos sensibles (`copy`), pérdidas de recursos (`drop`), y manejo incorrecto del almacenamiento global (`store`).
+
+#### Ejemplo de Código Inseguro
+
+```move
+module 0x42::example {
+  struct Token has copy { }
+  struct FlashLoan has drop { }
+}
+```
+
+- La capacidad `copy` para un `Token` permite replicar tokens, lo que podría permitir el doble gasto y la inflación de la oferta de tokens, lo que podría devaluar la moneda.
+- Permitir la capacidad `drop` en un `FlashLoan` struct podría permitir que los prestatarios abandonen su préstamo destruyéndolo antes de reembolsarlo.
+
+## Operaciones Aritméticas
+
+***
+
+### Precisión de División
+
+Las operaciones aritméticas que disminuyen la precisión redondeando hacia abajo pueden llevar a que los protocolos subreporten el resultado de estas operaciones.
+
+Move incluye seis tipos de datos enteros sin signo: `u8`, `u16`, `u32`, `u64`, `u128`, y `u256`. Las operaciones de división en Move truncan cualquier parte fraccionaria, redondeando efectivamente hacia abajo al número entero más cercano, lo que puede causar que los protocolos subrepresenten el resultado de tales cálculos.
+
+Los errores de redondeo en cálculos pueden tener impactos amplios, potencialmente causando desequilibrios financieros, inexactitudes de datos, y procesos de toma de decisiones defectuosos. Estos errores pueden resultar en una pérdida de ingresos, dar beneficios indebidos, o incluso poner en riesgo la seguridad, dependiendo del contexto. La computación precisa y precisa es esencial para mantener la confiabilidad y la confianza del sistema.
+
+#### Ejemplo de Código Inseguro
+
+```move
+module 0x42::example {
+  public fun calculate_protocol_fees(size: u64): (u64) {
+    return size * PROTOCOL_FEE_BPS / 10000
+  }
+}
+```
+
+Si `size` es menor que `10000 / PROTOCOL_FEE_BPS`, la tarifa se redondeará a 0, lo que permite que un usuario interactúe con el protocolo sin incurrir en ninguna tarifa.
+
+#### Ejemplo de Código Seguro
+
+Los siguientes ejemplos describen dos estrategias distintas para mitigar el problema en el código:
+
+- Establecer un umbral de tamaño de orden mínimo que sea mayor que `10000 / PROTOCOL_FEE_BPS`, asegurando que la tarifa nunca se redondeará a cero.
+
+```move
+module 0x42::example {
+  const MIN_ORDER_SIZE: u64 = 10000 / PROTOCOL_FEE_BPS + 1;
+
+  public fun calculate_protocol_fees(size: u64): (u64) {
+    assert!(size >= MIN_ORDER_SIZE, 0);
+    return size * PROTOCOL_FEE_BPS / 10000
+  }
+}
+```
+
+- Comprobar que las tarifas no sean cero y manejar la situación específicamente, por ejemplo, estableciendo una tarifa mínima o rechazando la transacción.
+
+```move
+module 0x42::example {
+  public fun calculate_protocol_fees(size: u64): (u64) {
+    let fee = size * PROTOCOL_FEE_BPS / 10000;
+    assert!(fee > 0, 0);
+    return fee;
+  }
+}
+```
+
+### Consideraciones de Enteros
+
+En Move, la seguridad alrededor de las operaciones de enteros está diseñada para prevenir desbordamientos y subdesbordamientos que pueden causar un comportamiento inesperado o vulnerabilidades. Específicamente:
+
+- Sumas (`+`) y multiplicaciones (`*`) causan que el programa aborte si el resultado es demasiado grande para el tipo de entero. Un abort en este contexto significa que el programa terminará inmediatamente.
+- Restas (`-`) abortan si el resultado es menor que cero.
+- División (`/`) aborta si el divisor es cero.
+- Desplazamiento a la izquierda (`<<`), de manera única, no aborta en el caso de un desbordamiento. Esto significa que si los bits desplazados exceden la capacidad de almacenamiento del tipo de entero, el programa no terminará, resultando en valores incorrectos o comportamiento imprevisible.
+
+[Leer más](/build/smart-contracts/book/integers#operations) sobre operaciones.
+
+Operaciones incorrectas podrían alterar inesperadamente la ejecución correcta del contrato inteligente, ya sea causando un abort no deseado o calculando datos inexactos.
+
+## Aptos Objects
+
+***
+
+### Fugas de ConstructorRef
+
+Al crear objetos, asegúrate de nunca exponer el `ConstructorRef` del objeto ya que permite agregar recursos a un objeto. Un `ConstructorRef` también puede ser utilizado para generar otras capacidades (o "Refs") que se utilizan para alterar o transferir la propiedad del objeto. [Leer más](/build/smart-contracts/object/creating-objects) sobre capacidades de Objetos.
+
+#### Ejemplo de Código Vulnerable
+
+Por ejemplo, si una función `mint` devuelve el `ConstructorRef` para un NFT, puede ser transformado en un `TransferRef`, almacenado en el almacenamiento global, y puede permitir que el propietario original transfiera el NFT de vuelta después de que haya sido vendido.
+
+```move
+module 0x42::example {
+  use std::string::utf8;
+
+  public fun mint(creator: &signer): ConstructorRef {
+    let constructor_ref = token::create_named_token(
+        creator,
+        string::utf8(b"Collection Name"),
+        string::utf8(b"Collection Description"),
+        string::utf8(b"Token"),
+        option::none(),
+        string::utf8(b"https://mycollection/token.jpeg"),
+    );
+    constructor_ref
+  }
+}
+```
+
+#### Ejemplo de Código Seguro
+
+No devuelvas `CostructorRef` en la función `mint`:
+
+```move
+module 0x42::example {
+  use std::string::utf8;
+
+  public fun mint(creator: &signer) {
+    let constructor_ref = token::create_named_token(
+        creator,
+        string::utf8(b"Collection Name"),
+        string::utf8(b"Collection Description"),
+        string::utf8(b"Token"),
+        option::none(),
+        string::utf8(b"https://mycollection/token.jpeg"),
+    );
+  }
+}
+```
+
+### Cuentas de Objetos
+
+En el Framework de Aptos, múltiples recursos `key`-ables pueden ser almacenados en una sola cuenta de objeto.
+
+Sin embargo, los objetos deberían ser aislados en cuentas diferentes, de lo contrario, las modificaciones en un objeto dentro de una cuenta pueden influir en toda la colección.
+
+Por ejemplo, la transferencia de un recurso implica la transferencia de todos los miembros del grupo, ya que la función de transferencia opera en `ObjectCore`, que es esencialmente una etiqueta general para todos los recursos en la cuenta.
+
+[Leer más](/build/smart-contracts/objects) sobre Objetos de Aptos.
+
+#### Ejemplo de Código Inseguro
+
+La función `mint_two` permite que `sender` cree un `Monkey` para sí mismo y envíe un `Toad` a `recipient`.
+
+Como `Monkey` y `Toad` pertenecen a la misma cuenta de objeto, el resultado es que ambos objetos ahora pertenecen a `recipient`.
+
+```move
+module 0x42::example {
+  #[resource_group(scope = global)]
+  struct ObjectGroup { }
+
+  #[resource_group_member(group = 0x42::example::ObjectGroup)]
+  struct Monkey has store, key { }
+
+  #[resource_group_member(group = 0x42::example::ObjectGroup)]
+  struct Toad has store, key { }
+
+  fun mint_two(sender: &signer, recipient: &signer) {
+    let constructor_ref = &object::create_object_from_account(sender);
+    let sender_object_signer = object::generate_signer(constructor_ref);
+    let sender_object_addr = object::address_from_constructor_ref(constructor_ref);
+
+    move_to(sender_object_signer, Monkey{});
+    move_to(sender_object_signer, Toad{});
+    let monkey_object: Object<Monkey> = object::address_to_object<Monkey>(sender_object_addr);
+    object::transfer<Monkey>(sender, monkey_object, signer::address_of(recipient));
+  }
+}
+```
+
+#### Ejemplo de Código Seguro
+
+En este ejemplo, los objetos deberían ser almacenados en cuentas de objetos separadas:
+
+```move
+module 0x42::example {
+  #[resource_group(scope = global)]
+  struct ObjectGroup { }
+
+  #[resource_group_member(group = 0x42::example::ObjectGroup)]
+  struct Monkey has store, key { }
+
+  #[resource_group_member(group = 0x42::example::ObjectGroup)]
+  struct Toad has store, key { }
+
+  fun mint_two(sender: &signer, recipient: &signer) {
+    let sender_address = signer::address_of(sender);
+
+    let constructor_ref_monkey = &object::create_object(sender_address);
+    let constructor_ref_toad = &object::create_object(sender_address);
+    let object_signer_monkey = object::generate_signer(&constructor_ref_monkey);
+    let object_signer_toad = object::generate_signer(&constructor_ref_toad);
+
+    move_to(object_signer_monkey, Monkey{});
+    move_to(object_signer_toad, Toad{});
+
+    let object_address_monkey = signer::address_of(&object_signer_monkey);
+
+    let monkey_object: Object<Monkey> = object::address_to_object<Monkey>(object_address_monkey);
+    object::transfer<Monkey>(sender, monkey_object, signer::address_of(recipient));
+  }
+}
+```
+
+## Lógica de Negocio
+
+### Front-running
+
+El front-running implica ejecutar transacciones antes de las demás explotando el conocimiento de las acciones futuras ya realizadas por otros. Esta táctica da a los front-runners una ventaja injusta, ya que pueden anticipar y beneficiarse de los resultados de estas transacciones pendientes.
+
+El front-running puede socavar la equidad y la integridad de una aplicación descentralizada. Puede llevar a pérdidas de fondos, ventajas injustas en juegos, manipulación de precios de mercado, y una pérdida general de confianza en la plataforma
+
+#### Ejemplo de Código Inseguro
+
+En un escenario de lotería, los usuarios participan seleccionando un número del 1 al 100. En un momento determinado, el administrador de la lotería invoca la función `set_winner_number` para establecer el número ganador. Posteriormente, en una transacción separada, el administrador revisa todas las apuestas de los jugadores para determinar el ganador a través de `evaluate_bets_and_determine_winners`.
+
+Un front-runner observando el número ganador establecido por `set_winner_number` podría intentar enviar una apuesta tardía o modificar una apuesta existente para que coincida con el número ganador antes de que `evaluate_bets_and_determine_winners` ejecute.
+
+```move
+module 0x42::example {
+  struct LotteryInfo {
+    winning_number: u8,
+    is_winner_set: bool,
+  }
+
+  struct Bets { }
+
+  public fun set_winning_number(admin: &signer, winning_number: u8) {
+    assert!(signer::address_of(admin) == @admin, 0);
+    assert!(winning_number < 10,0);
+    let lottery_info = LotteryInfo { winning_number, is_winner_set: true };
+    move_to<LotteryInfo>(admin, lottery_info);
+  }
+
+  public fun evaluate_bets_and_determine_winners(admin: &signer) acquires LotteryInfo, Bets {
+    assert!(signer::address_of(admin) == @admin, 0);
+    let lottery_info = borrow_global<LotteryInfo>(admin);
+    assert(lottery_info.is_winner_set, 1);
+
+    let bets = borrow_global<Bets>(admin);
+    let winners: vector<address> = vector::empty();
+
+    let winning_bets_option = smart_table::borrow_with_default(&bets.bets, lottery_info.winning_number, &vector::empty());
+
+    vector::iter(winning_bets_option, |bet| {
+       vector::push_back(&mut winners, bet.player);
+    });
+    distribute_rewards(&winners);
+  }
+}
+```
+
+#### Ejemplo de Código Seguro
+
+Una estrategia efectiva para evitar el front-running podría ser implementar una función `finalize_lottery` que revele la respuesta y concluya el juego en una sola transacción, y hacer que las otras funciones sean privadas. Esta aproximación garantiza que tan pronto como se divulgue la respuesta, el sistema ya no acepta ninguna nueva respuesta, eliminando así la oportunidad de front-running.
+
+```move
+module 0x42::example {
+  public fun finalize_lottery(admin: &signer, winning_number: u64) {
+    set_winning_number(admin, winning_number);
+    evaluate_bets_and_determine_winners(admin);
+  }
+
+  fun set_winning_number(admin: &signer, winning_number: u64) { }
+
+  fun evaluate_bets_and_determine_winners(admin: &signer) acquires LotteryInfo, Bets { }
+}
+```
+
+### Manipulación de Oracle de Precios
+
+En las aplicaciones DeFi, los oráculos que utilizan la relación de liquidez de tokens en un par para determinar los precios de las transacciones pueden ser vulnerables a la manipulación. Esta susceptibilidad surge del hecho de que la relación de liquidez puede ser influenciada por participantes del mercado que poseen una cantidad significativa de tokens. Cuando estos participantes estratégicamente aumentan o disminuyen sus tenencias de tokens, puede impactar la relación de liquidez y, por consiguiente, afectar los precios determinados por el oráculo, potencialmente vaciando el pool.
+
+Recomendamos usar múltiples oráculos para determinar los precios.
+
+#### Código de Ejemplo Seguro
+
+Thala, por ejemplo, utiliza un diseño de oráculo en capas. El sistema tiene un oráculo principal y un oráculo secundario. Si uno de los oráculos falla, el otro sirve como respaldo basado en una lógica sofisticada de conmutación. El sistema está diseñado para situaciones adversas, y busca proporcionar alimentos de precios precisos con mínima interacción de gobierno todo el tiempo.
+
+Para más información, consulta la [documentación de Thala](https://docs.thala.fi/thala-protocol-design/move-dollar-mod/oracles).
+
+### Colisión de Identificadores de Tokens
+
+Al manejar tokens, asegúrate de que el método para comparar las estructuras de tokens para establecer un orden determinístico no conduzca a colisiones. Concatenar la dirección, el módulo y el nombre de la estructura en un vector es insuficiente, ya que no distingue entre nombres similares que deberían tratarse como únicos.
+
+Como consecuencia, el protocolo puede rechazar pares de intercambio legítimos debido a colisiones en las comparaciones de estructuras de tokens. Este error podría comprometer la integridad de las operaciones de intercambio, lo que podría llevar a una pérdida de fondos.
+
+#### Ejemplo de Código Inseguro
+
+La función `get_pool_address` crea una dirección única para un pool de liquidez asociado a pares de activos fungibles. Genera y devuelve una dirección que sirve como identificador único para el pool de liquidez del par de tokens especificado.
+
+Sin embargo, los usuarios tienen la libertad de crear una `Object<Metadata>` con cualquier símbolo que elijan. Esta flexibilidad podría llevar a la creación de instancias de `Object<Metadata>` que imiten otras instancias existentes. Este problema podría resultar en una colisión de semilla, que a su vez podría causar una colisión en la generación de la dirección del pool.
+
+```move
+module 0x42::example {
+  public fun get_pool_address(token_1: Object<Metadata>, token_2: Object<Metadata>): address {
+    let token_symbol = string::utf8(b"LP-");
+    string::append(&mut token_symbol, fungible_asset::symbol(token_1));
+    string::append_utf8(&mut token_symbol, b"-");
+    string::append(&mut token_symbol, fungible_asset::symbol(token_2));
+    let seed = *string::bytes(&token_symbol);
+    object::create_object_address(&@swap, seed)
+  }
+}
+```
+
+#### Ejemplo de Código Seguro
+
+`object::object_address` devuelve un identificador único para cada `Object<Metadata>`
+
+```move
+module 0x42::example {
+  public fun get_pool_address(token_1: Object<Metadata>, token_2: Object<Metadata>): address {
+    let seeds = vector[];
+    vector::append(&mut seeds, bcs::to_bytes(&object::object_address(&token_1)));
+    vector::append(&mut seeds, bcs::to_bytes(&object::object_address(&token_2)));
+    object::create_object_address(&@swap, seed)
+  }
+}
+```
+
+## Operaciones
+
+***
+
+### Funcionalidad de Pausa
+
+Los protocolos deberían tener la capacidad de pausar operaciones de manera efectiva. Para protocolos inmutables, una funcionalidad de pausa incorporada es necesaria. Los protocolos actualizables pueden lograr la pausa a través de la funcionalidad del contrato inteligente o a través de actualizaciones de protocolo. Las equipos deberían estar equipadas con automatización para la ejecución rápida y eficiente de este proceso.
+
+La falta de un mecanismo de pausa puede llevar a una exposición prolongada a vulnerabilidades, lo que podría resultar en pérdidas significativas. Una funcionalidad de pausa eficiente permite una respuesta rápida a amenazas de seguridad, errores, o problemas críticos, minimizando el riesgo de explotación y asegurando la seguridad de los activos de los usuarios y la integridad del protocolo.
+
+#### Ejemplo de Código Seguro
+
+Ejemplo de cómo integrar una funcionalidad de pausa
+
+```move
+module 0x42::example {
+  struct State {
+    is_paused: bool,
+  }
+
+  public entry fun pause_protocol(admin: &signer) {
+    assert!(signer::address_of(admin)==@protocol_address, ERR_NOT_ADMIN);
+    let state = borrow_global_mut<State>(@protocol_address);
+    state.is_paused = true;
+  }
+
+  public entry fun resume_protocol(admin: &signer) {
+    assert!(signer::address_of(admin)==@protocol_address, ERR_NOT_ADMIN);
+    let state = borrow_global_mut<State>(@protocol_address);
+    state.is_paused = false;
+  }
+
+  public fun main(user: &signer) {
+    let state = borrow_global<State>(@protocol_address);
+    assert!(!state.is_paused, 0);
+    // ...
+  }
+}
+```
+
+### Gestión de Claves de Publicación de Contratos Inteligentes
+
+Usar la misma cuenta para testnet y mainnet representa un riesgo de seguridad, ya que las claves privadas de testnet, a menudo almacenadas en entornos menos seguros (ex. laptops), pueden ser más fáciles de exponer o filtrar. Un atacante que pueda obtener la clave privada del contrato inteligente de testnet podría ser capaz de actualizar el de mainnet.
+
+## Aleatoriedad
+
+Para más información sobre la aleatoriedad y por qué es crucial prevenir la predicción de números aleatorios, consulta esta página: [Guía de Aleatoriedad](https://aptos.dev/guides/randomness/).
+
+***
+
+### Aleatoriedad - test-and-abort
+
+> En Aptos, siempre nos preocupamos por la seguridad. Durante la compilación, nos aseguramos de que ninguna API de aleatoriedad se invoque desde una función pública. Sin embargo, todavía permitimos que los usuarios hagan esta elección agregando el atributo `#[lint::allow_unsafe_randomness]` a la función pública.
+
+Si una función `public` directamente o indirectamente invoca la API de aleatoriedad, un usuario malintencionado puede abusar de la composición de esta función y abortar la transacción si el resultado no es el deseado. Esto permite que el usuario siga intentando hasta que logre un resultado beneficioso, socavando la aleatoriedad.
+
+#### Ejemplo de Código Vulnerable
+
+```move filename="randomness_example.move"
+module user::lottery {
+    fun mint_to_user(user: &signer) {
+        move_to(user, WIN {});
+    }
+
+    #[lint::allow_unsafe_randomness]
+    public entry fun play(user: &signer) {
+        let random_value = aptos_framework::randomness::u64_range(0, 100);
+        if (random_value == 42) {
+            mint_to_user(user);
+        }
+    }
+}
+```
+
+En este ejemplo, la función `play` es `public`, lo que la hace accesible desde otros módulos. Un usuario malintencionado puede invocar esta función y luego verificar si ha ganado. Si no ha ganado, puede abortar la transacción y volver a intentarlo.
+
+```move filename="randomness_example.move"
+module attacker::exploit {
+    entry fun exploit(attacker: &signer) {
+        @user::lottery::play(attacker);
+        assert!(exists<@user::lottery::WIN>(address_of(attacker)));
+    }
+}
+```
+
+Para resolver la posible cuestión, es suficiente establecer la visibilidad de todas las funciones que invocan la API de aleatoriedad, ya sea directamente o indirectamente, a `entry` en lugar de `public` o `public entry`.
+
+#### Ejemplo de Código Seguro
+
+```move filename="randomness_example.move"
+module user::lottery {
+    fun mint_to_user(user: &signer) {
+        move_to(user, WIN {});
+    }
+
+    #[lint::allow_unsafe_randomness]
+    entry fun play(user: &signer) {
+        let random_value = aptos_framework::randomness::u64_range(0, 100);
+        if (random_value == 42) {
+            mint_to_user(user);
+        }
+    }
+}
+```
+
+### Aleatoriedad - undergasing
+
+Cuando diferentes caminos en una función consumen diferentes cantidades de gas, un atacante puede manipular el límite de gas para sesgar el resultado. Veamos un ejemplo de cómo diferentes caminos pueden consumir diferentes cantidades de gas.
+
+#### Ejemplo de Código Vulnerable
+
+```move filename="randomness_example.move"
+module user::lottery {
+
+    //transfer 10 aptos from admin to user
+    fun win(user: &signer) {
+        let admin_signer = &get_admin_signer();
+        let aptos_metadata = get_aptos_metadata();
+        primary_fungible_store::transfer(admin_signer, aptos_metadata, address_of(user),10);
+    }
+
+    //transfer 10 aptos from user to admin, then 1 aptos from admin to fee_admin
+    fun lose(user: &signer) {
+
+        //user to admin
+        let aptos_metadata = get_aptos_metadata();
+        primary_fungible_store::transfer(user, aptos_metadata, @admin, 10);
+
+        //admin to fee_admin
+        let admin_signer = &get_admin_signer();
+        primary_fungible_store::transfer(admin_signer, aptos_metadata, @fee_admin, 1);
+    }
+
+    #[randomness]
+    entry fun play(user: &signer) {
+        let random_value = aptos_framework::randomness::u64_range(0, 100);
+        if (random_value == 42) {
+            win(user);
+        } else {
+            lose(user);
+        }
+    }
+}
+```
+
+En este ejemplo de lotería, `win` y `lose` consumen diferentes cantidades de gas.
+La función `lose` consume más gas que la función `win`. Un atacante puede establecer el límite máximo de gas que es suficiente para `win` pero no para `lose`. Esto fuerza la transacción a abortar cuando se toma la ruta `lose`, asegurando que el usuario nunca ejecutará la ruta `lose`. Luego, el usuario puede llamar a la función repetidamente hasta que gane.
+
+#### Ejemplo de Código Seguro
+
+Hay diferentes formas de asegurar el código:
+
+1. Asegúrate de que las mejores salidas consumen más o la misma cantidad de gas que las peores salidas.
+2. Permite solo direcciones de administrador para invocar la API de aleatoriedad.
+3. Asegúrate de que las funciones de entrada funcionen independientemente de los resultados aleatorios. Esto puede ser manejado comprometiendo el resultado aleatorio, luego usando el resultado aleatorio para proporcionar la acción en una transacción diferente. Evita acciones basadas en la aleatoriedad para el uso de gas consistente.
+
+> Proporcionaremos más funcionalidad en el futuro, para permitir que el código más complejo pueda ser seguro contra ataques de undergasing.

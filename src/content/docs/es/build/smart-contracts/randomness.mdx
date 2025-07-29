@@ -1,0 +1,347 @@
+---
+title: "API de Aleatoriedad"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Qué hace: un ejemplo rápido
+
+### Cómo se han obtenido números aleatorios, de forma insegura/incómoda
+
+Construir un sistema de lotería y elegir un ganador aleatorio de `n` participantes es trivial, al menos en el mundo centralizado con un servidor confiable:
+el backend simplemente llama a una función de muestreo de enteros aleatorios
+(`random.randint(0, n-1)` en python, o `Math.floor(Math.random() * n)` en JS).
+
+Desafortunadamente, sin un equivalente de `random.randint()` en Aptos Move, construir una versión dApp de esto era mucho más difícil.
+
+Uno podría haber escrito un contrato donde los números aleatorios se muestrean de forma insegura (por ejemplo, desde el timestamp de la blockchain):
+
+```move
+module module_owner::lottery {
+    // ...
+
+    struct LotteryState {
+        players: vector<address>,
+        winner_idx: std::option::Option<u64>,
+    }
+
+    fun load_lottery_state_mut(): &mut LotteryState {
+        // ...
+    }
+
+    entry fun decide_winner() {
+        let lottery_state = load_lottery_state_mut();
+        let n = std::vector::length(&lottery_state.players);
+        let winner_idx = aptos_framework::timestamp::now_microseconds() % n;
+        lottery_state.winner_idx = std::option::some(winner_idx);
+    }
+}
+```
+
+La implementación anterior es insegura de múltiples maneras:
+
+- un usuario malicioso puede sesgar el resultado eligiendo el tiempo de envío de la transacción;
+- un validador malicioso puede sesgar fácilmente el resultado seleccionando en qué bloque va la transacción `decide_winner`.
+
+Otras dApps podrían haber elegido usar una fuente externa de aleatoriedad segura
+(por ejemplo, [drand](https://drand.love/)), que típicamente es un flujo complicado:
+
+1. Los participantes acuerdan usar una semilla de aleatoriedad futura prometida por la fuente de aleatoriedad para determinar el ganador.
+2. Una vez que se revela la semilla de aleatoriedad, los clientes la obtienen y derivan el ganador localmente.
+3. Uno de los participantes envía la semilla y el ganador en la cadena.
+
+```move
+module module_owner::lottery {
+    // ...
+
+    struct LotteryState {
+        players: vector<address>,
+        /// información pública sobre la "aleatoriedad futura", típicamente una clave pública VRF y una entrada.
+        seed_verifier: vector<u8>,
+        winner_idx: std::option::Option<u64>,
+    }
+
+    fun load_lottery_state_mut(): &mut LotteryState {
+        // ...
+    }
+
+    fun is_valid_seed(seed_verifier: vector<u8>, seed: vector<u8>): bool {
+        // ...
+    }
+
+    fun derive_winner(n: u64, seed: vector<u8>): u64 {
+        // ...
+    }
+
+    entry fun update_winner(winner_idx: u64, seed: vector<u8>) {
+        let lottery_state = load_lottery_state_mut();
+        assert!(is_valid_seed(lottery_state.seed_verifier, seed), ERR_INVALID_SEED);
+        let n = std::vector::length(players);
+        let expected_winner_idx = derive_winner(n, seed);
+        assert!(expected_winner_idx == winner_idx, ERR_INCORRECT_DERIVATION);
+        lottery_state.winner_idx = std::option::some(winner_idx);
+    }
+}
+```
+
+### Lograr simplicidad + seguridad con la API de aleatoriedad de Aptos
+
+Usando la API de aleatoriedad de Aptos, la implementación se verá así:
+
+```move
+module module_owner::lottery {
+    // ...
+
+    struct LotteryState {
+        players: vector<address>,
+        winner_idx: std::option::Option<u64>,
+    }
+
+    fun load_lottery_state_mut(): &mut Lottery {
+        // ...
+    }
+
+    #[randomness]
+    entry fun decide_winner() {
+        let lottery_state = load_lottery_state_mut();
+        let n = vector::length(&lottery_state.players);
+        let winner_idx = aptos_framework::randomness::u64_range(0, n);
+        lottery_state.winner_idx = std::option::some(winner_idx);
+    }
+}
+```
+
+donde:
+
+- `let winner_idx = aptos_framework::randomness::u64_range(0, n);` es la llamada a la API de aleatoriedad que devuelve un número entero u64 en el rango `[0, n)` uniformemente aleatorio.
+- `#[randomness]` es un atributo requerido para habilitar la llamada a la API en tiempo de ejecución.
+
+<Aside type="note">
+  ### Consideraciones de Seguridad
+
+  El compilador ayuda con ataques de prueba y aborto, requiriendo que las funciones que usan aleatoriedad sean privadas. Sin embargo, la API de aleatoriedad actualmente no previene los ataques de undergasing. El contrato inteligente necesitará ser escrito de cierta manera para evitarlo.
+</Aside>
+
+## Cómo usar la API de aleatoriedad de Aptos
+
+### Prerequisitos
+
+Asegúrate de tener la última versión de [aptos-cli](https://aptos.dev/en/build/cli) instalada.
+
+### Tener en cuenta los ataques de undergasing
+
+<Aside type="caution">
+  **La API de aleatoriedad actualmente no previene los ataques de undergasing.** Lee la sección de undergasing para entender sobre los ataques de undergasing y cómo prevenirlos. Como desarrollador de dApp, necesitarás diseñar aplicaciones que usen aleatoriedad con seguridad en mente.
+</Aside>
+
+### Identificar las funciones de entrada que dependen de la aleatoriedad y hacerlas conformes
+
+Para la seguridad (discutido con más detalles más adelante), las llamadas a la API de aleatoriedad solo están permitidas desde una función de entrada que sea:
+
+- privada, y
+- anotada con `#[randomness]`.
+
+Ahora es un buen momento para pensar en qué acciones del usuario necesitan la API de aleatoriedad, escríbelas y asegúrate de que sean privadas y tengan el atributo correcto, como se muestra en el ejemplo a continuación.
+
+```move
+module module_owner::lottery {
+    // ...
+
+    #[randomness]
+    entry fun decide_winner() {
+        // ...
+    }
+}
+```
+
+En tiempo de ejecución, cuando se llama a la API de aleatoriedad, el VM verifica si el más externo de la pila de llamadas es una función de entrada privada con el atributo `#[randomness]`.
+**Si no, la transacción completa se aborta.**
+
+<Aside type="note">
+  NOTA: Esto también significa que las llamadas a la API de aleatoriedad solo son compatibles en transacciones de función de entrada.
+  (Por ejemplo, usar la API de aleatoriedad en un script de Move es imposible.)
+</Aside>
+
+### Llamar a la API
+
+Las APIs son funciones públicas bajo `0x1::randomness` y pueden ser referenciadas directamente, como se demuestra en el ejemplo de la lotería anterior.
+
+```move
+module module_owner::lottery {
+    // ...
+
+    #[randomness]
+    entry fun decide_winner() {
+        // ...
+        let winner_idx = aptos_framework::randomness::u64_range(0, n);
+        lottery_state.winner_idx = std::option::some(winner_idx);
+    }
+}
+```
+
+El ejemplo anterior usa la función `u64_range()` pero muchos otros tipos básicos también son compatibles.
+Aquí hay una visión general de todas las APIs, donde `T` puede ser uno de `u8, u16, u32, u64, u128, u256`.
+
+```move
+module aptos_framework::randomness {
+    /// Genera un número uniformemente al azar.
+    fun u8_integer(): u8 {}
+
+    /// Genera un número uniformemente al azar.
+    fun u16_integer(): u16 {}
+
+    // fun u32_integer(), fun u64_integer() ...
+
+    /// Genera un número `[min_incl, max_excl)` uniformemente al azar.
+    fun u8_range(min_incl: u8, max_excl: u8): u8 {}
+
+    /// Genera un número `[min_incl, max_excl)` uniformemente al azar.
+    fun u16_range(min_incl: u16, max_excl: u16): u16 {}
+
+    // fun u32_range(), fun u64_range() ...
+
+    /// Genera una secuencia de bytes uniformemente al azar
+    /// n es el número de bytes
+    /// Si n es 0, devuelve el vector vacío.
+    fun bytes(n: u64): vector<u8> {}
+
+    /// Genera una permutación de `[0, 1, ..., n-1]` uniformemente al azar.
+    /// n es el número de bytes
+    /// Si n es 0, devuelve el vector vacío.
+    fun permutation(n: u64): vector<u64> {}
+}
+```
+
+La lista completa de funciones de API y documentación puede encontrarse [aquí](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/doc/randomness.md).
+
+## Consideraciones de Seguridad
+
+La API de aleatoriedad es poderosa en muchas maneras: desbloquea nuevos diseños de dApp;
+pero si se usa incorrectamente, puede dejar sus dApps abiertas a ataques!
+A continuación se muestran algunos errores comunes que deberías evitar.
+
+### Llamadas a la API de aleatoriedad en funciones públicas
+
+A medida que tu dApp se vuelve más complicada, es posible que tengas múltiples funciones de entrada que necesiten compartir la misma lógica de dependencia de la aleatoriedad, y quieras extraer la lógica como una función auxiliar separada.
+
+Mientras que esto es compatible como se muestra a continuación, se debe tener cuidado.
+
+```move
+module module_owner::lottery {
+    // ...
+
+    #[randomness]
+    entry fun decide_winner_v0() {
+        // ...
+        decide_winner_internal(lottery_state);
+    }
+
+    #[randomness]
+    entry fun decide_winner_v1() {
+        // ...
+        decide_winner_internal(lottery_state);
+    }
+
+    // Una función auxiliar privada
+    fun decide_winner_internal(lottery_state: &mut lottery_state) {
+        let n = std::vector::length(&lottery_state.players);
+        let winner_idx = aptos_framework::randomness::u64_range(0, n);
+        lottery_state.winner_idx = std::option::some(winner_idx);
+    }
+}
+```
+
+Si `decide_winner_internal()` fuera accidentalmente marcado como público,
+los jugadores maliciosos pueden desplegar su propio contrato para:
+
+1. llamar `decide_winner_internal()`;
+2. leer el resultado de la lotería (suponiendo que el módulo `lottery` tiene algunas funciones de getter para el resultado);
+3. abortar si el resultado no es favorable.
+   Repitiendo la llamada a su propio contrato hasta que una txn tenga éxito,
+   los usuarios maliciosos pueden sesgar la distribución uniforme del ganador (diseño inicial del desarrollador de dApp).
+   Esto se conoce como un [ataque de prueba y aborto](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-41.md#test-and-abort-attacks).
+
+El compilador de Aptos Move ha sido actualizado para prevenir este ataque para la seguridad de tu contrato:
+una función pública que depende de la aleatoriedad se trata como un error de compilación.
+Si has completado los pasos en la sección ["Construir Aptos CLI"](/build/cli),
+entonces tus Aptos CLI están equipados con el compilador actualizado.
+
+```move
+module module_owner::lottery {
+    // Error de compilación!
+    public fun decide_winner_internal(lottery_state: &mut lottery_state) {
+        let n = std::vector::length(&lottery_state.players);
+        let winner_idx = aptos_framework::randomness::u64_range(0, n);
+        lottery_state.winner_idx = std::option::some(winner_idx);
+    }
+}
+```
+
+No recomendado, pero si tienes la intención de exponer tal función de dependencia de la aleatoriedad a la pública, puedes omitir la verificación del compilador anotando tu función con `#[lint::allow_unsafe_randomness]`.
+
+```move
+module module_owner::lottery {
+    // Puede compilar, pero usa con precaución!
+    #[lint::allow_unsafe_randomness]
+    public fun decide_winner_internal(lottery_state: &mut lottery_state) {
+        let n = std::vector::length(&lottery_state.players);
+        let winner_idx = aptos_framework::randomness::u64_range(0, n);
+        lottery_state.winner_idx = std::option::some(winner_idx);
+    }
+}
+```
+
+### Ataques de undergasing, y cómo prevenir
+
+Imagina tal dApp. Define una función de entrada privada para un usuario para:
+
+1. lanzar una moneda (costo de gas: 9), luego
+2. obtener una recompensa (costo de gas: 10) si moneda=1, o hacer limpieza (costo de gas: 100) de lo contrario.
+
+Un usuario malicioso puede controlar su saldo de cuenta, por lo que cubre hasta 108 unidades de gas (o establecer el parámetro de transacción `max_gas=108`),
+y la rama de limpieza (costo total de gas: 110) siempre abortará con un error de gas insuficiente.
+El usuario luego llama repetidamente a la función de entrada hasta que obtiene la recompensa.
+
+Formalmente, esto se conoce como un [ataque de undergasing](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-41.md#undergasing-attacks),
+donde un atacante puede controlar cuánto gas queda para que la función de entrada se ejecute,
+y así puede decidir arbitrariamente abortar caminos que cuestan más gas,
+sesgando el resultado (es decir, cambiando efectivamente la distribución de números aleatorios).
+
+<Aside type="caution">
+  **ADVERTENCIA: la API de aleatoriedad actualmente no previene los ataques de undergasing.**
+  Como desarrollador de dApp, necesitarás ser muy cuidadoso en tu diseño para evitar este tipo de ataque.
+  Aquí hay algunas ideas de cómo prevenir un ataque de undergasing en general.
+
+  - Haz que la función de entrada sea independiente del resultado de la aleatoriedad.
+    El ejemplo más simple es no "actuar" sobre el resultado de la aleatoriedad, es decir, leerlo y almacenarlo para más tarde. Tenga en cuenta que llamar a cualquier otra función puede tener un costo de gas variable. Por ejemplo, cuando llamas a la aleatoriedad para decidir qué jugador debe ganar, y luego depositar las ganancias al ganador podría parecer un costo de gas fijo. Pero, `0x1::coin::transfer` / `0x1::fungible_asset::transfer` puede tener un costo variable basado en el estado de la cuenta del usuario en la cadena.
+  - Si tu dApp involucra un administrador/grupo de administradores confiables, solo permite que el administrador ejecute la transacción de aleatoriedad (es decir, requiere un firmante de administrador).
+  - Haz que el camino que es más beneficioso tenga el mayor gas (como el atacante solo puede abortar caminos con gas por encima de un umbral que elige.
+    NOTA: esto puede ser complicado de conseguir, y el programa de gas puede cambiar, y es aún más difícil de conseguir cuando hay más de 2 posibles resultados.
+
+  Tenga en cuenta que todo lo que no cae en las categorías anteriores puede ser susceptible a un ataque de undergasing de manera sutil. Contáctanos si necesitas ayuda.
+
+  Estaremos proporcionando más funcionalidad en el futuro, para permitir que el código más complejo sea capaz de ser seguro contra los ataques de undergasing.
+</Aside>
+
+### Es aleatorio, pero no es secreto
+
+Mientras que la API de aleatoriedad imita las bibliotecas estándar que usas para implementar un servidor centralizado privado,
+ten en cuenta que **la semilla es pública, y así también es la ejecución de la transacción**,
+y no toda la lógica de dependencia de la aleatoriedad en tu servidor centralizado privado puede ser transferida en la cadena de manera segura,
+**especialmente cuando implica un secreto que solo el servidor debería ver**.
+
+Por ejemplo, en tu contrato, NO intentes hacer lo siguiente.
+
+- Usa la API de aleatoriedad para generar una pareja de claves asimétricas, descartar la clave privada, y pensar que la clave pública es segura.
+- Usa la API de aleatoriedad para barajar algunas cartas abiertas, cubrirlas, y pensar que nadie conoce la permutación.
+
+## Leer más
+
+[Aptogotchi Random Mint](https://github.com/aptos-labs/aptogotchi-random-mint/tree/main) es una dApp oficial de demostración que usa la API de aleatoriedad para demostrar su uso.
+
+La lista completa de funciones de API y documentación puede encontrarse [aquí](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/doc/randomness.md).
+
+También puedes encontrar la implementación parcial de las funciones de API y ejemplos de pruebas unitarias [aquí](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/randomness.move).
+
+Ver [AIP-41](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-41.md) para el diseño de la API,
+y [AIP-79](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-79.md) si estás interesado en detalles de nivel de sistema/criptografía.

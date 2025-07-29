@@ -1,0 +1,73 @@
+---
+title: "Obtener Datos de Transacciones de Cuenta"
+---
+
+import { GraphQLEditor } from '~/components/react/GraphQLEditor';
+
+import { Aside } from '@astrojs/starlight/components';
+
+`AccountTransactionsData` recupera `transaction_version`s de transacciones que afectan una dirección de cuenta especificada, ordenadas en orden descendente. `transaction_version` es un id único dado a cada transacción en la cadena que aumenta en 1 cada vez.
+
+Esta consulta es esencial para aplicaciones que requieren un registro histórico de transacciones para auditoría, seguimiento o propósitos de visualización.
+
+<Aside type="note">
+  ¡Experimenta y ve los resultados! Modifica la dirección, límite y offset en las variables de abajo para personalizar tu consulta.
+</Aside>
+
+<GraphQLEditor
+  query={`query GetAccountTransactionsData($address: String, $limit: Int) {
+  account_transactions(
+    where: { account_address: { _eq: $address } }
+    order_by: { transaction_version: desc }
+    limit: $limit
+  ) {
+    transaction_version
+    __typename
+  }
+}`}
+  variables={`{
+  "address": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "limit": 10
+}`}
+/>
+
+#### Variables:
+
+- `$address`: **String** - La dirección de cuenta de la blockchain para la cual consultar datos de transacciones. Ejemplo: `"0x1abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"`.
+- `$limit`: **Integer** - Especifica el número máximo de versiones de transacciones a devolver. Ayuda a manejar el volumen de datos recuperados. Ejemplo: `10`.
+- `$offset`: **Integer** - El offset desde el cual comenzar a obtener las versiones de transacciones. Útil para paginar resultados. Ejemplo: `0`.
+
+<br />
+
+# Obtener Transacciones Recientes
+
+Una variante útil de la consulta anterior limita los resultados solo a aquellos que sucedieron después de una `transaction_version` específica. Todos los resultados tendrán una `transaction_version` mayor que `$gt`.
+
+<GraphQLEditor
+  query={`query GetAccountTransactionsData($address: String, $limit: Int, $gt: bigint) {
+  account_transactions(
+    where: {
+      account_address: { _eq: $address }
+      transaction_version: { _gt: $gt }
+    }
+    order_by: { transaction_version: desc }
+    limit: $limit
+  ) {
+    transaction_version
+    __typename
+  }
+}`}
+  variables={`{
+  "address": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "limit": 10,
+  "gt": 599296148
+}`}
+/>
+
+#### Variables:
+
+- `$address`: **String** - La dirección de cuenta de la blockchain para la cual consultar datos de transacciones. Ejemplo: `"0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"`.
+- `$limit`: **Integer** - Especifica el número máximo de versiones de transacciones a devolver. Esto ayuda a limitar los resultados a un tamaño manejable. Ejemplo: `10`.
+- `$gt`: **bigint** - El número de versión de transacción por encima del cual se deben obtener las transacciones. Una versión de transacción es un número secuencialmente creciente que se incrementa para cada transacción.
+  La versión de transacción 0 es la primera transacción (transacción de génesis), y una versión de transacción 100 es la 101ª transacción en la blockchain.
+  Ejemplo: `599296148`.

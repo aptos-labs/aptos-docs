@@ -9,6 +9,7 @@ export const sidebarGroupIcons: Record<string, string> = {
   guides: "ph:rocket-launch",
   sdksAndTools: "ph:crane-tower",
   concepts: "ph:file-text",
+  ai: "ph:robot",
   reference: "ph:book-open",
 };
 
@@ -429,13 +430,7 @@ export const sidebar = [
         collapsed: true,
         items: ["build/create-aptos-dapp", "build/create-aptos-dapp/faq"],
       },
-
       "network/faucet",
-      {
-        label: "LLMs Text",
-        link: "/llms-txt",
-        badge: { text: "NEW", variant: "tip" },
-      },
     ],
   }),
 
@@ -549,11 +544,11 @@ export const sidebar = [
         label: "Reference",
         collapsed: true,
         items: [
-          { label: "View Frameworks", link: "/move-reference" },
-          { label: "Aptos Framework", link: "/move-reference/mainnet/aptos-framework" },
-          { label: "Aptos Standard Library", link: "/move-reference/mainnet/aptos-stdlib" },
-          { label: "Aptos Token Objects", link: "/move-reference/mainnet/aptos-token-objects" },
-          { label: "Move Standard Library", link: "/move-reference/mainnet/move-stdlib" },
+          { label: "View Frameworks", link: "move-reference" },
+          { label: "Aptos Framework", link: "move-reference/mainnet/aptos-framework" },
+          { label: "Aptos Standard Library", link: "move-reference/mainnet/aptos-stdlib" },
+          { label: "Aptos Token Objects", link: "move-reference/mainnet/aptos-token-objects" },
+          { label: "Move Standard Library", link: "move-reference/mainnet/move-stdlib" },
           "build/smart-contracts/move-reference",
           "build/smart-contracts/reference",
           "build/smart-contracts/error-codes",
@@ -777,8 +772,25 @@ export const sidebar = [
       }),
       "build/indexer/indexer-api",
       "build/indexer/indexer-api/indexer-reference",
-      { label: "REST API", link: "/build/apis/fullnode-rest-api" },
+      "build/apis/fullnode-rest-api",
       "network/glossary",
+    ],
+  }),
+
+  group("ai", {
+    items: [
+      {
+        label: "Aptos MCP",
+        link: "build/ai/aptos-mcp",
+        badge: { text: "NEW", variant: "tip" },
+      },
+      "build/ai/aptos-mcp/claude",
+      "build/ai/aptos-mcp/cursor",
+      {
+        label: "LLMs Txt",
+        link: "llms-txt",
+        badge: { text: "NEW", variant: "tip" },
+      },
     ],
   }),
 

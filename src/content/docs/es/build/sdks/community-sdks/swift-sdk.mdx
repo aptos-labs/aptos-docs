@@ -1,0 +1,109 @@
+---
+title: "SDK de Swift"
+---
+
+Hay un SDK de Swift para Aptos, construido por Alcove [aquí](https://github.com/ALCOVE-LAB/aptos-swift-sdk)
+
+## Instalando el SDK de Swift
+
+```swift
+.package(url: "https://github.com/ALCOVE-LAB/aptos-swift-sdk.git", branch: "main")
+```
+
+## Usando el SDK de Swift
+
+### Creando un cliente
+
+Puedes crear un cliente importando el aptos-swift-sdk, y creando un `Client`
+
+```swift
+import Aptos
+
+let client = Aptos(aptosConfig: .devnet)
+
+```
+
+Puedes configurar la red con AptosConfig.Network, o usar un AptosConfig.devnet, AptosConfig.testnet, o AptosConfig.mainnet preexistente
+
+### Creando una clave privada
+
+Puedes crear una nueva clave privada de cuenta Ed25519 llamando Account.generate().
+
+```swift
+let account = Account.generate()
+```
+
+Derivar desde clave privada
+
+```swift
+
+let privateKey = try Ed25519PrivateKey("myEd25519privatekeystring")
+// or
+let singleKeyPrivateKey = try Secp256k1PrivateKey(Secp256k1.privateKey)
+
+let newAccount: Account.Ed25519Account = try Account.fromPrivateKey(privateKey)
+let singleKeyAccount: Account.SingleKeyAccount = try Account.fromPrivateKey(singleKeyPrivateKey)
+```
+
+Derivar desde path
+
+```swift
+let path = "m/44'/637'/0'/0'/1"
+let mnemonic = "various float stumble..."
+let newAccount = try Account.fromDerivationPath(Wallet.path, mnemonic: Wallet.mnemonic)
+```
+
+### Financiando cuentas
+
+Puedes crear y financiar una cuenta con un faucet en devnet
+
+```swift
+let account = Account.generate()
+let txn = try await client.faucet.fundAccount(accountAddress: account.accountAddress, amount: 100_000_000)
+```
+
+En testnet puedes acuñar en la [página de acuñación](/network/faucet).
+
+### Enviando una transacción
+
+Puedes enviar un AptosCoin via una transacción
+
+```swift
+let txn: TransactionResponse
+let senderAccount = Account.generate()
+_ = try await aptos.faucet.fundAccount(accountAddress: senderAccount.accountAddress, amount: 100_000_000)
+let bob = Account.generate()
+// Construir transacción
+let rawTxn = try await aptos.transaction.build.simple(
+    sender: senderAccount.accountAddress,
+    data: InputEntryFunctionData(
+        function: "0x1::aptos_account::transfer",
+        functionArguments: [bob.accountAddress, 100]
+    )
+)
+// Firmar
+let authenticator = try await aptos.transaction.sign.transaction(
+    signer: senderAccount,
+    transaction: rawTxn
+)
+// Enviar
+let response = try await aptos.transaction.submit.simple(
+    transaction: rawTxn,
+    senderAuthenticator: authenticator
+)
+// Esperar
+txn = try await aptos.transaction.waitForTransaction(transactionHash: response.hash)
+// Leer
+let transaction = try await aptos.transaction.getTransactionByHash(txn.hash)
+
+```
+
+### Pruebas
+
+Para ejecutar las pruebas del SDK, simplemente ejecuta desde la raíz de este repositorio:
+
+> Nota: para una mejor experiencia, asegúrate de que no haya ningún proceso de nodo local de aptos ejecutándose (puedes verificar si hay un proceso ejecutándose en el puerto 8080).
+
+```swift
+swift test
+```

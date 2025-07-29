@@ -1,0 +1,100 @@
+---
+title: "Servicio de Stream de Transacciones Auto-Alojado"
+---
+
+{/* <IndexerBetaNotice /> */}
+
+Para ejecutar el Servicio de Stream de Transacciones Auto-Alojado, necesitarás ejecutar los siguientes componentes.
+
+Indexer FN \[https://github.com/aptos-labs/aptos-core/tree/main/ecosystem/indexer-grpc/indexer-grpc-fullnode]: Un FN con funcionalidad de indexer grpc habilitada. Típicamente tu servicio de datos necesitará acceder a todos los datos históricos, por lo tanto tu FN necesita sincronizar desde génesis para arrancar toda la pila. El pruner puede ser eliminado (a través del pruner) más tarde una vez que los datos estén persistidos en el file store.
+
+GrpcManager \[https://github.com/aptos-labs/aptos-core/tree/main/ecosystem/indexer-grpc/indexer-grpc-manager]: Un componente centralizado que maneja todos los componentes en la pila. Puede ejecutarse en dos modos (master y no-master), solo se permite 1 master. Cuando está ejecutándose en modo master, también extraerá datos del FN upstream, y persistirá los datos en el file store (que puede ser un sistema de archivos local o Google Cloud Storage).
+
+DataService \[https://github.com/aptos-labs/aptos-core/tree/main/ecosystem/indexer-grpc/indexer-grpc-data-service-v2]: Proporciona el servicio de streaming Grpc orientado al cliente. Puede ejecutarse en 2 modos. El modo live sirve datos desde su caché local, el modo histórico sirve datos desde el file store.
+
+## Configuraciones de Ejemplo
+
+- FN
+
+```
+indexer_grpc:
+  enabled: true
+  address: 0.0.0.0:50051 # La dirección para servir solicitudes Grpc.
+  processor_task_count: 32
+  processor_batch_size: 100
+  output_batch_size: 100
+
+indexer_table_info:
+  table_info_service_mode: IndexingOnly
+  parser_task_count: 10
+  parser_batch_size: 100
+```
+
+- GrpcManager
+
+```
+health_check_port: 8081 # El puerto para propósitos de monitoreo.
+server_config:
+  is_master: true # Si está ejecutándose en modo master.
+  service_config:
+    listen_address: 0.0.0.0:50052 # El puerto que sirve solicitudes Grpc.
+  self_advertised_address: 0.0.0.0:50052
+  grpc_manager_addresses: # Todas las direcciones de GrpcManager en la pila, necesitan apuntar al server_config.self_advertised_address en la configuración de GrpcManager.
+    - >-
+      http://0.0.0.0:50052
+  fullnode_addresses: # Todas las direcciones de FN upstream en la pila, necesitan apuntar al indexer_grpc.address en la configuración de FN.
+    - >-
+      http://0.0.0.0:50051
+    - >-
+      http://other-fullnode.xyz:50051
+  file_store_config:
+    file_store_type: GcsFileStore
+    gcs_file_store_bucket_name: indexer
+    gcs_file_store_service_account_key_path: /secrets/indexer-sa-key
+  chain_id: 1
+```
+
+- DataService
+
+```
+health_check_port: 8081 # El puerto para propósitos de monitoreo.
+server_config:
+  chain_id: 1
+  self_advertised_address: 0.0.0.0:50053
+  grpc_manager_addresses: # Todas las direcciones de GrpcManager en la pila, necesitan apuntar al server_config.self_advertised_address en la configuración de GrpcManager.
+    - >-
+      http://0.0.0.0:50052
+  service_config:
+    listen_address: 0.0.0.0:50053
+  live_data_service_config: # Para el servicio de datos en vivo.
+    enabled: true
+    num_slots: 5000000 # Número máximo de transacciones para cachear.
+    size_limit_bytes: 10000000000 # Tamaño de caché en bytes.
+  historical_data_service_config: # Para el servicio de datos históricos.
+    enabled: true
+    file_store_config:
+      file_store_type: GcsFileStore
+      gcs_file_store_bucket_name: indexer
+      gcs_file_store_service_account_key_path: /secrets/indexer-sa-key
+```
+
+## Uso
+
+- Usa GrpcManager para enrutamiento / balanceo de carga
+
+Llama a GrpcManager.GetDataServiceForRequest primero, devolverá la dirección de una instancia del servicio de datos.
+
+Luego llama a DataService.GetTransactions.
+
+- Usa DataService directamente
+
+Llama a DataService.GetTransactions directamente. En este caso podrías querer ejecutar tanto el servicio de datos en vivo como el servicio de datos históricos juntos.
+
+## Uso Avanzado
+
+- No mantengas historial completo
+  Si tu stream nunca necesita servir datos antiguos y no quieres mantener el historial completo, por ejemplo quieres iniciar un stream ahora y solo te importan los datos en el futuro, puedes elegir no sincronizar desde génesis.
+
+Para hacer eso, primero puedes iniciar tu FN y hacer una sincronización rápida. Luego descarga la base de datos de información de tabla más reciente desde https://console.cloud.google.com/storage/browser/aptos-indexer-grpc-mainnet-table-info-backup (para testnet, reemplaza `mainnet` con `testnet`), descomprime a la carpeta db en tu FN.
+
+Luego inicia tu GrpcManager, generará el `metadata.json` en tu file store (podría ser tu file stream local o GCS basado en tu configuración). Actualiza manualmente la versión a la siguiente versión desde la que quieres comenzar a procesar. (la versión debe ser un múltiplo de 100000 más 1, ej. 1000000001, y tu FN debe tener datos en esta versión).

@@ -10,6 +10,7 @@ const labels = {
   nodes: "Nodes",
   concepts: "Concepts",
   reference: "Reference",
+  ai: "AI and LLMs",
   contribute: "Contribute",
 
   // Build Sub-Groups

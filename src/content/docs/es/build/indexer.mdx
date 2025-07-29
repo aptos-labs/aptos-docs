@@ -1,0 +1,105 @@
+---
+title: "Indexador"
+---
+
+import { Aside, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+import { GraphQLEditor } from '~/components/react/GraphQLEditor';
+
+Tenemos varias ofertas para obtener datos indexados de la blockchain de Aptos.
+
+1. Consulta la [API del Indexador](/build/indexer/indexer-api) para obtener datos básicos sobre transacciones, activos fungibles y tokens
+2. Indexa tu contrato personalizado con el [SDK del Indexador](/build/indexer/indexer-sdk)
+3. Transmite transacciones sin procesar desde el [Servicio de Transmisión de Transacciones](/build/indexer/txn-stream) a tu procesador o servicio
+
+## API del Indexador
+
+El Indexador de Aptos es una API que puedes usar para obtener:
+
+1. Datos agregados (ej. ¿Cuántos NFTs existen?)
+2. Datos históricos (ej. ¿Qué transacciones ha enviado esta cuenta?)
+3. Datos que son difíciles de obtener desde la API más simple del [Nodo de Aptos](/build/apis/fullnode-rest-api) (ej. ¿Qué cuenta posee un token llamado "ExampleToken"?).
+
+Por ejemplo, puedes usar la API del Indexador para buscar los balances de activos fungibles de cualquier cuenta así:
+
+<GraphQLEditor
+  query={`query GetFungibleAssetBalances($address: String, $offset: Int) {
+  current_fungible_asset_balances(
+    where: { owner_address: { _eq: $address } }
+    offset: $offset
+    limit: 100
+    order_by: { amount: desc }
+  ) {
+    asset_type
+    amount
+    __typename
+  }
+}`}
+  variables={`{
+  "address": "0x0000000000000000000000000000000000000000000000000000000000000001",
+  "offset": 0
+}`}
+/>
+
+<Aside type="note">
+  El Indexador rastrea cada transacción que ocurre en la cadena, luego expone esos datos a través de una API GraphQL.
+</Aside>
+
+## Usando la API del Indexador
+
+Aprende cómo usar la API del Indexador, qué representa cada tabla y la arquitectura.
+
+<CardGrid>
+  <LinkCard href="/es/build/indexer/indexer-api" title="Accediendo a la API" description="Aprende cómo consultar la API del Indexador." />
+
+  <LinkCard href="/es/build/indexer/indexer-api/indexer-reference" title="Referencia de Tablas del Indexador" description="Referencia detallada para las tablas del Indexador y sus esquemas." />
+
+  <LinkCard href="/es/build/indexer/indexer-api/architecture" title="Arquitectura" description="Diseño detallado de la arquitectura del Indexador." />
+
+  <LinkCard href="/es/build/indexer/indexer-api/self-hosted" title="API del Indexador Auto-hospedada" description="Hospeda tu propia API del Indexador" />
+</CardGrid>
+
+### Consultas de Ejemplo
+
+Para ayudarte a comenzar, aquí están las consultas más comunes para las que se usa el Indexador.
+
+<CardGrid>
+  <LinkCard href="/es/build/indexer/indexer-api/fungible-asset-balances" title="Obtener Balances de Activos Fungibles" description="Obtén todos los activos fungibles que una cuenta posee actualmente." />
+
+  <LinkCard href="/es/build/indexer/indexer-api/account-transactions" title="Obtener Transacciones de Cuenta" description="Obtén todas las transacciones que impactan una cuenta." />
+
+  <LinkCard href="/es/build/indexer/indexer-api/ans-lookup" title="Obtener Nombre de Aptos" description="Recupera el nombre de Aptos asociado con una cuenta (a través del ANS)." />
+
+  <LinkCard href="/es/build/indexer/indexer-api/fungible-asset-info" title="Obtener Información de Activo Fungible" description="Obtén información detallada sobre un activo fungible específico." />
+
+  <LinkCard href="/es/build/indexer/indexer-api/get-nft-collections" title="Obtener Colecciones NFT" description="Recupera colecciones NFT poseídas por una cuenta específica." />
+
+  <LinkCard href="/es/build/indexer/indexer-api/get-nfts" title="Obtener NFTs" description="Recupera NFTs individuales poseídos por una cuenta específica." />
+
+  <LinkCard href="/es/build/indexer/indexer-api/token-metadata" title="Obtener Metadatos de Token" description="Obtén información de metadatos para un token específico." />
+
+  <LinkCard href="/es/build/indexer/indexer-api/get-delegators" title="Contar Delegadores en Pool de Staking" description="Recupera el número de delegadores activos en un pool de staking." />
+</CardGrid>
+
+## SDK del Indexador
+
+Si la API del Indexador hospedada no es suficiente o si quieres indexar tu contrato personalizado, puedes crear un procesador con el [SDK del Indexador](/build/indexer/indexer-sdk).
+
+<CardGrid>
+  <LinkCard href="/es/build/indexer/indexer-sdk/quickstart" title="Guía de Inicio Rápido" description="Comienza con el SDK del Indexador" />
+
+  <LinkCard href="/es/build/indexer/indexer-sdk/documentation" title="Documentación" description="Lee documentación sobre el SDK del Indexador" />
+</CardGrid>
+
+## Servicio de Transmisión de Transacciones
+
+El Servicio de Transmisión de Transacciones es un servicio GRPC que transmite transacciones sin procesar a tu procesador o servicio.
+Si estás usando el SDK del Indexador, necesitarás un token de autorización para conectarte al Servicio de Transmisión de Transacciones.
+
+<CardGrid>
+  <LinkCard href="/es/build/indexer/txn-stream/aptos-hosted-txn-stream" title="Servicio de Transmisión de Transacciones Hospedado por Aptos" description="Obtén acceso al Servicio de Transmisión de Transacciones hospedado por Aptos" />
+</CardGrid>
+
+## Indexador Legacy
+
+Encuentra información sobre el indexador legacy [aquí](/build/indexer/legacy).

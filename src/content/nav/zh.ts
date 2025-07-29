@@ -13,6 +13,7 @@ export default navDictionary({
   smartContracts: "智能合约", // Smart Contracts
   guides: "指南", // Guides
   reference: "参考", // Reference
+  ai: "AI 和 LLMs",
   contribute: "贡献", // Contribute
 
   // Build Sub-Groups

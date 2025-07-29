@@ -1,0 +1,94 @@
+---
+title: "Surf: Seguridad de Tipos TypeScript para Contratos Move"
+---
+
+import { Steps, TabItem, Tabs } from '@astrojs/starlight/components';
+
+## ¿Qué es Surf?
+
+Surf es una librería de TypeScript construida sobre el SDK de TypeScript de Aptos y el adaptador de wallet que proporciona seguridad de tipos estática para tus contratos Move infiriendo los tipos desde el ABI (Interfaz Binaria de Aplicación) del contrato. Te permite detectar errores de tipo en tiempo de compilación en lugar de en tiempo de ejecución. La mayoría de los IDEs de TypeScript proporcionarán advertencias automáticamente si intentas acceder a campos que no existen o proporcionas tipos de entrada incorrectos.
+
+## Uso
+
+<Steps>
+  1. Paso 1
+
+     Primero, descarga el ABI del contrato Move y guárdalo en un archivo TypeScript. En este caso, llamamos al archivo `abi.ts` en la carpeta `src/utils`.
+
+     <Tabs>
+       <TabItem label="macOS & Linux">
+         ```shellscript filename="get_abi.sh"
+         #! /bin/bash
+
+         # reemplaza con la red donde vive tu contrato
+         NETWORK=testnet
+         # reemplaza con la dirección de tu contrato
+         CONTRACT_ADDRESS=0x12345
+         # reemplaza con el nombre de tu módulo, cada archivo .move excepto los scripts move tiene module_address::module_name {}
+         MODULE_NAME=fungible_asset_launchpad
+
+         # guarda el ABI en un archivo TypeScript
+         echo "export const ABI = $(curl https://fullnode.$NETWORK.aptoslabs.com/v1/accounts/$CONTRACT_ADDRESS/module/$MODULE_NAME | sed -n 's/.*\"abi\":\({.*}\).*}$/\1/p') as const" > abi.ts
+         ```
+       </TabItem>
+
+       <TabItem label="Windows">
+         ```powershell filename="get_abi.ps1"
+         # reemplaza con la red donde vive tu contrato
+         $NETWORK = "testnet"
+         # reemplaza con la dirección de tu contrato
+         $CONTRACT_ADDRESS = "0x1"
+         # reemplaza con el nombre de tu módulo, cada archivo .move excepto los scripts move tiene module_address::module_name {}
+         $MODULE_NAME = "fungible_asset_launchpad"
+
+         # guarda el ABI en un archivo TypeScript
+         Invoke-RestMethod -Uri "https://fullnode.$NETWORK.aptoslabs.com/v1/accounts/$CONTRACT_ADDRESS/module/$MODULE_NAME" |
+             Select-Object -ExpandProperty abi | ConvertTo-Json -Compress |
+             Foreach-Object { "export const ABI = $_ as const" } |
+             Out-File -FilePath "abi.ts"
+         ```
+       </TabItem>
+     </Tabs>
+
+  2. Paso 2
+
+     Con el ABI, puedes usar Surf como una capa sobre el cliente `Aptos` del SDK de TypeScript de Aptos al interactuar con contratos Move. Para operaciones no relacionadas con contratos, aún deberás usar `Aptos`.
+
+     ```typescript filename="src/utils/aptos.ts"
+     import { createSurfClient } from '@thalalabs/surf';
+     import { Aptos, AptosConfig, NETWORK } from "@aptos-labs/ts-sdk";
+     import { ABI } from "./abi";
+
+     // Primero, crea un cliente de Aptos, asegúrate de que la red sea la misma donde vive el contrato
+     export const aptos = new Aptos(new AptosConfig({ network: Network.DEVNET }));
+     // Segundo, crea un SurfClient con el cliente de Aptos y el ABI
+     export const surfClient = createSurfClient(aptos).useABI(ABI);
+
+     // Usa Surf para ejecutar una función de entrada
+     const result = await surfClient.entry.transfer({
+       functionArguments: ['0x1', 1],
+       typeArguments: ['0x1::aptos_coin::AptosCoin'],
+       account: Account.fromPrivateKey(...),
+     });
+
+     // Usa Surf para consultar una función de vista
+     const [balance] = await surfClient.view.balance({
+       functionArguments: ['0x1'],
+       typeArguments: ['0x1::aptos_coin::AptosCoin'],
+     });
+     ```
+</Steps>
+
+## Recursos
+
+- [Surf GitHub](https://github.com/ThalaLabs/surf)
+- [Un ejemplo simple de Next.js demostrando Surf](https://github.com/ThalaLabs/surf/tree/main/example)
+- [Un ejemplo de un launchpad de activo fungible usando Surf](https://github.com/aptos-labs/move-by-examples/tree/main/fungible-asset-launchpad): Este ejemplo es parte de la guía Solana a Aptos en Aptos Learn, puedes probarlo [aquí](https://fungible-asset-launchpad.vercel.app/) y leer el tutorial completo [aquí](https://learn.aptoslabs.com/en/tutorials/aptogotchi-intermediate/fungible-assets?workshop=solana-to-aptos).
+
+## Créditos
+
+Surf es construido por [Thala Labs](https://thala.fi/), un proyecto del ecosistema Aptos, y mantenido junto con la comunidad de Aptos.
+
+## Feedback
+
+Si tienes comentarios o preguntas, por favor abre un issue en el [GitHub de Surf](https://github.com/ThalaLabs/surf/issues).

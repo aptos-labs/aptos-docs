@@ -312,9 +312,13 @@ export default defineConfig({
      * TODO: Needs further testing
      */
     // ...isMoveReferenceEnabled() ? {} : {
-    //   "/move-reference/[network]": "/move-reference",
-    //   "/move-reference/[network]/[framework]": "/move-reference",
-    //   "/move-reference/[network]/[framework]/[slug]": "/move-reference",
+    //   "/move-reference/[network]": { src: "/move-reference/[network]", destination: "/move-reference", status: 301 },
+    //   "/move-reference/[network]/[framework]": { src: "/move-reference/[network]/[framework]", destination: "/move-reference", status: 301 },
+    //   "/move-reference/[network]/[framework]/[slug]": { src: "/move-reference/[network]/[framework]/[slug]", destination: "/move-reference", status: 301 },
     // },
+    //"/build/smart-contracts/move-reference": {
+    //  destination: "/move-reference",
+    //  status: 301,
+    //},
   },
 });

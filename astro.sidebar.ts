@@ -1,4 +1,5 @@
 import type { StarlightUserConfig } from "@astrojs/starlight/types";
+import { openAPISidebarGroups } from "starlight-openapi";
 import { group } from "./src/config/sidebar";
 
 // Define icons for top-level sidebar groups
@@ -770,8 +771,9 @@ export const sidebar = [
       }),
       "build/indexer/indexer-api",
       "build/indexer/indexer-api/indexer-reference",
-      "build/apis/fullnode-rest-api",
       "network/glossary",
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      ...(openAPISidebarGroups as never[]),
     ],
   }),
 

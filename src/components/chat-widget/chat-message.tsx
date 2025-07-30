@@ -1,7 +1,9 @@
-import { type ComponentProps } from "react";
+import { type ComponentProps, useState } from "react";
 import { Copy, ThumbsUp, ThumbsDown, Trash2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { vscDarkPlus } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import type { Message } from "./types";
 
 interface ChatMessageProps extends ComponentProps<"div"> {
@@ -24,7 +26,82 @@ export function ChatMessage({
       <div className="chat-message-content">
         <div className="chat-message-text">
           {message.role === "assistant" ? (
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                code: ({ className, children }) => {
+                  const match = /language-(\w+)/.exec(className ?? "");
+                  // Check if code is inline by seeing if it's a single line
+                  const isInline = !className;
+                  // For inline code, use simple styling
+                  if (isInline) {
+                    return <code className={className}>{children}</code>;
+                  }
+
+                  // For code blocks, use syntax highlighting
+                  const language = match ? match[1] : "move";
+                  const finalLanguage = language === "move" ? "rust" : language;
+
+                  const childArray = Array.isArray(children) ? children : [children];
+                  const content = childArray
+                    .map((child) => (typeof child === "string" ? child : ""))
+                    .join("")
+                    .trim();
+
+                  const [isCopied, setIsCopied] = useState(false);
+
+                  const handleCopy = async (e: React.MouseEvent) => {
+                    e.stopPropagation();
+                    try {
+                      await navigator.clipboard.writeText(content);
+                      setIsCopied(true);
+                      setTimeout(() => {
+                        setIsCopied(false);
+                      }, 2000);
+                    } catch (err) {
+                      console.error("Failed to copy:", err);
+                    }
+                  };
+
+                  return (
+                    <div className="code-block-wrapper">
+                      <button
+                        className="code-copy-button"
+                        onClick={handleCopy}
+                        aria-label="Copy code"
+                      >
+                        <Copy className={`code-copy-icon ${isCopied ? "copied" : ""}`} />
+                      </button>
+                      <SyntaxHighlighter
+                        style={vscDarkPlus}
+                        language={finalLanguage}
+                        PreTag="div"
+                        customStyle={{
+                          margin: "0",
+                          padding: "0.75rem 1rem",
+                          background: "var(--sl-color-gray-6)",
+                          borderRadius: "0.5rem",
+                          display: "inline-block",
+                          minWidth: "100%",
+                        }}
+                        codeTagProps={{
+                          style: {
+                            fontSize: "0.9em",
+                            lineHeight: "1.5",
+                          },
+                        }}
+                        wrapLines={true}
+                        showLineNumbers={false}
+                      >
+                        {content.replace(/\n$/, "")}
+                      </SyntaxHighlighter>
+                    </div>
+                  );
+                },
+              }}
+            >
+              {message.content}
+            </ReactMarkdown>
           ) : (
             <div className="chat-message-user">{message.content}</div>
           )}

@@ -361,18 +361,20 @@ This tracks the asset balances of each account on-chain. It includes v1 token da
 
 ## Delegated Staking
 
+With [AIP-6](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-6.md) we added the ability for staking pools to be formed with delegated funds (delegation pools). Once these pools hold over 1M APT, they can become a staking pool (validator node).
+
 ### `current_delegated_staking_pool_balances`
 
 This table tracks the current balances of each account in a delegated staking pool.
 
 | Field                        | Type   | Primary Key | Description                                                                 |
 |------------------------------|--------|-------------|-----------------------------------------------------------------------------|
-| staking\_pool\_address         | String | Yes         | The address of the staking pool.                                            |
-| total\_coins                  | bigint |             | The total number of coins in the staking pool.                              |
-| total\_shares                 | bigint |             | The total number of shares in the staking pool.                             |
-| last\_transaction\_version     | int8   |             | Blockchain version of the last transaction involving this staking pool. Ex. 30000000 |
+| staking\_pool\_address         | String | Yes         | The address of the delegation pool. |
+| total\_coins                  | bigint |             | Amount of APT in the staking pool.                              |
+| total\_shares                 | bigint |             | The total number of shares in the delegation pool. |
+| last\_transaction\_version     | int8   |             | Transaction version (identifier) for the last transaction involving this staking pool. |
 | inserted\_at                  | String |             | The timestamp when the record was inserted.                                 |
-| operator\_commission\_percentage | bigint |          | The commission percentage taken by the operator.                            |
+| operator\_commission\_percentage | bigint |          | The commission percentage taken by the staking pool operator.                 |
 | inactive\_table\_handle        | String |             | The table handle for the inactive table.                                    |
 | active\_table\_handle          | String |             | The table handle for the active table.                                      |
 
@@ -388,11 +390,11 @@ This table tracks the current delegated voters of a delegation pool.
 |----------------------------|--------|-------------|-------------|
 | delegation\_pool\_address    | String | Yes         | The address of the delegation pool. |
 | delegator\_address          | String | Yes         | The address of the delegator. |
-| table\_handle               | String |             | The table handle for the delegation pool. |
+| table\_handle               | String |             | The table handle tracking this position. |
 | voter                      | String |             | The address of the current voter in the delegation pool. |
 | pending\_voter              | String |             | The address of the pending voter awaiting confirmation. |
-| last\_transaction\_version   | bigint |             | The version number of the last transaction involving this delegation. |
-| last\_transaction\_timestamp | Timestamp |          | The timestamp of the last transaction involving this delegation. |
+| last\_transaction\_version   | bigint |             | The transaction version (identifier) of the last transaction involving this delegation. |
+| last\_transaction\_timestamp | Timestamp |          | The block timestamp of the last transaction involving this delegation. |
 | inserted\_at                | Timestamp |          | The timestamp when the record was inserted into the database. |
 
 | Index Name | Indexed Columns |
@@ -408,9 +410,9 @@ This table tracks the current balances of each account in a delegated staking po
 |----------------------------|--------|-------------|-------------|
 | delegator\_address          | String | Yes            | The address of the delegator.            |
 | pool\_address               | String |             | The address of the delegator pool.            |
-| pool\_type                | String |             | The type of the pool. Ex. "delegated" |
+| pool\_type                | String |             | If the shares are active or inactive |
 | table\_handle             | String |             | The table handle for the pool. |
-| last\_transaction\_version | bigint |             | The version number of the last transaction involving this pool. Ex. 5000000 |
+| last\_transaction\_version     | bigint   |             | Transaction version (identifier) for the last transaction involving this staking pool. |
 | inserted\_at              | Timestamp |             | The timestamp when the record was inserted. |
 | shares                   | bigint |             | The number of shares in the pool. |
 | parent\_table\_handle      | String |             | The table handle for the parent table. |
@@ -427,7 +429,7 @@ This table tracks the current voters of a staking pool.
 |----------------------------|--------|-------------|-------------|
 | staking\_pool\_address       | String | Yes            | The address of the staking pool.            |
 | voter\_address              | String |             | The address of the voter.            |
-| last\_transaction\_version | bigint |             | The version number of the last transaction involving this pool. Ex. 5000000 |
+| last\_transaction\_version     | bigint   |             | Transaction version (identifier) for the last transaction involving this staking pool. |
 | inserted\_at              | Timestamp |             | The timestamp when the record was inserted. |
 | operator\_address         | String |             | The address of the operator. |
 
@@ -443,11 +445,11 @@ This table tracks delegated staking events.
 
 | Field                    | Type   | Primary Key | Description |
 |----------------------------|--------|-------------|-------------|
-| transaction\_version      | bigint |             | The version number of the transaction. Ex. 5000000 |
+| transaction\_version     | bigint   |             | Transaction version (identifier) for activity |
 | event\_index              | bigint |             | The index of the event. Ex. 1 |
 | delegator\_address        | String |             | The address of the delegator.            |
 | pool\_address             | String |             | The address of the pool.            |
-| event\_type               | String |             | The event type. Ex. "0x1::stake::DistributeRewardsEvent" |
+| event\_type               | String |             | DistributeRewards, AddStake, UnlikeStake, ReactiveStake, WithdrawStake |
 | amount                   | bigint |             | The amount being staked. Ex. 1000 |
 | inserted\_at              | Timestamp |             | The timestamp when the record was inserted. |
 
@@ -478,7 +480,7 @@ This table tracks the historical balances of each account in a delegated staking
 
 ### `delegated_staking_pools`
 
-This table tracks the first transaction version that a pool was created.
+This table when a delegated pool was created.
 
 | Field                    | Type   | Primary Key | Description |
 |----------------------------|--------|-------------|-------------|

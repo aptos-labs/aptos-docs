@@ -128,6 +128,30 @@ async function generateMatcher() {
     );
   }
 
+  // Load redirect routes if available
+  let redirectRoutes = [];
+  try {
+    const redirectRoutesPath = path.join(rootDir, "src/middlewares/redirects.ts");
+    if (fs.existsSync(redirectRoutesPath)) {
+      const redirectContent = fs.readFileSync(redirectRoutesPath, "utf8");
+      const redirectRoutesMatch = redirectContent.match(
+        /redirectRoutes:\s*string\[\]\s*=\s*\[([\s\S]*?)\]/,
+      );
+      if (redirectRoutesMatch) {
+        const routesContent = redirectRoutesMatch[1];
+        const routeMatches = routesContent.match(/"([^"]+)"/g);
+        if (routeMatches) {
+          redirectRoutes = routeMatches.map((route) => route.replace(/"/g, ""));
+        }
+      }
+    }
+  } catch (error) {
+    console.warn(
+      "Could not load redirect routes:",
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+
   // Combine all content paths
   const ALL_CONTENT_PATHS = [
     "/",
@@ -135,6 +159,7 @@ async function generateMatcher() {
     ...pagePaths,
     ...apiReferencePaths,
     ...manualRoutes,
+    ...redirectRoutes,
   ];
 
   // Generate language-specific paths

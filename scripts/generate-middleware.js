@@ -6,7 +6,7 @@ import { build } from "vite";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const rootDir = path.resolve(__dirname, "..");
-const outDir = path.resolve(rootDir, ".vercel/output/middleware");
+const outDir = path.resolve(rootDir);
 
 await build({
   root: rootDir,

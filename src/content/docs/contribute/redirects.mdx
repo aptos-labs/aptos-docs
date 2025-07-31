@@ -1,0 +1,232 @@
+---
+title: Redirect System
+description: How to manage page redirects in the Aptos documentation site
+---
+
+# Redirect Middleware System
+
+This document explains the automated redirect middleware system that eliminates the white page flash during redirects in the statically generated Aptos documentation site.
+
+## Overview
+
+The system automatically extracts redirects from `src/config/redirects.json` and generates server-side middleware that handles redirects at the edge, providing instant redirects without any client-side JavaScript flash.
+
+## How It Works
+
+### 1. Simplified Redirect Configuration
+
+Redirects are configured in `src/config/redirects.json` with a single, unified array:
+
+```json
+{
+  "redirects": [
+    {
+      "from": "/nodes/nodes-landing",
+      "to": "/network/nodes",
+      "status": 301,
+      "description": "Redirect old nodes landing page to new network nodes section"
+    },
+    {
+      "from": "/old-path",
+      "to": "/new-path",
+      "status": 301,
+      "applyToAllLangs": true,
+      "description": "Example language redirect"
+    },
+    {
+      "from": "/specific-path",
+      "to": "/new-specific-path",
+      "status": 301,
+      "langs": ["es", "zh"],
+      "description": "Redirect for specific languages only"
+    }
+  ]
+}
+```
+
+#### Redirect Types:
+
+**Simple Redirects**: Basic redirects without language expansion
+
+```json
+{
+  "from": "/old-page",
+  "to": "/new-page",
+  "status": 301
+}
+```
+
+Creates: `/old-page` → `/new-page`
+
+**Language Redirects**: Automatically expanded for supported languages
+
+- Uses the centralized language configuration from `src/config/18n.js`
+- `applyToAllLangs: true` - Creates redirects for ALL languages (including English)
+- `langs: ["es", "zh"]` - Creates redirects for specific languages only
+
+Example: A redirect with `applyToAllLangs: true`:
+
+```json
+{
+  "from": "/old-path",
+  "to": "/new-path",
+  "applyToAllLangs": true
+}
+```
+
+Creates:
+
+- `/old-path` → `/new-path` (English - no prefix)
+- `/es/old-path` → `/es/new-path` (Spanish)
+- `/zh/old-path` → `/zh/new-path` (Chinese)
+
+Example: A redirect for specific languages:
+
+```json
+{
+  "from": "/specific-path",
+  "to": "/new-path",
+  "langs": ["en", "es"]
+}
+```
+
+Creates:
+
+- `/specific-path` → `/new-path` (English - no prefix)
+- `/es/specific-path` → `/es/new-path` (Spanish)
+
+### 2. Automatic Generation
+
+During the build process, the system:
+
+1. **Extracts redirects** from `src/config/redirects.json`
+2. **Generates middleware** at `src/middlewares/redirects.ts`
+3. **Updates matcher routes** to include redirect paths
+4. **Compiles middleware** for Vercel Edge Runtime
+
+### 3. Server-Side Execution
+
+When deployed, the middleware runs at the edge and:
+
+- Intercepts requests to redirect paths
+- Returns proper HTTP 301/302 responses
+- Provides instant redirects with no client-side flash
+
+## Build Process
+
+The redirect middleware is automatically generated during the build process:
+
+```bash
+# Individual steps
+pnpm build:redirect-middleware    # Generate redirect middleware
+pnpm build:middleware-matcher     # Update route matcher
+pnpm build:middleware            # Compile middleware
+
+# Automatic during build
+pnpm build                       # Runs all steps automatically
+```
+
+## Files Generated
+
+- `src/middlewares/redirects.ts` - Auto-generated redirect middleware (ignored in git)
+- `src/middlewares/matcher-routes-dynamic.js` - Updated route matcher (ignored in git)
+- `.vercel/output/middleware/middleware.js` - Compiled edge middleware
+
+**Note:** The auto-generated files are ignored in git since they're regenerated during each build.
+
+## Benefits
+
+- **No Flash**: True server-side redirects eliminate white page flash
+- **SEO Friendly**: Proper HTTP status codes (301/302)
+- **Single Source**: Redirects centralized in `src/config/redirects.json`
+- **Auto-Sync**: Middleware automatically updates when redirects change
+- **Type Safe**: Generated TypeScript middleware with JSON schema validation
+- **Edge Performance**: Runs on Vercel Edge Runtime
+- **Simple Format**: Easy-to-edit JSON configuration
+
+## Adding New Redirects
+
+Simply add redirects to `src/config/redirects.json`:
+
+```json
+{
+  "redirects": [
+    {
+      "from": "/old-path",
+      "to": "/new-path",
+      "status": 301
+    },
+    {
+      "from": "/another-old-path",
+      "to": "/another-new-path",
+      "status": 302
+    }
+  ]
+}
+```
+
+The middleware will be automatically regenerated on the next build.
+
+## Architecture
+
+```
+src/config/redirects.json
+        ↓
+generate-redirect-middleware.js
+        ↓
+src/middlewares/redirects.ts
+        ↓
+src/vercel-middleware.ts (middleware chain)
+        ↓
+.vercel/output/middleware/middleware.js (compiled)
+```
+
+## Dual Redirect System: Development + Production
+
+The system now provides redirects for both development and production environments:
+
+### Local Development
+
+- **Astro Middleware**: Uses the same redirect middleware as production
+- **Works with**: `pnpm dev`, `pnpm build && pnpm preview`
+- **Consistent behavior**: Same redirect logic in development and production
+
+### Production (Vercel)
+
+- **Edge Middleware**: Server-side redirects at the edge for optimal performance
+- **Works with**: Deployed environments on Vercel
+- **No client-side flash**: True server-side redirects
+
+### Testing Redirects
+
+**Local Testing:**
+
+```bash
+# Development server (redirects work)
+pnpm dev
+
+# Production build preview (redirects work)
+pnpm build && pnpm preview
+```
+
+**Production Testing:**
+
+- Deploy to Vercel preview environment
+- Redirects work via edge middleware
+
+## Troubleshooting
+
+If redirects aren't working:
+
+1. **Check that the redirect is properly configured** in `src/config/redirects.json`
+2. **Verify Astro config syntax**: Run `pnpm astro check --noSync` to check for syntax errors
+3. Check that the redirect is properly configured in `src/config/redirects.json`
+4. Verify the middleware was generated: `ls src/middlewares/redirects.ts`
+5. Ensure the build process completed: `pnpm prebuild`
+6. Check the route matcher includes your path: `cat src/middlewares/matcher-routes-dynamic.js`
+
+**Common Issues:**
+
+- **Local development**: Ensure the middleware was generated with `pnpm prebuild`
+- **Production**: Ensure middleware is built and deployed with `pnpm prebuild`
+- **Middleware errors**: Check that `src/middlewares/redirects.ts` was generated correctly

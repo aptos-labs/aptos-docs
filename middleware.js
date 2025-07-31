@@ -235,10 +235,6 @@ const SUPPORTED_LANGUAGES = [
     code: "zh",
     label: "简体中文",
   },
-  //{
-  //  code: "ja",
-  //  label: "日本語",
-  //},
 ];
 const LANGUAGE_CODES = SUPPORTED_LANGUAGES.map((lang) => lang.code);
 const DEFAULT_LANG = "en";
@@ -348,6 +344,20 @@ function middleware$1(request) {
   }
   return void 0;
 }
+function redirectMiddleware(req) {
+  const url = new URL(req.url);
+  const pathname = url.pathname;
+  if (pathname === "/nodes/nodes-landing") {
+    return Response.redirect(new URL("/network/nodes", req.url), 301);
+  }
+  if (pathname === "/es/nodes/nodes-landing") {
+    return Response.redirect(new URL("/es/network/nodes", req.url), 301);
+  }
+  if (pathname === "/zh/nodes/nodes-landing") {
+    return Response.redirect(new URL("/zh/network/nodes", req.url), 301);
+  }
+  return void 0;
+}
 async function applyMiddleware(req, middlewares) {
   return middlewares.reduce(
     async (chain, middleware2) => {
@@ -363,16 +373,38 @@ export const config = {
     "/",
     "/build/:path*",
     "/contribute/:path*",
-    "/guides/:path*",
-    "/ja/:path*",
     "/network/:path*",
-    "/zh/:path*",
     "/move-reference",
     "/move-reference/:path*",
     "/en",
     "/en/:path*",
+    "/nodes/nodes-landing",
+    "/es/nodes/nodes-landing",
+    "/zh/nodes/nodes-landing",
+    "/es$",
+    "/es/build/:path*",
+    "/es/contribute/:path*",
+    "/es/network/:path*",
+    "/es/move-reference",
+    "/es/move-reference/:path*",
+    "/es/en",
+    "/es/en/:path*",
+    "/es/nodes/nodes-landing",
+    "/es/es/nodes/nodes-landing",
+    "/es/zh/nodes/nodes-landing",
+    "/zh$",
+    "/zh/build/:path*",
+    "/zh/contribute/:path*",
+    "/zh/network/:path*",
+    "/zh/move-reference",
+    "/zh/move-reference/:path*",
+    "/zh/en",
+    "/zh/en/:path*",
+    "/zh/nodes/nodes-landing",
+    "/zh/es/nodes/nodes-landing",
+    "/zh/zh/nodes/nodes-landing",
   ],
 };
 export default async function middleware(req) {
-  return await applyMiddleware(req, [middleware$1, middleware$2, export_next]);
+  return await applyMiddleware(req, [redirectMiddleware, middleware$1, middleware$2, export_next]);
 }

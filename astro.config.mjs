@@ -305,6 +305,8 @@ export default defineConfig({
     ],
   },
   redirects: {
+    // Redirects are now handled by server-side middleware
+    // See src/config/redirects.json for redirect configuration
     /**
      * Development-only redirects when Move Reference is disabled
      * NOTE: Use caution - 301 redirects may be cached by browsers

@@ -4,6 +4,7 @@ import { next } from "@vercel/edge";
 // Edge-compatible middleware that implements a middleware chain pattern
 import i18nRedirect from "./middlewares/i18n-redirect";
 import enRedirect from "./middlewares/en-redirect";
+import redirectMiddleware from "./middlewares/redirects";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore - auto-generated import
 import { matcher } from "./middlewares/matcher-routes-dynamic";
@@ -17,7 +18,7 @@ export const config = {
 // Function to run middleware sequentially
 async function applyMiddleware(
   req: Request,
-  middlewares: ((req: Request) => Promise<Response | void> | Response | void)[],
+  middlewares: ((req: Request) => Promise<Response | void> | Response | void | undefined)[],
 ) {
   return middlewares.reduce<Promise<Response | void>>(
     async (chain, middleware) => {
@@ -32,6 +33,7 @@ async function applyMiddleware(
 // The main middleware function
 export default async function middleware(req: Request) {
   return await applyMiddleware(req, [
+    redirectMiddleware, // Handle specific page redirects first
     enRedirect,
     i18nRedirect,
     // Add more middleware functions here as needed

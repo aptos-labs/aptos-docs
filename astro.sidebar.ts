@@ -132,6 +132,10 @@ export const sidebar = [
           "build/sdks/ts-sdk/ts-examples",
           "build/sdks/ts-sdk/type-safe-contract",
           {
+            label: "React Hooks",
+            link: "https://js-pro.aptos.dev",
+          },
+          {
             label: "Account",
             collapsed: true,
             items: [
@@ -431,6 +435,10 @@ export const sidebar = [
         items: ["build/create-aptos-dapp", "build/create-aptos-dapp/faq"],
       },
       "network/faucet",
+      {
+        label: "Sign in with Aptos",
+        link: "https://siwa.aptos.dev",
+      },
     ],
   }),
 

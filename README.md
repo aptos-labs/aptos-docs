@@ -115,12 +115,42 @@ Key environment variables:
 
 ## Configuration Files
 
-| File               | Purpose                          |
-| ------------------ | -------------------------------- |
-| `.env.example`     | Example environment variables    |
-| `astro.config.mjs` | Main configuration               |
-| `astro.sidebar.ts` | Documentation sidebar structure  |
-| `package.json`     | Project dependencies and scripts |
+| File               | Purpose                                       |
+| ------------------ | --------------------------------------------- |
+| `.env.example`     | Example environment variables                 |
+| `astro.config.mjs` | Main configuration                            |
+| `astro.sidebar.ts` | Documentation sidebar structure               |
+| `package.json`     | Project dependencies and scripts              |
+| `vercel.json`      | Vercel deployment configuration and redirects |
+
+## Redirects
+
+Redirects are handled in `./vercel.json` for optimal performance. This approach ensures redirects are processed at the CDN level before middleware logic runs, providing faster response times for users and less potential for conflicts.
+
+The `vercel.json` file contains all URL redirects with the following structure:
+
+```json
+{
+  "redirects": [
+    {
+      "source": "/old-path",
+      "destination": "/new-path",
+      "permanent": true
+    }
+  ]
+}
+```
+
+**Benefits of CDN-level redirects:**
+
+- **Performance**: Redirects are handled at the edge, closest to users
+- **Speed**: No server-side processing or middleware execution required
+- **Efficiency**: Bypasses i18n middleware and other application logic
+- **Reliability**: Reduces server load and potential points of failure
+
+When adding new redirects, always update the `vercel.json` file rather than implementing them in middleware to maintain optimal performance.
+
+For more information on configuring redirects, see the [Vercel redirects documentation](https://vercel.com/docs/project-configuration#redirects).
 
 ## Technologies Used
 

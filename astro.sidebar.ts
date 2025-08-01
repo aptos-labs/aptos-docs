@@ -97,6 +97,11 @@ export const sidebar = [
           "build/guides/oracles",
         ],
       },
+      {
+        label: "External Resources",
+        collapsed: true,
+        items: ["build/external-resources/examples"],
+      },
     ],
   }),
 

@@ -22,6 +22,7 @@ function ChatDialogContainer() {
     deleteChat,
     updateChatTitle,
     setFastMode,
+    updateConfig,
   } = useChatbot();
 
   const [isOpen, setIsOpen] = useState(false);
@@ -73,7 +74,10 @@ function ChatDialogContainer() {
         }}
         onDeleteChat={(chatId: string) => deleteChat(chatId)}
         onUpdateChatTitle={updateChatTitle}
-        onToggleFastMode={setFastMode}
+        onToggleFastMode={(enabled) => {
+          setFastMode(enabled);
+          updateConfig({ fastMode: enabled });
+        }}
       />
       {error && (
         <div className="fixed bottom-4 right-4 rounded-lg bg-red-500 px-4 py-2 text-white">

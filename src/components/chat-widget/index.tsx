@@ -68,10 +68,10 @@ function ChatDialogContainer() {
         onNewChat={createNewChat}
         chats={chats}
         currentChatId={currentChatId}
-        onSelectChat={(chatId) => {
+        onSelectChat={(chatId: string) => {
           selectChat(chatId);
         }}
-        onDeleteChat={(chatId) => deleteChat(chatId)}
+        onDeleteChat={(chatId: string) => deleteChat(chatId)}
         onUpdateChatTitle={updateChatTitle}
         onToggleFastMode={setFastMode}
       />

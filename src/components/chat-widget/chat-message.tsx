@@ -10,7 +10,7 @@ interface ChatMessageProps extends ComponentProps<"div"> {
   message: Message;
   onDelete?: () => void;
   onCopy?: () => void;
-  onFeedback?: (feedback: "positive" | "negative") => void;
+  onFeedback?: (messageId: string, feedback: "positive" | "negative") => void;
 }
 
 export function ChatMessage({
@@ -110,13 +110,17 @@ export function ChatMessage({
           {message.role === "assistant" && (
             <>
               <button
-                onClick={() => onFeedback?.("positive")}
+                onClick={() => {
+                  onFeedback?.(message.id, "positive");
+                }}
                 className={`chat-message-action ${message.feedback === "positive" ? "chat-message-action-active chat-message-action-positive" : ""}`}
               >
                 <ThumbsUp className="chat-button-icon" />
               </button>
               <button
-                onClick={() => onFeedback?.("negative")}
+                onClick={() => {
+                  onFeedback?.(message.id, "negative");
+                }}
                 className={`chat-message-action ${message.feedback === "negative" ? "chat-message-action-active chat-message-action-negative" : ""}`}
               >
                 <ThumbsDown className="chat-button-icon" />

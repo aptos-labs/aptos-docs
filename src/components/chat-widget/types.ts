@@ -31,7 +31,7 @@ export interface ChatWidgetProps {
   fastMode?: boolean;
   showSidebar?: boolean;
   chats?: Chat[];
-  currentChatId?: string;
+  currentChatId?: string | null;
   onSelectChat?: (chatId: string) => void;
   onDeleteChat?: (chatId: string) => void;
   onUpdateChatTitle?: (chatId: string, title: string) => void;

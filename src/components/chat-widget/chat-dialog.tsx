@@ -1,13 +1,12 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import * as ScrollArea from "@radix-ui/react-scroll-area";
 import { ChevronRight, ChevronLeft, Pencil, Trash2, X } from "lucide-react";
-import type { ChatWidgetProps } from "@aptos-labs/ai-chatbot-client";
 import { useState, useRef, useEffect } from "react";
+import type { Message, Chat, ChatWidgetProps } from "./types";
 import { ChatSidebar } from "./chat-sidebar";
 import { ChatMessage } from "./chat-message";
 import { ChatInput } from "./chat-input";
 import type { ChatInputRef } from "./chat-input";
-import type { Chat } from "./types";
 
 export interface ChatDialogProps extends Omit<ChatWidgetProps, "chats"> {
   open: boolean;
@@ -28,6 +27,7 @@ export function ChatDialog({
   onLoadMore,
   onCopyMessage,
   onMessageFeedback,
+
   onNewChat,
   className,
   messageClassName,
@@ -45,7 +45,7 @@ export function ChatDialog({
   const viewportRef = useRef<HTMLDivElement>(null);
 
   // Convert message timestamps from string to number
-  const convertedMessages = messages.map((msg) => ({
+  const convertedMessages = messages.map((msg: Message) => ({
     ...msg,
     timestamp: typeof msg.timestamp === "string" ? Date.parse(msg.timestamp) : msg.timestamp,
   }));
@@ -174,12 +174,14 @@ export function ChatDialog({
                             </div>
                           </div>
                         )}
-                        {convertedMessages.map((message) => (
+                        {convertedMessages.map((message: Message) => (
                           <ChatMessage
                             key={message.id}
                             message={message}
                             onCopy={() => onCopyMessage?.(message.id)}
-                            onFeedback={(feedback) => onMessageFeedback?.(message.id, feedback)}
+                            onFeedback={(messageId, feedback) =>
+                              onMessageFeedback?.(messageId, feedback)
+                            }
                             className={messageClassName}
                           />
                         ))}

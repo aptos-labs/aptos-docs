@@ -1,0 +1,364 @@
+---
+title: "Condicionales"
+---
+
+Una expresión `if` especifica que algún código debe ser evaluado solo si cierta condición es verdadera. Por ejemplo:
+
+```move
+script {
+  fun example() {
+    if (x > 5) x = x - 5
+  }
+}
+```
+
+La condición debe ser una expresión de tipo `bool`.
+
+Una expresión `if` puede opcionalmente incluir una cláusula `else` para especificar otra expresión a evaluar cuando la condición es falsa.
+
+```move
+script {
+  fun example() {
+    if (y <= 10) y = y + 1 else y = 10
+  }
+}
+```
+
+Cualquiera de las ramas "verdadera" o "falsa" será evaluada, pero no ambas. Cualquiera de las ramas puede ser una expresión simple o un bloque de expresión.
+
+Las expresiones condicionales pueden producir valores para que la expresión `if` tenga un resultado.
+
+```move
+script {
+  fun example() {
+    let z = if (x < 100) x else 100;
+  }
+}
+```
+
+Las expresiones en las ramas verdadera y falsa deben tener tipos compatibles. Por ejemplo:
+
+```move
+script {
+  fun example() {
+    // x e y deben ser enteros u64
+    let maximum: u64 = if (x > y) x else y;
+
+    // ERROR! ramas con tipos diferentes
+    let z = if (maximum < 10) 10u8 else 100u64;
+
+    // ERROR! ramas con tipos diferentes, ya que la rama falsa por defecto es () no u64
+    if (maximum >= 10) maximum;
+  }
+}
+```
+
+Si la cláusula `else` no se especifica, la rama falsa por defecto es el valor unit. Los siguientes son equivalentes:
+
+```move
+script {
+  fun example() {
+    if (condition) true_branch // implícito por defecto: else ()
+    if (condition) true_branch else ()
+  }
+}
+```
+
+Comúnmente, las expresiones [`if`](/es/build/smart-contracts/book/conditionals) se usan en conjunto con bloques de expresión.
+
+```move
+script {
+  fun example() {
+    let maximum = if (x > y) x else y;
+    if (maximum < 10) {
+        x = x + 10;
+        y = y + 10;
+    } else if (x >= 10 && y >= 10) {
+        x = x - 10;
+        y = y - 10;
+    }
+  }
+}
+```
+
+## Expresiones Condicionales Anidadas
+
+Las expresiones `if` se pueden anidar para crear lógica más compleja:
+
+```move
+script {
+  fun example(score: u64) {
+    let grade = if (score >= 90) {
+        "A"
+    } else if (score >= 80) {
+        "B"
+    } else if (score >= 70) {
+        "C"
+    } else if (score >= 60) {
+        "D"
+    } else {
+        "F"
+    };
+  }
+}
+```
+
+## Valores de Retorno
+
+Las expresiones `if` pueden devolver valores, pero ambas ramas deben tener el mismo tipo:
+
+```move
+script {
+  fun example(condition: bool): u64 {
+    // Ambas ramas devuelven u64
+    if (condition) {
+        42
+    } else {
+        0
+    }
+  }
+}
+```
+
+## Con Bloques de Expresión
+
+Los condicionales frecuentemente usan bloques para agrupar múltiples declaraciones:
+
+```move
+script {
+  fun example(balance: u64, amount: u64) {
+    if (balance >= amount) {
+        // Transferencia válida
+        balance = balance - amount;
+        emit_transfer_event(amount);
+        update_account_state();
+    } else {
+        // Fondos insuficientes
+        emit_error_event();
+        abort 1
+    }
+  }
+}
+```
+
+## Uso con Operadores Lógicos
+
+Las condiciones pueden usar operadores lógicos para expresiones más complejas:
+
+```move
+script {
+  fun example(age: u8, has_license: bool, has_insurance: bool) {
+    if (age >= 18 && has_license && has_insurance) {
+        allow_driving();
+    } else {
+        deny_driving();
+    }
+  }
+}
+```
+
+## Ejemplos Prácticos
+
+### Validación de Entrada
+
+```move
+public fun validate_amount(amount: u64): bool {
+    if (amount == 0) {
+        false
+    } else if (amount > MAX_AMOUNT) {
+        false
+    } else {
+        true
+    }
+}
+```
+
+### Cálculo de Tarifas
+
+```move
+public fun calculate_fee(amount: u64, is_premium: bool): u64 {
+    let base_fee = if (amount < 1000) {
+        10
+    } else if (amount < 10000) {
+        25
+    } else {
+        50
+    };
+
+    if (is_premium) {
+        base_fee / 2  // 50% de descuento para usuarios premium
+    } else {
+        base_fee
+    }
+}
+```
+
+### Gestión de Estado
+
+```move
+public fun update_user_status(user: &mut User, new_points: u64) {
+    user.points = user.points + new_points;
+    
+    user.level = if (user.points < 100) {
+        1
+    } else if (user.points < 500) {
+        2
+    } else if (user.points < 1000) {
+        3
+    } else {
+        4
+    };
+}
+```
+
+### Autorización
+
+```move
+public fun check_permission(user_role: u8, required_role: u8): bool {
+    if (user_role == ADMIN_ROLE) {
+        true  // Los admins pueden hacer todo
+    } else if (user_role >= required_role) {
+        true  // El usuario tiene el rol requerido o superior
+    } else {
+        false // Permisos insuficientes
+    }
+}
+```
+
+## Patrones Comunes
+
+### Inicialización Condicional
+
+```move
+script {
+  fun example(use_cache: bool) {
+    let data = if (use_cache) {
+        load_from_cache()
+    } else {
+        load_from_database()
+    };
+  }
+}
+```
+
+### Validación con Early Return
+
+```move
+public fun process_transaction(from: address, to: address, amount: u64) {
+    if (from == to) {
+        abort E_SELF_TRANSFER;
+    };
+    
+    if (amount == 0) {
+        abort E_ZERO_AMOUNT;
+    };
+    
+    // Procesar transacción...
+}
+```
+
+### Configuración Condicional
+
+```move
+public fun setup_account(account: &signer, account_type: u8) {
+    let initial_balance = if (account_type == PREMIUM_ACCOUNT) {
+        1000
+    } else if (account_type == STANDARD_ACCOUNT) {
+        100
+    } else {
+        0
+    };
+    
+    create_account(account, initial_balance);
+}
+```
+
+## Buenas Prácticas
+
+### 1. Usa Paréntesis para Claridad
+
+```move
+// ✓ Bueno: condición clara
+if ((age >= 18) && (has_license || has_permit)) {
+    // ...
+}
+
+// ✗ Confuso sin paréntesis
+if (age >= 18 && has_license || has_permit) {
+    // ...
+}
+```
+
+### 2. Evita Anidamiento Excesivo
+
+```move
+// ✓ Bueno: lógica plana con early returns
+public fun validate_user(user: &User) {
+    if (!user.is_active) {
+        abort E_INACTIVE_USER;
+    };
+    if (user.balance < MIN_BALANCE) {
+        abort E_INSUFFICIENT_BALANCE;
+    };
+    // continuar procesamiento...
+}
+
+// ✗ Anidamiento excesivo
+public fun validate_user(user: &User) {
+    if (user.is_active) {
+        if (user.balance >= MIN_BALANCE) {
+            // continuar procesamiento...
+        } else {
+            abort E_INSUFFICIENT_BALANCE;
+        }
+    } else {
+        abort E_INACTIVE_USER;
+    }
+}
+```
+
+### 3. Usa Constantes para Valores Mágicos
+
+```move
+const MIN_AGE: u8 = 18;
+const MAX_TRANSACTION_AMOUNT: u64 = 1000000;
+
+public fun can_transact(age: u8, amount: u64): bool {
+    if (age < MIN_AGE) {
+        false
+    } else if (amount > MAX_TRANSACTION_AMOUNT) {
+        false
+    } else {
+        true
+    }
+}
+```
+
+### 4. Prefiere Expresiones sobre Declaraciones
+
+```move
+// ✓ Bueno: expresión que devuelve valor
+let result = if (condition) success_value else error_value;
+
+// ✗ Más verboso: declaraciones separadas
+let result;
+if (condition) {
+    result = success_value;
+} else {
+    result = error_value;
+}
+```
+
+### 5. Usa Operadores Ternarios para Casos Simples
+
+```move
+// ✓ Bueno para lógica simple
+let fee = if (is_premium) 0 else base_fee;
+
+// ✗ Excesivo para lógica simple
+let fee = if (is_premium) {
+    0
+} else {
+    base_fee
+};
+```

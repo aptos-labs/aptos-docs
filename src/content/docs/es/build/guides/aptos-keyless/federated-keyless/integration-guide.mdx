@@ -1,0 +1,449 @@
+---
+title: "Guía de Integración de Keyless Federado"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+<Steps>
+  1. Paso 1. Configurar tu proveedor IAM
+
+     Configura tu proyecto con tu IAM para que coincida con la estructura de cuenta que estás buscando.
+
+     - [Primeros Pasos con AWS Cognito](https://aws.amazon.com/cognito/getting-started/)
+     - [Primeros Pasos con Auth0](https://auth0.com/docs/get-started)
+
+  2. Paso 2. Registrar el JSON Web Key Set (JWKS) en cadena
+
+     Las cuentas Keyless Federadas requieren que el JWKS sea registrado en cadena.
+
+     Para registrar el JWKS - llama la función de entrada `0x1::jwks::update_federated_jwk_set` con una cuenta Aptos que almacenará las JWKs que serán usadas para validar transacciones firmadas por cuentas keyless federadas.
+
+     <Aside type="caution">
+       **Perder acceso a la cuenta propietaria de JWK compromete las cuentas Keyless Federadas creadas con ella**
+
+       La cuenta propietaria de JWK es la única cuenta que puede actualizar el JWKS. Si pierdes acceso a la cuenta propietaria de JWK, no podrás actualizar el JWKS y las cuentas Keyless Federadas creadas con él dejarán de funcionar en caso de una rotación de clave. Los usuarios no podrán validar sus tokens JWT ya que serán firmados con la nueva clave cuya clave pública no está registrada en la blockchain de Aptos.
+     </Aside>
+
+     El conjunto JWK puede ser encontrado como sigue -
+
+     AWS Cognito - `https://cognito-idp.<region>.amazonaws.com/<userPoolId>/.well-known/jwks.json`
+     Auth0 - `https://<yourDomain>/.well-known/jwks.json`
+
+     El SDK de TypeScript contiene funcionalidad para simplificar el proceso dado el emisor para tu configuración de proveedor IAM (el valor del claim `iss` en los tokens JWT de tu usuario) y una cuenta para usar para hacer la actualización.
+
+     ```tsx
+     import {Aptos} from '@aptos-labs/ts-sdk'; // Requiere versión v1.29.1 o posterior
+
+     const aptos = new Aptos(new AptosConfig({ network: Network.DEVNET })); // Configura tu red aquí
+     const alice = // Deriva tu cuenta Aptos aquí
+     const jwkTxn = await aptos.updateFederatedKeylessJwkSetTransaction({ sender: alice, iss });
+     await aptos.signAndSubmitTransaction({ signer: alice, transaction: jwkTxn });
+     ```
+
+     Puedes usar el ejemplo interactivo proporcionado por el SDK para registrar fácilmente el JWKS para tu proveedor IAM en devnet o testnet. Esto configurará la cuenta propietaria de JWK con una cuenta Google Keyless.
+
+     ```shellscript filename="Terminal"
+     git clone https://github.com/aptos-labs/aptos-ts-sdk
+     cd aptos-ts-sdk
+     pnpm install && pnpm build
+     cd examples/typescript
+     pnpm install
+     pnpm jwk_update
+     ```
+
+     Para configurar la cuenta propietaria de JWK en mainnet, necesitarás crear una cuenta y usarla para registrar el JWKS.
+
+     Guarda la dirección de la cuenta que usaste para registrar el JWKS ya que la necesitarás para el siguiente paso.
+
+     Para aprender más sobre la función de entrada `0x1::jwks::update_federated_jwk_set`, ver la [documentación de referencia](/es/move-reference/mainnet/aptos-framework/jwks#jwks_update_federated_jwk_set).
+
+     <Aside type="caution">
+       **Manejando rotaciones de clave**
+
+       Cuando hay una rotación de clave del JWKS, es importante actualizar el JWKS registrado en cadena prontamente para evitar cualquier pérdida de acceso a las cuentas Keyless Federadas. Ver [aquí](/es/build/guides/aptos-keyless/federated-keyless/key-considerations) para más información.
+     </Aside>
+
+  3. Paso 3. Seguir la guía de integración Aptos Keyless
+
+     Ahora que has registrado el JWKS, puedes seguir la guía de integración Aptos Keyless comenzando desde el paso 2. Asegúrate de establecer el `jwkAddress` a la dirección de la cuenta que usaste para registrar el JWKS al derivar la `KeylessAccount`.
+
+     [Guía de Integración Aptos Keyless - Paso 2](/es/build/guides/aptos-keyless/integration-guide#step-2-install-the-aptos-typescript-sdk)
+</Steps>
+
+## Implementación Detallada
+
+### Configuración de AWS Cognito
+
+```typescript
+// Configuración de AWS Cognito User Pool
+const cognitoConfig = {
+  region: 'us-east-1',
+  userPoolId: 'us-east-1_XXXXXXXXX',
+  userPoolWebClientId: 'xxxxxxxxxxxxxxxxxxxxxxxxxx',
+  domain: 'your-app-domain.auth.us-east-1.amazoncognito.com'
+};
+
+// Configurar Amplify para Cognito
+import { Amplify } from 'aws-amplify';
+
+Amplify.configure({
+  Auth: {
+    Cognito: {
+      userPoolId: cognitoConfig.userPoolId,
+      userPoolClientId: cognitoConfig.userPoolWebClientId,
+      identityPoolId: 'us-east-1:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
+      region: cognitoConfig.region,
+      signUpVerificationMethod: 'code', // 'code' | 'link'
+      loginWith: {
+        oauth: {
+          domain: cognitoConfig.domain,
+          scopes: ['email', 'profile', 'openid'],
+          redirectSignIn: ['http://localhost:3000/callback'],
+          redirectSignOut: ['http://localhost:3000/'],
+          responseType: 'code',
+        },
+        email: true,
+        phone: false,
+      }
+    }
+  }
+});
+```
+
+### Configuración de Auth0
+
+```typescript
+// Configuración de Auth0
+import { Auth0Provider } from '@auth0/auth0-react';
+
+const auth0Config = {
+  domain: 'your-app.auth0.com',
+  clientId: 'xxxxxxxxxxxxxxxxxxxxxxxxxx',
+  audience: 'https://your-app.auth0.com/api/v2/',
+  redirectUri: window.location.origin + '/callback'
+};
+
+// Envolver tu aplicación con Auth0Provider
+function App() {
+  return (
+    <Auth0Provider
+      domain={auth0Config.domain}
+      clientId={auth0Config.clientId}
+      authorizationParams={{
+        redirect_uri: auth0Config.redirectUri,
+        audience: auth0Config.audience,
+        scope: 'openid profile email'
+      }}
+    >
+      <MyApp />
+    </Auth0Provider>
+  );
+}
+```
+
+### Registro de JWKS Avanzado
+
+```typescript
+import { Aptos, AptosConfig, Network, Account, Ed25519PrivateKey } from '@aptos-labs/ts-sdk';
+
+class JWKSManager {
+  private aptos: Aptos;
+  private jwkOwnerAccount: Account;
+
+  constructor(network: Network, privateKey: string) {
+    this.aptos = new Aptos(new AptosConfig({ network }));
+    this.jwkOwnerAccount = Account.fromPrivateKey({
+      privateKey: new Ed25519PrivateKey(privateKey)
+    });
+  }
+
+  async registerJWKS(issuer: string): Promise<string> {
+    try {
+      // Obtener JWKS del proveedor
+      const jwksResponse = await fetch(`${issuer}/.well-known/jwks.json`);
+      const jwks = await jwksResponse.json();
+
+      console.log(`Registrando JWKS para emisor: ${issuer}`);
+      console.log(`JWKS keys encontradas: ${jwks.keys.length}`);
+
+      // Crear transacción de actualización
+      const transaction = await this.aptos.updateFederatedKeylessJwkSetTransaction({
+        sender: this.jwkOwnerAccount.accountAddress,
+        iss: issuer
+      });
+
+      // Firmar y enviar
+      const response = await this.aptos.signAndSubmitTransaction({
+        signer: this.jwkOwnerAccount,
+        transaction
+      });
+
+      // Esperar confirmación
+      const receipt = await this.aptos.waitForTransaction({
+        transactionHash: response.hash
+      });
+
+      console.log(`JWKS registrado exitosamente. Hash: ${response.hash}`);
+      return this.jwkOwnerAccount.accountAddress.toString();
+
+    } catch (error) {
+      console.error('Error registrando JWKS:', error);
+      throw error;
+    }
+  }
+
+  async updateJWKS(issuer: string): Promise<void> {
+    console.log(`Actualizando JWKS para emisor: ${issuer}`);
+    await this.registerJWKS(issuer);
+  }
+
+  async verifyJWKSRegistration(issuer: string): Promise<boolean> {
+    try {
+      const resource = await this.aptos.getAccountResource({
+        accountAddress: this.jwkOwnerAccount.accountAddress,
+        resourceType: '0x1::jwks::FederatedJWKs'
+      });
+      
+      return !!resource;
+    } catch {
+      return false;
+    }
+  }
+}
+
+// Uso
+const jwksManager = new JWKSManager(
+  Network.DEVNET, 
+  'your-private-key-hex'
+);
+
+// Registrar JWKS para Auth0
+const jwkAddress = await jwksManager.registerJWKS('https://your-app.auth0.com');
+
+// Registrar JWKS para Cognito
+await jwksManager.registerJWKS(
+  'https://cognito-idp.us-east-1.amazonaws.com/us-east-1_XXXXXXXXX'
+);
+```
+
+### Creación de Cuenta Keyless
+
+```typescript
+import { KeylessAccount, EphemeralKeyPair } from '@aptos-labs/ts-sdk';
+
+class KeylessAccountManager {
+  private aptos: Aptos;
+  private jwkAddress: string;
+
+  constructor(aptos: Aptos, jwkAddress: string) {
+    this.aptos = aptos;
+    this.jwkAddress = jwkAddress;
+  }
+
+  async createKeylessAccount(jwt: string, ephemeralKeyPair?: EphemeralKeyPair): Promise<KeylessAccount> {
+    try {
+      // Generar ephemeral key pair si no se proporciona
+      if (!ephemeralKeyPair) {
+        ephemeralKeyPair = EphemeralKeyPair.generate();
+      }
+
+      // Crear cuenta keyless
+      const keylessAccount = await KeylessAccount.create({
+        jwt,
+        ephemeralKeyPair,
+        jwkAddress: this.jwkAddress,
+        pepper: await this.getPepper(jwt)
+      });
+
+      console.log(`Cuenta Keyless creada: ${keylessAccount.accountAddress}`);
+      return keylessAccount;
+
+    } catch (error) {
+      console.error('Error creando cuenta Keyless:', error);
+      throw error;
+    }
+  }
+
+  private async getPepper(jwt: string): Promise<Uint8Array> {
+    // En producción, usar el servicio de pepper de Aptos
+    const response = await fetch('https://api.aptoslabs.com/v1/pepper', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ jwt })
+    });
+
+    if (!response.ok) {
+      throw new Error('Error obteniendo pepper');
+    }
+
+    const data = await response.json();
+    return new Uint8Array(data.pepper);
+  }
+
+  async fundAccount(keylessAccount: KeylessAccount, amount: number = 100000000): Promise<void> {
+    // Para testnet/devnet - usar faucet
+    if (this.aptos.config.network !== Network.MAINNET) {
+      await this.aptos.fundAccount({
+        accountAddress: keylessAccount.accountAddress,
+        amount
+      });
+      console.log(`Cuenta financiada con ${amount} octas`);
+    }
+  }
+}
+```
+
+### Flujo Completo de Autenticación
+
+```typescript
+// Componente React para autenticación completa
+import React, { useState, useEffect } from 'react';
+import { useAuth0 } from '@auth0/auth0-react';
+
+export function KeylessAuth() {
+  const { loginWithRedirect, isAuthenticated, getIdTokenClaims, logout } = useAuth0();
+  const [keylessAccount, setKeylessAccount] = useState<KeylessAccount | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const handleLogin = async () => {
+    try {
+      setLoading(true);
+      
+      // 1. Autenticar con Auth0
+      if (!isAuthenticated) {
+        await loginWithRedirect();
+        return;
+      }
+
+      // 2. Obtener JWT
+      const tokenClaims = await getIdTokenClaims();
+      if (!tokenClaims?.__raw) {
+        throw new Error('No se pudo obtener token JWT');
+      }
+
+      // 3. Crear cuenta Keyless
+      const accountManager = new KeylessAccountManager(
+        aptos, 
+        'your-jwk-address'
+      );
+      
+      const account = await accountManager.createKeylessAccount(tokenClaims.__raw);
+      
+      // 4. Financiar cuenta (solo en testnet)
+      await accountManager.fundAccount(account);
+      
+      setKeylessAccount(account);
+      
+    } catch (error) {
+      console.error('Error en login Keyless:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    setKeylessAccount(null);
+    logout({ returnTo: window.location.origin });
+  };
+
+  if (loading) {
+    return <div>Configurando tu cuenta blockchain...</div>;
+  }
+
+  if (keylessAccount) {
+    return (
+      <div>
+        <h2>¡Cuenta Keyless Activa!</h2>
+        <p>Dirección: {keylessAccount.accountAddress.toString()}</p>
+        <button onClick={handleLogout}>Cerrar Sesión</button>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <h2>Conecta con tu cuenta social</h2>
+      <button onClick={handleLogin}>
+        Iniciar Sesión con Auth0
+      </button>
+    </div>
+  );
+}
+```
+
+### Manejo de Errores y Casos Edge
+
+```typescript
+class KeylessErrorHandler {
+  static handleJWTError(error: any): string {
+    if (error.message?.includes('JWT expired')) {
+      return 'Tu sesión ha expirado. Por favor, inicia sesión nuevamente.';
+    }
+    
+    if (error.message?.includes('Invalid issuer')) {
+      return 'El proveedor de autenticación no está configurado correctamente.';
+    }
+    
+    if (error.message?.includes('JWKS not found')) {
+      return 'Las claves de verificación no están registradas. Contacta al soporte.';
+    }
+    
+    return 'Error de autenticación. Por favor, intenta nuevamente.';
+  }
+
+  static async retryWithBackoff<T>(
+    operation: () => Promise<T>,
+    maxRetries: number = 3,
+    baseDelay: number = 1000
+  ): Promise<T> {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        return await operation();
+      } catch (error) {
+        if (attempt === maxRetries) throw error;
+        
+        const delay = baseDelay * Math.pow(2, attempt - 1);
+        console.log(`Intento ${attempt} falló, reintentando en ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+    throw new Error('Operación falló después de todos los reintentos');
+  }
+}
+```
+
+### Monitoreo y Analytics
+
+```typescript
+class KeylessAnalytics {
+  static trackAccountCreation(provider: string, success: boolean, error?: string) {
+    // Integración con tu sistema de analytics
+    analytics.track('keyless_account_creation', {
+      provider,
+      success,
+      error: error || null,
+      timestamp: Date.now()
+    });
+  }
+
+  static trackTransactionSigning(success: boolean, transactionType: string) {
+    analytics.track('keyless_transaction_signing', {
+      success,
+      transactionType,
+      timestamp: Date.now()
+    });
+  }
+
+  static trackJWKSUpdate(issuer: string, success: boolean) {
+    analytics.track('jwks_update', {
+      issuer,
+      success,
+      timestamp: Date.now()
+    });
+  }
+}
+```
+
+Esta guía proporciona una implementación completa de Keyless Federado, desde la configuración inicial hasta el manejo avanzado de errores y monitoreo.

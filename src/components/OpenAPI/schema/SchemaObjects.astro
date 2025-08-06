@@ -2,10 +2,11 @@
 import { Tabs, TabItem } from "@astrojs/starlight/components";
 
 import { getType } from "starlight-openapi/libs/items";
-import type {
-  Discriminator,
-  SchemaObjects,
-  SchemaObject as SchemaObjectType,
+import {
+  getSchemaObjects,
+  type Discriminator,
+  type SchemaObjects,
+  type SchemaObject as SchemaObjectType,
 } from "starlight-openapi/libs/schemaObject";
 import Tag from "../Tag.astro";
 
@@ -15,6 +16,7 @@ interface Props {
   discriminator: Discriminator;
   nested: boolean;
   parents?: SchemaObjectType[];
+  schemaObject: SchemaObjectType;
   schemaObjects: SchemaObjects;
 }
 
@@ -36,6 +38,29 @@ const humanReadableType: Record<SchemaObjects["type"], string> = {
   anyOf: "Any of",
   oneOf: "One of",
 };
+
+function isCircularArrayItem(item: SchemaObjectType, parents: SchemaObjectType[] = []): boolean {
+  if (parents.some((parent) => parent === item)) {
+    return true;
+  }
+
+  if (
+    item.type !== "array" ||
+    !item.items ||
+    "$ref" in item.items ||
+    item.items.type !== "object"
+  ) {
+    return false;
+  }
+
+  const nestedSchemaObjects = getSchemaObjects(item.items);
+
+  return (
+    nestedSchemaObjects?.schemaObjects.some((nestedSchemaObject) =>
+      isCircularArrayItem(nestedSchemaObject, [...parents, item]),
+    ) ?? false
+  );
+}
 ---
 
 <div>
@@ -46,7 +71,11 @@ const humanReadableType: Record<SchemaObjects["type"], string> = {
   {
     schemaObjects.map((schemaObject) => (
       <TabItem label={schemaObject.title ?? getType(schemaObject) ?? "unknown"}>
-        <SchemaObject {parents} {nested} schemaObject={schemaObject} />
+        {isCircularArrayItem(schemaObject) ? (
+          "Self reference"
+        ) : (
+          <SchemaObject {parents} {nested} schemaObject={schemaObject} />
+        )}
       </TabItem>
     ))
   }

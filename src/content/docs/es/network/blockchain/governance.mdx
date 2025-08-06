@@ -1,0 +1,404 @@
+---
+title: "Gobernanza"
+---
+
+import { ThemedImage } from '~/components/ThemedImage';
+
+La gobernanza en cadena de Aptos es un proceso por el cual los miembros de la comunidad de Aptos pueden crear y votar en propuestas que minimizan el costo de actualizaciones de la blockchain. Lo siguiente describe el alcance de estas propuestas para la gobernanza en cadena de Aptos:
+
+- Cambios a los parámetros de la blockchain, por ejemplo, la duración de la época, y el stake mínimo requerido y máximo permitido para validadores.
+- Cambios al código central de la blockchain.
+- Actualizaciones a los módulos del Framework de Aptos para corregir errores o para agregar o mejorar la funcionalidad de la blockchain de Aptos.
+- Desplegar nuevos módulos de framework (en la dirección `0x1` - `0xa`).
+
+## Cómo una propuesta se vuelve lista para ser resuelta
+
+Ver abajo para una descripción resumida de cómo una propuesta llega a existir y cuándo se vuelve lista para ser resuelta:
+
+<ThemedImage
+  alt="Flujo de votación de propuesta"
+  sources={{
+light: '~/images/voting-resolution-flow.svg',
+dark: '~/images/voting-resolution-flow-dark.svg',
+}}
+/>
+
+- La comunidad de Aptos puede sugerir una Propuesta de Mejora de Aptos (AIP) en el [GitHub AIP de la Fundación Aptos](https://github.com/aptos-foundation/AIPs).
+- Cuando sea apropiado, una propuesta en cadena puede ser creada para la AIP vía el módulo `aptos_governance`.
+- Los votantes pueden entonces votar en esta propuesta en cadena vía el módulo `aptos_governance`. Si hay suficiente apoyo para una propuesta, entonces puede ser resuelta.
+- La gobernanza requiere un número mínimo de votos que sean emitidos por un umbral de expiración. Sin embargo, si se acumulan suficientes votos, más del 50% del suministro total, antes de ese umbral, la propuesta puede ser ejecutada **sin esperar el período completo de votación**.
+
+## Quién puede proponer
+
+- Para proponer o votar, debes hacer stake, pero no se requiere que ejecutes un nodo validador. Sin embargo, recomendamos que ejecutes un validador con stake como parte del conjunto de validadores para ganar recompensas de tu stake.
+- Para crear una propuesta, el pool de stake de respaldo del proponente debe tener el stake mínimo requerido para proponente. El stake del proponente debe estar bloqueado por al menos tanto tiempo como el período de votación de la propuesta. Esto es para evitar propuestas spam potenciales.
+- Los proponentes pueden crear una propuesta llamando [`aptos_governance::create_proposal`](https://github.com/aptos-labs/aptos-core/blob/27a255ebc662817944435349afc4ec33ea317e64/aptos-move/framework/aptos-framework/sources/aptos_governance.move#L183).
+
+## Quién puede votar
+
+- Para votar, debes hacer stake, aunque no se requiere que ejecutes un nodo validador. Tu poder de voto se deriva del pool de stake de respaldo.
+- El poder de voto se calcula basado en el stake activo de la época actual del pool de stake de respaldo del proponente o votante. Además, el bloqueo del pool de stake debe ser al menos tan largo como la duración de la propuesta.
+- Verifica las propuestas antes de votar. Asegúrate de que cada propuesta esté enlazada a su código fuente, y si hay una AIP correspondiente, la AIP esté en el título y descripción.
+
+Si eres un votante de [pool de staking](/es/network/blockchain/staking), sigue las instrucciones para votar [aquí](/es/network/nodes/validator-node/connect-nodes/staking-pool-voter).
+
+Si eres un [staker delegado](/es/network/blockchain/delegated-staking), sigue las instrucciones para votar [aquí](/es/network/nodes/validator-node/connect-nodes/staking-pool-voter#delegation-pool-voter).
+
+## Quién puede resolver
+
+- Cualquiera puede resolver una propuesta en cadena que haya pasado los requisitos de votación usando el comando `aptos governance execute-proposal` desde Aptos CLI.
+
+## Propuestas de Mejora de Aptos (AIPs)
+
+Las AIPs son propuestas creadas por la comunidad de Aptos o el equipo de Aptos Labs para mejorar las operaciones y desarrollo de la cadena Aptos.
+Para enviar una AIP, crea un issue en el [`repositorio GitHub de la Fundación Aptos`](https://github.com/aptos-foundation/AIPs/issues) usando la [plantilla](https://github.com/aptos-foundation/AIPs/blob/main/TEMPLATE.md).
+Para mantenerte al día con nuevas AIPs, revisa el canal `#aip-announcements` en el [canal de discord de Aptos](https://discord.gg/aptosnetwork).
+Para ver y votar en propuestas en cadena, ve al [`sitio web de Gobernanza de Aptos`](https://governance.aptosfoundation.org/).
+
+## Implementación Técnica de la Gobernanza de Aptos
+
+La mayoría de la lógica de gobernanza está en [`aptos_governance.move and voting.move`](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources).
+El módulo `aptos_governance` describe cómo los usuarios pueden interactuar con la Gobernanza de Aptos. Es el módulo de cara externa del proceso de gobernanza en cadena de Aptos y contiene lógica y verificaciones que son específicas a la Gobernanza de Aptos.
+El módulo `voting` es el estándar de gobernanza de Aptos que puede ser usado por DAOs en la cadena Aptos para crear su propio proceso de gobernanza en cadena.
+
+Si estás pensando en crear una DAO en Aptos, puedes referirte al uso del módulo `voting` de `aptos_governance` como ejemplo.
+En `aptos_governance`, dependemos del módulo `voting` para crear, votar y resolver una propuesta.
+
+- `aptos_governance::create_proposal` llama `voting::create_proposal` para crear una propuesta en cadena, cuando una AIP fuera de cadena adquiere suficiente importancia.
+- `aptos_governance::vote` llama `voting::vote` para registrar el voto en una propuesta en cadena;
+- `aptos_governance::resolve` puede ser llamado por cualquiera. Llama `voting::resolve` para resolver la propuesta en cadena.
+
+## Ejemplos de Uso de Gobernanza
+
+### Creando una Propuesta
+
+```move
+module governance_example {
+    use aptos_framework::aptos_governance;
+    use std::string;
+
+    public entry fun create_upgrade_proposal(
+        proposer: &signer,
+        execution_hash: vector<u8>,
+        metadata_location: vector<u8>,
+        metadata_hash: vector<u8>
+    ) {
+        aptos_governance::create_proposal(
+            proposer,
+            @0x1, // dirección donde ejecutar
+            execution_hash,
+            metadata_location,
+            metadata_hash,
+            true // is_multi_step_proposal
+        );
+    }
+}
+```
+
+### Votando en una Propuesta
+
+```move
+module voting_example {
+    use aptos_framework::aptos_governance;
+
+    public entry fun vote_on_proposal(
+        voter: &signer,
+        proposal_id: u64,
+        should_pass: bool
+    ) {
+        aptos_governance::vote(
+            voter,
+            proposal_id,
+            should_pass
+        );
+    }
+}
+```
+
+### Resolviendo una Propuesta
+
+```move
+module resolution_example {
+    use aptos_framework::aptos_governance;
+
+    public entry fun execute_proposal(
+        proposal_id: u64,
+        next_execution_hash: vector<u8>
+    ) {
+        aptos_governance::resolve(
+            proposal_id,
+            next_execution_hash
+        );
+    }
+}
+```
+
+## Creando una DAO Personalizada
+
+```move
+module custom_dao {
+    use aptos_framework::voting;
+    use aptos_framework::coin;
+    use std::string;
+    use std::option;
+
+    struct DAOCoin has store {}
+
+    struct DAOProposal has store {
+        title: string::String,
+        description: string::String,
+        execution_hash: vector<u8>
+    }
+
+    public fun create_dao_proposal<ProposalType: store>(
+        proposer: &signer,
+        execution_hash: vector<u8>,
+        proposal: ProposalType,
+        early_resolution_vote_threshold: option::Option<u128>
+    ): u64 {
+        voting::create_proposal<ProposalType>(
+            std::signer::address_of(proposer),
+            @dao_address,
+            proposal,
+            execution_hash,
+            7 * 24 * 60 * 60, // 7 días de votación
+            early_resolution_vote_threshold
+        )
+    }
+
+    public fun vote_on_dao_proposal(
+        voter: &signer,
+        proposal_id: u64,
+        should_pass: bool
+    ) {
+        voting::vote<DAOProposal>(
+            voter,
+            @dao_address,
+            proposal_id,
+            get_voting_power(std::signer::address_of(voter)),
+            should_pass
+        );
+    }
+
+    fun get_voting_power(voter: address): u64 {
+        // Implementar lógica de poder de voto basada en tokens DAO
+        coin::balance<DAOCoin>(voter)
+    }
+}
+```
+
+## Monitoreo de Propuestas
+
+### TypeScript/JavaScript
+
+```typescript
+import { AptosClient } from "aptos";
+
+const client = new AptosClient("https://fullnode.mainnet.aptoslabs.com");
+
+// Obtener propuestas activas
+async function getActiveProposals() {
+    try {
+        const resource = await client.getAccountResource(
+            "0x1",
+            "0x1::aptos_governance::GovernanceResponsbility"
+        );
+        
+        console.log("Propuestas activas:", resource.data);
+        return resource.data;
+    } catch (error) {
+        console.error("Error obteniendo propuestas:", error);
+    }
+}
+
+// Verificar estado de votación
+async function getProposalVotes(proposalId: number) {
+    try {
+        const events = await client.getEventsByEventType(
+            "0x1::voting::VotingEvents",
+            { start: 0, limit: 100 }
+        );
+        
+        const proposalVotes = events.filter(
+            event => event.data.proposal_id === proposalId
+        );
+        
+        console.log(`Votos para propuesta ${proposalId}:`, proposalVotes);
+        return proposalVotes;
+    } catch (error) {
+        console.error("Error obteniendo votos:", error);
+    }
+}
+
+// Verificar poder de voto de un usuario
+async function getVotingPower(address: string) {
+    try {
+        const stakingInfo = await client.getAccountResource(
+            address,
+            "0x1::stake::StakePool"
+        );
+        
+        console.log("Poder de voto:", stakingInfo.data.active.value);
+        return stakingInfo.data.active.value;
+    } catch (error) {
+        console.error("Error obteniendo poder de voto:", error);
+    }
+}
+```
+
+## Proceso de AIP (Aptos Improvement Proposal)
+
+### 1. Creación de AIP
+
+1. **Borrador**: Crear issue en el repositorio AIP con la plantilla
+2. **Discusión**: Participar en discusiones comunitarias
+3. **Refinamiento**: Incorporar feedback y iterar
+4. **Aprobación**: Obtener apoyo de la comunidad
+
+### 2. Propuesta en Cadena
+
+```move
+// Ejemplo de crear propuesta para AIP
+public entry fun create_aip_proposal(
+    proposer: &signer,
+    aip_number: u64,
+    execution_script: vector<u8>,
+    metadata_url: vector<u8>
+) {
+    let execution_hash = std::hash::sha3_256(execution_script);
+    
+    aptos_governance::create_proposal(
+        proposer,
+        @0x1,
+        execution_hash,
+        metadata_url,
+        std::hash::sha3_256(metadata_url),
+        false // single step proposal
+    );
+}
+```
+
+### 3. Período de Votación
+
+- **Duración**: Típicamente 7 días
+- **Umbral**: 50% + 1 del total de stake
+- **Resolución temprana**: Si se alcanza >50% antes del tiempo límite
+
+### 4. Ejecución
+
+```bash
+# Usando Aptos CLI
+aptos governance execute-proposal \
+    --proposal-id 123 \
+    --url https://fullnode.mainnet.aptoslabs.com
+```
+
+## Mejores Prácticas para Gobernanza
+
+### 1. Propuestas Claras
+
+```move
+// ✓ Bueno: propuesta específica y clara
+struct UpgradeFrameworkProposal has store {
+    title: vector<u8>, // "Upgrade Aptos Framework to v1.8"
+    description: vector<u8>, // Descripción detallada
+    target_modules: vector<vector<u8>>, // Módulos específicos
+    execution_timeline: u64 // Cuándo ejecutar
+}
+
+// ✗ Malo: propuesta vaga
+struct GenericProposal has store {
+    data: vector<u8> // Muy genérico
+}
+```
+
+### 2. Verificación Antes de Votar
+
+```move
+public fun verify_proposal_metadata(
+    proposal_id: u64,
+    expected_hash: vector<u8>
+): bool {
+    let proposal = voting::get_proposal_metadata(@governance_address, proposal_id);
+    let actual_hash = std::hash::sha3_256(proposal.metadata);
+    actual_hash == expected_hash
+}
+```
+
+### 3. Delegación Responsable
+
+```move
+module delegation_helper {
+    public fun delegate_voting_power(
+        delegator: &signer,
+        delegate: address,
+        amount: u64
+    ) {
+        // Verificar reputación del delegado
+        assert!(is_trusted_delegate(delegate), E_UNTRUSTED_DELEGATE);
+        
+        // Delegar poder de voto
+        stake::delegate_voting_power(delegator, delegate, amount);
+    }
+    
+    fun is_trusted_delegate(delegate: address): bool {
+        // Implementar verificaciones de reputación
+        get_delegate_reputation(delegate) > MIN_REPUTATION_THRESHOLD
+    }
+}
+```
+
+### 4. Transparencia en Votación
+
+```move
+public fun record_vote_rationale(
+    voter: &signer,
+    proposal_id: u64,
+    vote: bool,
+    rationale: vector<u8>
+) {
+    // Votar
+    aptos_governance::vote(voter, proposal_id, vote);
+    
+    // Registrar justificación públicamente
+    event::emit(VoteRationaleEvent {
+        voter: std::signer::address_of(voter),
+        proposal_id,
+        vote,
+        rationale,
+        timestamp: timestamp::now_seconds()
+    });
+}
+```
+
+## Consideraciones de Seguridad
+
+### 1. Prevención de Spam
+
+- **Stake mínimo**: Requerido para crear propuestas
+- **Período de bloqueo**: Stake debe estar bloqueado durante votación
+- **Cooldown**: Tiempo entre propuestas del mismo autor
+
+### 2. Ataques de Gobernanza
+
+- **Whale attacks**: Grandes holders controlando decisiones
+- **Flash loan attacks**: Préstamos temporales para votar
+- **Coordination attacks**: Grupos coordinados manipulando votos
+
+### 3. Verificación de Propuestas
+
+```move
+public fun verify_proposal_safety(
+    execution_hash: vector<u8>,
+    expected_modules: vector<address>
+): bool {
+    // Verificar que el hash corresponde a código seguro
+    let code = get_code_from_hash(execution_hash);
+    
+    // Verificar que solo afecta módulos esperados
+    let affected_modules = extract_affected_modules(code);
+    vector_utils::is_subset(&affected_modules, &expected_modules)
+}
+```
+
+La gobernanza de Aptos permite a la comunidad evolucionar la blockchain de manera descentralizada y transparente, asegurando que las mejoras beneficien a todo el ecosistema mientras mantienen la seguridad y estabilidad de la red.

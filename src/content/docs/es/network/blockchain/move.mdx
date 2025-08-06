@@ -1,0 +1,223 @@
+---
+title: "Move - Un Lenguaje y Runtime para Web3"
+---
+
+La blockchain de Aptos consiste en nodos validadores que ejecutan un protocolo de consenso. El protocolo de consenso acuerda el ordenamiento de transacciones y su salida cuando se ejecutan en la Máquina Virtual de Move (MoveVM). Cada nodo validador traduce transacciones junto con el estado actual del ledger de la blockchain como entrada hacia la VM. La MoveVM procesa esta entrada para producir un changeset o delta de almacenamiento como salida. Una vez que el consenso acuerda y se compromete con la salida, se vuelve públicamente visible. En esta guía, te introduciremos a los conceptos centrales de Move y cómo se aplican al desarrollo en Aptos.
+
+## ¿Qué es Move?
+
+Move es un lenguaje de programación seguro y protegido para Web3 que enfatiza la **escasez** y el **control de acceso**. Cualquier activo en Move puede ser representado por o almacenado dentro de un _resource_. La **escasez** se aplica por defecto ya que los structs no pueden ser accidentalmente duplicados o descartados. Solo los structs que han sido explícitamente definidos a nivel de bytecode como _copy_ pueden ser duplicados y _drop_ pueden ser descartados, respectivamente.
+
+El **control de acceso** proviene tanto de la noción de cuentas como de privilegios de acceso a módulos. Un módulo en Move puede ser una biblioteca o un programa que puede crear, almacenar o transferir activos. Move asegura que solo las funciones públicas del módulo puedan ser accedidas por otros módulos. A menos que un struct tenga un constructor público, solo puede ser construido dentro del módulo que lo define. De manera similar, los campos dentro de un struct solo pueden ser accedidos y mutados dentro de su módulo que lo define o vía accesores públicos y setters. Además, structs definidos con _key_ pueden ser almacenados y leídos desde almacenamiento global solo dentro del módulo que los define. Structs con _store_ pueden ser almacenados dentro de otro struct _store_ o _key_ dentro o fuera del módulo que define ese struct.
+
+En Move, el remitente de una transacción está representado por un _signer_, un propietario verificado de una cuenta específica. El signer tiene el nivel más alto de permiso en Move y es la única entidad capaz de agregar resources a una cuenta. Además, un desarrollador de módulo puede requerir que un signer esté presente para acceder a resources o modificar activos almacenados dentro de una cuenta.
+
+## Comparación con otras VMs
+
+|                             | Aptos / Move                                                  | Solana / SeaLevel                                                | EVM                                                        | Sui / Move                            |
+| --------------------------- | ------------------------------------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------- |
+| Almacenamiento de datos     | Almacenado en una dirección global o dentro de la cuenta del propietario | Almacenado dentro de la cuenta del propietario asociada con un programa | Almacenado dentro de la cuenta asociada con un contrato inteligente | Almacenado en una dirección global    |
+| Paralelización              | Capaz de inferir paralelización en tiempo de ejecución dentro de Aptos  | Requiere especificar todos los datos accedidos                          | Actualmente serial nada en producción                     | Requiere especificar todos los datos accedidos |
+| Seguridad de transacciones  | Número de secuencia                                           | Unicidad de transacción                                              | nonces, similar a números de secuencia                    | Unicidad de transacción               |
+| Seguridad de tipos          | Structs de módulo y genéricos                                | Structs de programa                                                  | Tipos de contrato                                          | Structs de módulo y genéricos         |
+| Llamada de funciones        | Despacho estático                                             | Despacho estático                                                    | Despacho dinámico                                          | Despacho estático                     |
+| Almacenamiento autenticado  | [Sí](/es/network/glossary#merkle-trees)                      | No                                                               | Sí                                                         | No                                    |
+| Accesibilidad global de objetos | Sí                                                        | No aplicable                                                     | No aplicable                                               | No, puede ser colocado en otros objetos |
+
+## Características de Aptos Move
+
+Cada despliegue de la MoveVM tiene la habilidad de extender la MoveVM central con características adicionales vía una capa adaptadora. Además, MoveVM tiene un framework para soportar operaciones estándar muy parecido a como una computadora tiene un sistema operativo.
+
+Las características del adaptador de Aptos Move incluyen:
+
+- [Objetos Move](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-10.md) que ofrecen un modelo de programación extensible para acceso global a un conjunto heterogéneo de resources almacenados en una sola dirección en cadena.
+- [Primitivas criptográficas](/es/build/smart-contracts/cryptography) para construir dapps escalables y preservadores de privacidad.
+- [Cuentas de resource](/es/build/smart-contracts/resource-accounts) que ofrecen cuentas programables en cadena, que pueden ser útiles para DAOs (organizaciones autónomas descentralizadas), cuentas compartidas, o construyendo aplicaciones complejas en cadena.
+- [Tablas](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-stdlib/sources/table.move) para almacenar datos clave-valor dentro de una cuenta a escala.
+- Paralelismo vía [Block-STM](https://medium.com/aptoslabs/block-stm-how-we-execute-over-160k-transactions-per-second-on-the-aptos-blockchain-3b003657e4ba) que habilita ejecución concurrente de transacciones sin ninguna entrada del usuario.
+- Framework multi-agente que habilita que una sola transacción sea enviada con múltiples entidades `signer` distintas.
+
+El framework de Aptos viene con muchas bibliotecas útiles:
+
+- Un estándar de [Objetos Token de Aptos](https://github.com/aptos-labs/aptos-core/tree/main/aptos-move/framework/aptos-token-objects/sources) como se define en [AIP-11](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-11.md) y [AIP-22](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-22.md) que hace posible crear NFTs interoperables con desarrollo de contrato inteligente ligero o ninguno en absoluto.
+- Un [estándar Coin](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/coin.move) que hace posible crear Coins con seguridad de tipos publicando un módulo trivial.
+- Un [estándar de activo fungible](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/fungible_asset.move) como se define en [AIP-21](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-21.md) para modernizar el concepto de coin con mejor programabilidad y controles.
+- Un framework de [staking](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/staking_contract.move) y [delegación](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/delegation_pool.move).
+- Un servicio [`type_of`](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-stdlib/sources/type_info.move) para identificar en tiempo de ejecución la dirección, módulo y nombre de struct de un tipo dado.
+- Un [servicio de timestamp](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/timestamp.move) que proporciona un reloj monótonamente creciente que mapea al tiempo Unix actual real.
+
+Con actualizaciones frecuentes.
+
+## Conceptos Clave de Move en Aptos
+
+### Resources y Escasez
+
+```move
+module aptos_example::digital_asset {
+    struct UniqueAsset has key {
+        id: u64,
+        owner: address,
+        metadata: vector<u8>
+    }
+    
+    // Los resources no pueden ser copiados o descartados accidentalmente
+    public fun create_asset(owner: &signer, id: u64, metadata: vector<u8>) {
+        let asset = UniqueAsset {
+            id,
+            owner: std::signer::address_of(owner),
+            metadata
+        };
+        move_to(owner, asset); // Solo el owner puede almacenar el asset
+    }
+}
+```
+
+### Control de Acceso con Signers
+
+```move
+module access_control_example {
+    struct ProtectedResource has key {
+        value: u64,
+        admin: address
+    }
+    
+    public fun update_value(admin: &signer, new_value: u64) acquires ProtectedResource {
+        let admin_addr = std::signer::address_of(admin);
+        let resource = borrow_global_mut<ProtectedResource>(admin_addr);
+        assert!(resource.admin == admin_addr, 1); // Solo el admin puede actualizar
+        resource.value = new_value;
+    }
+}
+```
+
+### Habilidades de Tipos
+
+```move
+module abilities_example {
+    // Copy: puede ser duplicado
+    struct Config has copy, drop, store {
+        setting: u64
+    }
+    
+    // Store: puede ser almacenado en otros structs
+    struct Metadata has store {
+        description: vector<u8>
+    }
+    
+    // Key: puede ser almacenado en almacenamiento global
+    struct GlobalRegistry has key {
+        configs: vector<Config>,
+        metadata: Metadata
+    }
+}
+```
+
+## Características Avanzadas de Aptos Move
+
+### Objetos Move
+
+```move
+use aptos_framework::object;
+
+public fun create_named_object(creator: &signer, name: vector<u8>): address {
+    let constructor_ref = object::create_named_object(creator, name);
+    let object_address = object::address_from_constructor_ref(&constructor_ref);
+    
+    // Configurar el objeto con datos específicos
+    let obj_signer = object::generate_signer(&constructor_ref);
+    move_to(&obj_signer, MyObjectData { value: 42 });
+    
+    object_address
+}
+```
+
+### Cuentas de Resource
+
+```move
+use aptos_framework::resource_account;
+
+public fun create_resource_account_and_publish_package(
+    source: &signer,
+    seed: vector<u8>
+) {
+    let (resource_signer, _) = resource_account::create_resource_account(source, seed);
+    
+    // El resource_signer puede ser usado para publicar módulos
+    // que serán controlados programáticamente
+}
+```
+
+### Tablas para Almacenamiento a Escala
+
+```move
+use aptos_std::table::{Self, Table};
+
+struct LargeRegistry has key {
+    items: Table<u64, ItemData>
+}
+
+public fun add_item(registry_owner: &signer, id: u64, data: ItemData) acquires LargeRegistry {
+    let registry = borrow_global_mut<LargeRegistry>(std::signer::address_of(registry_owner));
+    table::add(&mut registry.items, id, data);
+}
+```
+
+## Ventajas de Move para Desarrollo Web3
+
+### 1. Seguridad por Diseño
+
+- **Verificación formal**: Move está diseñado para verificación estática
+- **No aritmética de punteros**: Previene muchas vulnerabilidades comunes
+- **Sistema de recursos**: Garantiza que los activos no se dupliquen o pierdan
+
+### 2. Performance y Escalabilidad
+
+- **Block-STM**: Ejecución paralela automática de transacciones
+- **Optimizaciones de bytecode**: Ejecución eficiente en la MoveVM
+- **Almacenamiento optimizado**: Estructuras de datos eficientes
+
+### 3. Composabilidad
+
+- **Módulos reutilizables**: Fácil composición de funcionalidad
+- **Estándares integrados**: Tokens, NFTs, staking predefinidos
+- **Interoperabilidad**: Fácil integración entre diferentes dApps
+
+### 4. Experiencia de Desarrollador
+
+- **Sistema de tipos fuerte**: Menos errores en tiempo de ejecución
+- **Herramientas integradas**: Testing, debugging, profiling
+- **Documentación extensa**: Guías y ejemplos completos
+
+## Ecosistema de Desarrollo
+
+### Herramientas Principales
+
+- **Aptos CLI**: Gestión de proyectos y despliegue
+- **Move Prover**: Verificación formal de contratos
+- **Move Analyzer**: IDE support para VS Code
+- **Aptos TypeScript SDK**: Integración frontend
+
+### Estándares y Bibliotecas
+
+- **aptos-framework**: Funcionalidad central del sistema
+- **aptos-stdlib**: Estructuras de datos y utilidades
+- **aptos-token**: Estándares NFT y token
+- **aptos-names**: Servicio de nombres descentralizado
+
+### Patrones de Diseño Comunes
+
+- **Resource Pattern**: Gestión de activos únicos
+- **Capability Pattern**: Control de permisos granular
+- **Registry Pattern**: Gestión de colecciones grandes
+- **Factory Pattern**: Creación programática de recursos
+
+## Más Recursos
+
+Los desarrolladores pueden comenzar su viaje en Move dirigiéndose a nuestra [página de desarrollador Move](/es/build/smart-contracts/book). Para ejemplos prácticos y tutoriales completos, visita:
+
+- [Guía de primeros pasos](/es/build/get-started/developer-setup)
+- [Tutorial completo de Move](/es/build/smart-contracts/book/move-tutorial)
+- [Ejemplos de contratos inteligentes](https://github.com/aptos-labs/aptos-core/tree/main/aptos-move/move-examples)
+- [Documentación del framework](https://github.com/aptos-labs/aptos-core/tree/main/aptos-move/framework)
+
+Move representa una evolución significativa en lenguajes de contrato inteligente, diseñado específicamente para los desafíos únicos de Web3, incluyendo seguridad de activos, control de acceso granular, y rendimiento a escala.

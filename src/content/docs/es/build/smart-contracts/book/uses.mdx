@@ -1,0 +1,612 @@
+---
+title: "Uses y Aliases"
+---
+
+La sintaxis `use` puede usarse para crear aliases a miembros en otros módulos. `use` puede usarse para crear aliases que duren ya sea para todo el módulo, o para un ámbito de bloque de expresión dado.
+
+## Sintaxis
+
+Hay varios casos de sintaxis diferentes para `use`. Comenzando con el más simple, tenemos lo siguiente para crear aliases a otros módulos:
+
+```move
+use <address>::<module name>;
+use <address>::<module name> as <module alias name>;
+```
+
+Por ejemplo:
+
+```move
+script {
+  use std::vector;
+  use std::vector as V;
+}
+```
+
+`use std::vector;` introduce un alias `vector` para `std::vector`. Esto significa que en cualquier lugar donde quieras usar el nombre del módulo `std::vector` (asumiendo que este `use` está en ámbito), podrías usar `vector` en su lugar. `use std::vector;` es equivalente a `use std::vector as vector;`
+
+De manera similar, `use std::vector as V;` te permitiría usar `V` en lugar de `std::vector`
+
+```move
+module 0x42::example {
+  use std::vector;
+  use std::vector as V;
+
+  fun new_vecs(): (vector<u8>, vector<u8>, vector<u8>) {
+    let v1 = std::vector::empty();
+    let v2 = vector::empty();
+    let v3 = V::empty();
+    (v1, v2, v3)
+  }
+}
+```
+
+Si quieres importar un miembro específico del módulo (como una función, struct, o constante), puedes usar la siguiente sintaxis:
+
+```move
+use <address>::<module name>::<module member>;
+use <address>::<module name>::<module member> as <member alias>;
+```
+
+Por ejemplo:
+
+```move
+script {
+  use std::vector::empty;
+  use std::vector::empty as empty_vec;
+}
+```
+
+Esto te permitiría usar la función `std::vector::empty` sin calificación completa. En su lugar, podrías usar `empty` y `empty_vec` respectivamente. Nuevamente, `use std::vector::empty;` es equivalente a `use std::vector::empty as empty;`
+
+```move
+module 0x42::example {
+  use std::vector::empty;
+  use std::vector::empty as empty_vec;
+
+  fun new_vecs(): (vector<u8>, vector<u8>, vector<u8>) {
+    let v1 = std::vector::empty();
+    let v2 = empty();
+    let v3 = empty_vec();
+    (v1, v2, v3)
+  }
+}
+```
+
+Si quieres agregar aliases para múltiples miembros del módulo a la vez, puedes hacerlo con la siguiente sintaxis:
+
+```move
+use <address>::<module name>::{<module member>, <module member> as <member alias> ... };
+```
+
+Por ejemplo:
+
+```move
+module 0x42::example {
+  use std::vector::{push_back, length as len, pop_back};
+
+  fun swap_last_two<T>(v: &mut vector<T>) {
+    assert!(len(v) >= 2, 42);
+    let last = pop_back(v);
+    let second_to_last = pop_back(v);
+    push_back(v, last);
+    push_back(v, second_to_last)
+  }
+}
+```
+
+Si quieres importar tanto el módulo como algunos de sus miembros, puedes usar `Self`. `Self` es un alias para el módulo:
+
+```move
+module 0x42::example {
+  use std::vector::{Self, empty};
+
+  fun new_vec(): vector<u8> {
+    let v1 = vector::empty(); // Equivalente a std::vector::empty()
+    let v2 = Self::empty();   // Equivalente a std::vector::empty()
+    let v3 = empty();         // Equivalente a std::vector::empty()
+    v1
+  }
+}
+```
+
+Para importar todas las funciones públicas de un módulo, puedes usar el patrón comodín `*`:
+
+```move
+module 0x42::example {
+  use std::vector::*;
+
+  fun example(): vector<u64> {
+    let v = empty();  // std::vector::empty()
+    push_back(&mut v, 1);
+    push_back(&mut v, 2);
+    v
+  }
+}
+```
+
+### Importación de Múltiples Módulos
+
+Puedes importar múltiples módulos en una sola declaración:
+
+```move
+module 0x42::example {
+  use std::{vector, option, string};
+
+  fun example() {
+    let v = vector::empty<u64>();
+    let opt = option::some(42);
+    let s = string::utf8(b"hello");
+  }
+}
+```
+
+## Dentro de Expresiones
+
+Puedes introducir `use` localmente dentro de expresiones. Esto es útil cuando solo necesitas el alias por un corto período:
+
+```move
+module 0x42::example {
+  fun example(): vector<u8> {
+    {
+      use std::vector::{empty, push_back};
+      let v = empty();
+      push_back(&mut v, 1);
+      push_back(&mut v, 2);
+      v
+    }
+    // empty y push_back ya no están en ámbito aquí
+  }
+}
+```
+
+## Resolución de Nombres
+
+Los `use` se resuelven en el orden que aparecen. Si hay un conflicto de nombres, la declaración posterior toma precedencia:
+
+```move
+module 0x42::example {
+  use std::vector;
+  use std::option as vector; // Ahora 'vector' se refiere a std::option
+
+  fun example() {
+    let opt = vector::some(42); // Esto usa std::option::some()
+    // let v = vector::empty(); // Esto NO funcionaría
+  }
+}
+```
+
+## Aliases con Structs
+
+Puedes crear aliases para structs:
+
+```move
+module 0x42::example {
+  use std::string::String;
+  use std::option::Option;
+
+  struct User {
+    name: String,
+    email: Option<String>,
+  }
+
+  fun create_user(name: String): User {
+    User {
+      name,
+      email: Option::none(),
+    }
+  }
+}
+```
+
+## Aliases con Constantes
+
+También puedes importar constantes:
+
+```move
+module 0x42::example {
+  use std::error::{INVALID_ARGUMENT, NOT_FOUND};
+
+  const E_CUSTOM_ERROR: u64 = 100;
+
+  fun validate_input(x: u64) {
+    assert!(x > 0, INVALID_ARGUMENT);
+    assert!(x < 1000, NOT_FOUND);
+  }
+}
+```
+
+## Patrones de Uso Comunes
+
+### Importación de Módulos de Utilidad
+
+```move
+module 0x42::my_app {
+  use std::{
+    vector,
+    option::{Self, Option},
+    string::{Self, String},
+    error,
+  };
+
+  struct Config {
+    name: String,
+    features: vector<String>,
+    debug_mode: Option<bool>,
+  }
+
+  fun create_config(name: String): Config {
+    Config {
+      name,
+      features: vector::empty(),
+      debug_mode: option::some(false),
+    }
+  }
+}
+```
+
+### Importación de Funciones Frecuentemente Usadas
+
+```move
+module 0x42::math_utils {
+  use std::vector::{push_back, pop_back, length, is_empty};
+
+  fun process_numbers(numbers: &mut vector<u64>) {
+    if (is_empty(numbers)) {
+      push_back(numbers, 0);
+    };
+
+    while (length(numbers) > 10) {
+      pop_back(numbers);
+    };
+  }
+}
+```
+
+### Aliases para Módulos con Nombres Largos
+
+```move
+module 0x42::example {
+  use my_very_long_module_name::some_nested_module as short;
+
+  fun example() {
+    short::do_something();
+    short::helper_function();
+  }
+}
+```
+
+## Buenas Prácticas
+
+### 1. Agrupa Imports Relacionados
+
+```move
+// ✅ Bueno - imports agrupados lógicamente
+module 0x42::token {
+  // Bibliotecas estándar
+  use std::{
+    vector,
+    option::{Self, Option},
+    string::String,
+  };
+
+  // Bibliotecas de Aptos
+  use aptos_framework::{
+    coin,
+    event,
+    timestamp,
+  };
+
+  // Módulos locales
+  use 0x42::{
+    permissions,
+    events,
+  };
+}
+```
+
+### 2. Usa Aliases Descriptivos
+
+```move
+// ✅ Bueno - aliases claros
+module 0x42::exchange {
+  use std::string::String;
+  use aptos_framework::coin::{Self as coin_utils};
+  use 0x42::trading::order_book as book;
+
+  fun create_order() {
+    book::add_order(/* ... */);
+    coin_utils::transfer(/* ... */);
+  }
+}
+
+// ❌ Malo - aliases confusos
+module 0x42::exchange {
+  use std::string::String as S;
+  use aptos_framework::coin as c;
+  use 0x42::trading::order_book as ob;
+}
+```
+
+### 3. Evita Imports Excesivos
+
+```move
+// ❌ Malo - demasiados imports específicos
+module 0x42::bad_example {
+  use std::vector::{
+    empty, push_back, pop_back, length, is_empty,
+    borrow, borrow_mut, contains, index_of, remove,
+    reverse, append, split_off, insert
+  };
+}
+
+// ✅ Mejor - import del módulo con funciones más usadas específicamente
+module 0x42::good_example {
+  use std::vector::{Self, push_back, pop_back, length};
+
+  fun example() {
+    let v = vector::empty(); // Usar el módulo para funciones menos frecuentes
+    push_back(&mut v, 1);     // Usar import directo para funciones frecuentes
+  }
+}
+```
+
+### 4. Ordena los Imports
+
+```move
+// ✅ Bueno - orden consistente
+module 0x42::ordered_imports {
+  // 1. Bibliotecas estándar (alfabéticamente)
+  use std::option;
+  use std::string;
+  use std::vector;
+
+  // 2. Bibliotecas de framework (alfabéticamente)
+  use aptos_framework::coin;
+  use aptos_framework::event;
+
+  // 3. Módulos de terceros (alfabéticamente)
+  use some_package::utilities;
+
+  // 4. Módulos locales (alfabéticamente)
+  use 0x42::helpers;
+  use 0x42::types;
+}
+```
+
+## Ámbito y Visibilidad
+
+### Ámbito del Módulo vs Ámbito Local
+
+```move
+module 0x42::scope_example {
+  use std::vector; // Ámbito del módulo - disponible en todas las funciones
+
+  fun module_scope_example() {
+    vector::empty<u64>(); // Funciona - 'vector' está en ámbito del módulo
+  }
+
+  fun local_scope_example() {
+    {
+      use std::option; // Ámbito local - solo dentro de este bloque
+      option::some(42);
+    }; // 'option' sale del ámbito aquí
+
+    // option::none(); // Error - 'option' no está en ámbito
+    vector::empty<u64>(); // Funciona - 'vector' todavía está en ámbito
+  }
+}
+```
+
+### Shadowing (Sombreado)
+
+```move
+module 0x42::shadowing {
+  use std::vector;
+
+  fun shadowing_example() {
+    let v1 = vector::empty<u64>(); // Usa std::vector
+
+    {
+      use std::option as vector; // Sombrea el import anterior
+      let opt = vector::some(42); // Usa std::option
+      // let v2 = vector::empty<u64>(); // Error - 'vector' ahora es std::option
+    };
+
+    let v3 = vector::empty<u64>(); // Usa std::vector nuevamente
+  }
+}
+```
+
+## Casos de Uso Avanzados
+
+### Imports Condicionales por Características
+
+```move
+module 0x42::feature_imports {
+  #[cfg(feature = "testing")]
+  use std::debug;
+
+  #[cfg(feature = "production")]
+  use aptos_framework::event;
+
+  fun conditional_usage() {
+    #[cfg(feature = "testing")]
+    debug::print(&b"Debug message");
+
+    #[cfg(feature = "production")]
+    event::emit_event(/* ... */);
+  }
+}
+```
+
+### Re-exports
+
+```move
+module 0x42::re_exports {
+  // Re-exportar funciones comúnmente usadas
+  public use std::vector::{
+    empty,
+    push_back,
+    pop_back,
+    length,
+  };
+
+  public use std::option::{
+    some,
+    none,
+    is_some,
+    is_none,
+  };
+}
+
+module 0x42::consumer {
+  use 0x42::re_exports::{empty, push_back, some, none};
+
+  fun example() {
+    let v = empty<u64>();
+    push_back(&mut v, 42);
+    let opt = some(v);
+  }
+}
+```
+
+### Imports para Genéricos
+
+```move
+module 0x42::generic_imports {
+  use std::vector::{Self as Vec};
+  use std::option::{Self as Opt, Option};
+
+  struct Container<T> {
+    items: Vec<T>,
+    default: Option<T>,
+  }
+
+  fun new_container<T>(): Container<T> {
+    Container {
+      items: Vec::empty(),
+      default: Opt::none(),
+    }
+  }
+}
+```
+
+## Resolución de Problemas
+
+### Error: Nombre No Encontrado
+
+```move
+// ❌ Error - import faltante
+module 0x42::error_example {
+  fun example() {
+    let v = vector::empty(); // Error: 'vector' no está en ámbito
+  }
+}
+
+// ✅ Solución - agregar import
+module 0x42::fixed_example {
+  use std::vector;
+
+  fun example() {
+    let v = vector::empty(); // OK
+  }
+}
+```
+
+### Error: Import Ambiguo
+
+```move
+// ❌ Error - imports ambiguos
+module 0x42::ambiguous {
+  use std::vector::empty;
+  use std::option::none as empty; // Conflicto con el import anterior
+
+  fun example() {
+    let v = empty(); // Error: ¿cuál 'empty'?
+  }
+}
+
+// ✅ Solución - usar aliases únicos
+module 0x42::unambiguous {
+  use std::vector::empty as empty_vec;
+  use std::option::none as empty_opt;
+
+  fun example() {
+    let v = empty_vec();   // Claro
+    let opt = empty_opt(); // Claro
+  }
+}
+```
+
+### Error: Import Circular
+
+```move
+// ❌ Error potencial - dependencia circular
+module 0x42::module_a {
+  use 0x42::module_b;
+  // ...
+}
+
+module 0x42::module_b {
+  use 0x42::module_a; // Puede causar dependencia circular
+  // ...
+}
+```
+
+## Limitaciones
+
+### 1. No se Pueden Importar Tipos Privados
+
+```move
+module 0x42::private_types {
+  struct PrivateStruct { value: u64 } // No tiene 'public'
+
+  public fun get_private(): PrivateStruct {
+    PrivateStruct { value: 42 }
+  }
+}
+
+module 0x42::consumer {
+  // Error: no se puede importar tipo privado
+  // use 0x42::private_types::PrivateStruct;
+
+  use 0x42::private_types;
+
+  fun example() {
+    let s = private_types::get_private(); // OK - función pública
+    // let value = s.value; // Error - campo privado
+  }
+}
+```
+
+### 2. No se Pueden Importar Funciones Privadas
+
+```move
+module 0x42::private_functions {
+  fun private_helper() { } // No tiene 'public'
+
+  public fun public_function() {
+    private_helper(); // OK - dentro del mismo módulo
+  }
+}
+
+module 0x42::consumer {
+  // Error: no se puede importar función privada
+  // use 0x42::private_functions::private_helper;
+
+  use 0x42::private_functions::public_function; // OK
+}
+```
+
+## Conclusión
+
+El sistema `use` de Move proporciona una manera flexible de importar y crear aliases para módulos y sus miembros. Entender cómo usar efectivamente las declaraciones `use` puede hacer que tu código sea más legible y mantenible.
+
+Puntos clave para recordar:
+
+- Los `use` pueden importar módulos completos o miembros específicos
+- Los aliases pueden simplificar nombres largos de módulos
+- Los imports locales tienen ámbito limitado a su bloque
+- Siempre agrupa y ordena los imports de manera consistente
+- Evita conflicts de nombres usando aliases descriptivos
+- Solo se pueden importar elementos públicos de otros módulos

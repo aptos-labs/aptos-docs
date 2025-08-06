@@ -1,0 +1,150 @@
+---
+title: "Tarifas de Gas y Almacenamiento"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Cualquier ejecución de transacción en la blockchain de Aptos requiere una tarifa de procesamiento. A la fecha, esta tarifa comprende dos componentes:
+
+1. Costos de ejecución e I/O
+
+- Esto cubre tu uso de recursos de computación transitorios, como procesar tus transacciones y propagar el registro validado a través de la red distribuida de la red principal.
+- Se mide en Unidades de Gas cuyo precio puede fluctuar según la carga de la red. Esto permite que los costos de ejecución e I/O sean bajos cuando la red está menos ocupada.
+- Esta porción del gas se quema permanentemente al ejecutar una transacción.
+
+2. Tarifas de almacenamiento
+
+- Esto cubre el costo de almacenar persistentemente el registro validado en el almacenamiento distribuido de la blockchain.
+- Se mide en precios fijos de APT, por lo que el costo de almacenamiento permanente se mantiene estable incluso cuando el precio de la unidad de gas fluctúa con la carga transitoria de la red.
+- La tarifa de almacenamiento puede ser reembolsada cuando se elimina la ranura de almacenamiento asignada. Actualmente, la red está configurada para reembolsar la totalidad de la tarifa de almacenamiento pagada durante el tiempo de vida de una ranura de almacenamiento de estado.
+- Para mantener simple la implementación del sistema, esta porción del gas se quema y se acuña nuevamente al momento del reembolso.
+
+<Aside type="note">
+  Conceptualmente, esta tarifa puede pensarse como muy similar a cómo pagamos por nuestros servicios domésticos de electricidad o agua.
+</Aside>
+
+## Unidad de gas
+
+Las transacciones pueden variar desde simples y económicas hasta complicadas según lo que hagan. En la blockchain de Aptos, una **unidad de gas** representa una unidad básica de consumo para recursos transitorios, como hacer computación o acceder al almacenamiento. Esto último no debe confundirse con el aspecto de almacenamiento a largo plazo de tales operaciones, ya que eso está cubierto por las tarifas de almacenamiento por separado.
+
+Ver [Cómo Funciona el Gas Base](/es/network/blockchain/base-gas) para una descripción detallada de los tipos de tarifas de gas y las optimizaciones disponibles.
+
+<Aside type="note">
+  👉 Una **unidad de gas** es un número adimensional o una unidad que no está asociada con ningún elemento como una moneda, expresada como un entero. Las unidades totales de gas consumidas por tu transacción dependen de la complejidad de tu transacción. El **precio del gas**, por otro lado, se expresa en términos de la moneda nativa de la blockchain de Aptos [APT](/es/network/glossary#apt) y su subunidad [Octas](/es/network/glossary#octa). Ver también [Transacciones y Estados](/es/network/blockchain/txns-states) para cómo se ve una transacción enviada a la blockchain de Aptos.
+</Aside>
+
+## La Declaración de Tarifas
+
+A partir del lanzamiento 1.7 del Marco de Aptos, el desglose de cargos y reembolsos de tarifas se emite como un evento de módulo representado por la estructura `0x1::transaction_fee::FeeStatement`.
+
+```move filename="transaction_fee.move"
+#[event]
+/// Desglose de cargo y reembolso de tarifa para una transacción.
+/// La estructura es:
+///
+/// - Cargo neto o reembolso (no en la declaración)
+///    - cargo total: total_charge_gas_units, coincide con `gas_used` en el `TransactionInfo` en cadena.
+///      Esta es la suma de los sub-elementos a continuación. Nota que hay pérdida potencial de precisión cuando
+///      la conversión entre unidades de gas internas y externas y entre token nativo y unidades de gas,
+///      por lo que es posible que los números no sumen exactamente. -- Este número es el cargo final,
+///      mientras que el desglose es meramente informativo.
+///        - cargo de gas para ejecución (tiempo de CPU): `execution_gas_units`
+///        - cargo de gas para IO (acceso aleatorio al almacenamiento): `io_gas_units`
+///        - cargo de tarifa de almacenamiento (espacio de almacenamiento): `storage_fee_octas`, para ser incluido en
+///          `total_charge_gas_unit`, este número se convierte a unidades de gas según el
+///          `gas_unit_price` especificado por el usuario en la transacción.
+///    - reembolso por eliminación de almacenamiento: `storage_fee_refund_octas`, esto no está incluido en `gas_used` o
+///      `total_charge_gas_units`, el cargo neto / reembolso se calcula por
+///      `total_charge_gas_units` * `gas_unit_price` - `storage_fee_refund_octas`.
+///
+/// Esto está destinado a ser emitido como un evento de módulo.
+struct FeeStatement has drop, store {
+    /// Cargo total de gas.
+    total_charge_gas_units: u64,
+    /// Cargo de gas de ejecución.
+    execution_gas_units: u64,
+    /// Cargo de gas de IO.
+    io_gas_units: u64,
+    /// Cargo de tarifa de almacenamiento.
+    storage_fee_octas: u64,
+    /// Reembolso de tarifa de almacenamiento.
+    storage_fee_refund_octas: u64,
+}
+```
+
+## Precio del gas y priorización de transacciones
+
+En la red de Aptos, la gobernanza de Aptos establece el precio mínimo absoluto de la unidad de gas. Sin embargo, el mercado determina qué tan rápido se procesa una transacción con un precio particular de unidad de gas. Ver [Rastreador de Gas de Ethereum](https://etherscan.io/gastracker), por ejemplo, que muestra los movimientos de precios del mercado del precio del gas de Ethereum.
+
+Al especificar un precio de unidad de gas más alto que el precio actual del mercado, puedes **aumentar** el nivel de prioridad para tu transacción en la blockchain pagando una tarifa de procesamiento mayor. Como parte del consenso, cuando el líder selecciona transacciones de su mempool para proponer como parte del siguiente bloque, priorizará seleccionar transacciones con un precio de unidad de gas más alto. Ten en cuenta que las tarifas de gas más altas solo priorizan la selección de transacciones para el siguiente bloque.
+
+## Estimación de tarifas de gas
+
+Para estimar las tarifas de gas para una transacción:
+
+### Usando la API REST
+
+Puedes usar el endpoint de simulación para estimar los costos de gas:
+
+```bash
+curl -X POST "https://api.mainnet.aptoslabs.com/v1/transactions/simulate" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "sender": "0x123...",
+    "sequence_number": "1",
+    "max_gas_amount": "100000",
+    "gas_unit_price": "100",
+    "expiration_timestamp_secs": "...",
+    "payload": {...}
+  }'
+```
+
+### Usando el SDK de TypeScript
+
+```typescript
+import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
+
+const config = new AptosConfig({ network: Network.MAINNET });
+const aptos = new Aptos(config);
+
+// Simular transacción para estimar gas
+const simulation = await aptos.transaction.simulate.simple({
+  signerPublicKey: account.publicKey,
+  transaction,
+});
+
+console.log(`Gas estimado: ${simulation[0].gas_used}`);
+console.log(`Costo estimado: ${simulation[0].gas_used * gasUnitPrice} octas`);
+```
+
+## Mejores prácticas para tarifas de gas
+
+1. **Establece límites razonables**: Configura `max_gas_amount` lo suficientemente alto para cubrir tu transacción pero no excesivamente alto.
+
+2. **Monitorea los precios del mercado**: Ajusta tu `gas_unit_price` basado en las condiciones actuales de la red.
+
+3. **Usa simulación**: Siempre simula transacciones complejas antes de enviarlas para estimar costos precisos.
+
+4. **Considera los costos de almacenamiento**: Para transacciones que crean nuevos recursos, ten en cuenta las tarifas de almacenamiento adicionales.
+
+## Factores que afectan las tarifas de gas
+
+### Complejidad de la transacción
+
+- Funciones Move simples consumen menos gas
+- Operaciones complejas con múltiples llamadas de función cuestan más
+- Acceso a almacenamiento añade costos de I/O
+
+### Tamaño de los datos
+
+- Transacciones más grandes requieren más gas para procesamiento
+- Almacenar datos más grandes incurre en tarifas de almacenamiento más altas
+
+### Condiciones de la red
+
+- Alta congestión aumenta los precios de gas
+- Periodos de baja actividad resultan en tarifas más baratas
+
+***
+
+Para información más detallada sobre la estructura interna del gas y optimizaciones, consulta la [documentación completa](/network/blockchain/gas-txn-fee) en inglés.

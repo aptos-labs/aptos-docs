@@ -275,3 +275,40 @@ fun violation(): bool {
     if (foo()) true else false
 }
 ```
+
+## Security Checks
+
+### `contains_in_table`
+
+Checks for unsafe usage of table operations that could lead to runtime errors. This lint helps prevent common mistakes when working with tables by detecting:
+
+1. **Unsafe `table::borrow` calls**: Borrowing from a table without first checking if the key exists using `table::contains`. This can cause runtime errors if the key doesn't exist.
+
+2. **Unsafe `table::add` calls**: Adding to a table without ensuring the key doesn't already exist. This can cause runtime errors if the key already exists.
+
+The lint analyzes control flow to understand when keys are known to exist or not exist based on `table::contains` checks.
+
+**Examples of patterns caught by this lint:**
+
+```move
+// Unsafe borrow - no contains check
+table::borrow(&table, key); // Error: might fail if key doesn't exist
+
+// Unsafe add - no contains check
+table::add(&mut table, key, value); // Error: might fail if key already exists
+
+// Wrong key check
+if (table::contains(&table, key1)) {
+    table::borrow(&table, key2); // Error: checked key1 but borrowing key2
+}
+
+// Wrong branch usage
+if (!table::contains(&table, key)) {
+    table::borrow(&table, key); // Error: key is known NOT to exist
+}
+```
+
+**Recommended solutions:**
+
+- For `table::borrow`: Use `table::contains` first to check if the key exists
+- For `table::add`: Use `table::upsert` instead, or check with `table::contains` that the key doesn't exist first

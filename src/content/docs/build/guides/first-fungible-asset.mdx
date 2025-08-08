@@ -82,14 +82,14 @@ Here we will modify, deploy, and test the example [FACoin](https://github.com/ap
 
       ```shellscript filename="Terminal"
       === Addresses ===
-      Alice: 0x0c5dd7abbd67db06325fa1a2f37a1833f9a92ff2beb90f32495a9d80972429cd
-      Bob: 0x2a796f4255d5c23684fe6cc521069d684516031bb5ae1ad2061ddc5414450807
-      Charlie: 0xd824909be65a224f651ff6e9b82ec99ad5707fcef739d1003be20fc69fb93d7a
+      Alice: 0xca2f64c81ea9ab92c1d8686950aaef0fd5a050b7c7d3bd48f63739b9c0ff565f
+      Bob: 0x66f8bbe6c76ce6eadf0b4544b8fd9bbf5f44b2f3905ee4edeab41e4b07cfc74c
+      Charlie: 0xc25829d44511842b5f60bbf3f198c847fbad731a05e6125aa876f8f91e5d042b
 
       === Compiling FACoin package locally ===
       In order to run compilation, you must have the `aptos` CLI installed.
       Running the compilation locally, in a real situation you may want to compile this ahead of time.
-      aptos move build-publish-payload --json-output-file move/facoin/facoin.json --package-dir move/facoin --named-addresses FACoin=0x0c5dd7abbd67db06325fa1a2f37a1833f9a92ff2beb90f32495a9d80972429cd --assume-yes
+      aptos move build-publish-payload --json-output-file move/facoin/facoin.json --package-dir move/facoin --named-addresses FACoin=0xca2f64c81ea9ab92c1d8686950aaef0fd5a050b7c7d3bd48f63739b9c0ff565f --assume-yes
       Compiling, may take a little while to download git dependencies...
       UPDATING GIT DEPENDENCY https://github.com/aptos-labs/aptos-core.git
       INCLUDING DEPENDENCY AptosFramework
@@ -98,24 +98,24 @@ Here we will modify, deploy, and test the example [FACoin](https://github.com/ap
       BUILDING facoin
 
       ===Publishing FACoin package===
-      Transaction hash: 0x0c8a24987bdf2e5e40d8a00f6c97ac55419757bc440097d76959a64dbeafc351
-      metadata address: 0x2e0e90c701233467f27150f42d365e27e72eb0be8e2a74ee529c31b813bbb321
+      Transaction hash: 0xacd2af8920731caa0e9873c25d380ecc1f289193b407fea8f42313d28cf01df2
+      metadata address: 0xa0104ba8146b45bdaf1692c4e28aa7189cbb9ffb41523e025aab1a1600f4e331
       All the balances in this example refer to balance in primary fungible stores of each account.
-      Alice's initial balance: 0.
-      Bob's initial balance: 0.
-      Charlie's initial balance: 0.
+      Alice's initial FACoin balance: 0
+      Bob's initial FACoin balance: 0
+      Charlie's initial balance: 0
       Alice mints Charlie 100 coins.
-      Charlie's updated "Tutorial Token" primary fungible store balance: 0.
+      Charlie's updated FACoin primary fungible store balance: 100
       Alice freezes Bob's account.
       Alice as the admin forcefully transfers the newly minted coins of Charlie to Bob ignoring that Bob's account is frozen.
-      Bob's updated "Tutorial Token" balance: 0.
+      Bob's updated FACoin balance: 100
       Alice unfreezes Bob's account.
       Alice burns 50 coins from Bob.
-      Bob's updated "Tutorial Token" balance: 0.
+      Bob's updated FACoin balance: 50
       Bob transfers 10 coins to Alice as the owner.
-      Alice's updated "Tutorial Token" balance: 0.
-      Bob's updated "Tutorial Token" balance: 0.
-      done.
+      Alice's updated FACoin balance: 10
+      Bob's updated FACoin balance: 40
+      done.      
       ```
 </Steps>
 
@@ -168,6 +168,7 @@ Let’s go step by step through how this contract is written.
          use std::signer;
          use std::string::utf8;
          use std::option;
+         use std::string;
      		//...
      }
      ```
@@ -181,16 +182,16 @@ Let’s go step by step through how this contract is written.
      The `ManagedFungibleAsset` standard helps keep track of which permissions this Module is allowed to use.
 
      ```move filename="fa_coin.move"
-     fun init_module(admin: &signer) {
+      fun init_module(admin: &signer) {
          let constructor_ref = &object::create_named_object(admin, ASSET_SYMBOL);
          primary_fungible_store::create_primary_store_enabled_fungible_asset(
-             constructor_ref,
-             option::none(),
-             utf8(ASSET_NAME),
-             utf8(ASSET_SYMBOL),
-             8,
-             utf8(b"http://example.com/favicon.ico"),
-             utf8(b"http://example.com"),
+               constructor_ref,
+               option::none(),
+               utf8(ASSET_NAME), /* name */
+               utf8(ASSET_SYMBOL), /* symbol */
+               8, /* decimals */
+               utf8(b"http://example.com/favicon.ico"), /* icon */
+               utf8(b"http://example.com"), /* project */
          );
 
          let mint_ref = fungible_asset::generate_mint_ref(constructor_ref);
@@ -198,10 +199,10 @@ Let’s go step by step through how this contract is written.
          let transfer_ref = fungible_asset::generate_transfer_ref(constructor_ref);
          let metadata_object_signer = object::generate_signer(constructor_ref);
          move_to(
-             &metadata_object_signer,
-             ManagedFungibleAsset { mint_ref, transfer_ref, burn_ref }
+               &metadata_object_signer,
+               ManagedFungibleAsset { mint_ref, transfer_ref, burn_ref }
          )
-     }
+      }
      ```
 
   4. View Functions
@@ -227,13 +228,13 @@ Let’s go step by step through how this contract is written.
      Every fungible asset has a similar interface (mint, transfer, burn, freeze, unfreeze, deposit, and withdraw). Here’s an example of a minimal mint function, which mints and transfers the funds to the proper recipient:
 
      ```move filename="fa_coin.move"
-     public entry fun mint(admin: &signer, to: address, amount: u64) acquires ManagedFungibleAsset {
+      public entry fun mint(admin: &signer, to: address, amount: u64) acquires ManagedFungibleAsset {
          let asset = get_metadata();
          let managed_fungible_asset = authorized_borrow_refs(admin, asset);
          let to_wallet = primary_fungible_store::ensure_primary_store_exists(to, asset);
          let fa = fungible_asset::mint(&managed_fungible_asset.mint_ref, amount);
          fungible_asset::deposit_with_ref(&managed_fungible_asset.transfer_ref, to_wallet, fa);
-     }
+      }
      ```
 </Steps>
 

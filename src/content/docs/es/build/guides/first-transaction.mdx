@@ -421,63 +421,63 @@ Este tutorial te guiará para crear y enviar tu primera transacción en la block
 
       2. Build the transaction
 
-         Add the following code to your `main()` function to build a transaction that transfers 1000 octas from Alice to Bob:
+      Agrega el siguiente código a tu función `main()` para construir una transacción que transfiera 1000 octas de Alice a Bob:
 
-         ```python filename="transaction.py"
-         # 1. Build the transaction
-         print("\n=== 1. Building the transaction ===")
+      ```python filename="transaction.py"
+      # 1. Build the transaction
+      print("\n=== 1. Building the transaction ===")
 
-         # Create the entry function payload
-         # This specifies which function to call and with what arguments
-         entry_function = EntryFunction.natural(
-             "0x1::aptos_account",  # Module address and name
-             "transfer",            # Function name
-             [],                    # Type arguments (empty for this function)
-             [
-                 # Function arguments with their serialization type
-                 TransactionArgument(bob.address(), Serializer.struct),  # Recipient address
-                 TransactionArgument(1000, Serializer.u64),              # Amount to transfer (1000 octas)
-             ],
-         )
+      # Create the entry function payload
+      # This specifies which function to call and with what arguments
+      entry_function = EntryFunction.natural(
+          "0x1::aptos_account",  # Module address and name
+          "transfer",            # Function name
+          [],                    # Type arguments (empty for this function)
+          [
+              # Function arguments with their serialization type
+              TransactionArgument(bob.address(), Serializer.struct),  # Recipient address
+              TransactionArgument(1000, Serializer.u64),              # Amount to transfer (1000 octas)
+          ],
+      )
 
-         # Get the chain ID for the transaction
-         chain_id = await rest_client.chain_id()
+      # Get the chain ID for the transaction
+      chain_id = await rest_client.chain_id()
 
-         # Get the sender's current sequence number
-         account_data = await rest_client.account(alice.address())
-         sequence_number = int(account_data["sequence_number"])
+      # Get the sender's current sequence number
+      account_data = await rest_client.account(alice.address())
+      sequence_number = int(account_data["sequence_number"])
 
-         # Create the raw transaction with all required fields
-         raw_transaction = RawTransaction(
-             sender=alice.address(),                                    # Sender's address
-             sequence_number=sequence_number,                           # Sequence number to prevent replay attacks
-             payload=TransactionPayload(entry_function),                # The function to call
-             max_gas_amount=2000,                                       # Maximum gas units to use
-             gas_unit_price=100,                                        # Price per gas unit in octas
-             expiration_timestamps_secs=int(time.time()) + 600,         # Expires in 10 minutes
-             chain_id=chain_id,                                         # Chain ID to ensure correct network
-         )
+      # Create the raw transaction with all required fields
+      raw_transaction = RawTransaction(
+          sender=alice.address(),                                    # Sender's address
+          sequence_number=sequence_number,                           # Sequence number to prevent replay attacks
+          payload=TransactionPayload(entry_function),                # The function to call
+          max_gas_amount=2000,                                       # Maximum gas units to use
+          gas_unit_price=100,                                        # Price per gas unit in octas
+          expiration_timestamps_secs=int(time.time()) + 600,         # Expires in 10 minutes
+          chain_id=chain_id,                                         # Chain ID to ensure correct network
+      )
 
-         print("Transaction built successfully")
-         print(f"Sender: {raw_transaction.sender}")
-         print(f"Sequence Number: {raw_transaction.sequence_number}")
-         print(f"Max Gas Amount: {raw_transaction.max_gas_amount}")
-         print(f"Gas Unit Price: {raw_transaction.gas_unit_price}")
-         print(f"Expiration Timestamp: {time.ctime(raw_transaction.expiration_timestamps_secs)}")
-         ```
+      print("Transaction built successfully")
+      print(f"Sender: {raw_transaction.sender}")
+      print(f"Sequence Number: {raw_transaction.sequence_number}")
+      print(f"Max Gas Amount: {raw_transaction.max_gas_amount}")
+      print(f"Gas Unit Price: {raw_transaction.gas_unit_price}")
+      print(f"Expiration Timestamp: {time.ctime(raw_transaction.expiration_timestamps_secs)}")
+      ```
 
-         <Aside type="note">
-           The function `0x1::aptos_account::transfer` is a built-in function in the Aptos framework that transfers coins between accounts. The `0x1` prefix indicates it's part of the core framework. Behind the scenes, this function calls the [Coin Move module source code](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/coin.move) to perform the actual transfer.
+      <Aside type="note">
+        The function `0x1::aptos_account::transfer` is a built-in function in the Aptos framework that transfers coins between accounts. The `0x1` prefix indicates it's part of the core framework. Behind the scenes, this function calls the [Coin Move module source code](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/coin.move) to perform the actual transfer.
 
-           The Python SDK uses several key components to construct transactions:
+        The Python SDK uses several key components to construct transactions:
 
-           - `EntryFunction.natural()` creates a callable Move function reference
-           - `TransactionArgument` with `Serializer` types ensures proper BCS serialization
-           - `TransactionPayload` wraps the entry function for inclusion in the transaction
-           - `RawTransaction` combines all transaction parameters into a complete transaction
+        - `EntryFunction.natural()` creates a callable Move function reference
+        - `TransactionArgument` with `Serializer` types ensures proper BCS serialization
+        - `TransactionPayload` wraps the entry function for inclusion in the transaction
+        - `RawTransaction` combines all transaction parameters into a complete transaction
 
-           This layered approach gives you fine-grained control over transaction construction.
-         </Aside>
+        This layered approach gives you fine-grained control over transaction construction.
+      </Aside>
     </Steps>
   </TabItem>
 </Tabs>

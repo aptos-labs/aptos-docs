@@ -1,0 +1,263 @@
+---
+title: "Gas dan Biaya Transaksi"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Untuk dieksekusi di blockchain Aptos, transaksi harus membayar biaya yang dinyatakan dalam satuan gas dan unit gas Aptos (AGU). Konsep ini mirip dengan yang ditemukan di blockchain lainnya.
+
+Gas adalah cara untuk mengukur komputasi dan itu:
+
+- **Melindungi jaringan** dari denial-of-service (DoS) dengan mewajibkan biaya untuk transaksi
+- **Memberi prioritas transaksi** dengan memungkinkan pengguna membayar lebih untuk eksekusi yang lebih cepat
+- **Mengompensasi validator** untuk menjalankan transaksi dan memelihara jaringan
+
+## Komponen Biaya
+
+### Unit Gas
+
+**Unit gas** mengukur komputasi yang dikonsumsi oleh transaksi. Operasi yang berbeda mengonsumsi unit gas yang berbeda:
+
+- **Instruksi Move**: Setiap instruksi dalam bytecode Move memiliki biaya gas
+- **Akses memori**: Membaca dan menulis ke memori mengonsumsi gas
+- **Operasi I/O**: Interaksi dengan storage mengonsumsi gas
+- **Verifikasi kriptografi**: Verifikasi tanda tangan mengonsumsi gas
+
+### Harga Unit Gas
+
+**Harga unit gas** adalah biaya dalam APT (Octas) per unit gas. Ini ditentukan oleh:
+
+- **Permintaan jaringan**: Harga meningkat saat jaringan sibuk
+- **Prioritas transaksi**: Pengguna dapat membayar lebih untuk prioritas lebih tinggi
+- **Base fee**: Biaya minimum yang ditetapkan oleh jaringan
+
+### Biaya Storage
+
+Selain gas komputasi, Aptos juga memiliki **biaya storage** untuk menyimpan data di blockchain:
+
+- **Per byte storage**: Biaya untuk setiap byte data yang disimpan
+- **Storage refund**: Pengembalian parsial saat data dihapus
+- **State bloat prevention**: Mencegah pertumbuhan state yang tidak terkendali
+
+## Cara Kerja Gas
+
+### Estimasi Gas
+
+Sebelum mengirim transaksi, Anda dapat mengestimasi konsumsi gas:
+
+```typescript
+import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
+
+const config = new AptosConfig({ network: Network.DEVNET });
+const aptos = new Aptos(config);
+
+// Estimasi gas untuk transaksi
+const transaction = await aptos.transaction.build.simple({
+  sender: senderAddress,
+  data: {
+    function: "0x1::coin::transfer",
+    typeArguments: ["0x1::aptos_coin::AptosCoin"],
+    functionArguments: [receiverAddress, amount]
+  }
+});
+
+// Simulasi untuk mendapatkan estimasi gas
+const simulation = await aptos.transaction.simulate.simple({
+  signerPublicKey: signer.publicKey,
+  transaction
+});
+
+console.log("Gas used:", simulation[0].gas_used);
+console.log("Gas unit price:", simulation[0].gas_unit_price);
+```
+
+### Setting Gas Parameters
+
+Saat membangun transaksi, Anda dapat mengatur parameter gas:
+
+```typescript
+const transaction = await aptos.transaction.build.simple({
+  sender: senderAddress,
+  data: {
+    function: "0x1::coin::transfer",
+    typeArguments: ["0x1::aptos_coin::AptosCoin"],
+    functionArguments: [receiverAddress, amount]
+  },
+  options: {
+    gasUnitPrice: 100,      // Harga per unit gas dalam Octas
+    maxGasAmount: 2000      // Maksimum gas yang bersedia dibayar
+  }
+});
+```
+
+### Gas Limit dan Prioritas
+
+- **Gas Limit**: Maksimum gas yang bersedia Anda bayar
+- **Gas Price**: Harga per unit gas untuk memprioritaskan transaksi
+- **Estimasi yang akurat**: Penting untuk menghindari transaksi yang gagal
+
+## Optimisasi Gas
+
+### Teknik Optimisasi
+
+1. **Batch operations**: Gabungkan beberapa operasi dalam satu transaksi
+2. **Efficient storage**: Minimalisir penggunaan storage on-chain
+3. **Smart contract optimization**: Tulis kode Move yang efisien
+4. **Resource management**: Kelola resource dengan efisien
+
+### Contoh Optimisasi
+
+```move
+// Tidak efisien: Multiple storage operations
+public fun inefficient_update(account: &signer, values: vector<u64>) {
+    let i = 0;
+    while (i < vector::length(&values)) {
+        // Setiap loop melakukan storage operation terpisah
+        update_single_value(account, i, *vector::borrow(&values, i));
+        i = i + 1;
+    }
+}
+
+// Efisien: Batch storage operation
+public fun efficient_update(account: &signer, values: vector<u64>) {
+    // Satu storage operation untuk semua values
+    move_to(account, BatchValues { values });
+}
+```
+
+### Storage Fee Management
+
+```move
+module my_addr::storage_efficient {
+    // Struktur yang mengoptimalkan storage
+    struct OptimizedData has key, store {
+        // Gunakan vector untuk data yang serupa
+        values: vector<u64>,
+        // Pack boolean values ke dalam u8
+        flags: u8,
+        // Gunakan Option untuk field opsional
+        optional_data: Option<String>
+    }
+    
+    public fun store_efficiently(account: &signer, data: OptimizedData) {
+        move_to(account, data);
+    }
+}
+```
+
+## Gas di Berbagai Operasi
+
+### Transfer Coin
+
+```typescript
+// Transfer APT - konsumsi gas rendah
+const transferTx = await aptos.transaction.build.simple({
+  sender: sender.accountAddress,
+  data: {
+    function: "0x1::coin::transfer",
+    typeArguments: ["0x1::aptos_coin::AptosCoin"],
+    functionArguments: [receiver, amount]
+  }
+});
+// Biasanya ~500-800 gas units
+```
+
+### Smart Contract Deployment
+
+```typescript
+// Deploy module - konsumsi gas tinggi
+const deployTx = await aptos.transaction.build.simple({
+  sender: sender.accountAddress,
+  data: {
+    bytecode: compiledModule,
+    abi: moduleAbi
+  }
+});
+// Biasanya 10,000+ gas units tergantung ukuran module
+```
+
+### Complex Operations
+
+```move
+// Operasi kompleks yang mengonsumsi lebih banyak gas
+public fun complex_operation(account: &signer) {
+    // Multiple storage reads/writes
+    let data1 = borrow_global<Data1>(@user);
+    let data2 = borrow_global<Data2>(@user);
+    
+    // Complex computation
+    let result = expensive_computation(data1, data2);
+    
+    // Multiple storage updates
+    move_to(account, Result { value: result });
+}
+```
+
+## Monitoring dan Debugging
+
+### Gas Profiling
+
+```typescript
+// Profiling gas usage
+const simulation = await aptos.transaction.simulate.simple({
+  signerPublicKey: signer.publicKey,
+  transaction
+});
+
+console.log("Transaction result:", simulation[0]);
+console.log("Gas used:", simulation[0].gas_used);
+console.log("Success:", simulation[0].success);
+
+if (!simulation[0].success) {
+  console.log("Error:", simulation[0].vm_status);
+}
+```
+
+### Gas Analytics
+
+```typescript
+// Analisis penggunaan gas dari transaksi yang sudah dieksekusi
+const txnResult = await aptos.getTransactionByHash({
+  transactionHash: "0x..."
+});
+
+if ('gas_used' in txnResult) {
+  console.log("Gas used:", txnResult.gas_used);
+  console.log("Gas unit price:", txnResult.gas_unit_price);
+  console.log("Total cost:", 
+    BigInt(txnResult.gas_used) * BigInt(txnResult.gas_unit_price)
+  );
+}
+```
+
+## Best Practices
+
+### Untuk Developers
+
+1. **Selalu simulasikan** transaksi sebelum submit
+2. **Set gas limit yang wajar** - tidak terlalu rendah atau tinggi
+3. **Monitor gas consumption** dalam testing
+4. **Optimisasi smart contract** untuk efisiensi gas
+5. **Gunakan batch operations** untuk operasi multiple
+
+### Untuk Users
+
+1. **Gunakan estimasi gas** yang disediakan wallet
+2. **Adjust gas price** berdasarkan urgency
+3. **Monitor network congestion** untuk timing optimal
+4. **Understand tradeoffs** antara speed dan cost
+
+<Aside type="note">
+  Gas fee di Aptos dirancang untuk stabil dan dapat diprediksi, dengan mekanisme untuk mencegah spikes harga yang ekstrem. Sistem ini terus dioptimalkan untuk memberikan experience yang terbaik bagi users dan developers.
+</Aside>
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Insufficient gas**: Tingkatkan gas limit
+2. **Gas price too low**: Tingkatkan gas unit price
+3. **Out of gas**: Optimisasi kode atau tingkatkan limit
+4. **Transaction failed**: Periksa error message dan logic
+
+Gas dan biaya transaksi adalah komponen penting dari ekonomi Aptos yang memastikan keamanan jaringan, efisiensi operasi, dan insentif yang tepat untuk semua partisipan.

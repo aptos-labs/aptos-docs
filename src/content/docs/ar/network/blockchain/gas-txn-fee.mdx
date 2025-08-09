@@ -1,0 +1,354 @@
+---
+title: "الوقود ورسوم المعاملات"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+في بلوك تشين أبتوس، كل معاملة تتطلب دفع رسوم لتحفيز المدققين على معالجة المعاملة وضمان استخدام الموارد بكفاءة. فهم آلية الوقود والرسوم أمر ضروري لتطوير تطبيقات فعالة ومجدية اقتصادياً.
+
+## نظرة عامة على الرسوم
+
+رسوم المعاملات في أبتوس تتكون من عدة مكونات:
+
+1. **رسوم التنفيذ** - تكلفة تشغيل الكود
+2. **رسوم الإدخال/الإخراج** - تكلفة قراءة وكتابة البيانات
+3. **رسوم التخزين** - تكلفة تخزين البيانات الجديدة
+4. **رسوم الحالة العالمية** - تكلفة تحديث الحالة العامة للشبكة
+
+<Aside type="note">
+  جميع الرسوم تُدفع بعملة أبتوس (APT) وتُقاس بوحدة "Octas" (1 APT = 100,000,000 Octas).
+</Aside>
+
+## وحدة الوقود
+
+**وحدة الوقود** هي وحدة قياس موحدة لتكلفة الحوسبة في أبتوس. كل عملية لها تكلفة محددة بوحدات الوقود:
+
+### أمثلة على تكاليف العمليات
+
+| العملية | وحدات الوقود |
+|---------|-------------|
+| إنشاء حساب جديد | ~1,000 |
+| نقل عملة | ~150-300 |
+| نشر وحدة صغيرة | ~3,000-10,000 |
+| استدعاء دالة بسيطة | ~100-500 |
+| قراءة بيانات من التخزين | ~50-200 |
+
+## تقدير الرسوم
+
+يمكنك تقدير رسوم المعاملة قبل الإرسال باستخدام محاكاة المعاملة:
+
+### باستخدام TypeScript SDK
+
+```typescript
+import { Aptos, AptosConfig, Network, Account } from "@aptos-labs/ts-sdk";
+
+const config = new AptosConfig({ network: Network.TESTNET });
+const aptos = new Aptos(config);
+
+async function estimateTransactionFee(sender: Account, recipient: string, amount: number) {
+  // بناء المعاملة
+  const transaction = await aptos.transaction.build.simple({
+    sender: sender.accountAddress,
+    data: {
+      function: "0x1::coin::transfer",
+      typeArguments: ["0x1::aptos_coin::AptosCoin"],
+      functionArguments: [recipient, amount],
+    },
+  });
+
+  // محاكاة المعاملة للحصول على تقدير الرسوم
+  const simulation = await aptos.transaction.simulate.simple({
+    signerPublicKey: sender.publicKey,
+    transaction,
+  });
+
+  console.log("تقدير الرسوم:", simulation[0].gas_used + " وحدة وقود");
+  console.log("التكلفة بـ Octas:", simulation[0].gas_used * 100); // افتراض سعر 100 Octas لكل وحدة
+}
+```
+
+### باستخدام CLI
+
+```bash
+# محاكاة معاملة نقل
+aptos move run \
+  --function-id 0x1::coin::transfer \
+  --type-args 0x1::aptos_coin::AptosCoin \
+  --args address:0x123 u64:1000000 \
+  --dry-run
+```
+
+## بيان الرسوم
+
+كل معاملة تحتوي على **بيان رسوم** يحدد:
+
+- **الحد الأقصى للوقود**: أقصى وحدات وقود مستعد لدفعها
+- **سعر الوقود**: السعر لكل وحدة وقود بـ Octas
+- **الحد الأقصى للرسوم**: إجمالي الرسوم القصوى = الحد الأقصى للوقود × سعر الوقود
+
+```typescript
+const transaction = await aptos.transaction.build.simple({
+  sender: sender.accountAddress,
+  data: {
+    function: "0x1::coin::transfer",
+    typeArguments: ["0x1::aptos_coin::AptosCoin"],
+    functionArguments: [recipient, amount],
+  },
+  options: {
+    maxGasAmount: 2000,        // الحد الأقصى للوقود
+    gasUnitPrice: 100,         // سعر الوقود (Octas)
+    // الحد الأقصى للرسوم = 2000 × 100 = 200,000 Octas
+  },
+});
+```
+
+## تحسين الرسوم
+
+### 1. تحسين الكود
+
+```move
+// ❌ غير محسن - قراءات متعددة
+public fun inefficient_transfer(from: &signer, to: address, amount: u64) acquires Coin {
+    let balance1 = borrow_global<Coin>(signer::address_of(from)).value;
+    let balance2 = borrow_global<Coin>(signer::address_of(from)).value; // قراءة مكررة
+    // باقي الكود...
+}
+
+// ✅ محسن - قراءة واحدة
+public fun efficient_transfer(from: &signer, to: address, amount: u64) acquires Coin {
+    let coin_ref = borrow_global_mut<Coin>(signer::address_of(from));
+    let balance = coin_ref.value; // قراءة واحدة فقط
+    // باقي الكود...
+}
+```
+
+### 2. تجميع العمليات
+
+```move
+// ❌ عمليات منفصلة (معاملات متعددة)
+public entry fun update_user_data_separate(
+    account: &signer,
+    name: String,
+    age: u8,
+    email: String
+) acquires UserProfile {
+    update_name(account, name);
+    update_age(account, age);
+    update_email(account, email);
+}
+
+// ✅ عملية مجمعة (معاملة واحدة)
+public entry fun update_user_data_batch(
+    account: &signer,
+    name: String,
+    age: u8,
+    email: String
+) acquires UserProfile {
+    let profile = borrow_global_mut<UserProfile>(signer::address_of(account));
+    profile.name = name;
+    profile.age = age;
+    profile.email = email;
+}
+```
+
+### 3. استخدام الوظائف المناسبة
+
+```move
+// ❌ استخدام entry function للقراءة
+public entry fun get_balance_expensive(account: &signer): u64 acquires Coin {
+    borrow_global<Coin>(signer::address_of(account)).value
+}
+
+// ✅ استخدام view function للقراءة
+#[view]
+public fun get_balance_cheap(addr: address): u64 acquires Coin {
+    borrow_global<Coin>(addr).value
+}
+```
+
+## أسعار الوقود والأولوية
+
+أبتوس يستخدم آلية سوق لتحديد أسعار الوقود:
+
+### الأسعار الحالية
+
+- **السعر الأساسي**: 100 Octas لكل وحدة وقود
+- **السعر المتوسط**: 100-150 Octas لكل وحدة وقود
+- **السعر للأولوية العالية**: 200+ Octas لكل وحدة وقود
+
+### اختيار السعر المناسب
+
+```typescript
+// لمعاملة عادية
+const normalTransaction = {
+  maxGasAmount: 2000,
+  gasUnitPrice: 100,  // السعر الأساسي
+};
+
+// لمعاملة عاجلة
+const urgentTransaction = {
+  maxGasAmount: 2000,
+  gasUnitPrice: 200,  // سعر أعلى للأولوية
+};
+
+// لمعاملة اقتصادية (قد تستغرق وقتاً أطول)
+const economicalTransaction = {
+  maxGasAmount: 2000,
+  gasUnitPrice: 100,  // السعر الأساسي
+};
+```
+
+## رسوم التخزين
+
+بالإضافة إلى رسوم التنفيذ، أبتوس يفرض رسوم تخزين للبيانات الجديدة:
+
+### حساب رسوم التخزين
+
+```typescript
+// رسوم التخزين = حجم البيانات × سعر التخزين
+const storageBytes = 1000;  // 1KB من البيانات الجديدة
+const storagePricePerByte = 1000;  // Octas لكل بايت
+const storageFee = storageBytes * storagePricePerByte;  // 1,000,000 Octas
+
+console.log(`رسوم التخزين: ${storageFee} Octas`);
+```
+
+### أمثلة على أحجام التخزين
+
+| نوع البيانات | الحجم التقريبي |
+|-------------|---------------|
+| عنوان حساب | 32 بايت |
+| رقم u64 | 8 بايت |
+| نص بـ 100 حرف | ~100 بايت |
+| صورة رمزية NFT | ~500-2000 بايت |
+
+## مراقبة استخدام الوقود
+
+### في التطوير
+
+```typescript
+import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
+
+async function monitorGasUsage(txnHash: string) {
+  const config = new AptosConfig({ network: Network.TESTNET });
+  const aptos = new Aptos(config);
+
+  const transaction = await aptos.getTransactionByHash({ transactionHash: txnHash });
+  
+  if ('gas_used' in transaction) {
+    console.log("الوقود المستخدم:", transaction.gas_used);
+    console.log("الرسوم المدفوعة:", transaction.gas_used * transaction.gas_unit_price, "Octas");
+    console.log("كفاءة الوقود:", (transaction.gas_used / transaction.max_gas_amount * 100).toFixed(2) + "%");
+  }
+}
+```
+
+### باستخدام المستكشف
+
+يمكنك مراقبة استخدام الوقود باستخدام [Aptos Explorer](https://explorer.aptoslabs.com/):
+
+1. ابحث عن معاملتك بالمعرف (hash)
+2. اعرض تفاصيل المعاملة
+3. راجع قسم "Gas Usage"
+
+## نصائح لتوفير الرسوم
+
+### 1. تجميع المعاملات
+
+```typescript
+// ❌ معاملات منفصلة
+await aptos.signAndSubmitTransaction({ signer: account, transaction: tx1 });
+await aptos.signAndSubmitTransaction({ signer: account, transaction: tx2 });
+await aptos.signAndSubmitTransaction({ signer: account, transaction: tx3 });
+
+// ✅ معاملة مجمعة
+const batchTransaction = await aptos.transaction.build.multiAgent({
+  sender: account.accountAddress,
+  secondarySignerAddresses: [account2.accountAddress],
+  data: {
+    function: "your_module::batch_operations",
+    functionArguments: [/* جميع المعاملات */],
+  },
+});
+```
+
+### 2. استخدام الحد الأدنى للوقود
+
+```typescript
+// تقدير دقيق للوقود المطلوب
+const simulation = await aptos.transaction.simulate.simple({
+  signerPublicKey: account.publicKey,
+  transaction,
+});
+
+const estimatedGas = simulation[0].gas_used;
+const gasWithBuffer = Math.ceil(estimatedGas * 1.1); // إضافة 10% احتياط
+
+const transaction = await aptos.transaction.build.simple({
+  sender: account.accountAddress,
+  data: { /* بيانات المعاملة */ },
+  options: {
+    maxGasAmount: gasWithBuffer,  // استخدام التقدير + احتياط
+    gasUnitPrice: 100,
+  },
+});
+```
+
+### 3. تجنب العمليات المكلفة
+
+```move
+// ❌ حلقات طويلة
+public fun expensive_loop(n: u64): u64 {
+    let i = 0;
+    let sum = 0;
+    while (i < n) {  // قد تكون مكلفة جداً إذا كان n كبير
+        sum = sum + i;
+        i = i + 1;
+    };
+    sum
+}
+
+// ✅ استخدام صيغ رياضية
+public fun efficient_sum(n: u64): u64 {
+    n * (n + 1) / 2  // صيغة رياضية مباشرة
+}
+```
+
+## التعامل مع نفاد الوقود
+
+```typescript
+try {
+  const result = await aptos.signAndSubmitTransaction({
+    signer: account,
+    transaction,
+  });
+  console.log("نجحت المعاملة:", result.hash);
+} catch (error) {
+  if (error.message.includes("INSUFFICIENT_BALANCE_FOR_TRANSACTION_FEE")) {
+    console.error("رصيد غير كافٍ لدفع الرسوم");
+    // إضافة المزيد من الأموال أو تقليل مبلغ النقل
+  } else if (error.message.includes("OUT_OF_GAS")) {
+    console.error("نفد الوقود أثناء التنفيذ");
+    // زيادة الحد الأقصى للوقود
+  }
+}
+```
+
+<Aside type="tip">
+  **نصائح مهمة:**
+
+  - اختبر المعاملات دائماً على الشبكة التجريبية أولاً
+  - استخدم محاكاة المعاملات لتقدير الرسوم
+  - راقب أسعار الوقود الحالية لتحسين التوقيت
+  - اجمع العمليات المتشابهة في معاملة واحدة عند الإمكان
+</Aside>
+
+## الخلاصة
+
+فهم نظام الوقود والرسوم في أبتوس ضروري لبناء تطبيقات فعالة. المفاتيح الرئيسية:
+
+1. **قدر الرسوم** باستخدام محاكاة المعاملات
+2. **حسّن الكود** لتقليل استخدام الوقود
+3. **اجمع العمليات** لتوفير الرسوم
+4. **راقب الاستخدام** لتحديد نقاط التحسين
+5. **استخدم الأسعار المناسبة** حسب الأولوية المطلوبة

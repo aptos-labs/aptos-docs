@@ -1,0 +1,514 @@
+---
+title: "Sua Primeira Transação"
+---
+
+import { Aside, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
+
+Transações são a maneira fundamental de alterar dados no blockchain Aptos. Pense nelas como enviar um pacote: você precisa especificar o que está enviando, para quem está indo, e então rastrear até que a entrega seja confirmada. Em termos de blockchain, transações permitem transferir moedas, chamar funções de contratos inteligentes e atualizar estado on-chain.
+
+Este tutorial irá guiá-lo através da criação e envio de sua primeira transação no blockchain Aptos. Você aprenderá como:
+
+1. Configurar seu ambiente de desenvolvimento
+2. Criar contas de teste e financiá-las
+3. Construir uma transação para transferir moedas
+4. Simular a transação para estimar custos
+5. Assinar e enviar a transação
+6. Verificar se a transação foi executada com sucesso
+
+<Aside type="note">
+  Este tutorial se baseia em conceitos do blockchain Aptos. Se você é novo no desenvolvimento blockchain, não se preocupe - explicaremos conceitos-chave ao longo do caminho.
+
+  Você pode pular para o exemplo de código completo [aqui](#exemplo-de-código-completo) ou continuar lendo para um passo a passo.
+</Aside>
+
+## 1. Configurando Seu Ambiente
+
+<Tabs>
+  <TabItem label="TypeScript">
+    Antes de podermos criar transações, precisamos configurar nosso ambiente de desenvolvimento com as ferramentas e SDKs necessários.
+
+    <Steps>
+      1. Instalar o SDK TypeScript
+
+         Instale o SDK TypeScript usando seu gerenciador de pacotes preferido:
+
+         <Tabs>
+           <TabItem label="npm">
+             ```shellscript filename="Terminal"
+             npm install @aptos-labs/ts-sdk
+             ```
+           </TabItem>
+
+           <TabItem label="yarn">
+             ```shellscript filename="Terminal"
+             yarn add @aptos-labs/ts-sdk
+             ```
+           </TabItem>
+
+           <TabItem label="pnpm">
+             ```shellscript filename="Terminal"
+             pnpm add @aptos-labs/ts-sdk
+             ```
+           </TabItem>
+         </Tabs>
+
+      2. Criar um diretório de projeto
+
+         Crie um novo diretório para seu projeto:
+
+         ```shellscript filename="Terminal"
+         mkdir minha-primeira-transacao
+         cd minha-primeira-transacao
+         ```
+
+      3. Criar um novo arquivo
+
+         Crie um novo arquivo chamado `transacao.ts`:
+
+         <Tabs>
+           <TabItem label="Mac/Linux">
+             ```shellscript filename="Terminal"
+             touch transacao.ts
+             ```
+           </TabItem>
+
+           <TabItem label="Windows">
+             ```shellscript filename="Terminal"
+             type nul > transacao.ts
+             ```
+           </TabItem>
+         </Tabs>
+    </Steps>
+  </TabItem>
+
+  <TabItem label="Python">
+    Antes de podermos criar transações, precisamos configurar nosso ambiente de desenvolvimento com as ferramentas e SDKs necessários.
+
+    <Steps>
+      1. Instalar o SDK Python
+
+         Instale o SDK Python usando pip:
+
+         ```shellscript filename="Terminal"
+         pip install aptos-sdk
+         ```
+
+      2. Criar um diretório de projeto
+
+         Crie um novo diretório para seu projeto:
+
+         ```shellscript filename="Terminal"
+         mkdir minha-primeira-transacao
+         cd minha-primeira-transacao
+         ```
+
+      3. Criar um novo arquivo
+
+         Crie um novo arquivo chamado `transacao.py`:
+
+         <Tabs>
+           <TabItem label="Mac/Linux">
+             ```shellscript filename="Terminal"
+             touch transacao.py
+             ```
+           </TabItem>
+
+           <TabItem label="Windows">
+             ```shellscript filename="Terminal"
+             type nul > transacao.py
+             ```
+           </TabItem>
+         </Tabs>
+    </Steps>
+  </TabItem>
+</Tabs>
+
+## 2. Criando Contas de Teste
+
+<Tabs>
+  <TabItem label="TypeScript">
+    No blockchain, todas as transações devem vir de uma conta. Vamos criar duas contas de teste: uma para enviar moedas (Alice) e uma para recebê-las (Bob).
+
+    <Steps>
+      1. Configurar o cliente
+
+         Primeiro, precisamos inicializar o cliente Aptos que se conectará ao blockchain. Abra `transacao.ts` no seu editor e adicione:
+
+         ```typescript filename="transacao.ts"
+         import {
+           Account,
+           Aptos,
+           AptosConfig,
+           Network,
+         } from "@aptos-labs/ts-sdk";
+
+         async function main() {
+           // Inicializar o cliente Aptos
+           const config = new AptosConfig({ network: Network.DEVNET });
+           const aptos = new Aptos(config);
+
+           console.log("Conectado ao devnet Aptos");
+
+           // Mais código será adicionado aqui
+         }
+
+         main().catch(console.error);
+         ```
+
+         <Aside type="note">
+           Estamos nos conectando ao devnet Aptos, que é uma rede de teste onde você pode experimentar sem usar moedas reais. O devnet é resetado periodicamente, então não armazene nada importante lá. Você pode explorar o código fonte completo do SDK TypeScript no [repositório aptos-ts-sdk](https://github.com/aptos-labs/aptos-ts-sdk).
+         </Aside>
+
+      2. Gerar contas
+
+         Adicione este código dentro da sua função `main()` para criar duas contas - Alice (remetente) e Bob (destinatário):
+
+         ```typescript filename="transacao.ts"
+         // Gerar duas contas
+         const alice = Account.generate();
+         const bob = Account.generate();
+
+         console.log("=== Endereços ===");
+         console.log(`Endereço da Alice: ${alice.accountAddress}`);
+         console.log(`Endereço do Bob: ${bob.accountAddress}`);
+         ```
+
+         <Aside type="note">
+           Cada conta tem um endereço único (como um número de conta bancária) e um par de chaves (como suas credenciais de login). O endereço é derivado da chave pública, enquanto a chave privada é mantida em segredo e usada para assinar transações. Para mais detalhes sobre como as contas funcionam no Aptos, veja [Básicos de Conta](/pt/network/blockchain/accounts).
+         </Aside>
+
+      3. Financiar as contas
+
+         Adicione este código após gerar as contas para obter moedas de teste do faucet:
+
+         ```typescript filename="transacao.ts"
+         // Financiar as contas com APT de teste do faucet devnet
+         console.log("\n=== Financiando contas ===");
+         await aptos.fundAccount({
+           accountAddress: alice.accountAddress,
+           amount: 100_000_000, // 1 APT = 100,000,000 octas
+         });
+         console.log("Contas financiadas com sucesso");
+
+         // Verificar saldos iniciais
+         const saldoAlice = await aptos.getAccountAPTAmount({
+           accountAddress: alice.accountAddress,
+         });
+         const saldoBob = await aptos.getAccountAPTAmount({
+           accountAddress: bob.accountAddress,
+         });
+
+         console.log(`Saldo da Alice: ${saldoAlice} octas`);
+         console.log(`Saldo do Bob: ${saldoBob} octas`);
+         ```
+    </Steps>
+  </TabItem>
+
+  <TabItem label="Python">
+    No blockchain, todas as transações devem vir de uma conta. Vamos criar duas contas de teste: uma para enviar moedas (Alice) e uma para recebê-las (Bob).
+
+    ```python filename="transacao.py"
+    import asyncio
+    from aptos_sdk.client import RestClient
+    from aptos_sdk.account import Account
+
+    async def main():
+        # Inicializar o cliente Aptos
+        client = RestClient("https://fullnode.devnet.aptoslabs.com/v1")
+        
+        # Gerar duas contas
+        alice = Account.generate()
+        bob = Account.generate()
+        
+        print("=== Endereços ===")
+        print(f"Endereço da Alice: {alice.address()}")
+        print(f"Endereço do Bob: {bob.address()}")
+        
+        # Financiar contas com faucet devnet
+        print("\n=== Financiando contas ===")
+        await client.fund_account(alice.address(), 100_000_000)
+        print("Contas financiadas com sucesso")
+
+    if __name__ == "__main__":
+        asyncio.run(main())
+    ```
+  </TabItem>
+</Tabs>
+
+## 3. Construindo e Enviando a Transação
+
+<Tabs>
+  <TabItem label="TypeScript">
+    <Steps>
+      1. Construir transação de transferência
+
+         Adicione o seguinte código à sua função `main()` para criar uma transação que transfere 1 APT da Alice para o Bob:
+
+         ```typescript filename="transacao.ts"
+         // Construir transação de transferência
+         console.log("\n=== Construindo transação ===");
+         const transacao = await aptos.transaction.build.simple({
+           sender: alice.accountAddress,
+           data: {
+             function: "0x1::coin::transfer",
+             typeArguments: ["0x1::aptos_coin::AptosCoin"],
+             functionArguments: [bob.accountAddress, 100_000_000], // 1 APT
+           },
+         });
+         console.log("Transação construída");
+         ```
+
+      2. Simular a transação
+
+         Antes de enviar realmente, simule a transação para estimar taxas de gas:
+
+         ```typescript filename="transacao.ts"
+         // Simular a transação
+         console.log("\n=== Simulando transação ===");
+         const resultadoSimulacao = await aptos.transaction.simulate.simple({
+           signerPublicKey: alice.publicKey,
+           transaction: transacao,
+         });
+         console.log("Resultado da simulação:", resultadoSimulacao[0]);
+         ```
+
+      3. Assinar e enviar a transação
+
+         ```typescript filename="transacao.ts"
+         // Assinar e enviar a transação
+         console.log("\n=== Enviando transação ===");
+         const transacaoConfirmada = await aptos.transaction.signAndSubmitTransaction({
+           signer: alice,
+           transaction: transacao,
+         });
+
+         console.log("Hash da transação:", transacaoConfirmada.hash);
+
+         // Aguardar confirmação da transação
+         const transacaoExecutada = await aptos.waitForTransaction({
+           transactionHash: transacaoConfirmada.hash,
+         });
+         console.log("Transação executada:", transacaoExecutada.success);
+         ```
+    </Steps>
+  </TabItem>
+
+  <TabItem label="Python">
+    ```python filename="transacao.py"
+    # Construir e enviar transação de transferência
+    print("\n=== Enviando transação ===")
+
+    # Construir transação de transferência
+    transacao = {
+        "function": "0x1::coin::transfer",
+        "type_arguments": ["0x1::aptos_coin::AptosCoin"],
+        "arguments": [str(bob.address()), "100000000"]  # 1 APT
+    }
+
+    # Enviar transação
+    txn_hash = await client.submit_transaction(alice, transacao)
+    print(f"Hash da transação: {txn_hash}")
+
+    # Aguardar confirmação da transação
+    await client.wait_for_transaction(txn_hash)
+    print("Transação confirmada!")
+    ```
+  </TabItem>
+</Tabs>
+
+## 4. Verificando os Resultados
+
+<Tabs>
+  <TabItem label="TypeScript">
+    Finalmente, vamos verificar os saldos após a transferência:
+
+    ```typescript filename="transacao.ts"
+    // Verificar saldos finais
+    console.log("\n=== Saldos finais ===");
+    const saldoFinalAlice = await aptos.getAccountAPTAmount({
+      accountAddress: alice.accountAddress,
+    });
+    const saldoFinalBob = await aptos.getAccountAPTAmount({
+      accountAddress: bob.accountAddress,
+    });
+
+    console.log(`Saldo final da Alice: ${saldoFinalAlice} octas`);
+    console.log(`Saldo final do Bob: ${saldoFinalBob} octas`);
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    ```python filename="transacao.py"
+    # Verificar saldos finais
+    print("\n=== Saldos finais ===")
+    saldo_alice = await client.account_balance(alice.address())
+    saldo_bob = await client.account_balance(bob.address())
+
+    print(f"Saldo final da Alice: {saldo_alice} octas")
+    print(f"Saldo final do Bob: {saldo_bob} octas")
+    ```
+  </TabItem>
+</Tabs>
+
+## 5. Executando o Código
+
+<Tabs>
+  <TabItem label="TypeScript">
+    Execute o script no terminal:
+
+    ```shellscript filename="Terminal"
+    npx ts-node transacao.ts
+    ```
+
+    Ou compile TypeScript para JavaScript e execute:
+
+    ```shellscript filename="Terminal"
+    npx tsc transacao.ts && node transacao.js
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    Execute o script no terminal:
+
+    ```shellscript filename="Terminal"
+    python transacao.py
+    ```
+  </TabItem>
+</Tabs>
+
+## Exemplo de Código Completo
+
+<Tabs>
+  <TabItem label="TypeScript">
+    ```typescript filename="transacao.ts"
+    import {
+      Account,
+      Aptos,
+      AptosConfig,
+      Network,
+    } from "@aptos-labs/ts-sdk";
+
+    async function main() {
+      // Inicializar o cliente Aptos
+      const config = new AptosConfig({ network: Network.DEVNET });
+      const aptos = new Aptos(config);
+      console.log("Conectado ao devnet Aptos");
+
+      // Gerar duas contas
+      const alice = Account.generate();
+      const bob = Account.generate();
+      console.log("=== Endereços ===");
+      console.log(`Endereço da Alice: ${alice.accountAddress}`);
+      console.log(`Endereço do Bob: ${bob.accountAddress}`);
+
+      // Financiar contas
+      console.log("\n=== Financiando contas ===");
+      await aptos.fundAccount({
+        accountAddress: alice.accountAddress,
+        amount: 100_000_000,
+      });
+      console.log("Contas financiadas com sucesso");
+
+      // Verificar saldo inicial
+      const saldoAlice = await aptos.getAccountAPTAmount({
+        accountAddress: alice.accountAddress,
+      });
+      console.log(`Saldo da Alice: ${saldoAlice} octas`);
+
+      // Construir transação de transferência
+      console.log("\n=== Construindo transação ===");
+      const transacao = await aptos.transaction.build.simple({
+        sender: alice.accountAddress,
+        data: {
+          function: "0x1::coin::transfer",
+          typeArguments: ["0x1::aptos_coin::AptosCoin"],
+          functionArguments: [bob.accountAddress, 100_000_000],
+        },
+      });
+
+      // Assinar e enviar transação
+      console.log("\n=== Enviando transação ===");
+      const transacaoConfirmada = await aptos.transaction.signAndSubmitTransaction({
+        signer: alice,
+        transaction: transacao,
+      });
+      console.log("Hash da transação:", transacaoConfirmada.hash);
+
+      // Aguardar confirmação da transação
+      await aptos.waitForTransaction({
+        transactionHash: transacaoConfirmada.hash,
+      });
+
+      // Verificar saldos finais
+      console.log("\n=== Saldos finais ===");
+      const saldoFinalAlice = await aptos.getAccountAPTAmount({
+        accountAddress: alice.accountAddress,
+      });
+      const saldoFinalBob = await aptos.getAccountAPTAmount({
+        accountAddress: bob.accountAddress,
+      });
+      console.log(`Saldo final da Alice: ${saldoFinalAlice} octas`);
+      console.log(`Saldo final do Bob: ${saldoFinalBob} octas`);
+    }
+
+    main().catch(console.error);
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    ```python filename="transacao.py"
+    import asyncio
+    from aptos_sdk.client import RestClient
+    from aptos_sdk.account import Account
+
+    async def main():
+        # Inicializar o cliente Aptos
+        client = RestClient("https://fullnode.devnet.aptoslabs.com/v1")
+        
+        # Gerar duas contas
+        alice = Account.generate()
+        bob = Account.generate()
+        print("=== Endereços ===")
+        print(f"Endereço da Alice: {alice.address()}")
+        print(f"Endereço do Bob: {bob.address()}")
+        
+        # Financiar contas
+        print("\n=== Financiando contas ===")
+        await client.fund_account(alice.address(), 100_000_000)
+        print("Contas financiadas com sucesso")
+        
+        # Enviar transação de transferência
+        print("\n=== Enviando transação ===")
+        transacao = {
+            "function": "0x1::coin::transfer",
+            "type_arguments": ["0x1::aptos_coin::AptosCoin"],
+            "arguments": [str(bob.address()), "100000000"]
+        }
+        
+        txn_hash = await client.submit_transaction(alice, transacao)
+        print(f"Hash da transação: {txn_hash}")
+        
+        # Aguardar confirmação da transação
+        await client.wait_for_transaction(txn_hash)
+        print("Transação confirmada!")
+        
+        # Verificar saldos finais
+        print("\n=== Saldos finais ===")
+        saldo_alice = await client.account_balance(alice.address())
+        saldo_bob = await client.account_balance(bob.address())
+        print(f"Saldo final da Alice: {saldo_alice} octas")
+        print(f"Saldo final do Bob: {saldo_bob} octas")
+
+    if __name__ == "__main__":
+        asyncio.run(main())
+    ```
+  </TabItem>
+</Tabs>
+
+## Próximos Passos
+
+Parabéns! Você criou e enviou com sucesso sua primeira transação Aptos. A seguir, experimente:
+
+- [Seu Primeiro Módulo Move](/pt/build/guides/first-move-module) - Crie seu próprio contrato inteligente
+- [Indexador Aptos](/pt/build/indexer) - Consulte dados on-chain
+- [Construindo um dApp Completo](/pt/build/guides/build-e2e-dapp) - Construa uma aplicação completa

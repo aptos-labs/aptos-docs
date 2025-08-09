@@ -1,0 +1,858 @@
+---
+title: "Ваша Первая Транзакция"
+---
+
+import { Aside, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
+
+Транзакции - это основной способ изменения данных в блокчейне Aptos. Думайте о них как об отправке посылки: вам нужно указать что вы отправляете, кому, а затем отслеживать до подтверждения доставки. В терминах блокчейна транзакции позволяют переводить монеты, вызывать функции смарт-контрактов и обновлять состояние на блокчейне.
+
+Этот учебник проведет вас через создание и отправку вашей первой транзакции в блокчейне Aptos. Вы узнаете как:
+
+1. Настроить среду разработки
+2. Создать тестовые аккаунты и профинансировать их
+3. Построить транзакцию для перевода монет
+4. Симулировать транзакцию для оценки затрат
+5. Подписать и отправить транзакцию
+6. Проверить успешное выполнение транзакции
+
+<Aside type="note">
+  Этот учебник основывается на концепциях блокчейна Aptos. Если вы новичок в разработке блокчейна, не волнуйтесь - мы объясним ключевые концепции по ходу дела.
+
+  Вы можете перейти к полному примеру кода [здесь](#полный-пример-кода) или продолжить чтение для пошагового разбора.
+</Aside>
+
+## 1. Настройка Среды
+
+<Tabs>
+  <TabItem label="TypeScript">
+    Прежде чем мы сможем создавать транзакции, нам нужно настроить среду разработки с необходимыми инструментами и SDK.
+
+    <Steps>
+      1. Установить TypeScript SDK
+
+         Установите TypeScript SDK, используя ваш предпочитаемый менеджер пакетов:
+
+         <Tabs>
+           <TabItem label="npm">
+             ```shellscript filename="Terminal"
+             npm install @aptos-labs/ts-sdk
+             ```
+           </TabItem>
+
+           <TabItem label="yarn">
+             ```shellscript filename="Terminal"
+             yarn add @aptos-labs/ts-sdk
+             ```
+           </TabItem>
+
+           <TabItem label="pnpm">
+             ```shellscript filename="Terminal"
+             pnpm add @aptos-labs/ts-sdk
+             ```
+           </TabItem>
+         </Tabs>
+
+      2. Создать директорию проекта
+
+         Создайте новую директорию для вашего проекта:
+
+         ```shellscript filename="Terminal"
+         mkdir my-first-transaction
+         cd my-first-transaction
+         ```
+
+      3. Создать новый файл
+
+         Создайте новый файл с именем `transaction.ts`:
+
+         <Tabs>
+           <TabItem label="Mac/Linux">
+             ```shellscript filename="Terminal"
+             touch transaction.ts
+             ```
+           </TabItem>
+
+           <TabItem label="Windows">
+             ```shellscript filename="Terminal"
+             type nul > transaction.ts
+             ```
+           </TabItem>
+         </Tabs>
+
+      4. Добавить базовые импорты
+
+         Откройте `transaction.ts` в вашем редакторе и добавьте базовые импорты:
+
+         ```typescript filename="transaction.ts"
+         import {
+           Account,
+           Aptos,
+           AptosConfig,
+           Network,
+         } from "@aptos-labs/ts-sdk";
+
+         // Настройка для подключения к Aptos devnet
+         const config = new AptosConfig({ network: Network.DEVNET });
+         const aptos = new Aptos(config);
+
+         console.log("Подключено к Aptos devnet");
+         ```
+    </Steps>
+  </TabItem>
+
+  <TabItem label="Python">
+    Настройте среду Python для создания транзакций.
+
+    <Steps>
+      1. Установить Python SDK
+
+         Установите Python SDK для Aptos:
+
+         ```shellscript filename="Terminal"
+         pip install aptos-sdk
+         ```
+
+      2. Создать директорию проекта
+
+         ```shellscript filename="Terminal"
+         mkdir my-first-transaction
+         cd my-first-transaction
+         ```
+
+      3. Создать Python файл
+
+         Создайте новый файл с именем `transaction.py`:
+
+         ```shellscript filename="Terminal"
+         touch transaction.py
+         ```
+
+      4. Добавить базовые импорты
+
+         ```python filename="transaction.py"
+         import asyncio
+         from aptos_sdk.account import Account
+         from aptos_sdk.async_client import FaucetClient, RestClient
+
+         # Настройка для подключения к Aptos devnet
+         NODE_URL = "https://fullnode.devnet.aptoslabs.com/v1"
+         FAUCET_URL = "https://faucet.devnet.aptoslabs.com"
+
+         rest_client = RestClient(NODE_URL)
+         faucet_client = FaucetClient(FAUCET_URL, rest_client)
+
+         print("Подключено к Aptos devnet")
+         ```
+    </Steps>
+  </TabItem>
+</Tabs>
+
+## 2. Создание и Финансирование Аккаунтов
+
+Прежде чем отправлять транзакции, нам нужны аккаунты. В блокчейне Aptos каждый аккаунт имеет уникальный адрес и может хранить APT (нативная валюта) и другие активы.
+
+<Tabs>
+  <TabItem label="TypeScript">
+    ```typescript filename="transaction.ts"
+    async function main() {
+      console.log("=== Создание аккаунтов ===");
+      
+      // Создать два новых аккаунта
+      const alice = Account.generate();
+      const bob = Account.generate();
+      
+      console.log(`Адрес Alice: ${alice.accountAddress}`);
+      console.log(`Адрес Bob: ${bob.accountAddress}`);
+      
+      // Финансировать аккаунты APT из faucet
+      console.log("\n=== Финансирование аккаунтов ===");
+      
+      await aptos.fundAccount({
+        accountAddress: alice.accountAddress,
+        amount: 100_000_000, // 1 APT = 100,000,000 Octas
+      });
+      
+      await aptos.fundAccount({
+        accountAddress: bob.accountAddress,
+        amount: 100_000_000,
+      });
+      
+      console.log("Аккаунты успешно профинансированы!");
+      
+      // Проверить начальные балансы
+      const aliceBalance = await aptos.getAccountAPTAmount({
+        accountAddress: alice.accountAddress,
+      });
+      
+      const bobBalance = await aptos.getAccountAPTAmount({
+        accountAddress: bob.accountAddress,
+      });
+      
+      console.log(`Баланс Alice: ${aliceBalance} octas`);
+      console.log(`Баланс Bob: ${bobBalance} octas`);
+      
+      return { alice, bob };
+    }
+
+    // Запустить основную функцию
+    main().catch(console.error);
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    ```python filename="transaction.py"
+    async def main():
+        print("=== Создание аккаунтов ===")
+        
+        # Создать два новых аккаунта
+        alice = Account.generate()
+        bob = Account.generate()
+        
+        print(f"Адрес Alice: {alice.address()}")
+        print(f"Адрес Bob: {bob.address()}")
+        
+        # Финансировать аккаунты APT из faucet
+        print("\n=== Финансирование аккаунтов ===")
+        
+        await faucet_client.fund_account(alice.address(), 100_000_000)
+        await faucet_client.fund_account(bob.address(), 100_000_000)
+        
+        print("Аккаунты успешно профинансированы!")
+        
+        # Проверить начальные балансы
+        alice_balance = await rest_client.account_balance(alice.address())
+        bob_balance = await rest_client.account_balance(bob.address())
+        
+        print(f"Баланс Alice: {alice_balance} octas")
+        print(f"Баланс Bob: {bob_balance} octas")
+        
+        return alice, bob
+
+    # Запустить основную функцию
+    if __name__ == "__main__":
+        asyncio.run(main())
+    ```
+  </TabItem>
+</Tabs>
+
+<Aside type="note">
+  **Что такое Octas?** Octa - это самая маленькая единица APT, похожая на сатоши в Bitcoin. 1 APT = 100,000,000 Octas. Все транзакции в блокчейне используют Octas для точности.
+</Aside>
+
+## 3. Построение Транзакции
+
+Теперь давайте создадим транзакцию для перевода APT от Alice к Bob. Мы переведем 1 APT (100,000,000 octas).
+
+<Tabs>
+  <TabItem label="TypeScript">
+    ```typescript filename="transaction.ts"
+    async function createTransaction(alice: Account, bob: Account) {
+      console.log("\n=== Создание транзакции ===");
+      
+      const transferAmount = 100_000_000; // 1 APT в octas
+      
+      // Построить транзакцию
+      const transaction = await aptos.transaction.build.simple({
+        sender: alice.accountAddress,
+        data: {
+          function: "0x1::aptos_account::transfer",
+          functionArguments: [bob.accountAddress, transferAmount],
+        },
+      });
+      
+      console.log("Транзакция создана:");
+      console.log(`  Отправитель: ${alice.accountAddress}`);
+      console.log(`  Получатель: ${bob.accountAddress}`);
+      console.log(`  Сумма: ${transferAmount} octas (1 APT)`);
+      
+      return transaction;
+    }
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    ```python filename="transaction.py"
+    from aptos_sdk.transactions import EntryFunction, TransactionArgument, TransactionPayload
+    from aptos_sdk.type_tag import TypeTag, StructTag
+    from aptos_sdk.bcs import Serializer
+
+    async def create_transaction(alice: Account, bob: Account):
+        print("\n=== Создание транзакции ===")
+        
+        transfer_amount = 100_000_000  # 1 APT в octas
+        
+        # Построить полезную нагрузку транзакции
+        payload = TransactionPayload(
+            EntryFunction.natural(
+                "0x1::aptos_account",
+                "transfer",
+                [],
+                [
+                    TransactionArgument(bob.address(), Serializer.struct),
+                    TransactionArgument(transfer_amount, Serializer.u64),
+                ],
+            )
+        )
+        
+        # Получить номер последовательности аккаунта
+        account_data = await rest_client.account(alice.address())
+        sequence_number = int(account_data["sequence_number"])
+        
+        # Создать сырую транзакцию
+        raw_transaction = RawTransaction(
+            sender=alice.address(),
+            sequence_number=sequence_number,
+            payload=payload,
+            max_gas_amount=1_000_000,
+            gas_unit_price=100,
+            expiration_timestamps_secs=int(time.time()) + 600,
+            chain_id=4,  # Devnet chain ID
+        )
+        
+        print("Транзакция создана:")
+        print(f"  Отправитель: {alice.address()}")
+        print(f"  Получатель: {bob.address()}")
+        print(f"  Сумма: {transfer_amount} octas (1 APT)")
+        
+        return raw_transaction
+    ```
+  </TabItem>
+</Tabs>
+
+## 4. Симуляция Транзакции
+
+Перед отправкой полезно симулировать транзакцию для оценки стоимости газа и обеспечения успешности выполнения.
+
+<Tabs>
+  <TabItem label="TypeScript">
+    ```typescript filename="transaction.ts"
+    async function simulateTransaction(alice: Account, transaction: any) {
+      console.log("\n=== Симуляция транзакции ===");
+      
+      // Симулировать транзакцию
+      const simulation = await aptos.transaction.simulate.simple({
+        signerPublicKey: alice.publicKey,
+        transaction,
+      });
+      
+      const simulationResult = simulation[0];
+      
+      console.log("Результаты симуляции:");
+      console.log(`  Использовано газа: ${simulationResult.gas_used} единиц`);
+      console.log(`  Успех: ${simulationResult.success}`);
+      console.log(`  VM статус: ${simulationResult.vm_status}`);
+      
+      if (!simulationResult.success) {
+        throw new Error(`Симуляция не удалась: ${simulationResult.vm_status}`);
+      }
+      
+      // Оценить стоимость газа
+      const gasUsed = parseInt(simulationResult.gas_used);
+      const gasPrice = 100; // цена за единицу газа
+      const estimatedCost = gasUsed * gasPrice;
+      
+      console.log(`  Оценочная стоимость: ${estimatedCost} octas`);
+      
+      return simulationResult;
+    }
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    ```python filename="transaction.py"
+    async def simulate_transaction(alice: Account, raw_transaction):
+        print("\n=== Симуляция транзакции ===")
+        
+        # Подписать транзакцию для симуляции
+        signature = alice.sign(raw_transaction.keyed())
+        authenticator = Authenticator(
+            Ed25519Authenticator(alice.public_key(), signature)
+        )
+        signed_transaction = SignedTransaction(raw_transaction, authenticator)
+        
+        # Симулировать транзакцию
+        simulation = await rest_client.simulate_transaction(
+            signed_transaction, estimate_gas_unit_price=True
+        )
+        
+        print("Результаты симуляции:")
+        print(f"  Использовано газа: {simulation['gas_used']} единиц")
+        print(f"  Успех: {simulation['success']}")
+        print(f"  VM статус: {simulation['vm_status']}")
+        
+        if not simulation["success"]:
+            raise Exception(f"Симуляция не удалась: {simulation['vm_status']}")
+        
+        # Оценить стоимость газа
+        gas_used = int(simulation["gas_used"])
+        gas_price = 100  # цена за единицу газа
+        estimated_cost = gas_used * gas_price
+        
+        print(f"  Оценочная стоимость: {estimated_cost} octas")
+        
+        return simulation
+    ```
+  </TabItem>
+</Tabs>
+
+## 5. Подписание и Отправка Транзакции
+
+Теперь подпишем транзакцию и отправим её в блокчейн.
+
+<Tabs>
+  <TabItem label="TypeScript">
+    ```typescript filename="transaction.ts"
+    async function submitTransaction(alice: Account, transaction: any) {
+      console.log("\n=== Подписание и отправка транзакции ===");
+      
+      // Подписать и отправить транзакцию
+      const committedTransaction = await aptos.signAndSubmitTransaction({
+        signer: alice,
+        transaction,
+      });
+      
+      console.log(`Транзакция отправлена! Хеш: ${committedTransaction.hash}`);
+      
+      // Дождаться подтверждения транзакции
+      console.log("Ожидание подтверждения...");
+      const executedTransaction = await aptos.waitForTransaction({
+        transactionHash: committedTransaction.hash,
+      });
+      
+      console.log("Транзакция подтверждена!");
+      console.log(`  Статус: ${executedTransaction.success ? 'Успех' : 'Неудача'}`);
+      console.log(`  Использовано газа: ${executedTransaction.gas_used} единиц`);
+      console.log(`  Версия: ${executedTransaction.version}`);
+      
+      return executedTransaction;
+    }
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    ```python filename="transaction.py"
+    async def submit_transaction(alice: Account, raw_transaction):
+        print("\n=== Подписание и отправка транзакции ===")
+        
+        # Подписать транзакцию
+        signature = alice.sign(raw_transaction.keyed())
+        authenticator = Authenticator(
+            Ed25519Authenticator(alice.public_key(), signature)
+        )
+        signed_transaction = SignedTransaction(raw_transaction, authenticator)
+        
+        # Отправить транзакцию
+        tx_hash = await rest_client.submit_bcs_transaction(signed_transaction)
+        print(f"Транзакция отправлена! Хеш: {tx_hash}")
+        
+        # Дождаться подтверждения транзакции
+        print("Ожидание подтверждения...")
+        executed_transaction = await rest_client.wait_for_transaction(tx_hash)
+        
+        print("Транзакция подтверждена!")
+        print(f"  Статус: {'Успех' if executed_transaction['success'] else 'Неудача'}")
+        print(f"  Использовано газа: {executed_transaction['gas_used']} единиц")
+        print(f"  Версия: {executed_transaction['version']}")
+        
+        return executed_transaction
+    ```
+  </TabItem>
+</Tabs>
+
+## 6. Проверка Результатов
+
+Наконец, давайте проверим обновленные балансы для подтверждения успешного перевода.
+
+<Tabs>
+  <TabItem label="TypeScript">
+    ```typescript filename="transaction.ts"
+    async function checkBalances(alice: Account, bob: Account) {
+      console.log("\n=== Финальные балансы ===");
+      
+      const aliceBalance = await aptos.getAccountAPTAmount({
+        accountAddress: alice.accountAddress,
+      });
+      
+      const bobBalance = await aptos.getAccountAPTAmount({
+        accountAddress: bob.accountAddress,
+      });
+      
+      console.log(`Баланс Alice: ${aliceBalance} octas`);
+      console.log(`Баланс Bob: ${bobBalance} octas`);
+      
+      // Проверить, что перевод произошел
+      const expectedAliceBalance = 100_000_000 - 100_000_000; // Минус переведенная сумма и газ
+      const expectedBobBalance = 100_000_000 + 100_000_000;   // Плюс полученная сумма
+      
+      console.log("\n=== Проверка перевода ===");
+      console.log(`Bob получил 1 APT: ${bobBalance >= expectedBobBalance ? '✅' : '❌'}`);
+      console.log(`Alice отправила 1 APT (плюс газ): ${aliceBalance < 100_000_000 ? '✅' : '❌'}`);
+    }
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    ```python filename="transaction.py"
+    async def check_balances(alice: Account, bob: Account):
+        print("\n=== Финальные балансы ===")
+        
+        alice_balance = await rest_client.account_balance(alice.address())
+        bob_balance = await rest_client.account_balance(bob.address())
+        
+        print(f"Баланс Alice: {alice_balance} octas")
+        print(f"Баланс Bob: {bob_balance} octas")
+        
+        # Проверить, что перевод произошел
+        expected_alice_balance = 100_000_000 - 100_000_000  # Минус переведенная сумма и газ
+        expected_bob_balance = 100_000_000 + 100_000_000    # Плюс полученная сумма
+        
+        print("\n=== Проверка перевода ===")
+        print(f"Bob получил 1 APT: {'✅' if bob_balance >= expected_bob_balance else '❌'}")
+        print(f"Alice отправила 1 APT (плюс газ): {'✅' if alice_balance < 100_000_000 else '❌'}")
+    ```
+  </TabItem>
+</Tabs>
+
+## Полный Пример Кода
+
+Вот полный рабочий пример:
+
+<Tabs>
+  <TabItem label="TypeScript">
+    ```typescript filename="transaction.ts"
+    import {
+      Account,
+      Aptos,
+      AptosConfig,
+      Network,
+    } from "@aptos-labs/ts-sdk";
+
+    // Настройка для подключения к Aptos devnet
+    const config = new AptosConfig({ network: Network.DEVNET });
+    const aptos = new Aptos(config);
+
+    async function main() {
+      try {
+        console.log("🚀 Начинаем ваш первый урок по транзакциям Aptos!");
+        
+        // 1. Создать и профинансировать аккаунты
+        console.log("\n=== Шаг 1: Создание аккаунтов ===");
+        const alice = Account.generate();
+        const bob = Account.generate();
+        
+        console.log(`Адрес Alice: ${alice.accountAddress}`);
+        console.log(`Адрес Bob: ${bob.accountAddress}`);
+        
+        console.log("\n=== Финансирование аккаунтов ===");
+        await aptos.fundAccount({
+          accountAddress: alice.accountAddress,
+          amount: 100_000_000,
+        });
+        await aptos.fundAccount({
+          accountAddress: bob.accountAddress,
+          amount: 100_000_000,
+        });
+        console.log("✅ Аккаунты профинансированы!");
+        
+        // 2. Проверить начальные балансы
+        console.log("\n=== Шаг 2: Начальные балансы ===");
+        const aliceInitialBalance = await aptos.getAccountAPTAmount({
+          accountAddress: alice.accountAddress,
+        });
+        const bobInitialBalance = await aptos.getAccountAPTAmount({
+          accountAddress: bob.accountAddress,
+        });
+        console.log(`Alice: ${aliceInitialBalance} octas`);
+        console.log(`Bob: ${bobInitialBalance} octas`);
+        
+        // 3. Создать транзакцию
+        console.log("\n=== Шаг 3: Создание транзакции ===");
+        const transferAmount = 100_000_000; // 1 APT
+        const transaction = await aptos.transaction.build.simple({
+          sender: alice.accountAddress,
+          data: {
+            function: "0x1::aptos_account::transfer",
+            functionArguments: [bob.accountAddress, transferAmount],
+          },
+        });
+        console.log(`✅ Транзакция создана для перевода ${transferAmount} octas`);
+        
+        // 4. Симулировать транзакцию
+        console.log("\n=== Шаг 4: Симуляция транзакции ===");
+        const simulation = await aptos.transaction.simulate.simple({
+          signerPublicKey: alice.publicKey,
+          transaction,
+        });
+        console.log(`Оценка газа: ${simulation[0].gas_used} единиц`);
+        console.log(`Успех симуляции: ${simulation[0].success}`);
+        
+        // 5. Подписать и отправить
+        console.log("\n=== Шаг 5: Отправка транзакции ===");
+        const committedTransaction = await aptos.signAndSubmitTransaction({
+          signer: alice,
+          transaction,
+        });
+        console.log(`✅ Транзакция отправлена: ${committedTransaction.hash}`);
+        
+        // 6. Дождаться подтверждения
+        console.log("\n=== Шаг 6: Ожидание подтверждения ===");
+        const executedTransaction = await aptos.waitForTransaction({
+          transactionHash: committedTransaction.hash,
+        });
+        console.log(`✅ Транзакция подтверждена! Газ: ${executedTransaction.gas_used}`);
+        
+        // 7. Проверить финальные балансы
+        console.log("\n=== Шаг 7: Финальные балансы ===");
+        const aliceFinalBalance = await aptos.getAccountAPTAmount({
+          accountAddress: alice.accountAddress,
+        });
+        const bobFinalBalance = await aptos.getAccountAPTAmount({
+          accountAddress: bob.accountAddress,
+        });
+        console.log(`Alice: ${aliceFinalBalance} octas`);
+        console.log(`Bob: ${bobFinalBalance} octas`);
+        
+        console.log("\n🎉 Поздравляем! Вы успешно создали и отправили свою первую транзакцию Aptos!");
+        console.log(`📊 Сводка: Alice отправила ${transferAmount} octas Bob'у`);
+        console.log(`💰 Изменение баланса Alice: ${aliceFinalBalance - aliceInitialBalance} octas`);
+        console.log(`💰 Изменение баланса Bob: ${bobFinalBalance - bobInitialBalance} octas`);
+        
+      } catch (error) {
+        console.error("❌ Ошибка:", error);
+      }
+    }
+
+    // Запустить пример
+    main();
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    ```python filename="transaction.py"
+    import asyncio
+    import time
+    from aptos_sdk.account import Account
+    from aptos_sdk.async_client import FaucetClient, RestClient
+    from aptos_sdk.authenticator import Authenticator, Ed25519Authenticator
+    from aptos_sdk.transactions import (
+        EntryFunction,
+        RawTransaction,
+        SignedTransaction,
+        TransactionArgument,
+        TransactionPayload,
+    )
+    from aptos_sdk.bcs import Serializer
+
+    # Настройки сети
+    NODE_URL = "https://fullnode.devnet.aptoslabs.com/v1"
+    FAUCET_URL = "https://faucet.devnet.aptoslabs.com"
+
+    rest_client = RestClient(NODE_URL)
+    faucet_client = FaucetClient(FAUCET_URL, rest_client)
+
+    async def main():
+        try:
+            print("🚀 Начинаем ваш первый урок по транзакциям Aptos!")
+            
+            # 1. Создать и профинансировать аккаунты
+            print("\n=== Шаг 1: Создание аккаунтов ===")
+            alice = Account.generate()
+            bob = Account.generate()
+            
+            print(f"Адрес Alice: {alice.address()}")
+            print(f"Адрес Bob: {bob.address()}")
+            
+            print("\n=== Финансирование аккаунтов ===")
+            await faucet_client.fund_account(alice.address(), 100_000_000)
+            await faucet_client.fund_account(bob.address(), 100_000_000)
+            print("✅ Аккаунты профинансированы!")
+            
+            # 2. Проверить начальные балансы
+            print("\n=== Шаг 2: Начальные балансы ===")
+            alice_initial = await rest_client.account_balance(alice.address())
+            bob_initial = await rest_client.account_balance(bob.address())
+            print(f"Alice: {alice_initial} octas")
+            print(f"Bob: {bob_initial} octas")
+            
+            # 3. Создать транзакцию
+            print("\n=== Шаг 3: Создание транзакции ===")
+            transfer_amount = 100_000_000  # 1 APT
+            
+            payload = TransactionPayload(
+                EntryFunction.natural(
+                    "0x1::aptos_account",
+                    "transfer",
+                    [],
+                    [
+                        TransactionArgument(bob.address(), Serializer.struct),
+                        TransactionArgument(transfer_amount, Serializer.u64),
+                    ],
+                )
+            )
+            
+            account_data = await rest_client.account(alice.address())
+            sequence_number = int(account_data["sequence_number"])
+            
+            raw_transaction = RawTransaction(
+                sender=alice.address(),
+                sequence_number=sequence_number,
+                payload=payload,
+                max_gas_amount=1_000_000,
+                gas_unit_price=100,
+                expiration_timestamps_secs=int(time.time()) + 600,
+                chain_id=4,
+            )
+            print(f"✅ Транзакция создана для перевода {transfer_amount} octas")
+            
+            # 4. Симулировать транзакцию
+            print("\n=== Шаг 4: Симуляция транзакции ===")
+            signature = alice.sign(raw_transaction.keyed())
+            authenticator = Authenticator(
+                Ed25519Authenticator(alice.public_key(), signature)
+            )
+            signed_transaction = SignedTransaction(raw_transaction, authenticator)
+            
+            simulation = await rest_client.simulate_transaction(signed_transaction)
+            print(f"Оценка газа: {simulation['gas_used']} единиц")
+            print(f"Успех симуляции: {simulation['success']}")
+            
+            # 5. Отправить транзакцию
+            print("\n=== Шаг 5: Отправка транзакции ===")
+            tx_hash = await rest_client.submit_bcs_transaction(signed_transaction)
+            print(f"✅ Транзакция отправлена: {tx_hash}")
+            
+            # 6. Дождаться подтверждения
+            print("\n=== Шаг 6: Ожидание подтверждения ===")
+            executed_transaction = await rest_client.wait_for_transaction(tx_hash)
+            print(f"✅ Транзакция подтверждена! Газ: {executed_transaction['gas_used']}")
+            
+            # 7. Проверить финальные балансы
+            print("\n=== Шаг 7: Финальные балансы ===")
+            alice_final = await rest_client.account_balance(alice.address())
+            bob_final = await rest_client.account_balance(bob.address())
+            print(f"Alice: {alice_final} octas")
+            print(f"Bob: {bob_final} octas")
+            
+            print("\n🎉 Поздравляем! Вы успешно создали и отправили свою первую транзакцию Aptos!")
+            print(f"📊 Сводка: Alice отправила {transfer_amount} octas Bob'у")
+            print(f"💰 Изменение баланса Alice: {alice_final - alice_initial} octas")
+            print(f"💰 Изменение баланса Bob: {bob_final - bob_initial} octas")
+            
+        except Exception as error:
+            print(f"❌ Ошибка: {error}")
+
+    # Запустить пример
+    if __name__ == "__main__":
+        asyncio.run(main())
+    ```
+  </TabItem>
+</Tabs>
+
+## Запуск Примера
+
+<Tabs>
+  <TabItem label="TypeScript">
+    ```shellscript filename="Terminal"
+    # Установить зависимости
+    npm install @aptos-labs/ts-sdk typescript ts-node
+
+    # Запустить пример
+    npx ts-node transaction.ts
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    ```shellscript filename="Terminal"
+    # Установить зависимости
+    pip install aptos-sdk
+
+    # Запустить пример
+    python transaction.py
+    ```
+  </TabItem>
+</Tabs>
+
+Вы должны увидеть вывод, похожий на:
+
+```
+🚀 Начинаем ваш первый урок по транзакциям Aptos!
+
+=== Шаг 1: Создание аккаунтов ===
+Адрес Alice: 0x123...
+Адрес Bob: 0x456...
+✅ Аккаунты профинансированы!
+
+=== Шаг 2: Начальные балансы ===
+Alice: 100000000 octas
+Bob: 100000000 octas
+
+=== Шаг 3: Создание транзакции ===
+✅ Транзакция создана для перевода 100000000 octas
+
+=== Шаг 4: Симуляция транзакции ===
+Оценка газа: 1372 единиц
+Успех симуляции: true
+
+=== Шаг 5: Отправка транзакции ===
+✅ Транзакция отправлена: 0xabc...
+
+=== Шаг 6: Ожидание подтверждения ===
+✅ Транзакция подтверждена! Газ: 1372
+
+=== Шаг 7: Финальные балансы ===
+Alice: 99861200 octas
+Bob: 200000000 octas
+
+🎉 Поздравляем! Вы успешно создали и отправили свою первую транзакцию Aptos!
+```
+
+## Следующие Шаги
+
+Поздравляем! Вы успешно создали и отправили свою первую транзакцию в блокчейне Aptos. Вот некоторые темы для дальнейшего изучения:
+
+1. **[Создание смарт-контрактов](/ru/build/guides/first-move-module)** - Научитесь писать и разворачивать контракты Move
+2. **[Создание dApps](/ru/build/guides/build-e2e-dapp)** - Создайте полноценное децентрализованное приложение
+3. **[Работа с токенами](/ru/build/guides/first-coin)** - Изучите создание и управление пользовательскими токенами
+4. **[NFT разработка](/ru/build/guides/your-first-nft)** - Создавайте и торгуйте цифровыми активами
+
+## Устранение Неполадок
+
+### Распространенные Ошибки
+
+**Ошибка финансирования аккаунта**
+
+```
+Error: Failed to fund account
+```
+
+- Убедитесь, что вы подключены к правильной сети (devnet)
+- Попробуйте еще раз через несколько секунд
+- Проверьте подключение к интернету
+
+**Недостаточный баланс для газа**
+
+```
+Error: INSUFFICIENT_BALANCE_FOR_TRANSACTION_FEE
+```
+
+- Убедитесь, что у аккаунта достаточно APT для оплаты газа
+- Профинансируйте аккаунт больше APT из faucet
+
+**Неверная последовательность транзакции**
+
+```
+Error: SEQUENCE_NUMBER_TOO_OLD
+```
+
+- Убедитесь, что используете текущий номер последовательности аккаунта
+- Попробуйте создать транзакцию заново
+
+### Получение Помощи
+
+Если у вас возникли проблемы:
+
+1. Проверьте [документацию по API](/reference/api)
+2. Присоединитесь к [сообществу Discord](https://discord.gg/aptoslabs)
+3. Изучите [примеры в GitHub](https://github.com/aptos-labs/aptos-ts-sdk/tree/main/examples)
+
+Удачного создания на Aptos! 🚀

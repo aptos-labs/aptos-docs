@@ -1,0 +1,250 @@
+---
+title: "Akun"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Sebuah **akun** pada blockchain Aptos mewakili kontrol akses atas aset on-chain. Akun diidentifikasi oleh alamat akun 32-byte. Akun harus dibuat secara eksplisit, mendukung rotasi kunci, dan memungkinkan konfigurasi multisig. Akun mengandung:
+
+- [**Sumber daya**](/id/network/blockchain/resources): Data yang dimiliki akun
+- [**Modul**](/id/network/blockchain/resources): Kode yang dapat dipanggil untuk memodifikasi sumber daya
+- [**Skema otentikasi**](#skema-otentikasi): Cara untuk mengotentikasi akun untuk operasi yang diotorisasi
+
+## Alamat Akun
+
+Alamat akun adalah identifier 256-bit yang biasanya ditulis sebagai string hex 64-karakter dengan awalan `0x`. Alamat akun _tidak_ dapat diprediksi secara otomatis - mereka harus diturunkan. Saat membuat alamat akun baru, alamat tersebut berasal dari salah satu dari:
+
+- [Kunci publik](#alamat-dari-kunci-publik) penandatangan tunggal
+- [Kunci publik multi-ed25519](#alamat-multi-ed25519) untuk multisig
+- [Resource account](#resource-accounts)
+- [Named object](#named-objects)
+
+<Aside type="note">
+  Akun yang menggunakan skema SingleKey atau MultiKey dapat dirotasi tanpa mengubah alamat akun. Skema MultisigV2 juga mendukung rotasi, tetapi dengan beberapa batasan.
+</Aside>
+
+### Alamat dari Kunci Publik
+
+Untuk akun single-signer, alamat akun diturunkan dari:
+
+- **Kunci publik** (untuk skema SingleKey atau MultiKey)
+- **Scheme identifier** (byte tunggal yang mengidentifikasi skema otentikasi)
+
+Derivasi alamat adalah deterministik, artinya alamat yang sama akan selalu dihasilkan untuk kunci publik dan skema yang sama.
+
+```typescript
+import { Account, Ed25519PrivateKey } from "@aptos-labs/ts-sdk";
+
+// Untuk Ed25519
+const privateKey = new Ed25519PrivateKey("0x...");
+const account = Account.fromPrivateKey({ privateKey });
+console.log(account.accountAddress.toString());
+
+// Atau buat akun baru
+const newAccount = Account.generate();
+console.log(newAccount.accountAddress.toString());
+```
+
+### Alamat Multi-Ed25519
+
+Untuk akun multisig, alamat diturunkan dari:
+
+- **Kunci publik** dari semua penandatangan
+- **Threshold** (jumlah minimum tanda tangan yang diperlukan)
+- **Scheme identifier** (0x01 untuk Multi-Ed25519)
+
+### Resource Accounts
+
+Resource account adalah akun yang hanya dapat ditandatangani melalui kode Move, bukan melalui kunci pribadi. Mereka berguna untuk:
+
+- Menyimpan sumber daya yang hanya dapat diakses oleh kontrak pintar tertentu
+- Membuat akun yang memiliki aset tetapi tidak dapat ditandatangani secara langsung
+- Implementasi pola seperti object ownership
+
+```move
+// Contoh dalam Move
+module my_addr::resource_account {
+    use aptos_framework::account;
+    
+    public fun create_resource_account(source: &signer): signer {
+        let (resource_signer, _) = account::create_resource_account(source, b"my_resource");
+        resource_signer
+    }
+}
+```
+
+### Named Objects
+
+Named object memungkinkan Anda membuat alamat yang dapat diprediksi untuk objek tertentu:
+
+```move
+use aptos_framework::object;
+
+// Membuat named object
+let constructor_ref = object::create_named_object(creator, b"my_object_name");
+let object_signer = object::generate_signer(&constructor_ref);
+```
+
+## Skema Otentikasi
+
+Aptos mendukung berbagai skema otentikasi untuk fleksibilitas dalam mengelola akun:
+
+### SingleKey (Ed25519)
+
+Skema yang paling umum digunakan:
+
+- **Kunci tunggal**: Menggunakan satu kunci pribadi Ed25519
+- **Tanda tangan**: Tanda tangan Ed25519 standar
+- **Rotasi**: Didukung tanpa mengubah alamat
+
+```typescript
+import { Account, Ed25519PrivateKey } from "@aptos-labs/ts-sdk";
+
+const account = Account.generate({ scheme: SigningSchemeInput.Ed25519 });
+```
+
+### MultiKey
+
+Mendukung berbagai jenis kunci dan threshold yang fleksibel:
+
+- **Mixed keys**: Kombinasi Ed25519, Secp256k1, dll.
+- **Threshold**: M-of-N multisig
+- **Rotasi**: Didukung dengan batasan
+
+```typescript
+import { Account, MultiKey } from "@aptos-labs/ts-sdk";
+
+// Membuat MultiKey dengan 2-of-3 threshold
+const multiKey = new MultiKey({
+  publicKeys: [publicKey1, publicKey2, publicKey3],
+  threshold: 2
+});
+
+const account = Account.fromMultiKey({ multiKey });
+```
+
+### Multi-Ed25519 (Legacy)
+
+Skema multisig legacy yang masih didukung:
+
+- **Ed25519 only**: Hanya mendukung kunci Ed25519
+- **Threshold**: M-of-N multisig
+- **Legacy**: Disarankan menggunakan MultiKey untuk implementasi baru
+
+### MultisigV2
+
+Multisig yang lebih canggih dengan fitur tambahan:
+
+- **On-chain management**: Manajemen anggota dan threshold on-chain
+- **Proposal system**: Sistem proposal untuk perubahan
+- **Advanced features**: Timeout, veto, dll.
+
+```move
+// Contoh penggunaan MultisigV2
+use aptos_framework::multisig_account;
+
+public fun create_multisig_account(
+    owners: vector<address>,
+    threshold: u64,
+    metadata: vector<u8>
+): address {
+    multisig_account::create_multisig_account(
+        owners,
+        threshold,
+        metadata
+    )
+}
+```
+
+## Rotasi Kunci
+
+Aptos mendukung rotasi kunci untuk keamanan yang lebih baik:
+
+### Mengapa Rotasi Kunci?
+
+- **Keamanan**: Mengganti kunci yang mungkin telah dikompromikan
+- **Key recovery**: Memulihkan akses ke akun
+- **Upgrade**: Beralih ke skema otentikasi yang lebih baru
+
+### Proses Rotasi
+
+```typescript
+import { Account, RotationProofChallenge } from "@aptos-labs/ts-sdk";
+
+// Rotasi dari kunci lama ke kunci baru
+const oldAccount = Account.fromPrivateKey({ privateKey: oldPrivateKey });
+const newAccount = Account.generate();
+
+// Buat proof rotasi
+const rotationProof = await RotationProofChallenge.generateRotationProof({
+  fromAccount: oldAccount,
+  toAccount: newAccount
+});
+
+// Submit rotasi
+await aptos.rotateAuthKey({
+  fromAccount: oldAccount,
+  toNewAuthKey: newAccount.authKey,
+  rotationProof
+});
+```
+
+## Konfigurasi Akun
+
+### Creation dan Funding
+
+Akun harus dibuat secara eksplisit sebelum dapat digunakan:
+
+```typescript
+import { Account, Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
+
+const config = new AptosConfig({ network: Network.DEVNET });
+const aptos = new Aptos(config);
+
+// Buat akun baru
+const account = Account.generate();
+
+// Fund akun (di testnet)
+await aptos.fundAccount({
+  accountAddress: account.accountAddress,
+  amount: 100_000_000 // 1 APT dalam octas
+});
+```
+
+### Account Resources
+
+Akun dapat menyimpan berbagai jenis sumber daya:
+
+```move
+// Contoh resource yang disimpan di akun
+module my_addr::user_profile {
+    struct Profile has key {
+        name: String,
+        age: u64,
+        email: String
+    }
+    
+    public fun create_profile(account: &signer, name: String, age: u64, email: String) {
+        let profile = Profile { name, age, email };
+        move_to(account, profile);
+    }
+}
+```
+
+## Best Practices
+
+### Keamanan
+
+1. **Gunakan hardware wallet** untuk akun produksi
+2. **Rotasi kunci secara berkala** untuk keamanan yang lebih baik
+3. **Gunakan multisig** untuk akun dengan nilai tinggi
+4. **Backup kunci** dengan aman
+
+### Pengembangan
+
+1. **Gunakan testnet** untuk pengembangan dan testing
+2. **Resource accounts** untuk kontrak yang membutuhkan ownership
+3. **Named objects** untuk alamat yang dapat diprediksi
+4. **Monitor events** untuk melacak aktivitas akun
+
+Akun Aptos menyediakan fondasi yang fleksibel dan aman untuk kepemilikan dan kontrol aset digital, dengan dukungan untuk berbagai kasus penggunaan dari dompet sederhana hingga konfigurasi multisig yang kompleks.

@@ -1,0 +1,369 @@
+---
+title: "Votre Premier NFT"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+Ce tutoriel décrit comment créer et transférer des actifs non-fongibles sur la blockchain Aptos. Le tutoriel contient des exemples de codes opérationnels dans le [SDK TypeScript](https://github.com/aptos-labs/aptos-ts-sdk), [SDK Python](https://github.com/aptos-labs/aptos-python-sdk), et [SDK Rust](https://github.com/aptos-labs/aptos-rust-sdk).
+
+<Aside type="note">
+  Les **Digital Assets** et les **Tokens** sont deux standards NFT différents sur Aptos. Ce tutoriel vous apprend à utiliser le [standard Digital Asset](/build/smart-contracts/digital-asset#digital-asset-standard) plus récent et plus flexible. Si vous recherchez le standard Token hérité, consultez la [documentation Token](/build/smart-contracts/digital-asset#token-standard).
+</Aside>
+
+## Étape 1 : Choisir un SDK
+
+Installez votre SDK préféré dans la liste ci-dessous :
+
+- [SDK TypeScript](/fr/build/sdks/ts-sdk)
+- [SDK Python](/fr/build/sdks/python-sdk)
+- [SDK Rust](/fr/build/sdks/rust-sdk)
+
+***
+
+## Étape 2 : Installer la CLI
+
+[Installez le binaire pré-compilé pour la CLI Aptos](/fr/build/cli).
+
+***
+
+## Étape 3 : Exécuter l'exemple
+
+### TypeScript
+
+Clonez le repo `aptos-ts-sdk` et construisez-le :
+
+```shellscript filename="Terminal"
+git clone https://github.com/aptos-labs/aptos-ts-sdk.git
+cd aptos-ts-sdk
+pnpm install
+pnpm build
+```
+
+Naviguez vers le répertoire des exemples TypeScript :
+
+```shellscript filename="Terminal"
+cd examples/typescript/
+```
+
+Installez les dépendances nécessaires :
+
+```shellscript filename="Terminal"
+pnpm install
+```
+
+Exécutez l'exemple TypeScript [`simple_nft`](https://github.com/aptos-labs/aptos-ts-sdk/blob/main/examples/typescript/simple_nft.ts) :
+
+```shellscript filename="Terminal"
+pnpm run simple_nft
+```
+
+### Python
+
+Clonez le repo `aptos-python-sdk` :
+
+```shellscript filename="Terminal"
+git clone https://github.com/aptos-labs/aptos-python-sdk.git
+cd aptos-python-sdk
+```
+
+Installez les dépendances nécessaires :
+
+```shellscript filename="Terminal"
+curl -sSL https://install.python-poetry.org | python3
+poetry install
+```
+
+Exécutez l'exemple Python [`simple_nft`](https://github.com/aptos-labs/aptos-python-sdk/blob/main/examples/simple_nft.py) :
+
+```shellscript filename="Terminal"
+poetry run python -m examples.simple_nft
+```
+
+### Rust
+
+Clonez le repo `aptos-rust-sdk` :
+
+```shellscript filename="Terminal"
+git clone https://github.com/aptos-labs/aptos-rust-sdk.git
+cd aptos-rust-sdk
+```
+
+Exécutez l'exemple Rust [`simple_nft`](https://github.com/aptos-labs/aptos-rust-sdk/tree/main/examples/simple-nft) :
+
+```shellscript filename="Terminal"
+cargo run --example simple_nft
+```
+
+***
+
+## Étape 4 : Comprendre le code
+
+<Aside type="note">
+  Les extraits de code dans cette section sont en TypeScript. Vous pouvez trouver des exemples équivalents en Python et Rust dans les repos SDK respectifs.
+</Aside>
+
+### Initialiser les clients et comptes
+
+Tout d'abord, nous initialisons les objets Aptos et Account :
+
+```typescript
+// Créer une instance Aptos pour interagir avec la blockchain
+const aptos = new Aptos();
+
+// Créer des comptes pour Alice et Bob
+const alice = Account.generate();
+const bob = Account.generate();
+
+console.log("Adresse d'Alice :", alice.accountAddress.toString());
+console.log("Adresse de Bob :", bob.accountAddress.toString());
+```
+
+### Financer les comptes
+
+Avant de pouvoir créer et transférer des NFT, nous devons financer les comptes avec des APT testnet :
+
+```typescript
+// Financer le compte d'Alice
+await aptos.fundAccount({
+  accountAddress: alice.accountAddress,
+  amount: 100_000_000, // 1 APT = 100_000_000 Octas
+});
+
+// Financer le compte de Bob  
+await aptos.fundAccount({
+  accountAddress: bob.accountAddress,
+  amount: 100_000_000,
+});
+```
+
+### Créer une collection
+
+Avant de créer des NFT individuels, nous devons créer une collection. Une collection agit comme un conteneur pour des NFT connexes :
+
+```typescript
+// Créer une transaction pour créer une collection
+const createCollectionTransaction = await aptos.createCollectionTransaction({
+  creator: alice,
+  description: "Collection de démonstration d'Alice",
+  name: "Collection d'Alice",
+  uri: "https://aptos.dev",
+});
+
+// Signer et soumettre la transaction
+const committedTxn = await aptos.signAndSubmitTransaction({
+  signer: alice,
+  transaction: createCollectionTransaction,
+});
+
+// Attendre que la transaction soit confirmée
+await aptos.waitForTransaction({ transactionHash: committedTxn.hash });
+console.log("Collection créée !");
+```
+
+### Créer un NFT
+
+Maintenant que nous avons une collection, nous pouvons créer un NFT à l'intérieur :
+
+```typescript
+// Créer une transaction pour créer un NFT
+const createNftTransaction = await aptos.mintDigitalAssetTransaction({
+  creator: alice,
+  collection: "Collection d'Alice",
+  description: "Premier NFT d'Alice",
+  name: "NFT d'Alice",
+  uri: "https://aptos.dev/img/nft.jpeg",
+});
+
+// Signer et soumettre la transaction
+const nftTxn = await aptos.signAndSubmitTransaction({
+  signer: alice,
+  transaction: createNftTransaction,
+});
+
+// Attendre que la transaction soit confirmée
+await aptos.waitForTransaction({ transactionHash: nftTxn.hash });
+console.log("NFT créé !");
+```
+
+### Lire les données NFT
+
+Nous pouvons maintenant lire les données de notre NFT nouvellement créé :
+
+```typescript
+// Obtenir les collections d'Alice
+const alicesCollections = await aptos.getAccountCollections({
+  accountAddress: alice.accountAddress,
+});
+console.log("Collections d'Alice :", alicesCollections);
+
+// Obtenir les NFT d'Alice
+const alicesNfts = await aptos.getAccountOwnedTokens({
+  accountAddress: alice.accountAddress,
+});
+console.log("NFT d'Alice :", alicesNfts);
+```
+
+### Transférer un NFT
+
+Maintenant transférons le NFT d'Alice à Bob :
+
+```typescript
+// Obtenir l'adresse du NFT depuis les NFT d'Alice
+const nftAddress = alicesNfts[0].token_data_id;
+
+// Créer une transaction de transfert
+const transferTransaction = await aptos.transferDigitalAssetTransaction({
+  sender: alice,
+  digitalAssetAddress: nftAddress,
+  recipient: bob.accountAddress,
+});
+
+// Signer et soumettre la transaction
+const transferTxn = await aptos.signAndSubmitTransaction({
+  signer: alice,
+  transaction: transferTransaction,
+});
+
+// Attendre que la transaction soit confirmée
+await aptos.waitForTransaction({ transactionHash: transferTxn.hash });
+console.log("NFT transféré à Bob !");
+```
+
+### Vérifier la propriété
+
+Enfin, vérifions que Bob possède maintenant le NFT :
+
+```typescript
+// Obtenir les NFT de Bob
+const bobsNfts = await aptos.getAccountOwnedTokens({
+  accountAddress: bob.accountAddress,
+});
+console.log("NFT de Bob :", bobsNfts);
+
+// Obtenir les NFT d'Alice (devrait être vide maintenant)
+const alicesNftsAfterTransfer = await aptos.getAccountOwnedTokens({
+  accountAddress: alice.accountAddress,
+});
+console.log("NFT d'Alice après transfert :", alicesNftsAfterTransfer);
+```
+
+## Étape 5 : Comprendre les Digital Assets
+
+### Métadonnées NFT
+
+Chaque NFT (Digital Asset) sur Aptos contient les métadonnées suivantes :
+
+- **Nom** : Le nom du NFT
+- **Description** : Une description du NFT
+- **URI** : Un lien vers le media associé (image, vidéo, etc.)
+- **Collection** : La collection à laquelle appartient ce NFT
+
+### Collections
+
+Les collections servent de conteneurs pour des NFT connexes et contiennent :
+
+- **Nom** : Nom de la collection
+- **Description** : Description de la collection
+- **URI** : URI pour les métadonnées de la collection
+- **Créateur** : L'adresse qui a créé la collection
+
+### Propriétés des Digital Assets
+
+Les Digital Assets sur Aptos ont plusieurs propriétés importantes :
+
+- **Unicité** : Chaque Digital Asset a une adresse unique sur la blockchain
+- **Propriété** : La propriété est suivie on-chain et peut être vérifiée
+- **Transférabilité** : Les NFT peuvent être transférés entre comptes
+- **Métadonnées mutables** : Les créateurs peuvent configurer si les métadonnées peuvent être modifiées
+
+## Étape 6 : Concepts avancés
+
+### Propriétés personnalisées
+
+Vous pouvez ajouter des propriétés personnalisées à vos NFT :
+
+```typescript
+const createNftWithProperties = await aptos.mintDigitalAssetTransaction({
+  creator: alice,
+  collection: "Collection d'Alice",
+  description: "NFT avec propriétés personnalisées",
+  name: "NFT Spécial",
+  uri: "https://aptos.dev/img/special-nft.jpeg",
+  propertyKeys: ["power", "rarity", "level"],
+  propertyTypes: ["u64", "string", "u8"],
+  propertyValues: [100, "legendary", 5],
+});
+```
+
+### Contrôle de la mutabilité
+
+Vous pouvez contrôler quels aspects de votre NFT peuvent être modifiés :
+
+```typescript
+const createImmutableNft = await aptos.mintDigitalAssetTransaction({
+  creator: alice,
+  collection: "Collection d'Alice",
+  description: "NFT immuable", 
+  name: "NFT Permanent",
+  uri: "https://aptos.dev/img/permanent-nft.jpeg",
+  // Contrôler quelles métadonnées peuvent être modifiées
+  mutableDescription: false,
+  mutableName: false,
+  mutableUri: false,
+  mutableProperties: false,
+});
+```
+
+### Burning (Destruction) de NFT
+
+Vous pouvez détruire définitivement un NFT :
+
+```typescript
+const burnTransaction = await aptos.burnDigitalAssetTransaction({
+  creator: alice,
+  digitalAssetAddress: nftAddress,
+});
+
+await aptos.signAndSubmitTransaction({
+  signer: alice,
+  transaction: burnTransaction,
+});
+```
+
+## Étape 7 : Bonnes pratiques
+
+### Métadonnées
+
+- Stockez les images et médias dans un stockage décentralisé comme IPFS
+- Utilisez des formats de métadonnées standards (par exemple, JSON)
+- Incluez des descriptions riches et des attributs
+
+### Sécurité
+
+- Validez toujours les entrées lors de la création de NFT
+- Considérez soigneusement les permissions de mutabilité
+- Testez sur testnet avant le déploiement en mainnet
+
+### Coûts de gaz
+
+- Les coûts de gaz varient selon la complexité du NFT
+- Les NFT avec plus de propriétés coûtent plus de gaz
+- Considérez le groupement d'opérations quand c'est possible
+
+## Félicitations !
+
+Vous avez maintenant appris les bases de la création et gestion de NFT sur Aptos ! Vous pouvez maintenant :
+
+- Créer des collections NFT
+- Créer des NFT individuels avec métadonnées
+- Transférer des NFT entre comptes
+- Lire et vérifier la propriété de NFT
+- Ajouter des propriétés personnalisées
+- Contrôler la mutabilité
+
+## Prochaines étapes
+
+- Explorez les [Digital Assets avancés](/fr/build/smart-contracts/digital-asset)
+- Apprenez sur les [standards de tokens](/fr/build/smart-contracts/digital-asset)
+- Créez une [marketplace NFT](/fr/build/guides/build-e2e-dapp)
+- Intégrez des NFT dans des applications front-end

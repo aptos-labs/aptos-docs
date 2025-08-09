@@ -1,0 +1,657 @@
+---
+title: "Votre Premier Multisig Aptos (SDK Python)"
+---
+
+import { Aside, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
+
+Dans ce tutoriel, vous apprendrez comment créer et gérer un compte multisig qui nécessite 2 signatures sur 3 détenteurs de clés pour approuver toute transaction.
+Vous apprendrez comment :
+
+1. Configurer un environnement de développement pour Aptos
+2. Créer plusieurs comptes pour agir comme détenteurs de clés
+3. Configurer un compte multisig nécessitant 2 signatures sur 3
+4. Financer les comptes et vérifier les soldes
+5. Créer et exécuter des transactions multisig
+
+<Aside type="note">
+  Si vous venez d'Ethereum/Solidity, notez qu'Aptos gère les comptes multisig différemment. Aptos implémente [le multisig directement au niveau du protocole](/fr/network/blockchain/accounts), permettant aux comptes d'exiger plusieurs signatures sans déployer de contrats intelligents supplémentaires.
+
+  ![Diagramme Multisig](~/images/multisig_chart.svg)
+
+  Nous interfaçons avec Aptos en utilisant le [SDK Python Aptos](/fr/build/sdks/python-sdk).
+</Aside>
+
+Conceptuellement, un compte multisig (multi-signature) fonctionne comme un coffre-fort bancaire nécessitant plusieurs détenteurs de clés pour autoriser l'accès. Dans Aptos, ceci est implémenté avec des signatures numériques plutôt que des clés physiques, chaque signataire autorisé fournissant son approbation cryptographique.
+
+## Configuration
+
+D'abord, préparons notre environnement de développement. Nous allons créer un espace de travail isolé et installer toutes les dépendances nécessaires.
+
+<Steps>
+  1. Ouvrir un terminal
+
+     Ouvrez une nouvelle fenêtre de terminal.
+
+  2. Vérifier l'installation Python
+
+     Exécutez cette commande pour vérifier votre version de Python :
+
+     <Tabs>
+       <TabItem label="Mac/Linux">
+         ```shellscript filename="Terminal"
+         python3 --version
+         ```
+       </TabItem>
+
+       <TabItem label="Windows">
+         ```shellscript filename="Terminal"
+         python --version
+         ```
+       </TabItem>
+     </Tabs>
+
+     Vous devriez voir quelque chose comme "Python 3.7" ou plus récent.
+
+     <Aside type="caution">
+       Si vous voyez une erreur ou que votre version de Python est inférieure à 3.7, téléchargez Python depuis [python.org](https://python.org/).
+     </Aside>
+
+  3. Créer le répertoire du projet
+
+     Créez un nouveau dossier pour notre projet :
+
+     ```shellscript filename="Terminal"
+     mkdir my-first-multisig
+     ```
+
+  4. Naviguer vers le répertoire du projet
+
+     Déplacez-vous dans ce nouveau dossier :
+
+     ```shellscript filename="Terminal"
+     cd my-first-multisig
+     ```
+
+  5. Créer un environnement virtuel
+
+     Configurez un environnement Python isolé :
+
+     <Tabs>
+       <TabItem label="Mac/Linux">
+         ```shellscript filename="Terminal"
+         python3 -m venv venv
+         ```
+       </TabItem>
+
+       <TabItem label="Windows">
+         ```shellscript filename="Terminal"
+         python -m venv venv
+         ```
+       </TabItem>
+     </Tabs>
+
+     Cette commande :
+
+     - Crée un environnement Python isolé
+     - Installe une instance Python fraîche
+     - Garde les dépendances du projet séparées de votre Python système
+     - Crée un dossier `venv` (vous pouvez le voir mais ne modifiez pas son contenu !)
+
+  6. Activer l'environnement virtuel
+
+     <Tabs>
+       <TabItem label="Mac/Linux">
+         ```shellscript filename="Terminal"
+         source venv/bin/activate
+         ```
+       </TabItem>
+
+       <TabItem label="Windows">
+         ```shellscript filename="Terminal"
+         .\venv\Scripts\activate
+         ```
+
+         <Aside type="note">
+           Si vous obtenez une erreur indiquant que les scripts ne sont pas autorisés à s'exécuter, vous pouvez les activer avec PowerShell :
+
+           ```powershell filename="Terminal"
+           Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
+           ```
+
+           Confirmez en tapant `[Y]` et appuyez sur Entrée, puis réessayez la commande d'activation.
+         </Aside>
+       </TabItem>
+     </Tabs>
+
+     Cette commande :
+
+     - Modifie les variables d'environnement de votre terminal
+     - Fait utiliser à votre terminal le Python de `venv` au lieu de votre Python système
+     - Vous verrez `(venv)` apparaître au début de votre ligne de terminal
+     - Pour désactiver plus tard, tapez simplement `deactivate`
+
+  7. Installer le SDK Aptos
+
+     Installez le SDK requis :
+
+     ```shellscript filename="Terminal"
+     pip install aptos-sdk
+     ```
+
+     Cette commande :
+
+     - Télécharge le package SDK Aptos depuis PyPI (Python Package Index)
+     - L'installe dans votre dossier `venv`
+     - Crée des fichiers dans `venv/lib/python3.x/site-packages/aptos_sdk`
+     - Vous pouvez voir ces fichiers en naviguant vers ce répertoire
+</Steps>
+
+## Créer les Fondations
+
+Commençons à construire notre implémentation multisig. D'abord, nous allons configurer nos imports, boucle principale, et configuration de base.
+
+<Steps>
+  1. Créer le script Python
+
+     Créez un fichier de script Python vide :
+
+     <Tabs>
+       <TabItem label="Mac/Linux">
+         ```shellscript filename="Terminal"
+         touch multisig.py
+         ```
+       </TabItem>
+
+       <TabItem label="Windows">
+         ```shellscript filename="Terminal"
+         echo "" > multisig.py
+         ```
+       </TabItem>
+     </Tabs>
+
+  2. Ajouter le code de base
+
+     Ouvrez `multisig.py` dans votre IDE (nous recommandons VSCode ou JetBrains) et ajoutez le code suivant :
+
+     ```python filename="multisig.py"
+     # Copyright © Aptos Foundation
+     # SPDX-License-Identifier: Apache-2.0
+
+     import asyncio
+     import subprocess
+     import time
+
+     from aptos_sdk.account import Account, RotationProofChallenge
+     from aptos_sdk.account_address import AccountAddress
+     from aptos_sdk.async_client import FaucetClient, RestClient
+     from aptos_sdk.authenticator import Authenticator, MultiEd25519Authenticator
+     from aptos_sdk.bcs import Serializer
+     from aptos_sdk.ed25519 import MultiPublicKey, MultiSignature
+     from aptos_sdk.transactions import (
+         EntryFunction,
+         RawTransaction,
+         Script,
+         ScriptArgument,
+         SignedTransaction,
+         TransactionArgument,
+         TransactionPayload,
+     )
+     from aptos_sdk.type_tag import StructTag, TypeTag
+
+
+     class RestClient:
+         """Un wrapper simple pour les interactions REST"""
+
+         def __init__(self, base_url: str):
+             self.base_url = base_url
+             self.client = RestClient(base_url)
+
+         async def account_balance(self, account_address: AccountAddress) -> int:
+             """Récupère le solde APT d'un compte"""
+             return await self.client.account_balance(account_address)
+
+         async def submit_bcs_transaction(self, signed_transaction: SignedTransaction):
+             """Soumet une transaction signée à la blockchain"""
+             return await self.client.submit_bcs_transaction(signed_transaction)
+
+         async def wait_for_transaction(self, tx_hash: str):
+             """Attend qu'une transaction soit confirmée"""
+             return await self.client.wait_for_transaction(tx_hash)
+
+
+     # Configuration du réseau - utilise devnet pour les tests
+     NODE_URL = "https://fullnode.devnet.aptoslabs.com/v1"
+     FAUCET_URL = "https://faucet.devnet.aptoslabs.com"
+
+     # Initialiser les clients
+     rest_client = RestClient(NODE_URL)
+     faucet_client = FaucetClient(FAUCET_URL, rest_client)
+
+
+     async def main():
+         """Fonction principale qui exécute notre tutoriel multisig"""
+         
+         print("=== Tutoriel Multisig Aptos ===")
+         print("Ce script va démontrer comment créer et utiliser un compte multisig")
+         print("qui nécessite 2 signatures sur 3 pour exécuter des transactions\n")
+         
+         # Le code principal ira ici...
+         await create_accounts()
+         
+
+     async def create_accounts():
+         """Crée trois comptes: Alice, Bob, et Chad"""
+         
+         print("=== Création des comptes ===")
+         
+         # Générer trois comptes aléatoires
+         alice = Account.generate()
+         bob = Account.generate()
+         chad = Account.generate()
+         
+         print(f"Adresse d'Alice: {alice.address()}")
+         print(f"Adresse de Bob:   {bob.address()}")
+         print(f"Adresse de Chad:  {chad.address()}")
+         
+         # Financer les comptes avec des APT de testnet
+         print("\n=== Financement des comptes ===")
+         await asyncio.gather(
+             faucet_client.fund_account(alice.address(), 100_000_000),  # 1 APT
+             faucet_client.fund_account(bob.address(), 100_000_000),    # 1 APT
+             faucet_client.fund_account(chad.address(), 100_000_000),   # 1 APT
+         )
+         print("Comptes financés avec succès!")
+         
+         return alice, bob, chad
+
+
+     if __name__ == "__main__":
+         asyncio.run(main())
+     ```
+
+  3. Tester le script de base
+
+     Exécutez le script pour vous assurer que tout fonctionne :
+
+     <Tabs>
+       <TabItem label="Mac/Linux">
+         ```shellscript filename="Terminal"
+         python3 multisig.py
+         ```
+       </TabItem>
+
+       <TabItem label="Windows">
+         ```shellscript filename="Terminal"
+         python multisig.py
+         ```
+       </TabItem>
+     </Tabs>
+
+     Vous devriez voir quelque chose comme :
+
+     ```shellscript filename="Terminal"
+     === Tutoriel Multisig Aptos ===
+     Ce script va démontrer comment créer et utiliser un compte multisig
+     qui nécessite 2 signatures sur 3 pour exécuter des transactions
+
+     === Création des comptes ===
+     Adresse d'Alice: 0x1234...
+     Adresse de Bob:   0x5678...
+     Adresse de Chad:  0x9abc...
+
+     === Financement des comptes ===
+     Comptes financés avec succès!
+     ```
+</Steps>
+
+## Créer le Compte Multisig
+
+Maintenant créons le compte multisig qui nécessitera 2 signatures sur 3 pour autoriser les transactions.
+
+<Steps>
+  1. Ajouter la fonction de création multisig
+
+     Ajoutez cette fonction à votre script `multisig.py` :
+
+     ```python filename="multisig.py"
+     async def create_multisig_account(alice: Account, bob: Account, chad: Account):
+         """Crée un compte multisig 2-sur-3"""
+         
+         print("\n=== Création du compte multisig ===")
+         
+         # Collecter les clés publiques de tous les signataires
+         public_keys = [
+             alice.public_key(),
+             bob.public_key(), 
+             chad.public_key()
+         ]
+         
+         # Créer une clé publique multiple avec seuil de 2
+         threshold = 2  # Nombre de signatures requises
+         multi_public_key = MultiPublicKey(public_keys, threshold)
+         
+         # Dériver l'adresse du compte multisig
+         multisig_address = AccountAddress.from_multi_ed25519(multi_public_key)
+         
+         print(f"Adresse multisig: {multisig_address}")
+         print(f"Seuil requis: {threshold} signatures sur {len(public_keys)}")
+         
+         # Financer le compte multisig
+         print("\n=== Financement du compte multisig ===")
+         await faucet_client.fund_account(multisig_address, 100_000_000)  # 1 APT
+         print("Compte multisig financé!")
+         
+         return multisig_address, multi_public_key
+     ```
+
+  2. Mettre à jour la fonction main
+
+     Modifiez votre fonction `main()` pour inclure la création du multisig :
+
+     ```python filename="multisig.py"
+     async def main():
+         """Fonction principale qui exécute notre tutoriel multisig"""
+         
+         print("=== Tutoriel Multisig Aptos ===")
+         print("Ce script va démontrer comment créer et utiliser un compte multisig")
+         print("qui nécessite 2 signatures sur 3 pour exécuter des transactions\n")
+         
+         # Créer les comptes individuels
+         alice, bob, chad = await create_accounts()
+         
+         # Créer le compte multisig
+         multisig_address, multi_public_key = await create_multisig_account(alice, bob, chad)
+         
+         # Vérifier les soldes
+         await check_balances(alice, bob, chad, multisig_address)
+     ```
+
+  3. Ajouter la fonction de vérification des soldes
+
+     ```python filename="multisig.py"
+     async def check_balances(alice: Account, bob: Account, chad: Account, multisig_address: AccountAddress):
+         """Vérifie et affiche les soldes de tous les comptes"""
+         
+         print("\n=== Soldes des comptes ===")
+         
+         # Récupérer tous les soldes en parallèle
+         [alice_balance, bob_balance, chad_balance, multisig_balance] = await asyncio.gather(
+             *[
+                 rest_client.account_balance(alice.address()),
+                 rest_client.account_balance(bob.address()),
+                 rest_client.account_balance(chad.address()),
+                 rest_client.account_balance(multisig_address),
+             ]
+         )
+         
+         print(f"Solde d'Alice:   {alice_balance:>12} octas")
+         print(f"Solde de Bob:    {bob_balance:>12} octas")
+         print(f"Solde de Chad:   {chad_balance:>12} octas")
+         print(f"Solde multisig:  {multisig_balance:>12} octas")
+     ```
+
+  4. Tester la création du multisig
+
+     Exécutez votre script mis à jour :
+
+     <Tabs>
+       <TabItem label="Mac/Linux">
+         ```shellscript filename="Terminal"
+         python3 multisig.py
+         ```
+       </TabItem>
+
+       <TabItem label="Windows">
+         ```shellscript filename="Terminal"
+         python multisig.py
+         ```
+       </TabItem>
+     </Tabs>
+
+     Vous devriez maintenant voir la création et le financement du compte multisig !
+</Steps>
+
+## Créer une Transaction Multisig
+
+Maintenant créons une transaction qui transfert des APT du compte multisig vers Chad, nécessitant les signatures d'Alice et Bob.
+
+<Steps>
+  1. Ajouter la fonction de transaction
+
+     Ajoutez cette fonction pour créer une transaction de transfert :
+
+     ```python filename="multisig.py"
+     async def create_transfer_transaction(
+         multisig_address: AccountAddress,
+         recipient: AccountAddress,
+         amount: int
+     ) -> RawTransaction:
+         """Crée une transaction brute pour transférer des APT"""
+         
+         print(f"\n=== Création de transaction de transfert ===")
+         print(f"De: {multisig_address}")
+         print(f"Vers: {recipient}")
+         print(f"Montant: {amount} octas")
+         
+         # Récupérer le numéro de séquence du compte multisig
+         account_data = await rest_client.client.account(multisig_address)
+         sequence_number = int(account_data["sequence_number"])
+         
+         # Créer la charge utile de transaction
+         payload = TransactionPayload(
+             EntryFunction.natural(
+                 "0x1::aptos_account",
+                 "transfer",
+                 [],
+                 [
+                     TransactionArgument(recipient, Serializer.struct),
+                     TransactionArgument(amount, Serializer.u64),
+                 ],
+             )
+         )
+         
+         # Créer la transaction brute
+         raw_transaction = RawTransaction(
+             sender=multisig_address,
+             sequence_number=sequence_number,
+             payload=payload,
+             max_gas_amount=1_000_000,
+             gas_unit_price=100,
+             expiration_timestamps_secs=int(time.time()) + 600,  # Expire dans 10 minutes
+             chain_id=4,  # Devnet chain ID
+         )
+         
+         return raw_transaction
+     ```
+
+  2. Ajouter la fonction de signature multisig
+
+     ```python filename="multisig.py"
+     async def sign_multisig_transaction(
+         raw_transaction: RawTransaction,
+         alice: Account,
+         bob: Account,
+         multi_public_key: MultiPublicKey
+     ) -> Authenticator:
+         """Signe une transaction avec plusieurs signataires"""
+         
+         print(f"\n=== Signature de la transaction ===")
+         
+         # Alice signe la transaction
+         alice_signature = alice.sign(raw_transaction.keyed())
+         print(f"Alice a signé la transaction")
+         
+         # Bob signe la transaction
+         bob_signature = bob.sign(raw_transaction.keyed())
+         print(f"Bob a signé la transaction")
+         
+         # Créer la carte des signatures
+         # L'index correspond à la position dans le tableau de clés publiques
+         sig_map = {
+             0: alice_signature,  # Alice était l'index 0
+             1: bob_signature,    # Bob était l'index 1
+             # Chad (index 2) ne signe pas - nous n'avons besoin que de 2 signatures
+         }
+         
+         # Créer la signature multiple
+         multi_signature = MultiSignature(multi_public_key, sig_map)
+         
+         # Créer l'authentificateur
+         authenticator = Authenticator(
+             MultiEd25519Authenticator(multi_public_key, multi_signature)
+         )
+         
+         print(f"Transaction signée avec {len(sig_map)} signatures (seuil: {multi_public_key.threshold})")
+         
+         return authenticator
+     ```
+
+  3. Mettre à jour la fonction main pour inclure la transaction
+
+     ```python filename="multisig.py"
+     async def main():
+         """Fonction principale qui exécute notre tutoriel multisig"""
+         
+         print("=== Tutoriel Multisig Aptos ===")
+         print("Ce script va démontrer comment créer et utiliser un compte multisig")
+         print("qui nécessite 2 signatures sur 3 pour exécuter des transactions\n")
+         
+         # Créer les comptes individuels
+         alice, bob, chad = await create_accounts()
+         
+         # Créer le compte multisig
+         multisig_address, multi_public_key = await create_multisig_account(alice, bob, chad)
+         
+         # Vérifier les soldes initiaux
+         await check_balances(alice, bob, chad, multisig_address)
+         
+         # Créer et exécuter une transaction de transfert
+         await execute_multisig_transfer(
+             alice, bob, chad, multisig_address, multi_public_key
+         )
+     ```
+
+  4. Ajouter la fonction d'exécution complète
+
+     ```python filename="multisig.py"
+     async def execute_multisig_transfer(
+         alice: Account,
+         bob: Account, 
+         chad: Account,
+         multisig_address: AccountAddress,
+         multi_public_key: MultiPublicKey
+     ):
+         """Exécute un transfert multisig complet"""
+         
+         # Créer la transaction de transfert (100 octas vers Chad)
+         raw_transaction = await create_transfer_transaction(
+             multisig_address, 
+             chad.address(), 
+             100
+         )
+         
+         # Signer avec Alice et Bob
+         authenticator = await sign_multisig_transaction(
+             raw_transaction, alice, bob, multi_public_key
+         )
+         
+         # Créer et soumettre la transaction signée
+         signed_transaction = SignedTransaction(raw_transaction, authenticator)
+         
+         print("\n=== Soumission de la transaction de transfert ===")
+         tx_hash = await rest_client.submit_bcs_transaction(signed_transaction)
+         await rest_client.wait_for_transaction(tx_hash)
+         print(f"Hash de transaction: {tx_hash}")
+         
+         # Vérifier les nouveaux soldes
+         print("\n=== Nouveaux soldes des comptes ===")
+         [alice_balance, bob_balance, chad_balance, multisig_balance] = await asyncio.gather(
+             *[
+                 rest_client.account_balance(alice.address()),
+                 rest_client.account_balance(bob.address()),
+                 rest_client.account_balance(chad.address()),
+                 rest_client.account_balance(multisig_address),
+             ]
+         )
+         
+         print(f"Solde d'Alice:   {alice_balance:>12}")
+         print(f"Solde de Bob:    {bob_balance:>12}")
+         print(f"Solde de Chad:   {chad_balance:>12}        # Augmenté de 100 octas")
+         print(f"Solde multisig:  {multisig_balance:>12}        # Diminué de 100 octas plus frais de gaz")
+     ```
+
+  5. Exécuter la transaction multisig complète
+
+     <Tabs>
+       <TabItem label="Mac/Linux">
+         ```shellscript filename="Terminal"
+         python3 multisig.py
+         ```
+       </TabItem>
+
+       <TabItem label="Windows">
+         ```shellscript filename="Terminal"
+         python multisig.py
+         ```
+       </TabItem>
+     </Tabs>
+
+     Vous devriez voir quelque chose comme :
+
+     ```shellscript filename="Terminal"
+     === Soumission de la transaction de transfert ===
+     Hash de transaction: 0x2f0b7fc8e69213f0c7e720e660f789b6e3d3564729a298f2b4f6794245833f2d
+
+     === Nouveaux soldes des comptes ===
+     Solde d'Alice:   10000000
+     Solde de Bob:    20000000
+     Solde de Chad:   30000100        # Augmenté de 100 octas
+     Solde multisig:  39999200        # Diminué de 100 octas plus frais de gaz
+     ```
+
+     Notez comment :
+
+     - Le solde de Chad a augmenté d'exactement 100 octas, mais les soldes d'Alice et Bob n'ont pas changé puisqu'ils ont seulement signé
+     - Le compte multisig a payé à la fois le montant du transfert et les frais de gaz
+
+     <Aside type="note">
+       Vous pouvez vérifier la transaction sur Aptos Explorer :
+
+       - Allez sur [Aptos Explorer](https://explorer.aptoslabs.com/)
+       - Assurez-vous qu'Explorer est réglé sur Devnet (vérifiez le coin supérieur droit)
+         ![Basculer vers le réseau Devnet dans Aptos Explorer](~/images/screenshots/explorer_devnet.png)
+       - Recherchez votre adresse multisig ou hash de transaction
+       - Examinez les détails de transaction et changements de solde
+     </Aside>
+</Steps>
+
+## Aller Plus Loin : Fonctionnalités Avancées
+
+Vous avez terminé les bases du multisig Aptos - créer un "coffre" (compte multisig), ajouter des "détenteurs de clés" (signataires), et faire un transfert simple qui nécessite plusieurs approbations. Mais comme dans la banque moderne, il y a beaucoup plus que nous pouvons faire :
+
+### Adresses Personnalisées
+
+Comme avoir un numéro de compte bancaire personnalisé, Aptos vous permet de créer des adresses "personnalisées" qui commencent par des caractères spécifiques. Imaginez pouvoir choisir un numéro de compte mémorable comme "0xdd..." pour votre entreprise "Digital Dynamics" !
+
+### Rotation de Compte
+
+Les banques vous permettent de mettre à jour vos identifiants de sécurité sans changer votre numéro de compte. De même, les comptes multisig Aptos peuvent "faire la rotation" de leurs clés d'authentification tout en gardant la même adresse - parfait pour mettre à jour la sécurité sans perturber les configurations de paiement existantes.
+
+### Gouvernance et Contrats Intelligents
+
+Tout comme les banques ont des systèmes d'approbation complexes pour les gros comptes d'entreprise, le multisig Aptos peut interagir avec des contrats intelligents et des systèmes de gouvernance. Imaginez configurer des règles automatisées comme :
+
+- Approbations requises basées sur la taille de transaction
+- Transactions verrouillées dans le temps
+- Intégration avec des systèmes de vote DAO
+
+<Aside type="note">
+  Faites-nous savoir ce qui vous excite le plus à propos du multisig sur Aptos ! Rejoignez nos canaux communautaires pour partager vos idées et expériences.
+</Aside>
+
+## Prochaines Étapes
+
+1. Examinez l'[exemple de code complet](https://github.com/aptos-labs/aptos-python-sdk/blob/main/examples/multisig.py) qui inclut toutes les Fonctionnalités Avancées (voir ci-dessus).
+2. Apprenez sur [la gouvernance multisig dans ce tutoriel](/fr/build/cli/working-with-move-contracts/multi-signature-tutorial).
+3. Explorez [l'abstraction de compte dans Aptos](/fr/network/blockchain/accounts).
+4. Rejoignez le [Discord Aptos](https://discord.gg/aptoslabs) pour le support développeur.

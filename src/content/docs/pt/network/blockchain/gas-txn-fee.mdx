@@ -1,0 +1,64 @@
+---
+title: "Gas e Taxas de Armazenamento"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+A execução de transações no blockchain Aptos requer uma taxa de processamento. Atualmente, essa taxa consiste em dois componentes:
+
+1. Custos de execução e E/S
+
+- Isso cobre o uso de recursos computacionais temporários, como processamento de transações e propagação de registros verificados através da rede distribuída da mainnet.
+- Isso é medido em unidades de gas, e seu preço pode flutuar dependendo da carga da rede. Isso permite manter os custos de execução e E/O baixos quando a rede não está ocupada.
+- Esta parte do gas é permanentemente queimada quando a transação é executada.
+
+2. Taxa de armazenamento
+
+- Isso cobre o custo de armazenar permanentemente registros verificados no armazenamento distribuído do blockchain.
+- Isso é medido a um preço fixo de APT, então o custo de armazenamento permanente permanece estável mesmo quando o preço das unidades de gas flutua com a carga temporária da rede.
+- As taxas de armazenamento podem ser reembolsáveis quando o slot de armazenamento alocado for deletado. Atualmente, a rede está configurada para reembolsar a taxa de armazenamento total paga ao longo da vida de um slot de armazenamento de estado.
+- Para manter a implementação do sistema simples, esta parte do gas é queimada e re-cunhada quando o reembolso acontece.
+
+<Aside type="note">
+  Conceitualmente, essa taxa pode ser pensada como muito similar à maneira como você paga suas contas de eletricidade ou água em casa.
+</Aside>
+
+## Unidades de gas
+
+As transações variam de simples e baratas a complexas, dependendo de suas operações. No blockchain Aptos, uma **unidade de gas** representa uma unidade básica de consumo de recursos temporários, como computação e acesso ao armazenamento. Este último não deve ser confundido com o aspecto de armazenamento de longo prazo de tais operações, pois isso é coberto separadamente por taxas de armazenamento.
+
+O consumo de gas é independente do preço externo do token APT. O precionamento de gas é determinado por governança como parte dos parâmetros de gas on-chain e permite que a rede permaneça eficiente mesmo durante alta demanda.
+
+As transações devem especificar um preço de gas máximo que estão dispostas a pagar por unidade de gas, e o gas máximo que estão dispostas a consumir. Antes da execução, o custo máximo (`max_gas_amount * gas_unit_price`) é reservado do saldo da conta. O gas é então cobrado para cada operação durante a execução. No final da execução, o gas não utilizado é devolvido à conta.
+
+## Como o gas é cobrado
+
+O gas é cobrado por operação e também por memória na memória e operações de armazenamento de dados. Cada instrução de bytecode tem um custo de gas associado, assim como cada operação nativa (operações implementadas em Rust no Move VM que podem ser invocadas de Move).
+
+Além do custo de execução baseado em instruções, o gas também é cobrado através das seguintes dimensões:
+
+| Categoria de Gas | Descrição |
+| ---------------- | --------- |
+| **Computação**   | Executar instruções de bytecode, executar operações nativas |
+| **Memória**      | Carregar dados na memória, como contas, recursos, etc. |
+| **Armazenamento (E/S)** | Operações de leitura e escrita para armazenamento persistente |
+
+### Detalhes de cobrança de gas
+
+A cobrança de gas segue estas regras:
+
+- **Cobrança antecipada**: Gas é pré-cobrado no início das operações antes da execução.
+- **Medição precisa**: O uso real de gas é medido durante a execução.
+- **Reembolso**: Qualquer gas pré-cobrado em excesso é reembolsado após a operação.
+
+### Aborto de transação
+
+Se uma transação ficar sem gas durante a execução, ela é abortada com uma condição de saída de "FORA\_DE\_GAS". Neste caso:
+
+- Todas as mudanças de estado são descartadas
+- O gas consumido até o ponto de aborto não é reembolsado
+- A própria transação ainda é armazenada on-chain
+
+<Aside type="note">
+  É importante estimar o gas precisamente para evitar transações com falha. Usar simulação pode ajudar a estimar custos de gas antes de enviar uma transação.
+</Aside>

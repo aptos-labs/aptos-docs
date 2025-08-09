@@ -1,0 +1,622 @@
+---
+title: "La Tua Prima Transazione"
+---
+
+import { Aside, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
+
+Le transazioni sono il modo fondamentale per cambiare i dati sulla blockchain di Aptos. Pensale come l'invio di un pacco: devi specificare cosa stai inviando, a chi sta andando, e poi tracciarlo fino a che la consegna non viene confermata. In termini di blockchain, le transazioni ti permettono di trasferire coin, chiamare funzioni di smart contract e aggiornare lo stato on-chain.
+
+Questo tutorial ti guiderà attraverso la creazione e l'invio della tua prima transazione sulla blockchain di Aptos. Imparerai come:
+
+1. Configurare il tuo ambiente di sviluppo
+2. Creare account di test e finanziarli
+3. Costruire una transazione per trasferire coin
+4. Simulare la transazione per stimare i costi
+5. Firmare e inviare la transazione
+6. Verificare che la transazione sia stata eseguita con successo
+
+<Aside type="note">
+  Questo tutorial si basa sui concetti della blockchain di Aptos. Se sei nuovo allo sviluppo blockchain, non preoccuparti - spiegheremo i concetti chiave lungo il percorso.
+
+  Puoi saltare al campione di codice completo [qui](#full-code-sample) o continuare a leggere per una guida passo-passo.
+</Aside>
+
+## 1. Configurazione del Tuo Ambiente
+
+<Tabs>
+  <TabItem label="TypeScript">
+    Prima di poter creare transazioni, dobbiamo configurare il nostro ambiente di sviluppo con gli strumenti e SDK necessari.
+
+    <Steps>
+      1. Installa l'SDK TypeScript
+
+         Installa l'SDK TypeScript usando il tuo gestore di pacchetti preferito:
+
+         <Tabs>
+           <TabItem label="npm">
+             ```shellscript filename="Terminal"
+             npm install @aptos-labs/ts-sdk
+             ```
+           </TabItem>
+
+           <TabItem label="yarn">
+             ```shellscript filename="Terminal"
+             yarn add @aptos-labs/ts-sdk
+             ```
+           </TabItem>
+
+           <TabItem label="pnpm">
+             ```shellscript filename="Terminal"
+             pnpm add @aptos-labs/ts-sdk
+             ```
+           </TabItem>
+         </Tabs>
+
+      2. Crea una directory del progetto
+
+         Crea una nuova directory per il tuo progetto:
+
+         ```shellscript filename="Terminal"
+         mkdir my-first-transaction
+         cd my-first-transaction
+         ```
+
+      3. Crea un nuovo file
+
+         Crea un nuovo file chiamato `transaction.ts`:
+
+         <Tabs>
+           <TabItem label="Mac/Linux">
+             ```shellscript filename="Terminal"
+             touch transaction.ts
+             ```
+           </TabItem>
+
+           <TabItem label="Windows">
+             ```shellscript filename="Terminal"
+             type nul > transaction.ts
+             ```
+           </TabItem>
+         </Tabs>
+    </Steps>
+  </TabItem>
+
+  <TabItem label="Python">
+    Prima di poter creare transazioni, dobbiamo configurare il nostro ambiente di sviluppo con gli strumenti e SDK necessari.
+
+    <Steps>
+      1. Installa l'SDK Python
+
+         Installa l'SDK Python usando pip:
+
+         ```shellscript filename="Terminal"
+         pip install aptos-sdk
+         ```
+
+      2. Crea una directory del progetto
+
+         Crea una nuova directory per il tuo progetto:
+
+         ```shellscript filename="Terminal"
+         mkdir my-first-transaction
+         cd my-first-transaction
+         ```
+
+      3. Crea un nuovo file
+
+         Crea un nuovo file chiamato `transaction.py`:
+
+         <Tabs>
+           <TabItem label="Mac/Linux">
+             ```shellscript filename="Terminal"
+             touch transaction.py
+             ```
+           </TabItem>
+
+           <TabItem label="Windows">
+             ```shellscript filename="Terminal"
+             type nul > transaction.py
+             ```
+           </TabItem>
+         </Tabs>
+    </Steps>
+  </TabItem>
+</Tabs>
+
+## 2. Creazione di Account di Test
+
+<Tabs>
+  <TabItem label="TypeScript">
+    Nella blockchain, tutte le transazioni devono venire da un account. Creiamo due account di test: uno per inviare coin (Alice) e uno per riceverli (Bob).
+
+    <Steps>
+      1. Configura il client
+
+         Prima, dobbiamo inizializzare il client Aptos che si connetterà alla blockchain. Apri `transaction.ts` nel tuo editor e aggiungi:
+
+         ```typescript filename="transaction.ts"
+         import {
+           Account,
+           Aptos,
+           AptosConfig,
+           Network,
+         } from "@aptos-labs/ts-sdk";
+
+         async function main() {
+           // Inizializza il client Aptos
+           const config = new AptosConfig({ network: Network.DEVNET });
+           const aptos = new Aptos(config);
+
+           console.log("Connesso a Aptos devnet");
+         }
+
+         main();
+         ```
+
+         <Aside type="note">
+           Questo codice si connette a devnet - la rete di test di Aptos. Questo ti permette di sperimentare senza spendere soldi veri.
+         </Aside>
+
+      2. Crea gli account
+
+         Ora aggiungi gli account Alice e Bob:
+
+         ```typescript filename="transaction.ts"
+         // Crea gli account Alice e Bob
+         const alice = Account.generate();
+         const bob = Account.generate();
+
+         console.log("Indirizzo Alice:", alice.accountAddress.toString());
+         console.log("Indirizzo Bob:", bob.accountAddress.toString());
+         ```
+
+         <Aside type="note">
+           Creare un account significa generare una coppia chiave privata/pubblica. La chiave privata è usata per firmare transazioni, mentre la chiave pubblica (e l'indirizzo derivato) è usata per identificare l'account.
+         </Aside>
+
+      3. Finanzia gli account
+
+         Finanziamo l'account di Alice dal faucet devnet per i test:
+
+         ```typescript filename="transaction.ts"
+         // Finanzia Alice con il faucet
+         console.log("Finanziando Alice...");
+         await aptos.fundAccount({
+           accountAddress: alice.accountAddress,
+           amount: 100_000_000, // 1 APT (APT ha 8 decimali)
+         });
+
+         console.log("Alice finanziata!");
+         ```
+
+         <Aside type="note">
+           Il faucet è un servizio che fornisce token di test gratuiti sulle reti di test. Non è APT reale, solo per test.
+         </Aside>
+    </Steps>
+  </TabItem>
+
+  <TabItem label="Python">
+    Nella blockchain, tutte le transazioni devono venire da un account. Creiamo due account di test: uno per inviare coin (Alice) e uno per riceverli (Bob).
+
+    <Steps>
+      1. Configura il client
+
+         Prima, dobbiamo inizializzare il client Aptos che si connetterà alla blockchain. Apri `transaction.py` nel tuo editor e aggiungi:
+
+         ```python filename="transaction.py"
+         import asyncio
+         from aptos_sdk.async_client import RestClient
+         from aptos_sdk.account import Account
+         from aptos_sdk.bcs import Serializer
+
+         async def main():
+             # Inizializza il client Aptos
+             client = RestClient("https://fullnode.devnet.aptoslabs.com/v1")
+             
+             print("Connesso a Aptos devnet")
+
+         if __name__ == "__main__":
+             asyncio.run(main())
+         ```
+
+         <Aside type="note">
+           Questo codice si connette a devnet - la rete di test di Aptos. Questo ti permette di sperimentare senza spendere soldi veri.
+         </Aside>
+
+      2. Crea gli account
+
+         Ora aggiungi gli account Alice e Bob:
+
+         ```python filename="transaction.py"
+         # Crea gli account Alice e Bob
+         alice = Account.generate()
+         bob = Account.generate()
+
+         print(f"Indirizzo Alice: {alice.address()}")
+         print(f"Indirizzo Bob: {bob.address()}")
+         ```
+
+         <Aside type="note">
+           Creare un account significa generare una coppia chiave privata/pubblica. La chiave privata è usata per firmare transazioni, mentre la chiave pubblica (e l'indirizzo derivato) è usata per identificare l'account.
+         </Aside>
+
+      3. Finanzia gli account
+
+         Finanziamo l'account di Alice dal faucet devnet per i test:
+
+         ```python filename="transaction.py"
+         # Finanzia Alice con il faucet
+         print("Finanziando Alice...")
+         await client.fund_account(alice.address(), 100_000_000)  # 1 APT
+
+         print("Alice finanziata!")
+         ```
+
+         <Aside type="note">
+           Il faucet è un servizio che fornisce token di test gratuiti sulle reti di test. Non è APT reale, solo per test.
+         </Aside>
+    </Steps>
+  </TabItem>
+</Tabs>
+
+## 3. Costruzione di una Transazione
+
+<Tabs>
+  <TabItem label="TypeScript">
+    Ora che abbiamo account finanziati, creiamo una transazione per trasferire coin da Alice a Bob. È come compilare un modulo specificando cosa vuoi inviare e a chi.
+
+    <Steps>
+      1. Comprendi la struttura della transazione
+
+         Una transazione in Aptos ha diverse componenti chiave:
+
+         1. **Mittente**: L'account che inizia la transazione (Alice)
+         2. **Funzione**: La funzione on-chain da chiamare (in questo caso, un trasferimento di coin)
+         3. **Argomenti**: Dati necessari dalla funzione (indirizzo destinatario e importo)
+         4. **Parametri gas**: Importo massimo di gas e prezzo unitario del gas
+         5. **Tempo di scadenza**: Quando la transazione non è più valida se non eseguita
+         6. **Numero di sequenza**: Un contatore che previene attacchi replay
+
+         <Aside type="note">
+           Tutti i dati nelle transazioni Aptos sono serializzati usando Binary Canonical Serialization (BCS), un formato compatto e deterministico progettato per l'uso blockchain. L'SDK gestisce questa serializzazione per te.
+
+           BCS assicura che i dati delle transazioni siano codificati consistentemente attraverso diverse piattaforme e linguaggi, che è critico per una blockchain dove la stessa transazione potrebbe essere processata da nodi che eseguono implementazioni diverse.
+         </Aside>
+
+      2. Costruisci la transazione
+
+         Aggiungiamo codice per costruire una transazione che trasferisce 1000 octa da Alice a Bob:
+
+         ```typescript filename="transaction.ts"
+         // Crea transazione di trasferimento da Alice a Bob
+         const transaction = await aptos.transaction.build.simple({
+           sender: alice.accountAddress,
+           data: {
+             function: "0x1::aptos_account::transfer",
+             functionArguments: [bob.accountAddress, 1000],
+           },
+         });
+
+         console.log("Transazione creata");
+         ```
+
+         <Aside type="note">
+           "0x1::aptos\_account::transfer" è una funzione standard di Aptos. "0x1" è l'indirizzo del framework core, "aptos\_account" è il nome del modulo, e "transfer" è il nome della funzione.
+         </Aside>
+    </Steps>
+  </TabItem>
+
+  <TabItem label="Python">
+    Ora che abbiamo account finanziati, creiamo una transazione per trasferire coin da Alice a Bob. È come compilare un modulo specificando cosa vuoi inviare e a chi.
+
+    <Steps>
+      1. Comprendi la struttura della transazione
+
+         Una transazione in Aptos ha diverse componenti chiave:
+
+         1. **Mittente**: L'account che inizia la transazione (Alice)
+         2. **Funzione**: La funzione on-chain da chiamare (in questo caso, un trasferimento di coin)
+         3. **Argomenti**: Dati necessari dalla funzione (indirizzo destinatario e importo)
+         4. **Parametri gas**: Importo massimo di gas e prezzo unitario del gas
+         5. **Tempo di scadenza**: Quando la transazione non è più valida se non eseguita
+         6. **Numero di sequenza**: Un contatore che previene attacchi replay
+
+         <Aside type="note">
+           Tutti i dati nelle transazioni Aptos sono serializzati usando Binary Canonical Serialization (BCS), un formato compatto e deterministico progettato per l'uso blockchain. L'SDK gestisce questa serializzazione per te.
+
+           BCS assicura che i dati delle transazioni siano codificati consistentemente attraverso diverse piattaforme e linguaggi, che è critico per una blockchain dove la stessa transazione potrebbe essere processata da nodi che eseguono implementazioni diverse.
+         </Aside>
+
+      2. Costruisci la transazione
+
+         Aggiungi il seguente codice alla tua funzione `main()` per costruire una transazione che trasferisce 1000 octa da Alice a Bob:
+
+         ```python filename="transaction.py"
+         from aptos_sdk.transactions import EntryFunction, TransactionArgument
+
+         # Crea transazione di trasferimento da Alice a Bob
+         payload = EntryFunction.natural(
+             "0x1::aptos_account",
+             "transfer",
+             [],
+             [TransactionArgument(bob.address(), Serializer.struct),
+              TransactionArgument(1000, Serializer.u64)]
+         )
+
+         print("Transazione creata")
+         ```
+
+         <Aside type="note">
+           "0x1::aptos\_account::transfer" è una funzione standard di Aptos. "0x1" è l'indirizzo del framework core, "aptos\_account" è il nome del modulo, e "transfer" è il nome della funzione.
+         </Aside>
+    </Steps>
+  </TabItem>
+</Tabs>
+
+## 4. Simulazione della Transazione
+
+Prima di inviare la transazione, simuliamola per stimare i costi del gas e controllare eventuali errori.
+
+<Tabs>
+  <TabItem label="TypeScript">
+    ```typescript filename="transaction.ts"
+    // Simula la transazione
+    const [simulateResult] = await aptos.transaction.simulate.simple({
+      signerPublicKey: alice.publicKey,
+      transaction,
+    });
+
+    console.log("Risultato simulazione:", simulateResult);
+    console.log("Uso gas:", simulateResult.gas_used);
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    ```python filename="transaction.py"
+    # Simula la transazione
+    simulated_result = await client.simulate_transaction(alice, payload)
+
+    print(f"Risultato simulazione: {simulated_result}")
+    print(f"Uso gas: {simulated_result[0]['gas_used']}")
+    ```
+  </TabItem>
+</Tabs>
+
+## 5. Firma e Invio della Transazione
+
+<Tabs>
+  <TabItem label="TypeScript">
+    ```typescript filename="transaction.ts"
+    // Firma e invia la transazione
+    const committedTransaction = await aptos.transaction.signAndSubmitTransaction({
+      signer: alice,
+      transaction,
+    });
+
+    console.log("Transazione inviata:", committedTransaction.hash);
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    ```python filename="transaction.py"
+    # Firma e invia la transazione
+    signed_transaction = alice.sign_transaction(payload)
+    submitted_transaction = await client.submit_transaction(signed_transaction)
+
+    print(f"Transazione inviata: {submitted_transaction}")
+    ```
+  </TabItem>
+</Tabs>
+
+## 6. Verifica della Transazione
+
+<Tabs>
+  <TabItem label="TypeScript">
+    ```typescript filename="transaction.ts"
+    // Aspetta che la transazione si completi
+    await aptos.waitForTransaction({ transactionHash: committedTransaction.hash });
+
+    console.log("Transazione completata con successo!");
+
+    // Controlla i saldi
+    const aliceBalance = await aptos.getAccountAPTAmount({
+      accountAddress: alice.accountAddress,
+    });
+    const bobBalance = await aptos.getAccountAPTAmount({
+      accountAddress: bob.accountAddress,
+    });
+
+    console.log("Saldo Alice:", aliceBalance);
+    console.log("Saldo Bob:", bobBalance);
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    ```python filename="transaction.py"
+    # Aspetta che la transazione si completi
+    await client.wait_for_transaction(submitted_transaction)
+
+    print("Transazione completata con successo!")
+
+    # Controlla i saldi
+    alice_balance = await client.account_balance(alice.address())
+    bob_balance = await client.account_balance(bob.address())
+
+    print(f"Saldo Alice: {alice_balance}")
+    print(f"Saldo Bob: {bob_balance}")
+    ```
+  </TabItem>
+</Tabs>
+
+## Cosa Succede Dopo?
+
+Congratulazioni! Hai creato, inviato e verificato con successo la tua prima transazione Aptos. Ecco altre cose che puoi imparare:
+
+**Impara le transazioni più complesse**:
+
+- [Firme Multi-Agente](/it/build/sdks/ts-sdk/building-transactions/multi-agent-transactions) - Transazioni che richiedono più firmatari
+- [Sponsorizzazione Transazioni](/it/build/sdks/ts-sdk/building-transactions/sponsoring-transactions) - Avere un altro account che paga le commissioni gas
+- [Raggruppamento Transazioni](/it/build/sdks/ts-sdk/building-transactions/batching-transactions) - Inviare più transazioni efficientemente
+
+<Aside type="note">
+  I link sopra sono per l'SDK TypeScript ma i principi sono gli stessi se stai usando Python o Rust.
+</Aside>
+
+**Esplora smart contract o basi degli account**:
+
+- [Il Tuo Primo Modulo Move](/it/build/guides/first-move-module) - Crea il tuo smart contract
+- [Basi degli Account](/it/network/blockchain/accounts)
+
+[Unisciti al Discord di Aptos](https://discord.gg/aptoslabs) e condividi cosa stai costruendo!
+
+## Campione di Codice Completo
+
+I campioni di codice completi qui sotto combinano tutti i frammenti che abbiamo coperto in questo tutorial:
+
+<Tabs>
+  <TabItem label="TypeScript">
+    ```typescript filename="transaction.ts"
+    import {
+      Account,
+      Aptos,
+      AptosConfig,
+      Network,
+    } from "@aptos-labs/ts-sdk";
+
+    async function main() {
+      // Inizializza il client Aptos
+      const config = new AptosConfig({ network: Network.DEVNET });
+      const aptos = new Aptos(config);
+
+      console.log("Connesso a Aptos devnet");
+
+      // Crea gli account Alice e Bob
+      const alice = Account.generate();
+      const bob = Account.generate();
+
+      console.log("Indirizzo Alice:", alice.accountAddress.toString());
+      console.log("Indirizzo Bob:", bob.accountAddress.toString());
+
+      // Finanzia Alice con il faucet
+      console.log("Finanziando Alice...");
+      await aptos.fundAccount({
+        accountAddress: alice.accountAddress,
+        amount: 100_000_000, // 1 APT
+      });
+
+      console.log("Alice finanziata!");
+
+      // Crea transazione di trasferimento da Alice a Bob
+      const transaction = await aptos.transaction.build.simple({
+        sender: alice.accountAddress,
+        data: {
+          function: "0x1::aptos_account::transfer",
+          functionArguments: [bob.accountAddress, 1000],
+        },
+      });
+
+      console.log("Transazione creata");
+
+      // Simula la transazione
+      const [simulateResult] = await aptos.transaction.simulate.simple({
+        signerPublicKey: alice.publicKey,
+        transaction,
+      });
+
+      console.log("Uso gas:", simulateResult.gas_used);
+
+      // Firma e invia la transazione
+      const committedTransaction = await aptos.transaction.signAndSubmitTransaction({
+        signer: alice,
+        transaction,
+      });
+
+      console.log("Transazione inviata:", committedTransaction.hash);
+
+      // Aspetta che la transazione si completi
+      await aptos.waitForTransaction({ transactionHash: committedTransaction.hash });
+      
+      console.log("Transazione completata con successo!");
+      
+      // Controlla i saldi
+      const aliceBalance = await aptos.getAccountAPTAmount({
+        accountAddress: alice.accountAddress,
+      });
+      const bobBalance = await aptos.getAccountAPTAmount({
+        accountAddress: bob.accountAddress,
+      });
+      
+      console.log("Saldo Alice:", aliceBalance);
+      console.log("Saldo Bob:", bobBalance);
+    }
+
+    main();
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    ```python filename="transaction.py"
+    import asyncio
+    from aptos_sdk.async_client import RestClient
+    from aptos_sdk.account import Account
+    from aptos_sdk.bcs import Serializer
+    from aptos_sdk.transactions import EntryFunction, TransactionArgument
+
+    async def main():
+        # Inizializza il client Aptos
+        client = RestClient("https://fullnode.devnet.aptoslabs.com/v1")
+        
+        print("Connesso a Aptos devnet")
+
+        # Crea gli account Alice e Bob
+        alice = Account.generate()
+        bob = Account.generate()
+
+        print(f"Indirizzo Alice: {alice.address()}")
+        print(f"Indirizzo Bob: {bob.address()}")
+
+        # Finanzia Alice con il faucet
+        print("Finanziando Alice...")
+        await client.fund_account(alice.address(), 100_000_000)  # 1 APT
+        
+        print("Alice finanziata!")
+
+        # Crea transazione di trasferimento da Alice a Bob
+        payload = EntryFunction.natural(
+            "0x1::aptos_account",
+            "transfer",
+            [],
+            [TransactionArgument(bob.address(), Serializer.struct),
+             TransactionArgument(1000, Serializer.u64)]
+        )
+
+        print("Transazione creata")
+
+        # Simula la transazione
+        simulated_result = await client.simulate_transaction(alice, payload)
+        
+        print(f"Uso gas: {simulated_result[0]['gas_used']}")
+
+        # Firma e invia la transazione
+        signed_transaction = alice.sign_transaction(payload)
+        submitted_transaction = await client.submit_transaction(signed_transaction)
+        
+        print(f"Transazione inviata: {submitted_transaction}")
+
+        # Aspetta che la transazione si completi
+        await client.wait_for_transaction(submitted_transaction)
+        
+        print("Transazione completata con successo!")
+        
+        # Controlla i saldi
+        alice_balance = await client.account_balance(alice.address())
+        bob_balance = await client.account_balance(bob.address())
+        
+        print(f"Saldo Alice: {alice_balance}")
+        print(f"Saldo Bob: {bob_balance}")
+
+    if __name__ == "__main__":
+        asyncio.run(main())
+    ```
+  </TabItem>
+</Tabs>

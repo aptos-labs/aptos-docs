@@ -1,0 +1,268 @@
+---
+title: "Transactions et États"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+La blockchain Aptos est conçue autour d'un modèle de données unique qui sépare le code des données et utilise des ressources Move pour gérer les actifs et l'état. Comprendre comment les transactions changent l'état est crucial pour développer efficacement sur Aptos.
+
+## Vue d'ensemble des transactions
+
+Une transaction sur Aptos est une unité atomique d'exécution qui peut :
+
+- Transférer des actifs entre comptes
+- Publier de nouveaux modules de code
+- Appeler des fonctions dans des contrats intelligents existants
+- Mettre à jour l'état du compte
+
+Chaque transaction est soit entièrement exécutée avec succès, soit entièrement échouée - il n'y a pas d'exécution partielle.
+
+## Structure des transactions
+
+### Données de transaction
+
+Chaque transaction contient :
+
+```rust
+pub struct RawTransaction {
+    /// Adresse de l'expéditeur.
+    sender: AccountAddress,
+    /// Numéro de séquence de ce transaction. 
+    sequence_number: u64,
+    /// La payload de la transaction.
+    payload: TransactionPayload,
+    /// Prix maximal du gaz en unités par octa de gaz.
+    max_gas_amount: u64,
+    /// Prix maximal du gaz en octets par unité de gaz.
+    gas_unit_price: u64,
+    /// Heure d'expiration pour cette transaction.
+    expiration_timestamp_secs: u64,
+    /// Identifiant de chaîne pour distinguer entre chaînes différentes.
+    chain_id: ChainId,
+}
+```
+
+### Types de payload
+
+Aptos supporte plusieurs types de payloads de transaction :
+
+1. **Script Function** : Appelle une fonction publique dans un module publié
+2. **Package Publication** : Publie de nouveaux modules Move
+3. **Script** : Exécute un script Move autonome (déprécié)
+
+## Modèle d'état
+
+### Structure d'état de compte
+
+L'état d'un compte sur Aptos consiste en :
+
+```move
+struct Account {
+    authentication_key: vector<u8>,
+    sequence_number: u64,
+    guid_creation_num: u64,
+}
+```
+
+En plus de cette structure centrale, les comptes peuvent contenir :
+
+- **Modules** : Code Move publié par le compte
+- **Ressources** : Données structurées stockées sous le compte
+
+### Ressources
+
+Les ressources sont des structures de données clés dans Move qui :
+
+- Ne peuvent pas être copiées ou supprimées implicitement
+- Doivent être explicitement déplacées
+- Garantissent la rareté et la propriété des actifs
+
+```move
+struct Coin<phantom CoinType> has store {
+    value: u64,
+}
+```
+
+### Global Storage
+
+Aptos utilise un modèle de stockage global où :
+
+- Chaque compte possède son propre espace d'adresse
+- Les ressources sont indexées par type et adresse
+- Le code peut accéder aux ressources via des fonctions globales
+
+```move
+// Lire une ressource
+acquires<T>(addr: address): &T
+// Emprunter une ressource mutable
+acquires<T>(addr: address): &mut T
+// Déplacer une ressource depuis le stockage global
+move_from<T>(addr: address): T
+// Déplacer une ressource vers le stockage global
+move_to<T>(account: &signer, resource: T)
+```
+
+## Exécution des transactions
+
+### Pipeline d'exécution
+
+1. **Validation** : Vérifier la signature et la validité de base
+2. **Prologue** : Vérifier le numéro de séquence et déduire les frais
+3. **Exécution** : Exécuter la payload de la transaction
+4. **Épilogue** : Finaliser les changements d'état et les frais
+
+### Atomicité
+
+Aptos garantit l'atomicité des transactions via :
+
+- **Modèle de mémoire transactionnelle** : Tous les changements sont mis en buffer
+- **Validation au commit** : Les conflits causent l'abandon de la transaction
+- **Rollback automatique** : Les transactions échouées ne laissent aucun changement
+
+### Exécution parallèle
+
+Aptos peut exécuter des transactions en parallèle en :
+
+- Détectant les dépendances de données à l'exécution
+- Recommençant les transactions en cas de conflit
+- Maintenant l'ordre sériel pour la cohérence
+
+<Aside type="note">
+  L'exécution parallèle améliore significativement le débit sans compromettre la cohérence ou nécessiter que les développeurs spécifient explicitement les dépendances.
+</Aside>
+
+## États de transaction
+
+### États possibles
+
+Une transaction peut être dans l'un des états suivants :
+
+- **Pending** : Soumise mais pas encore traitée
+- **Executed** : Exécutée avec succès et incluise dans un bloc
+- **Failed** : Exécution échouée mais incluse dans un bloc
+- **Expired** : Expire avant d'être incluse dans un bloc
+
+### Finalité
+
+Sur Aptos :
+
+- Les transactions sont **finales** une fois incluses dans un bloc
+- La finilité probabiliste commence après 1 confirmation
+- La finilité pratique est atteinte après quelques secondes
+
+## Calcul d'état
+
+### Arbre Merkle
+
+L'état d'Aptos est organisé comme un arbre Merkle sparse :
+
+- **Authentification** : Chaque élément d'état a une preuve cryptographique
+- **Efficacité** : Seules les branches modifiées nécessitent une mise à jour
+- **Vérifiabilité** : Les clients peuvent vérifier l'état sans faire confiance
+
+### Hash d'état
+
+Chaque version de l'état blockchain a un hash unique :
+
+```rust
+pub struct StateCheckpoint {
+    /// Version de l'état
+    version: Version,
+    /// Hash racine de l'arbre d'état
+    root_hash: HashValue,
+    /// Timestamp du dernier bloc
+    timestamp_usecs: u64,
+}
+```
+
+## Gas et frais
+
+### Unités de gaz
+
+Le gaz sur Aptos couvre :
+
+- **Calcul** : Instructions CPU exécutées
+- **Stockage** : Données écrites sur la chaîne
+- **E/S** : Accès aux données existantes
+
+### Optimisations
+
+Pour optimiser l'utilisation du gaz :
+
+1. **Minimiser l'allocation de stockage** : Réutiliser les ressources existantes
+2. **Utilisation efficace des données** : Accéder seulement aux données nécessaires
+3. **Logique simplifiée** : Réduire la complexité computationnelle
+
+```move
+// Efficace : modification sur place
+fun update_balance(account: &signer, new_amount: u64) acquires Balance {
+    let balance = borrow_global_mut<Balance>(signer::address_of(account));
+    balance.value = new_amount;
+}
+
+// Inefficace : recréation de ressource
+fun update_balance_inefficient(account: &signer, new_amount: u64) acquires Balance {
+    let old_balance = move_from<Balance>(signer::address_of(account));
+    let new_balance = Balance { value: new_amount };
+    move_to(account, new_balance);
+}
+```
+
+## Changements d'état observables
+
+### Événements
+
+Les transactions peuvent émettre des événements pour les changements observables :
+
+```move
+#[event]
+struct TransferEvent has store, drop {
+    from: address,
+    to: address,
+    amount: u64,
+}
+
+fun transfer_with_event(from: &signer, to: address, amount: u64) {
+    // Logique de transfert...
+    
+    event::emit(TransferEvent {
+        from: signer::address_of(from),
+        to,
+        amount,
+    });
+}
+```
+
+### Changements de ressource
+
+Les applications peuvent surveiller :
+
+- **Création de ressource** : Nouvelles ressources ajoutées aux comptes
+- **Modification de ressource** : Changements aux ressources existantes
+- **Suppression de ressource** : Ressources supprimées des comptes
+
+<Aside type="tip">
+  Utilisez l'Indexeur Aptos pour interroger efficacement les changements d'état historiques et les événements à travers des requêtes GraphQL.
+</Aside>
+
+## Bonnes pratiques
+
+### Conception de transaction
+
+1. **Idempotence** : Concevoir des transactions qui peuvent être réessayées en sécurité
+2. **Validation d'entrée** : Valider tous les paramètres d'entrée
+3. **Gestion d'erreur** : Gérer gracieusement les conditions d'erreur
+
+### Gestion d'état
+
+1. **Séparation des préoccupations** : Séparer la logique métier du stockage
+2. **Contrôle d'accès** : Implémenter des permissions appropriées
+3. **Mise à niveau** : Concevoir pour les futures mises à niveau de contrat
+
+### Optimisation des performances
+
+1. **Accès minimal aux données** : Lire seulement les données nécessaires
+2. **Opérations par lots** : Grouper les opérations liées
+3. **Éviter les goulots d'étranglement** : Concevoir pour l'accès concurrent
+
+En comprenant la relation entre les transactions et l'état sur Aptos, vous pouvez construire des applications efficaces et robustes qui tirent parti des capacités uniques de la blockchain.

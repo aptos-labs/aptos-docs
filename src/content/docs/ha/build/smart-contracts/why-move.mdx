@@ -1,0 +1,141 @@
+---
+title: "Me Ya Sa Move?"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Move harshen shirye-shirye ne da aka ƙera musamman don kwangilolon da suka dace akan blockchain na Aptos. Meta (da aka fi sani da Facebook) ya haɓaka shi don aikin Diem, kuma harshe ne mai aminci, mai sassauci, da kuma mai iya tabbatarwa wanda ya sa haɓakar kwangilolon da suka dace ta zama mafi aminci da inganci.
+
+## Manyan Fasalolin Move
+
+### 1. Aminci Da Farko
+
+An ƙera Move tare da sanya aminci a gaba. Tsarin nau'in harshen yana hana yawancin kurakurai na gama gari a cikin haɓakar kwangilolon da suka dace:
+
+- **Babu alamun babu komai**: Yana kawar da kurakuran rujewa na babu komai
+- **Amincin ƙwaƙwalwar ajiya**: Yana hana zubewar ƙwaƙwalwar ajiya da matsalolin samun dama
+- **Amincin albarkatu**: Yana tabbatar da cewa ba za a iya kwafi ko asara albarkatun dijital ba
+
+### 2. Tsarin Albarkatu
+
+Move yana gabatar da manufa ta musamman da ake kira "albarkatu":
+
+```move
+struct Coin has key {
+    value: u64,
+}
+```
+
+Albarkatu nau'in bayanai ne na musamman waɗanda ke da waɗannan halaye:
+
+- **Ba za a iya kwafi ba**: Ba za a iya kwafi tsabar kuɗi ko kadarorin dijital ba
+- **Ba za a iya watsi da su ba**: Dole ne a cinye ko adana duk albarkatu a fili
+- **Amintacce ta tsari**: Suna hana kurakuran gama gari a cikin sarrafa kadarori
+
+### 3. Tabbatarwa ta Hukuma
+
+Move yana goyan bayan tabbatarwa ta hukuma ta hanyar **Move Prover**:
+
+```move
+spec module::coin {
+    /// Tabbatar da cewa jimlar da aka samar ba ta taɓa wuce MAX_SUPPLY ba
+    invariant sum_of_coins <= MAX_SUPPLY;
+}
+```
+
+Wannan yana ba da damar:
+
+- Tabbatarwa ta lissafi na sahihin kwangila
+- Tabbatar da kaddarorin aminci
+- Gano kurakurai kafin fita
+
+## Kwatanta da Sauran Harsuna
+
+### Move Tare da Solidity
+
+| Fasali | Move | Solidity |
+|--------|------|----------|
+| Amincin Albarkatu | ✅ An haɗa | ❌ Yana buƙatar tabbatarwa ta hannu |
+| Tabbatarwa ta Hukuma | ✅ Move Prover | ⚠️ Kayan aiki na waje |
+| Sarrafa Ƙwaƙwalwar Ajiya | ✅ Amintacce ta tsari | ⚠️ Mai sauƙin kuskure |
+| Hana Alamun Babu Komai | ✅ Eh | ❌ A'a |
+
+### Fa'idodin Move akan Aptos
+
+<Aside type="tip">
+  **Ingantaccen Aiki**: Move akan Aptos yana goyan bayan aiwatarwa daidai, ma'ana ma'amaloli na iya aiki a lokaci guda lokacin da ba su gaba ba.
+</Aside>
+
+1. **Aiwatarwa Daidai**: Kwangiloli na iya aiki a lokaci guda
+2. **Inganta Injin Virtual**: Injin aiwatarwa da aka inganta don aiki
+3. **Tsarin Asusu Mai Sassauci**: Sarrafa asusu mai sassauci
+
+## Misali Mai Aiki
+
+Wannan misali ne mai sauƙi na kwangilar tsabar kuɗi a cikin Move:
+
+```move
+module MyAddress::BasicCoin {
+    use std::signer;
+
+    /// Albarki wanda ke wakiltar tsabar kuɗi
+    struct Coin has key {
+        value: u64,
+    }
+
+    /// Ƙirƙirar sabuwar tsabar kuɗi
+    public fun mint(account: &signer, value: u64) {
+        let coin = Coin { value };
+        move_to(account, coin);
+    }
+
+    /// Canja wurin tsabar kuɗi tsakanin asusu
+    public fun transfer(
+        from: &signer,
+        to: address,
+        value: u64,
+    ) acquires Coin {
+        let from_addr = signer::address_of(from);
+        
+        // Cire daga asusun mai aika
+        let Coin { value: from_value } = move_from<Coin>(from_addr);
+        assert!(from_value >= value, 1);
+        
+        // Ajiye ga asusun mai karɓa
+        let remaining = from_value - value;
+        if (remaining > 0) {
+            let remaining_coin = Coin { value: remaining };
+            move_to(from, remaining_coin);
+        };
+        
+        let transfer_coin = Coin { value };
+        move_to(to, transfer_coin);
+    }
+}
+```
+
+## Farawa da Move
+
+Don farawa koyan Move:
+
+1. **Karanta [Littafin Move](/ha/build/smart-contracts/book)** - cikakken jagora ga harshen
+2. **Gwada [koyarwar farko](/ha/build/guides/first-move-module)** - ƙirƙirar kwangilar ku ta farko
+3. **Bincika [misalan Move](https://github.com/aptos-labs/aptos-core/tree/main/aptos-move/move-examples)** - misalai masu aiki
+
+## Kwatanta da Sauran Injuna Virtual
+
+### Move VM Tare da EVM
+
+- **Sassauci**: Move yana goyan bayan nau'ikan bayanai masu rikitarwa da sassauci
+- **Aiki**: Inganta mafi kyau da aiwatarwa daidai
+- **Aminci**: Tsarin nau'i mai ƙarfi da hana kurakuran lokacin aiki
+
+### Move VM Tare da Wasm
+
+- **Ƙwararru**: An ƙera musamman don blockchain
+- **Tsarin Albarkatu**: Ra'ayoyin asali don sarrafa kadarorin dijital
+- **Tabbatarwa**: Kayan aikin tabbatarwa da aka haɗa
+
+<Aside type="note">
+  Move ba kawai harshen shirye-shirye ba ne, amma cikakken tsarin muhalli da aka ƙera don sa haɓakar kwangilolon da suka dace ta zama mafi aminci, inganci, da kuma mai iya tabbatarwa.
+</Aside>

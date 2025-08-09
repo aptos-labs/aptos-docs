@@ -1,0 +1,622 @@
+---
+title: "İlk İşleminiz"
+---
+
+import { Aside, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
+
+İşlemler, Aptos blok zincirindeki verileri değiştirmenin temel yoludur. Onları paket göndermek gibi düşünün: ne gönderdiğinizi, kime gittiğini belirtmeniz ve teslimatın onaylanana kadar takip etmeniz gerekir. Blok zinciri terimlerinde, işlemler coin transfer etmenize, akıllı sözleşme fonksiyonlarını çağırmanıza ve zincir üstü durumu güncellemenize olanak tanır.
+
+Bu öğretici, Aptos blok zincirinde ilk işleminizi oluşturma ve gönderme konusunda size rehberlik edecektir. Şunları öğreneceksiniz:
+
+1. Geliştirme ortamınızı kurma
+2. Test hesapları oluşturma ve fonlama
+3. Coin transfer etmek için işlem oluşturma
+4. Maliyetleri tahmin etmek için işlemi simüle etme
+5. İşlemi imzalama ve gönderme
+6. İşlemin başarıyla yürütüldüğünü doğrulama
+
+<Aside type="note">
+  Bu öğretici Aptos blok zinciri kavramları üzerine kuruludur. Blok zinciri geliştirmesinde yeniyseniz, endişelenmeyin - yol boyunca temel kavramları açıklayacağız.
+
+  Tam kod örneğine [buradan](#full-code-sample) atlayabilir veya adım adım anlatım için okumaya devam edebilirsiniz.
+</Aside>
+
+## 1. Ortamınızı Kurma
+
+<Tabs>
+  <TabItem label="TypeScript">
+    İşlem oluşturabilmeden önce, gerekli araçlar ve SDK'larla geliştirme ortamımızı kurmamız gerekir.
+
+    <Steps>
+      1. TypeScript SDK'yı Yükleme
+
+         Tercih ettiğiniz paket yöneticisini kullanarak TypeScript SDK'yı yükleyin:
+
+         <Tabs>
+           <TabItem label="npm">
+             ```shellscript filename="Terminal"
+             npm install @aptos-labs/ts-sdk
+             ```
+           </TabItem>
+
+           <TabItem label="yarn">
+             ```shellscript filename="Terminal"
+             yarn add @aptos-labs/ts-sdk
+             ```
+           </TabItem>
+
+           <TabItem label="pnpm">
+             ```shellscript filename="Terminal"
+             pnpm add @aptos-labs/ts-sdk
+             ```
+           </TabItem>
+         </Tabs>
+
+      2. Proje dizini oluşturma
+
+         Projeniz için yeni bir dizin oluşturun:
+
+         ```shellscript filename="Terminal"
+         mkdir my-first-transaction
+         cd my-first-transaction
+         ```
+
+      3. Yeni dosya oluşturma
+
+         `transaction.ts` adında yeni bir dosya oluşturun:
+
+         <Tabs>
+           <TabItem label="Mac/Linux">
+             ```shellscript filename="Terminal"
+             touch transaction.ts
+             ```
+           </TabItem>
+
+           <TabItem label="Windows">
+             ```shellscript filename="Terminal"
+             type nul > transaction.ts
+             ```
+           </TabItem>
+         </Tabs>
+    </Steps>
+  </TabItem>
+
+  <TabItem label="Python">
+    İşlem oluşturabilmeden önce, gerekli araçlar ve SDK'larla geliştirme ortamımızı kurmamız gerekir.
+
+    <Steps>
+      1. Python SDK'yı Yükleme
+
+         Pip kullanarak Python SDK'yı yükleyin:
+
+         ```shellscript filename="Terminal"
+         pip install aptos-sdk
+         ```
+
+      2. Proje dizini oluşturma
+
+         Projeniz için yeni bir dizin oluşturun:
+
+         ```shellscript filename="Terminal"
+         mkdir my-first-transaction
+         cd my-first-transaction
+         ```
+
+      3. Yeni dosya oluşturma
+
+         `transaction.py` adında yeni bir dosya oluşturun:
+
+         <Tabs>
+           <TabItem label="Mac/Linux">
+             ```shellscript filename="Terminal"
+             touch transaction.py
+             ```
+           </TabItem>
+
+           <TabItem label="Windows">
+             ```shellscript filename="Terminal"
+             type nul > transaction.py
+             ```
+           </TabItem>
+         </Tabs>
+    </Steps>
+  </TabItem>
+</Tabs>
+
+## 2. Test Hesapları Oluşturma
+
+<Tabs>
+  <TabItem label="TypeScript">
+    Blok zincirinde, tüm işlemler bir hesaptan gelmelidir. İki test hesabı oluşturalım: coin göndermek için bir tane (Alice) ve almak için bir tane (Bob).
+
+    <Steps>
+      1. İstemciyi kurma
+
+         İlk olarak, blok zincirine bağlanacak Aptos istemcisini başlatmamız gerekir. `transaction.ts` dosyasını editörünüzde açın ve ekleyin:
+
+         ```typescript filename="transaction.ts"
+         import {
+           Account,
+           Aptos,
+           AptosConfig,
+           Network,
+         } from "@aptos-labs/ts-sdk";
+
+         async function main() {
+           // Aptos istemcisini başlat
+           const config = new AptosConfig({ network: Network.DEVNET });
+           const aptos = new Aptos(config);
+
+           console.log("Aptos devnet'e bağlandı");
+         }
+
+         main();
+         ```
+
+         <Aside type="note">
+           Bu kod devnet'e bağlanır - Aptos'un test ağı. Bu, gerçek para harcamadan deneyim yapmanıza olanak tanır.
+         </Aside>
+
+      2. Hesapları oluşturma
+
+         Şimdi Alice ve Bob hesaplarını ekleyin:
+
+         ```typescript filename="transaction.ts"
+         // Alice ve Bob hesaplarını oluştur
+         const alice = Account.generate();
+         const bob = Account.generate();
+
+         console.log("Alice adresi:", alice.accountAddress.toString());
+         console.log("Bob adresi:", bob.accountAddress.toString());
+         ```
+
+         <Aside type="note">
+           Bir hesap oluşturmak, özel anahtar/genel anahtar çifti oluşturmak anlamına gelir. Özel anahtar, işlemleri imzalamak için kullanılır, genel anahtar (ve türetilen adres) ise hesabı tanımlamak için kullanılır.
+         </Aside>
+
+      3. Hesapları fonlama
+
+         Test için Alice hesabını devnet faucet'den fonlayalım:
+
+         ```typescript filename="transaction.ts"
+         // Alice'i faucet ile fonla
+         console.log("Alice'i fonlama...");
+         await aptos.fundAccount({
+           accountAddress: alice.accountAddress,
+           amount: 100_000_000, // 1 APT (APT'nin 8 ondalık basamağı vardır)
+         });
+
+         console.log("Alice fonlandı!");
+         ```
+
+         <Aside type="note">
+           Faucet, test ağlarında ücretsiz test token'ları sağlayan bir hizmettir. Gerçek APT değil, yalnızca test için kullanılır.
+         </Aside>
+    </Steps>
+  </TabItem>
+
+  <TabItem label="Python">
+    Blok zincirinde, tüm işlemler bir hesaptan gelmelidir. İki test hesabı oluşturalım: coin göndermek için bir tane (Alice) ve almak için bir tane (Bob).
+
+    <Steps>
+      1. İstemciyi kurma
+
+         İlk olarak, blok zincirine bağlanacak Aptos istemcisini başlatmamız gerekir. `transaction.py` dosyasını editörünüzde açın ve ekleyin:
+
+         ```python filename="transaction.py"
+         import asyncio
+         from aptos_sdk.async_client import RestClient
+         from aptos_sdk.account import Account
+         from aptos_sdk.bcs import Serializer
+
+         async def main():
+             # Aptos istemcisini başlat
+             client = RestClient("https://fullnode.devnet.aptoslabs.com/v1")
+             
+             print("Aptos devnet'e bağlandı")
+
+         if __name__ == "__main__":
+             asyncio.run(main())
+         ```
+
+         <Aside type="note">
+           Bu kod devnet'e bağlanır - Aptos'un test ağı. Bu, gerçek para harcamadan deneyim yapmanıza olanak tanır.
+         </Aside>
+
+      2. Hesapları oluşturma
+
+         Şimdi Alice ve Bob hesaplarını ekleyin:
+
+         ```python filename="transaction.py"
+         # Alice ve Bob hesaplarını oluştur
+         alice = Account.generate()
+         bob = Account.generate()
+
+         print(f"Alice adresi: {alice.address()}")
+         print(f"Bob adresi: {bob.address()}")
+         ```
+
+         <Aside type="note">
+           Bir hesap oluşturmak, özel anahtar/genel anahtar çifti oluşturmak anlamına gelir. Özel anahtar, işlemleri imzalamak için kullanılır, genel anahtar (ve türetilen adres) ise hesabı tanımlamak için kullanılır.
+         </Aside>
+
+      3. Hesapları fonlama
+
+         Test için Alice hesabını devnet faucet'den fonlayalım:
+
+         ```python filename="transaction.py"
+         # Alice'i faucet ile fonla
+         print("Alice'i fonlama...")
+         await client.fund_account(alice.address(), 100_000_000)  # 1 APT
+
+         print("Alice fonlandı!")
+         ```
+
+         <Aside type="note">
+           Faucet, test ağlarında ücretsiz test token'ları sağlayan bir hizmettir. Gerçek APT değil, yalnızca test için kullanılır.
+         </Aside>
+    </Steps>
+  </TabItem>
+</Tabs>
+
+## 3. İşlem Oluşturma
+
+<Tabs>
+  <TabItem label="TypeScript">
+    Artık fonlanmış hesaplarımız olduğuna göre, Alice'den Bob'a coin transfer etmek için bir işlem oluşturalım. Bu, ne göndermek istediğinizi ve kime göndereceğinizi belirten bir form doldurmak gibidir.
+
+    <Steps>
+      1. İşlem yapısını anlama
+
+         Aptos'ta bir işlem birkaç temel bileşene sahiptir:
+
+         1. **Gönderen**: İşlemi başlatan hesap (Alice)
+         2. **Fonksiyon**: Çağrılacak zincir üstü fonksiyon (bu durumda coin transfer)
+         3. **Argümanlar**: Fonksiyon tarafından ihtiyaç duyulan veri (alıcı adresi ve miktar)
+         4. **Gas parametreleri**: Maksimum gas miktarı ve gas birim fiyatı
+         5. **Son kullanma zamanı**: İşlemin yürütülmezse artık geçerli olmayacağı zaman
+         6. **Sıra numarası**: Tekrar saldırılarını önleyen bir sayaç
+
+         <Aside type="note">
+           Aptos işlemlerindeki tüm veriler, blok zinciri kullanımı için tasarlanmış kompakt ve deterministik bir format olan Binary Canonical Serialization (BCS) kullanılarak serileştirilir. SDK bu serileştirmeyi sizin için halleder.
+
+           BCS, işlem verilerinin farklı platformlar ve diller arasında tutarlı bir şekilde kodlanmasını sağlar, bu da aynı işlemin farklı implementasyonlar çalıştıran düğümler tarafından işlenebileceği bir blok zinciri için kritiktir.
+         </Aside>
+
+      2. İşlemi oluşturma
+
+         Alice'den Bob'a 1000 octa transfer eden bir işlem oluşturmak için kod ekleyelim:
+
+         ```typescript filename="transaction.ts"
+         // Alice'den Bob'a transfer işlemi oluştur
+         const transaction = await aptos.transaction.build.simple({
+           sender: alice.accountAddress,
+           data: {
+             function: "0x1::aptos_account::transfer",
+             functionArguments: [bob.accountAddress, 1000],
+           },
+         });
+
+         console.log("İşlem oluşturuldu");
+         ```
+
+         <Aside type="note">
+           "0x1::aptos\_account::transfer" standart bir Aptos fonksiyonudur. "0x1" core framework'ün adresidir, "aptos\_account" modül adıdır ve "transfer" fonksiyon adıdır.
+         </Aside>
+    </Steps>
+  </TabItem>
+
+  <TabItem label="Python">
+    Artık fonlanmış hesaplarımız olduğuna göre, Alice'den Bob'a coin transfer etmek için bir işlem oluşturalım. Bu, ne göndermek istediğinizi ve kime göndereceğinizi belirten bir form doldurmak gibidir.
+
+    <Steps>
+      1. İşlem yapısını anlama
+
+         Aptos'ta bir işlem birkaç temel bileşene sahiptir:
+
+         1. **Gönderen**: İşlemi başlatan hesap (Alice)
+         2. **Fonksiyon**: Çağrılacak zincir üstü fonksiyon (bu durumda coin transfer)
+         3. **Argümanlar**: Fonksiyon tarafından ihtiyaç duyulan veri (alıcı adresi ve miktar)
+         4. **Gas parametreleri**: Maksimum gas miktarı ve gas birim fiyatı
+         5. **Son kullanma zamanı**: İşlemin yürütülmezse artık geçerli olmayacağı zaman
+         6. **Sıra numarası**: Tekrar saldırılarını önleyen bir sayaç
+
+         <Aside type="note">
+           Aptos işlemlerindeki tüm veriler, blok zinciri kullanımı için tasarlanmış kompakt ve deterministik bir format olan Binary Canonical Serialization (BCS) kullanılarak serileştirilir. SDK bu serileştirmeyi sizin için halleder.
+
+           BCS, işlem verilerinin farklı platformlar ve diller arasında tutarlı bir şekilde kodlanmasını sağlar, bu da aynı işlemin farklı implementasyonlar çalıştıran düğümler tarafından işlenebileceği bir blok zinciri için kritiktir.
+         </Aside>
+
+      2. İşlemi oluşturma
+
+         `main()` fonksiyonunuza Alice'den Bob'a 1000 octa transfer eden bir işlem oluşturmak için aşağıdaki kodu ekleyin:
+
+         ```python filename="transaction.py"
+         from aptos_sdk.transactions import EntryFunction, TransactionArgument
+
+         # Alice'den Bob'a transfer işlemi oluştur
+         payload = EntryFunction.natural(
+             "0x1::aptos_account",
+             "transfer",
+             [],
+             [TransactionArgument(bob.address(), Serializer.struct),
+              TransactionArgument(1000, Serializer.u64)]
+         )
+
+         print("İşlem oluşturuldu")
+         ```
+
+         <Aside type="note">
+           "0x1::aptos\_account::transfer" standart bir Aptos fonksiyonudur. "0x1" core framework'ün adresidir, "aptos\_account" modül adıdır ve "transfer" fonksiyon adıdır.
+         </Aside>
+    </Steps>
+  </TabItem>
+</Tabs>
+
+## 4. İşlemi Simüle Etme
+
+İşlemi göndermeden önce, gas maliyetlerini tahmin etmek ve herhangi bir hata olup olmadığını kontrol etmek için simüle edelim.
+
+<Tabs>
+  <TabItem label="TypeScript">
+    ```typescript filename="transaction.ts"
+    // İşlemi simüle et
+    const [simulateResult] = await aptos.transaction.simulate.simple({
+      signerPublicKey: alice.publicKey,
+      transaction,
+    });
+
+    console.log("Simülasyon sonucu:", simulateResult);
+    console.log("Gas kullanımı:", simulateResult.gas_used);
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    ```python filename="transaction.py"
+    # İşlemi simüle et
+    simulated_result = await client.simulate_transaction(alice, payload)
+
+    print(f"Simülasyon sonucu: {simulated_result}")
+    print(f"Gas kullanımı: {simulated_result[0]['gas_used']}")
+    ```
+  </TabItem>
+</Tabs>
+
+## 5. İşlemi İmzalama ve Gönderme
+
+<Tabs>
+  <TabItem label="TypeScript">
+    ```typescript filename="transaction.ts"
+    // İşlemi imzala ve gönder
+    const committedTransaction = await aptos.transaction.signAndSubmitTransaction({
+      signer: alice,
+      transaction,
+    });
+
+    console.log("İşlem gönderildi:", committedTransaction.hash);
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    ```python filename="transaction.py"
+    # İşlemi imzala ve gönder
+    signed_transaction = alice.sign_transaction(payload)
+    submitted_transaction = await client.submit_transaction(signed_transaction)
+
+    print(f"İşlem gönderildi: {submitted_transaction}")
+    ```
+  </TabItem>
+</Tabs>
+
+## 6. İşlemi Doğrulama
+
+<Tabs>
+  <TabItem label="TypeScript">
+    ```typescript filename="transaction.ts"
+    // İşlemin tamamlanmasını bekle
+    await aptos.waitForTransaction({ transactionHash: committedTransaction.hash });
+
+    console.log("İşlem başarıyla tamamlandı!");
+
+    // Bakiyeleri kontrol et
+    const aliceBalance = await aptos.getAccountAPTAmount({
+      accountAddress: alice.accountAddress,
+    });
+    const bobBalance = await aptos.getAccountAPTAmount({
+      accountAddress: bob.accountAddress,
+    });
+
+    console.log("Alice bakiyesi:", aliceBalance);
+    console.log("Bob bakiyesi:", bobBalance);
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    ```python filename="transaction.py"
+    # İşlemin tamamlanmasını bekle
+    await client.wait_for_transaction(submitted_transaction)
+
+    print("İşlem başarıyla tamamlandı!")
+
+    # Bakiyeleri kontrol et
+    alice_balance = await client.account_balance(alice.address())
+    bob_balance = await client.account_balance(bob.address())
+
+    print(f"Alice bakiyesi: {alice_balance}")
+    print(f"Bob bakiyesi: {bob_balance}")
+    ```
+  </TabItem>
+</Tabs>
+
+## Sırada Ne Var?
+
+Tebrikler! İlk Aptos işleminizi başarıyla oluşturdunuz, gönderdiniz ve doğruladınız. İşte öğrenebileceğiniz daha fazla şey:
+
+**Daha karmaşık işlemler hakkında öğrenin**:
+
+- [Çok Aracılı İmzalar](/tr/build/sdks/ts-sdk/building-transactions/multi-agent-transactions) - Birden fazla imzalayan gerektiren işlemler
+- [İşlemleri Sponsorlama](/tr/build/sdks/ts-sdk/building-transactions/sponsoring-transactions) - Başka bir hesabın gas ücretlerini ödemesi
+- [İşlemleri Toplu Halde Gönderme](/tr/build/sdks/ts-sdk/building-transactions/batching-transactions) - Birden fazla işlemi verimli bir şekilde gönderme
+
+<Aside type="note">
+  Yukarıdaki bağlantılar TypeScript SDK içindir ancak Python veya Rust kullanıyorsanız prensipler aynıdır.
+</Aside>
+
+**Akıllı sözleşmeleri veya hesap temellerini keşfedin**:
+
+- [İlk Move Modülünüz](/tr/build/guides/first-move-module) - Kendi akıllı sözleşmenizi oluşturun
+- [Hesap Temelleri](/tr/network/blockchain/accounts)
+
+[Aptos Discord'una katılın](https://discord.gg/aptoslabs) ve ne inşa ettiğinizi paylaşın!
+
+## Tam Kod Örneği
+
+Bu öğreticide ele aldığımız tüm kod parçacıklarını birleştiren tam kod örnekleri aşağıda:
+
+<Tabs>
+  <TabItem label="TypeScript">
+    ```typescript filename="transaction.ts"
+    import {
+      Account,
+      Aptos,
+      AptosConfig,
+      Network,
+    } from "@aptos-labs/ts-sdk";
+
+    async function main() {
+      // Aptos istemcisini başlat
+      const config = new AptosConfig({ network: Network.DEVNET });
+      const aptos = new Aptos(config);
+
+      console.log("Aptos devnet'e bağlandı");
+
+      // Alice ve Bob hesaplarını oluştur
+      const alice = Account.generate();
+      const bob = Account.generate();
+
+      console.log("Alice adresi:", alice.accountAddress.toString());
+      console.log("Bob adresi:", bob.accountAddress.toString());
+
+      // Alice'i faucet ile fonla
+      console.log("Alice'i fonlama...");
+      await aptos.fundAccount({
+        accountAddress: alice.accountAddress,
+        amount: 100_000_000, // 1 APT
+      });
+
+      console.log("Alice fonlandı!");
+
+      // Alice'den Bob'a transfer işlemi oluştur
+      const transaction = await aptos.transaction.build.simple({
+        sender: alice.accountAddress,
+        data: {
+          function: "0x1::aptos_account::transfer",
+          functionArguments: [bob.accountAddress, 1000],
+        },
+      });
+
+      console.log("İşlem oluşturuldu");
+
+      // İşlemi simüle et
+      const [simulateResult] = await aptos.transaction.simulate.simple({
+        signerPublicKey: alice.publicKey,
+        transaction,
+      });
+
+      console.log("Gas kullanımı:", simulateResult.gas_used);
+
+      // İşlemi imzala ve gönder
+      const committedTransaction = await aptos.transaction.signAndSubmitTransaction({
+        signer: alice,
+        transaction,
+      });
+
+      console.log("İşlem gönderildi:", committedTransaction.hash);
+
+      // İşlemin tamamlanmasını bekle
+      await aptos.waitForTransaction({ transactionHash: committedTransaction.hash });
+      
+      console.log("İşlem başarıyla tamamlandı!");
+      
+      // Bakiyeleri kontrol et
+      const aliceBalance = await aptos.getAccountAPTAmount({
+        accountAddress: alice.accountAddress,
+      });
+      const bobBalance = await aptos.getAccountAPTAmount({
+        accountAddress: bob.accountAddress,
+      });
+      
+      console.log("Alice bakiyesi:", aliceBalance);
+      console.log("Bob bakiyesi:", bobBalance);
+    }
+
+    main();
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    ```python filename="transaction.py"
+    import asyncio
+    from aptos_sdk.async_client import RestClient
+    from aptos_sdk.account import Account
+    from aptos_sdk.bcs import Serializer
+    from aptos_sdk.transactions import EntryFunction, TransactionArgument
+
+    async def main():
+        # Aptos istemcisini başlat
+        client = RestClient("https://fullnode.devnet.aptoslabs.com/v1")
+        
+        print("Aptos devnet'e bağlandı")
+
+        # Alice ve Bob hesaplarını oluştur
+        alice = Account.generate()
+        bob = Account.generate()
+
+        print(f"Alice adresi: {alice.address()}")
+        print(f"Bob adresi: {bob.address()}")
+
+        # Alice'i faucet ile fonla
+        print("Alice'i fonlama...")
+        await client.fund_account(alice.address(), 100_000_000)  # 1 APT
+        
+        print("Alice fonlandı!")
+
+        # Alice'den Bob'a transfer işlemi oluştur
+        payload = EntryFunction.natural(
+            "0x1::aptos_account",
+            "transfer",
+            [],
+            [TransactionArgument(bob.address(), Serializer.struct),
+             TransactionArgument(1000, Serializer.u64)]
+        )
+
+        print("İşlem oluşturuldu")
+
+        # İşlemi simüle et
+        simulated_result = await client.simulate_transaction(alice, payload)
+        
+        print(f"Gas kullanımı: {simulated_result[0]['gas_used']}")
+
+        # İşlemi imzala ve gönder
+        signed_transaction = alice.sign_transaction(payload)
+        submitted_transaction = await client.submit_transaction(signed_transaction)
+        
+        print(f"İşlem gönderildi: {submitted_transaction}")
+
+        # İşlemin tamamlanmasını bekle
+        await client.wait_for_transaction(submitted_transaction)
+        
+        print("İşlem başarıyla tamamlandı!")
+        
+        # Bakiyeleri kontrol et
+        alice_balance = await client.account_balance(alice.address())
+        bob_balance = await client.account_balance(bob.address())
+        
+        print(f"Alice bakiyesi: {alice_balance}")
+        print(f"Bob bakiyesi: {bob_balance}")
+
+    if __name__ == "__main__":
+        asyncio.run(main())
+    ```
+  </TabItem>
+</Tabs>

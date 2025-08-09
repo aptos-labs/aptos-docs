@@ -1,0 +1,84 @@
+---
+id: "accounts"
+title: "Tài khoản"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Một tài khoản trên blockchain Aptos đại diện cho việc kiểm soát truy cập vào một tập hợp tài sản bao gồm tiền tệ trên chuỗi và NFT. Trong Aptos, những tài sản này được đại diện bởi một kiểu dữ liệu nguyên thủy của ngôn ngữ Move được gọi là **resource** nhấn mạnh cả việc kiểm soát truy cập và tính khan hiếm.
+
+Mỗi tài khoản trên blockchain Aptos được xác định bởi một địa chỉ tài khoản 32-byte. Bạn có thể sử dụng Aptos Name Service tại [www.aptosnames.com](https://www.aptosnames.com/) để bảo mật tên miền .apt cho các tài khoản chính để làm cho chúng dễ nhớ và độc đáo.
+
+Khác với các blockchain khác nơi tài khoản và địa chỉ là ngầm định, tài khoản trên Aptos là rõ ràng và cần được tạo trước khi chúng có thể thực hiện giao dịch. Tài khoản có thể được tạo một cách rõ ràng hoặc ngầm định bằng cách chuyển token Aptos (APT) đến đó. Xem phần [Tạo tài khoản](#creating-an-account) để biết thêm chi tiết. Theo một cách nào đó, điều này tương tự như các chuỗi khác nơi một địa chỉ cần được gửi tiền cho gas trước khi nó có thể gửi giao dịch.
+
+Tài khoản rõ ràng cho phép các tính năng hạng nhất không có sẵn trên các mạng khác như:
+
+- Xoay khóa xác thực. Khóa xác thực của tài khoản có thể được thay đổi để được kiểm soát thông qua một khóa riêng khác. Điều này tương tự như việc thay đổi mật khẩu trong thế giới web2.
+- Hỗ trợ multisig bản địa. Tài khoản trên Aptos hỗ trợ multisig k-of-n sử dụng cả hai sơ đồ chữ ký Ed25519 và Secp256k1 ECDSA khi xây dựng khóa xác thực.
+
+Có ba loại tài khoản trên Aptos:
+
+- _Tài khoản tiêu chuẩn_ - Đây là một tài khoản điển hình tương ứng với một địa chỉ với một cặp khóa công khai/riêng tư tương ứng.
+- [_Tài khoản tài nguyên_](/build/smart-contracts/resource-accounts) - Một tài khoản tự trị không có khóa riêng tương ứng được các nhà phát triển sử dụng để lưu trữ tài nguyên hoặc xuất bản module trên chuỗi.
+- [_Đối tượng_](/build/smart-contracts/objects) - Một tập hợp phức tạp các tài nguyên được lưu trữ trong một địa chỉ duy nhất đại diện cho một thực thể duy nhất.
+
+<Aside type="note">
+  Địa chỉ tài khoản là 32-byte. Chúng thường được hiển thị dưới dạng 64 ký tự hex, với mỗi ký tự hex là một nibble.
+  Đôi khi địa chỉ được đặt tiền tố với 0x. Xem [Giao dịch đầu tiên của bạn](/build/guides/first-transaction) để xem ví dụ
+  về cách một địa chỉ xuất hiện, được tái tạo bên dưới:
+</Aside>
+
+```text
+Alice: 0xeeff357ea5c1a4e7bc11b2b17ff2dc2dcca69750bfef1e1ebcaccf8c8018175b
+Bob: 0x19aadeca9388e009d136245b9a67423f3eee242b03142849eb4f81a4a409e59c
+```
+
+## Địa chỉ tài khoản
+
+Hiện tại, Aptos chỉ hỗ trợ một định danh thống nhất duy nhất cho một tài khoản. Tài khoản trên Aptos được đại diện phổ quát dưới dạng chuỗi hex 32-byte. Một chuỗi hex ngắn hơn 32-byte cũng hợp lệ; trong những trường hợp đó, chuỗi hex có thể được đệm với các số không đứng đầu, ví dụ: `0x1` => `0x0000000000000...01`. Trong khi các tiêu chuẩn Aptos chỉ ra rằng các số không đứng đầu có thể được loại bỏ khỏi một Địa chỉ, hầu hết các ứng dụng cố gắng tránh hành vi kế thừa đó và chỉ hỗ trợ việc loại bỏ số 0 cho các địa chỉ đặc biệt từ `0x0` đến `0xa`.
+
+## Tạo tài khoản
+
+Khi người dùng yêu cầu tạo tài khoản, ví dụ bằng cách sử dụng [Aptos SDK](/build/sdks/ts-sdk/account), các bước sau được thực hiện:
+
+- Chọn sơ đồ xác thực để quản lý tài khoản của người dùng, ví dụ: Ed25519 hoặc Secp256k1 ECDSA.
+- Tạo một cặp khóa riêng, khóa công khai mới.
+- Kết hợp khóa công khai với sơ đồ xác thực của khóa công khai để tạo khóa xác thực 32-byte và địa chỉ tài khoản.
+
+Người dùng nên sử dụng khóa riêng để ký các giao dịch liên quan đến tài khoản này.
+
+## Số thứ tự tài khoản
+
+Số thứ tự cho một tài khoản cho biết số lượng giao dịch đã được gửi và cam kết trên chuỗi từ tài khoản đó. Các giao dịch được cam kết hoặc thực thi với các thay đổi trạng thái kết quả được cam kết vào blockchain hoặc hủy bỏ trong đó các thay đổi trạng thái bị loại bỏ và chỉ giao dịch được lưu trữ.
+
+Mỗi giao dịch được gửi phải chứa một số thứ tự duy nhất cho tài khoản của người gửi nhất định. Khi blockchain Aptos xử lý giao dịch, nó xem xét số thứ tự trong giao dịch và so sánh nó với số thứ tự trong tài khoản trên chuỗi. Giao dịch chỉ được xử lý nếu số thứ tự bằng hoặc lớn hơn số thứ tự hiện tại. Các giao dịch chỉ được chuyển tiếp đến các mempool khác hoặc được thực thi nếu có một chuỗi giao dịch liên tục từ số thứ tự hiện tại. Việc thực thi từ chối các số thứ tự không theo thứ tự ngăn chặn các cuộc tấn công replay của các giao dịch cũ hơn và đảm bảo thứ tự của các giao dịch tương lai.
+
+## Khóa xác thực
+
+Địa chỉ tài khoản ban đầu được đặt thành khóa xác thực được tạo ra trong quá trình tạo tài khoản. Tuy nhiên, khóa xác thực có thể thay đổi sau đó, ví dụ như khi bạn tạo ra một cặp khóa công khai-riêng tư mới, khóa công khai để xoay các khóa. Địa chỉ tài khoản không bao giờ thay đổi.
+
+Blockchain Aptos hỗ trợ các sơ đồ xác thực sau:
+
+1. [Ed25519](https://ed25519.cr.yp.to/)
+2. [Secp256k1 ECDSA](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-49.md)
+3. [Chữ ký đa K-of-N](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-55.md)
+4. Một sơ đồ MultiEd25519 chuyên dụng, hiện đã lỗi thời
+
+<Aside type="note">
+  Blockchain Aptos mặc định sử dụng giao dịch chữ ký Ed25519.
+</Aside>
+
+### Xác thực Ed25519
+
+Để tạo khóa xác thực và địa chỉ tài khoản cho chữ ký Ed25519:
+
+1. **Tạo cặp khóa**: Tạo một cặp khóa mới (`privkey_A`, `pubkey_A`). Blockchain Aptos sử dụng sơ đồ PureEdDSA trên đường cong Ed25519, như được định nghĩa trong RFC 8032.
+2. **Tạo khóa xác thực 32-byte**: Tạo khóa xác thực 32-byte từ `pubkey_A`:
+   ```text
+   auth_key = sha3-256(pubkey_A | 0x00)
+   ```
+   trong đó `|` biểu thị phép nối. `0x00` là định danh sơ đồ chữ ký đơn 1-byte.
+3. **Tạo địa chỉ tài khoản**: Địa chỉ tài khoản ban đầu được đặt thành khóa xác thực:
+   ```text
+   account_address = auth_key
+   ```

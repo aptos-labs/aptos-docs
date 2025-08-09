@@ -1,0 +1,451 @@
+---
+title: "معاملتك الأولى"
+---
+
+import { Aside, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
+
+المعاملات هي الطريقة الأساسية لتغيير البيانات على بلوك تشين أبتوس. فكر فيها مثل إرسال طرد: تحتاج إلى تحديد ما ترسله، إلى من يذهب، ثم تتبعه حتى يتم تأكيد التسليم. في مصطلحات البلوك تشين، تسمح لك المعاملات بنقل العملات، واستدعاء دوال العقود الذكية، وتحديث الحالة على السلسلة.
+
+سيرشدك هذا البرنامج التعليمي خلال إنشاء وإرسال معاملتك الأولى على بلوك تشين أبتوس. ستتعلم كيفية:
+
+1. إعداد بيئة التطوير الخاصة بك
+2. إنشاء حسابات تجريبية وتمويلها
+3. بناء معاملة لنقل العملات
+4. محاكاة المعاملة لتقدير التكاليف
+5. توقيع وإرسال المعاملة
+6. التحقق من تنفيذ المعاملة بنجاح
+
+<Aside type="note">
+  يبني هذا البرنامج التعليمي على مفاهيم من بلوك تشين أبتوس. إذا كنت جديداً على تطوير البلوك تشين، لا تقلق - سنشرح المفاهيم الرئيسية على طول الطريق.
+
+  يمكنك الانتقال إلى نموذج الكود الكامل [هنا](#نموذج-الكود-الكامل) أو متابعة القراءة للحصول على شرح خطوة بخطوة.
+</Aside>
+
+## 1. إعداد بيئتك
+
+<Tabs>
+  <TabItem label="TypeScript">
+    قبل أن نتمكن من إنشاء المعاملات، نحتاج إلى إعداد بيئة التطوير بالأدوات ومجموعات التطوير اللازمة.
+
+    <Steps>
+      1. تثبيت مجموعة تطوير TypeScript
+
+         ثبت مجموعة تطوير TypeScript باستخدام مدير الحزم المفضل لديك:
+
+         <Tabs>
+           <TabItem label="npm">
+             ```shellscript filename="الطرفية"
+             npm install @aptos-labs/ts-sdk
+             ```
+           </TabItem>
+
+           <TabItem label="yarn">
+             ```shellscript filename="الطرفية"
+             yarn add @aptos-labs/ts-sdk
+             ```
+           </TabItem>
+
+           <TabItem label="pnpm">
+             ```shellscript filename="الطرفية"
+             pnpm add @aptos-labs/ts-sdk
+             ```
+           </TabItem>
+         </Tabs>
+
+      2. إنشاء دليل المشروع
+
+         أنشئ دليل جديد لمشروعك:
+
+         ```shellscript filename="الطرفية"
+         mkdir my-first-transaction
+         cd my-first-transaction
+         ```
+
+      3. إنشاء ملف جديد
+
+         أنشئ ملف جديد باسم `transaction.ts`:
+
+         ```shellscript filename="الطرفية"
+         touch transaction.ts
+         ```
+    </Steps>
+  </TabItem>
+
+  <TabItem label="Python">
+    قبل أن نتمكن من إنشاء المعاملات، نحتاج إلى إعداد بيئة التطوير بالأدوات ومجموعات التطوير اللازمة.
+
+    <Steps>
+      1. تثبيت مجموعة تطوير Python
+
+         ثبت مجموعة تطوير Python باستخدام pip:
+
+         ```shellscript filename="الطرفية"
+         pip install aptos-sdk
+         ```
+
+      2. إنشاء دليل المشروع
+
+         أنشئ دليل جديد لمشروعك:
+
+         ```shellscript filename="الطرفية"
+         mkdir my-first-transaction
+         cd my-first-transaction
+         ```
+
+      3. إنشاء ملف جديد
+
+         أنشئ ملف جديد باسم `transaction.py`:
+
+         ```shellscript filename="الطرفية"
+         touch transaction.py
+         ```
+    </Steps>
+  </TabItem>
+</Tabs>
+
+## 2. استيراد الوحدات الضرورية
+
+لنبدأ بأول باستيراد الوحدات المطلوبة للتعامل مع المعاملات.
+
+<Tabs>
+  <TabItem label="TypeScript">
+    ```typescript filename="transaction.ts"
+    import {
+      Account,
+      Aptos,
+      AptosConfig,
+      Network,
+    } from "@aptos-labs/ts-sdk";
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    ```python filename="transaction.py"
+    from aptos_sdk.account import Account
+    from aptos_sdk.client import RestClient
+    from aptos_sdk.transactions import EntryFunction, TransactionArgument, TransactionPayload
+    from aptos_sdk.type_tag import TypeTag, StructTag
+    ```
+  </TabItem>
+</Tabs>
+
+## 3. تهيئة عميل أبتوس
+
+أنشئ عميل يتصل بشبكة أبتوس التجريبية.
+
+<Tabs>
+  <TabItem label="TypeScript">
+    ```typescript filename="transaction.ts"
+    const config = new AptosConfig({ network: Network.TESTNET });
+    const aptos = new Aptos(config);
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    ```python filename="transaction.py"
+    NODE_URL = "https://fullnode.testnet.aptoslabs.com/v1"
+    client = RestClient(NODE_URL)
+    ```
+  </TabItem>
+</Tabs>
+
+## 4. إنشاء حسابات
+
+لننشئ حسابين: Alice (المرسل) و Bob (المستقبل).
+
+<Tabs>
+  <TabItem label="TypeScript">
+    ```typescript filename="transaction.ts"
+    async function createAccounts() {
+      // إنشاء حسابين
+      const alice = Account.generate();
+      const bob = Account.generate();
+      
+      console.log("عنوان Alice:", alice.accountAddress.toString());
+      console.log("عنوان Bob:", bob.accountAddress.toString());
+      
+      return { alice, bob };
+    }
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    ```python filename="transaction.py"
+    def create_accounts():
+        # إنشاء حسابين
+        alice = Account.generate()
+        bob = Account.generate()
+        
+        print(f"عنوان Alice: {alice.address()}")
+        print(f"عنوان Bob: {bob.address()}")
+        
+        return alice, bob
+    ```
+  </TabItem>
+</Tabs>
+
+## 5. تمويل الحسابات
+
+قبل إرسال المعاملات، نحتاج إلى تمويل حساب Alice ببعض APT الشبكة التجريبية.
+
+<Tabs>
+  <TabItem label="TypeScript">
+    ```typescript filename="transaction.ts"
+    async function fundAccounts(alice: Account, bob: Account) {
+      // تمويل Alice
+      await aptos.fundAccount({
+        accountAddress: alice.accountAddress,
+        amount: 100_000_000, // 1 APT (APT له 8 خانات عشرية)
+      });
+      
+      console.log("تم تمويل Alice");
+    }
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    ```python filename="transaction.py"
+    async def fund_accounts(alice, bob):
+        # تمويل Alice
+        await client.fund_account(alice.address(), 100_000_000)  # 1 APT
+        print("تم تمويل Alice")
+    ```
+  </TabItem>
+</Tabs>
+
+## 6. إنشاء وإرسال المعاملة
+
+الآن لننشئ معاملة لنقل APT من Alice إلى Bob.
+
+<Tabs>
+  <TabItem label="TypeScript">
+    ```typescript filename="transaction.ts"
+    async function transferCoins(alice: Account, bob: Account) {
+      const transaction = await aptos.transaction.build.simple({
+        sender: alice.accountAddress,
+        data: {
+          function: "0x1::coin::transfer",
+          typeArguments: ["0x1::aptos_coin::AptosCoin"],
+          functionArguments: [bob.accountAddress, 1_000_000], // 0.01 APT
+        },
+      });
+      
+      // محاكاة المعاملة للتحقق من رسوم الوقود
+      const simulation = await aptos.transaction.simulate.simple({
+        signerPublicKey: alice.publicKey,
+        transaction,
+      });
+      
+      console.log("نتيجة المحاكاة:", simulation);
+      
+      // توقيع وإرسال المعاملة
+      const committedTransaction = await aptos.signAndSubmitTransaction({
+        signer: alice,
+        transaction,
+      });
+      
+      console.log("تم إرسال المعاملة:", committedTransaction.hash);
+      
+      // انتظار اكتمال المعاملة
+      await aptos.waitForTransaction({ transactionHash: committedTransaction.hash });
+      
+      console.log("تمت المعاملة!");
+      
+      return committedTransaction.hash;
+    }
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    ```python filename="transaction.py"
+    async def transfer_coins(alice, bob):
+        # بناء المعاملة
+        payload = EntryFunction.natural(
+            "0x1::coin",
+            "transfer",
+            [TypeTag(StructTag.from_str("0x1::aptos_coin::AptosCoin"))],
+            [
+                TransactionArgument(bob.address(), "address"),
+                TransactionArgument(1_000_000, "u64"),  # 0.01 APT
+            ],
+        )
+        
+        # إنشاء وإرسال المعاملة
+        signed_transaction = await client.create_bcs_signed_transaction(
+            alice, TransactionPayload(payload)
+        )
+        
+        result = await client.submit_bcs_transaction(signed_transaction)
+        
+        print(f"تم إرسال المعاملة: {result}")
+        
+        # انتظار اكتمال المعاملة
+        await client.wait_for_transaction(result)
+        
+        print("تمت المعاملة!")
+        
+        return result
+    ```
+  </TabItem>
+</Tabs>
+
+## نموذج الكود الكامل
+
+<Tabs>
+  <TabItem label="TypeScript">
+    ```typescript filename="transaction.ts"
+    import {
+      Account,
+      Aptos,
+      AptosConfig,
+      Network,
+    } from "@aptos-labs/ts-sdk";
+
+    const config = new AptosConfig({ network: Network.TESTNET });
+    const aptos = new Aptos(config);
+
+    async function main() {
+      console.log("بدء عرض المعاملة الأولى...");
+      
+      // 1. إنشاء حسابات
+      const alice = Account.generate();
+      const bob = Account.generate();
+      
+      console.log("عنوان Alice:", alice.accountAddress.toString());
+      console.log("عنوان Bob:", bob.accountAddress.toString());
+      
+      // 2. تمويل Alice
+      await aptos.fundAccount({
+        accountAddress: alice.accountAddress,
+        amount: 100_000_000, // 1 APT
+      });
+      
+      console.log("تم تمويل Alice");
+      
+      // 3. التحقق من الأرصدة الأولية
+      console.log("\n--- الأرصدة الأولية ---");
+      await checkBalances(alice, bob);
+      
+      // 4. نقل العملات
+      console.log("\n--- نقل العملات ---");
+      const txnHash = await transferCoins(alice, bob);
+      
+      // 5. التحقق من الأرصدة النهائية
+      console.log("\n--- الأرصدة النهائية ---");
+      await checkBalances(alice, bob);
+      
+      console.log(`\n✅ نجحت المعاملة! المعرف: ${txnHash}`);
+    }
+
+    async function transferCoins(alice: Account, bob: Account) {
+      const transaction = await aptos.transaction.build.simple({
+        sender: alice.accountAddress,
+        data: {
+          function: "0x1::coin::transfer",
+          typeArguments: ["0x1::aptos_coin::AptosCoin"],
+          functionArguments: [bob.accountAddress, 1_000_000], // 0.01 APT
+        },
+      });
+      
+      const committedTransaction = await aptos.signAndSubmitTransaction({
+        signer: alice,
+        transaction,
+      });
+      
+      await aptos.waitForTransaction({ transactionHash: committedTransaction.hash });
+      
+      return committedTransaction.hash;
+    }
+
+    async function checkBalances(alice: Account, bob: Account) {
+      const aliceBalance = await aptos.getAccountAPTAmount({
+        accountAddress: alice.accountAddress,
+      });
+      
+      const bobBalance = await aptos.getAccountAPTAmount({
+        accountAddress: bob.accountAddress,
+      });
+      
+      console.log(`رصيد Alice: ${aliceBalance} Octas`);
+      console.log(`رصيد Bob: ${bobBalance} Octas`);
+    }
+
+    // تشغيل الدالة الرئيسية
+    main().catch(console.error);
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    ```python filename="transaction.py"
+    import asyncio
+    from aptos_sdk.account import Account
+    from aptos_sdk.async_client import RestClient
+
+    NODE_URL = "https://fullnode.testnet.aptoslabs.com/v1"
+
+    async def main():
+        print("بدء عرض المعاملة الأولى...")
+        
+        client = RestClient(NODE_URL)
+        
+        # 1. إنشاء حسابات
+        alice = Account.generate()
+        bob = Account.generate()
+        
+        print(f"عنوان Alice: {alice.address()}")
+        print(f"عنوان Bob: {bob.address()}")
+        
+        # 2. تمويل Alice
+        await client.fund_account(alice.address(), 100_000_000)  # 1 APT
+        print("تم تمويل Alice")
+        
+        # 3. التحقق من الأرصدة الأولية
+        print("\n--- الأرصدة الأولية ---")
+        await check_balances(client, alice, bob)
+        
+        # 4. نقل العملات
+        print("\n--- نقل العملات ---")
+        txn_hash = await transfer_coins(client, alice, bob)
+        
+        # 5. التحقق من الأرصدة النهائية
+        print("\n--- الأرصدة النهائية ---")
+        await check_balances(client, alice, bob)
+        
+        print(f"\n✅ نجحت المعاملة! المعرف: {txn_hash}")
+
+    async def check_balances(client, alice, bob):
+        alice_balance = await client.account_balance(alice.address())
+        bob_balance = await client.account_balance(bob.address())
+        
+        print(f"رصيد Alice: {alice_balance} Octas")
+        print(f"رصيد Bob: {bob_balance} Octas")
+
+    # تشغيل الدالة الرئيسية
+    if __name__ == "__main__":
+        asyncio.run(main())
+    ```
+  </TabItem>
+</Tabs>
+
+## الخطوات التالية
+
+تهانينا! لقد نجحت في إنشاء وإرسال معاملتك الأولى على بلوك تشين أبتوس. تعلمت كيفية:
+
+- إعداد بيئة التطوير
+- إنشاء الحسابات وتمويلها
+- بناء وتوقيع وإرسال المعاملات
+- التحقق من نتائج المعاملة
+
+### استمر في التعلم
+
+- [وحدة Move الأولى الخاصة بك](/ar/build/guides/first-move-module) - تعلم كيفية كتابة العقود الذكية
+- [بناء تطبيق لامركزي شامل](/ar/build/guides/build-e2e-dapp) - إنشاء تطبيق لامركزي كامل
+- [وثائق مجموعة تطوير أبتوس](/ar/build/sdks) - تعمق في وظائف مجموعة التطوير
+
+<Aside type="tip">
+  **نصائح استكشاف الأخطاء وإصلاحها**: إذا واجهت أي مشاكل، يرجى التحقق من:
+
+  - اتصالك بالشبكة مستقر
+  - تستخدم تكوين الشبكة الصحيح (الشبكة التجريبية)
+  - الحسابات لديها أموال كافية لدفع رسوم الوقود
+</Aside>

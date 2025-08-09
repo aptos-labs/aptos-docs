@@ -1,0 +1,510 @@
+---
+title: "İlk Move Modülünüz"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+Aptos blok zinciri, geliştiricilerin güvenli tasarım yaklaşımı benimseyen Move dili ile Turing tamamlanmış akıllı sözleşmeler ("modüller") yazmalarına olanak tanır. Akıllı sözleşmeler, kullanıcıların blok zinciri ile para göndermesini sağlar, ayrıca oyunlar da dahil olmak üzere keyfi kod yazabilir! Her şey, dağıtılmış ("yayınlanmış") Move modülünü depolayacak bir hesap oluşturan Aptos CLI ile başlar.
+
+Bu öğretici, minimal bir Aptos ortamı kurarak, ardından Aptos Blok Zincirinde Move modüllerini derleme, test etme, yayınlama ve bunlarla etkileşim kurma konularında size rehberlik ederek Move Modüllerini anlamanıza yardımcı olacaktır. Şunları öğreneceksiniz:
+
+1. Ortamınızı kurma, CLI'yi yükleme
+2. Devnet hesabı oluşturma ve fonlama
+3. Move modülünü derleme ve test etme
+4. Aptos blok zincirine Move modülü yayınlama (veya "dağıtma")
+5. Modülle etkileşim kurma
+6. Aptos ile geliştirmeye devam etme (sonraki adımlar)
+
+<Aside type="note">
+  Bu öğretici size Move'un temellerini öğretmeyi amaçlamıyor. Bu, [Move Kitabı](/tr/build/smart-contracts/book) aracılığıyla öğrenilmesi en iyi olan daha uzun bir konudur.
+</Aside>
+
+## 1. Kurulum
+
+Blok zincirine yapılan değişikliklere "işlemler" denir ve bunlar ağ ücretini ("gas ücreti") ödemek için bir hesap gerektirir. Bu ücreti ödemek ve yayınlanan sözleşmeye sahip olmak için biraz APT'si olan bir hesap oluşturmamız gerekecek. Bunu yapmak için Aptos CLI'yi kullanmamız gerekecek.
+
+<Steps>
+  1. Aptos CLI'yi Yükleme
+
+     [Aptos CLI'yi yükleyin](/tr/build/cli) (henüz yapmadıysanız).
+
+  2. Yeni bir terminal açma
+
+     Yeni bir terminal penceresi veya sekmesi açın.
+
+  3. Yüklemeyi doğrulama
+
+     Yüklü olduğunu doğrulamak için `aptos --version` komutunu çalıştırın.
+
+     ```shellscript filename="Terminal"
+     aptos --version
+     ```
+
+     `aptos 4.6.1` gibi bir yanıt görmelisiniz.
+
+  4. Proje klasörü oluşturma
+
+     Şu komutu çalıştırarak bu öğretici için yeni bir klasör oluşturun:
+
+     ```shellscript filename="Terminal"
+     mkdir my-first-module
+     ```
+
+  5. Proje klasörüne gitme
+
+     Yeni klasörünüze gitmek için `cd my-first-module` komutunu çalıştırın.
+
+  6. Hesabınızı başlatma
+
+     `devnet`'te bir test hesabı oluşturmak için `aptos init` komutunu çalıştırın ve kurulumun her adımı için 'enter'a basın.
+
+     <Aside type="note">
+       Bu klasör için Aptos CLI'nizi yapılandırırken, bu kurulumun blok zincirinin mantığını takip ettiğini fark edin:
+
+       1. Hangi ağ ile çalışıyoruz (varsayılan `devnet`, her hafta yenilenir)?
+       2. İşlem yaptığımız hesap nedir (benzersiz bir özel anahtar oluşturmak, bu da kriptografik genel anahtar ve hesap adresi oluşturur)?
+       3. "Gas"ı nasıl öderim? (Devnet, testnet ve yerel ağlar için Aptos CLI yardımcı olacak şekilde bu hesabı Aptos Coin, APT ile fonlar).
+
+       Şimdilik, tüm varsayılanları kabul etmek için sürekli 'enter'a basın.
+     </Aside>
+
+     Şöyle bir başarı mesajı görmelisiniz:
+
+     ```shellscript filename="Terminal"
+     ---
+     Aptos CLI is now set up for account 0x9ec1cfa30b885a5c9d595f32f3381ec16d208734913b587be9e210f60be9f9ba as profile default!
+     {
+       "Result": "Success"
+     }
+     ```
+
+     <Aside type="note">
+       Fark etmemiş olabileceğiniz şey, Aptos CLI'nin özel anahtar, genel anahtar ve hesap adresi dahil olmak üzere hesap bilgilerini içeren `.gitignore` ve `config.yaml` ile gizli bir `.aptos/` klasörü oluşturduğudur.
+
+       Unix/Mac terminalinde `ls -a` veya Windows'ta `dir /ah` ile gizli dosyaları görüntüleyebilirsiniz.
+     </Aside>
+</Steps>
+
+## 2. (İsteğe Bağlı) Az Önce Zincir Üzerinde Yaptıklarınızı Keşfedin
+
+<Steps>
+  1. Hesap adresinizi kopyalama
+
+     Yeni hesabınız için komut satırından adresi kopyalayın.
+
+     Adres şuna benzer `0x9ec1cfa30b885a5c9d595f32f3381ec16d208734913b587be9e210f60be9f9ba` ve onu şu satırda bulabilirsiniz:
+
+     ```shellscript filename="Terminal"
+     Aptos CLI is now set up for account 0x9ec1cfa30b885a5c9d595f32f3381ec16d208734913b587be9e210f60be9f9ba as profile default!
+     ```
+
+  2. Aptos Explorer'ı açma
+
+     [Aptos Explorer](https://explorer.aptoslabs.com/?network=devnet)'a gidin.
+
+     Bu, devnet, testnet veya mainnet'te neler olduğunu hızlıca kontrol etmenin birincil yoludur. Daha sonra dağıtılmış sözleşmelerimizi görüntülemek için kullanacağız.
+
+  3. Devnet ağında olduğunuzdan emin olma
+
+     Sağ üst köşede "Devnet"i arayın veya "Mainnet" açılır menüsüne tıklayıp Devnet'i seçerek ağları değiştirin
+
+     ![Aptos Explorer'da Devnet ağına geçiş](~/images/screenshots/explorer_devnet.png)
+
+  4. Hesabınızı arama
+
+     Yeni oluşturduğunuz adresi arama çubuğuna yapıştırın.
+
+     <Aside type="caution">
+       Enter'a basmayın! Enter ile aramanın çalışmadığı bilinen bir hata vardır.
+     </Aside>
+
+  5. Arama sonuçlarını görüntüleme
+
+     Sonuçların görünmesini bekleyin, ardından en üstteki sonuca tıklayın.
+
+  6. İşlemi kontrol etme
+
+     Yeni oluşturduğunuz hesabı ve devnet token'ları ile fonlayan faucet fonksiyonu içeren bir işlem görmelisiniz.
+
+     ![Aptos Explorer'da Hesap Görüntüleme](~/images/screenshots/explorer_account.png)
+
+  7. Bakiyenizi doğrulama
+
+     1 APT Aptos Coin'iniz olduğunu görmek için "Coins" sekmesine tıklayın. Bu, aptos devnet'inde akıllı sözleşmeler yayınlamanıza ve bunlarla etkileşim kurmanıza olanak tanıyacaktır.
+
+     <Aside type="note">
+       Explorer, dağıttığımız sözleşmeleri görmek için önemli bir araçtır ve ayrıca bir sözleşmenin ne yaptığını aramak için bir yol sunar. Sadece sözleşmenin dağıtıldığı adresi arayın ve o modül için kodu görebileceksiniz.
+     </Aside>
+</Steps>
+
+## 3. İlk Modülünüzü Yazma ve Derleme
+
+Artık ortamımızı kurduğumuza ve bir hesap oluşturduğumuza göre, ilk Move modülümüzü yazalım ve derleyelim. Ethereum'da sözleşmelerin bağımsız olarak var olduğu yerin aksine, Move her şeyi hesaplara bağlar - hem modülleri hem de kaynaklarını. Temel kavramları anlamak için basit bir örnekle başlayalım.
+
+![Move Blok Zinciri Diyagramı](~/images/screenshots/move_blockchain.png)
+
+Bu diyagram, modül sahipliği, token sahipliği ve Move blok zinciri durumu arasındaki ilişkiyi gösterir. Modüllerin ve kaynakların hesaplara nasıl bağlandığını görselleştirmeye yardımcı olur ve Move'un diğer blok zinciri platformlarına kıyasla benzersiz tasarım yönlerini vurgular.
+
+### Move Modülü Nedir?
+
+Move modülleri diğer blok zincirlerdeki akıllı sözleşmelere benzer, bazı temel farklılıklar vardır:
+
+- **Kaynaklar:** Solidity'de durumun sözleşme değişkenlerinde depolandığı yerin aksine, Move "kaynakları" kullanır - aynı anda yalnızca bir yerde bulunabilen ve her zaman bir hesaba bağlı olan özel veri türleri
+- **Modül tabanlı**: Solidity'de olduğu gibi tüm sözleşmeleri bağımsız birimler olarak dağıtmak yerine, Move kodu sınırlar arasında kaynakları paylaşabilen ve işleyebilen yeniden kullanılabilir modüller halinde organize edilir. Modüller daha çok beraber veya ayrı ayrı yayınlanabilen standart kütüphane paketleri gibidir ve kod organizasyonu üzerinde daha ince ayrıntılı kontrol sunar.
+- **Tasarım gereği güvenlik:** Move'un tip sistemi ve kaynak semantiği yaygın akıllı sözleşme güvenlik açıklarını önlemeye yardımcı olur
+
+<Aside type="note">
+  Rust'a aşinaysanız, Move'un sözdizimini çok benzer bulacaksınız. Solidity'den geliyorsanız, modülleri yeniden kullanılabilir akıllı sözleşme kütüphaneleri olarak düşünün.
+</Aside>
+
+### İlk Move Modülünüz
+
+İlk modülümüz, hesapların mesaj depolamasına ve almasına olanak tanıyan basit bir mesaj depolama sistemi olacaktır. `my-first-module` klasörümüz içinde yeni bir move projesi oluşturalım:
+
+<Steps>
+  1. Projeyi başlatma
+
+     `aptos move init --name my_first_module` ile yeni bir move projesi başlatın
+
+     Bu, bir `sources` dizini ve bir `Move.toml` dosyası içeren bir proje yapısı oluşturur.
+
+  2. Modül dosyasını oluşturma
+
+     Modül kodumuzu içeren yeni bir `sources/message.move` dosyası oluşturun:
+
+     ```move filename="message.move"
+     module my_first_module::message {
+         use std::string;
+         use std::signer;
+
+         struct MessageHolder has key, store, drop {
+             message: string::String,
+         }
+
+         public entry fun set_message(account: &signer, message: string::String) acquires MessageHolder {
+             let account_addr = signer::address_of(account);
+
+             if (exists<MessageHolder>(account_addr)) {
+                 move_from<MessageHolder>(account_addr);
+             };
+
+             move_to(account, MessageHolder { message });
+         }
+
+         public fun get_message(account_addr: address): string::String acquires MessageHolder {
+             assert!(exists<MessageHolder>(account_addr), 0);
+             let message_holder = borrow_global<MessageHolder>(account_addr);
+             message_holder.message
+         }
+     }
+     ```
+
+     Bu modülü parçalayalım:
+
+     - Bir string mesaj depolayabilen `MessageHolder` kaynak türü tanımlıyoruz
+     - `set_message` bir hesabın mesaj depolamasına olanak tanır
+     - `get_message` herhangi birinin depolanmış mesajı almasına olanak tanır
+     - `acquires` anahtar kelimesi fonksiyonların hangi kaynaklara erişmesi gerektiğini belirtir (bu durumda MessageHolder)
+     - `move_to` ve `move_from` kaynakların hesaplar altında depolanmasını işler
+
+     <Aside type="note">
+       Move'un onu diğer akıllı sözleşme dillerinden farklı kılan bazı benzersiz özellikleri vardır:
+
+       1. Kaynak türleri, aynı anda yalnızca bir yerde bulunabilen varlıkları ve durumu temsil etmek için kullanılır
+       2. `key`, `store` ve `drop` gibi yetenek değiştiricileri değerlerin nasıl kullanılabileceğini kontrol eder
+       3. Açık acquire açıklamaları bir fonksiyonun hangi kaynaklara erişebileceğini bize söyler
+     </Aside>
+
+  3. Modülü derleme
+
+     Az önce oluşturduğumuz Move modülünü `aptos move compile --named-addresses my_first_module=default` ile derleyin
+
+     <Aside type="note">
+       `--named-addresses` bayrağı modül adımızı hesabımızın adresine eşler. Move'da modüller derleme zamanında bir adresle ilişkilendirilmelidir - az önce oluşturduğumuz hesabı işaret eden `'default'` kullanıyoruz.
+     </Aside>
+
+     Başarılı olursa şöyle bir mesaj görmelisiniz:
+
+     ```shellscript filename="Terminal"
+     ❯ aptos move compile --named-addresses my_first_module=default
+     Compiling, may take a little while to download git dependencies...
+     UPDATING GIT DEPENDENCY https://github.com/aptos-labs/aptos-framework.git
+     INCLUDING DEPENDENCY AptosFramework
+     INCLUDING DEPENDENCY AptosStdlib
+     INCLUDING DEPENDENCY MoveStdlib
+     BUILDING my_first_module
+     {
+       "Result": [
+         "9ec1cfa30b885a5c9d595f32f3381ec16d208734913b587be9e210f60be9f9ba::message"
+       ]
+     }
+     ```
+</Steps>
+
+Harika iş! Artık test etmeye ve hata ayıklamaya hazırız.
+
+## 4. Test Etme ve Hata Ayıklama
+
+Test etme ve hata ayıklama, Move modülü geliştirmenin kritik parçalarıdır. Move, birim testleri ve hata ayıklama yazdırması için yerleşik destek sunar.
+
+<Steps>
+  1. Hata ayıklama yazdırmaları ekleme
+
+     Önce, bazı hata ayıklama yazdırmaları eklemek için mesaj modülümüzü değiştirelim. `sources/message.move` dosyanızı güncelleyin:
+
+     ```move filename="message.move"
+     module my_first_module::message {
+         use std::string;
+         use std::signer;
+         use std::debug;  // Hata ayıklama yazdırmaları için bunu ekleyin
+
+         struct MessageHolder has key, store, drop {
+             message: string::String,
+         }
+
+         public entry fun set_message(account: &signer, message: string::String) acquires MessageHolder {
+             let account_addr = signer::address_of(account);
+             debug::print(&message); // Ayarlanan mesajı yazdır
+
+             if (exists<MessageHolder>(account_addr)) {
+                 debug::print(&string::utf8(b"Updating existing message")); // Hata ayıklama bilgisi yazdır
+                 move_from<MessageHolder>(account_addr);
+             } else {
+                 debug::print(&string::utf8(b"Creating new message")); // Yeni oluştururken yazdır
+             };
+
+             move_to(account, MessageHolder { message });
+         }
+
+         public fun get_message(account_addr: address): string::String acquires MessageHolder {
+             assert!(exists<MessageHolder>(account_addr), 0);
+             let message_holder = borrow_global<MessageHolder>(account_addr);
+             debug::print(&message_holder.message); // Alınan mesajı yazdır
+             message_holder.message
+         }
+     }
+     ```
+
+  2. Test dosyası oluşturma
+
+     Testlerimizi oluşturun: şu içerikle yeni bir `sources/message_tests.move` dosyası:
+
+     ```move filename="message_tests.move"
+     #[test_only]
+     module my_first_module::message_tests {
+         use std::string;
+         use std::signer;
+         use aptos_framework::account;
+         use my_first_module::message;
+
+         #[test]
+         fun test_set_and_get_message() {
+             // Test hesabını kur
+             let test_account = account::create_account_for_test(@0x1);
+
+             // Mesaj ayarlamayı test et
+             message::set_message(&test_account, string::utf8(b"Hello World"));
+
+             // Mesajın doğru ayarlandığını doğrula
+             let stored_message = message::get_message(signer::address_of(&test_account));
+             assert!(stored_message == string::utf8(b"Hello World"), 0);
+         }
+     }
+     ```
+
+  3. Testleri çalıştırma
+
+     Şimdi testleri `aptos move test --named-addresses my_first_module=default` ile çalıştırın
+
+     Testler geçerse çıktı görmelisiniz: (Hatalarla nasıl başa çıkılacağı aşağıda)
+
+     ```shellscript filename="Terminal"
+     INCLUDING DEPENDENCY AptosFramework
+     INCLUDING DEPENDENCY AptosStdlib
+     INCLUDING DEPENDENCY MoveStdlib
+     BUILDING my_first_module
+     Running Move unit tests
+     [debug] "Hello World"
+     [debug] "Creating new message"
+     [debug] "Hello World"
+     [ PASS    ] 0x9ec1cfa30b885a5c9d595f32f3381ec16d208734913b587be9e210f60be9f9ba::message_tests::test_set_and_get_message
+     Test result: OK. Total tests: 1; passed: 1; failed: 0
+     {
+       "Result": "Success"
+     }
+     ```
+</Steps>
+
+**Test sırasında hatalarla karşılaşırsanız, işte bazı yaygın sorunlar ve çözümleri:**
+
+- Tüm modül bağımlılıklarının düzgün şekilde içe aktarıldığından emin olun
+- Hesap adresinizin `-named-addresses` parametresinde eşleştiğini kontrol edin
+- Test fonksiyonlarının `#[test]` özniteliğine sahip olduğunu doğrulayın
+- String literal'larının düzgün kodlandığından emin olun
+
+<Aside type="note">
+  ### Hata Ayıklama İpuçları
+
+  1. Test fonksiyonlarında `debug::print()` kullanın
+  2. Hata ayıklama yazdırmaları test yürütme sırasında otomatik olarak görünecektir
+  3. Hata ayıklama ifadelerinin yalnızca testlerde çalışacağını, prodüksiyon kodunda çalışmayacağını unutmayın. Kod performansına hiçbir etkisi olmayacaktır.
+  4. Modül durumunu hata ayıklamak için:
+     - Hesap adreslerini `debug::print(&addr)` ile yazdırın
+     - String değerleri `debug::print(&some_string)` ile yazdırın
+     - Boolean koşulları `debug::print(&some_bool)` ile yazdırın
+</Aside>
+
+## 5. Modülünüzü Yayınlama
+
+Modülünüzü başarıyla derleyip test ettikten sonra, Aptos blok zincirine yayınlayabilirsiniz. Bu süreç, kodunuzun zincir üzerinde erişilebilir olması için dağıtır.
+
+<Steps>
+  1. Modülü yayınlama
+
+     Modülünüzü `aptos move publish --named-addresses my_first_module=default` ile yayınlayın
+
+     Derleme sürecini gösteren çıktıyı ve ardından gas ücretleri hakkında soru soran bir istemi göreceksiniz:
+
+     ```shellscript filename="Terminal"
+     Compiling, may take a little while to download git dependencies...
+     UPDATING GIT DEPENDENCY https://github.com/aptos-labs/aptos-framework.git
+     INCLUDING DEPENDENCY AptosFramework
+     INCLUDING DEPENDENCY AptosStdlib
+     INCLUDING DEPENDENCY MoveStdlib
+     BUILDING my_first_module
+     package size 1271 bytes
+     Do you want to submit a transaction for a range of [141300 - 211900] Octas at a gas unit price of 100 Octas? [yes/no] >
+     ```
+
+  2. İşlemi onaylama
+
+     İşlemi onaylamak için `y` yazın ve Enter'a basın.
+
+     Onaydan sonra, işlem ayrıntılarını gösteren bir yanıt alacaksınız:
+
+     ```shellscript filename="Terminal"
+     {
+       "Result": {
+         "transaction_hash": "0x95fce7344b066abda10c07dbf1ffa83e0d9c7bd400e2b143682a6c8a5f179dc2",
+         "gas_used": 1413,
+         "gas_unit_price": 100,
+         "sender": "9ec1cfa30b885a5c9d595f32f3381ec16d208734913b587be9e210f60be9f9ba",
+         "sequence_number": 0,
+         "success": true,
+         "timestamp_us": 1735351260227638,
+         "version": 273029731,
+         "vm_status": "Executed successfully"
+       }
+     }
+     ```
+</Steps>
+
+### (İsteğe Bağlı) Sözleşmenizi Zincir Üzerinde Görme
+
+Başarılı yayından sonra, şu adımları izleyerek modülünüzün zincir üzerinde olduğunu doğrulayabilirsiniz:
+
+<Steps>
+  1. Explorer'ı açma
+
+     [Aptos Explorer](https://explorer.aptoslabs.com/?network=devnet)'a gidin
+
+  2. İşlemi kontrol etme
+
+     Hesap adresinizi arayın. Hesabınızda yeni bir işlem olduğunu, `code::publish_package_txn` fonksiyonunu fark etmelisiniz.
+
+  3. Bakiyenizi görüntüleme
+
+     Artık 1 APT'den az Aptos Coin'iniz olduğunu görmek için "Coins" sekmesine tıklayın.
+
+     ![Explorer Coins Görünümü](~/images/screenshots/explorer_coins.png)
+
+     Sözleşmeyi dağıtmak için gas'a küçük bir miktar harcadınız, bu yüzden yaklaşık `0.99855 APT` kalması gerekir.
+
+  4. Modülünüzü bulma
+
+     "Modules" sekmesinin altına bakın
+
+     ![Explorer Modüller Görünümü](~/images/screenshots/explorer_modules.png)
+
+  5. Modülü doğrulama
+
+     "message" modülünüzün listelendiğini görmelisiniz
+
+     <Aside type="note">
+       Modülünüzün explorer bağlantısını paylaşabilirsiniz ve diğerleri bir cüzdan bağlayarak modülle etkileşim kurabilir.
+     </Aside>
+</Steps>
+
+## 6. Modülünüzle Etkileşim Kurma
+
+Artık modülünüz yayınlandığına göre, Aptos CLI aracılığıyla onunla etkileşim kurabilirsiniz:
+
+<Steps>
+  1. Mesaj ayarlama
+
+     CLI kullanarak bir mesaj ayarlayın:
+
+     ```shellscript filename="Terminal"
+     aptos move run --function-id 'default::message::set_message' --args 'string:Hello, Aptos!'
+     ```
+
+     Yayınlama sırasında gördüğünüze benzer bir gas ücreti istemi göreceksiniz.
+
+  2. İşlemi onaylama
+
+     `y` ile onayladıktan sonra, şöyle bir başarı yanıtı almalısınız:
+
+     ```shellscript filename="Terminal"
+     Transaction submitted: https://explorer.aptoslabs.com/txn/0x0c0b1e56a31d037280278327eb8fdfcc469a20213e5e65accf6e7c56af574449?network=devnet
+     {
+       "Result": {
+         "transaction_hash": "0x0c0b1e56a31d037280278327eb8fdfcc469a20213e5e65accf6e7c56af574449",
+         "gas_used": 445,
+         "gas_unit_price": 100,
+         "sender": "9ec1cfa30b885a5c9d595f32f3381ec16d208734913b587be9e210f60be9f9ba",
+         "sequence_number": 1,
+         "success": true,
+         "timestamp_us": 1735351754495208,
+         "version": 273137362,
+         "vm_status": "Executed successfully"
+       }
+     }
+     ```
+
+  3. Mesajınızı görüntüleme
+
+     Explorer'da Resources altında kontrol ederek depolanmış mesajınızı görüntüleyin.
+
+  4. Kutlama!
+
+     Başardık!
+
+     <Aside type="note">
+       Bu kılavuzu tamamlamanız ne kadar sürdü? Sizden haber almak istiyoruz!
+     </Aside>
+</Steps>
+
+## Sonraki Adımlar
+
+Tebrikler! Başarıyla:
+
+1. İlk Move modülünüzü derlediniz
+2. Hata ayıklamaya yardımcı olmak için testler eklediniz
+3. Modülünüzü zincir üzerinde yayınladınız
+4. CLI aracılığıyla sözleşmenizi kullandınız
+
+Artık yayınlanmış Move modülünüz [birçok Resmi SDK'mız](/tr/build/sdks/) aracılığıyla bir API gibi bağlanabilir!
+
+İşte **Move modüllerinin daha derin anlaşılması için önerilen sonraki adımlar**:
+
+1. Modüle yeni bir özellik eklemek için değiştirmeyi deneyin. Move modülleri yazma anlayışınızı geliştirmek için [Move Kitabı](/tr/build/smart-contracts/book)'nı kullanabilirsiniz.
+2. Move'un zincir üzerinde nasıl çalıştığını anlamak için Move'un [kaynak sistemi](/tr/network/blockchain/resources) hakkında bilgi edinebilirsiniz.
+3. Sözleşmelerle etkileşim kurmak veya zincir üstünden veri aramak için bir uygulama oluşturuyorsanız, SDK'ları [burada](/tr/build/sdks/) nasıl kullanacağınızı öğrenin.
+4. Diğer geliştiricilerle bağlantı kurmak için [Aptos Discord](https://discord.gg/aptoslabs)'una katılın.
+
+## Destekleyici belgeler
+
+- [Hesap temelleri](/tr/network/blockchain/accounts)
+- [TypeScript SDK](/tr/build/sdks/ts-sdk)
+- [Python SDK](/tr/build/sdks/python-sdk)
+- [REST API spesifikasyonu](/tr/network/nodes/aptos-api-spec)

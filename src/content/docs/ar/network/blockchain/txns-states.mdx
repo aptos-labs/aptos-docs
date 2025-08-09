@@ -1,0 +1,452 @@
+---
+title: "المعاملات والحالات"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+المعاملات هي الوحدة الأساسية للتحديث في بلوك تشين أبتوس. فهم كيفية عمل المعاملات وكيف تؤثر على حالة البلوك تشين أمر ضروري لأي مطور يعمل على أبتوس.
+
+## نظرة عامة على المعاملات
+
+المعاملة في أبتوس هي وحدة ذرية من العمل تُغير حالة البلوك تشين. كل معاملة إما تُنفذ بالكامل أو تفشل بالكامل - لا توجد حالات جزئية.
+
+### مكونات المعاملة
+
+كل معاملة تحتوي على:
+
+1. **المُرسل** - الحساب الذي بدأ المعاملة
+2. **الحمولة** - البيانات والعمليات المراد تنفيذها
+3. **رقم التسلسل** - رقم فريد للحساب المُرسل
+4. **الحد الأقصى للوقود** - أقصى وحدات وقود مسموح باستخدامها
+5. **سعر الوقود** - السعر المدفوع لكل وحدة وقود
+6. **انتهاء الصلاحية** - وقت انتهاء صلاحية المعاملة
+7. **التوقيع** - توقيع رقمي من المُرسل
+
+```typescript
+interface Transaction {
+  sender: string;                    // عنوان المُرسل
+  sequence_number: string;           // رقم التسلسل
+  max_gas_amount: string;           // الحد الأقصى للوقود
+  gas_unit_price: string;           // سعر الوقود
+  expiration_timestamp_secs: string; // انتهاء الصلاحية
+  payload: TransactionPayload;       // حمولة المعاملة
+  signature: TransactionSignature;   // التوقيع
+}
+```
+
+## أنواع المعاملات
+
+### 1. معاملات دالة الدخول (Entry Function)
+
+الأكثر شيوعاً، تستدعي دالة عامة في وحدة منشورة:
+
+```typescript
+const transaction = {
+  function: "0x1::coin::transfer",
+  type_arguments: ["0x1::aptos_coin::AptosCoin"],
+  arguments: [
+    "0x123...",  // عنوان المستقبل
+    "1000000"    // المبلغ
+  ]
+};
+```
+
+### 2. معاملات السكريبت (Script)
+
+تنفذ كود Move مباشرة (نادر الاستخدام):
+
+```move
+script {
+    use std::debug;
+    
+    fun main() {
+        debug::print(&b"Hello, Aptos!");
+    }
+}
+```
+
+### 3. معاملات نشر الوحدة (Module Publishing)
+
+تنشر وحدة Move جديدة على البلوك تشين:
+
+```typescript
+const moduleCode = "0xa11ce..."; // bytecode للوحدة
+const transaction = {
+  type: "module_bundle_payload",
+  modules: [{ bytecode: moduleCode }]
+};
+```
+
+### 4. معاملات التوقيع المتعدد (Multi-signature)
+
+تتطلب توقيعات من عدة حسابات:
+
+```typescript
+const multiSigTransaction = {
+  sender: "0x123...",
+  secondary_signers: ["0x456...", "0x789..."],
+  payload: { /* حمولة المعاملة */ }
+};
+```
+
+## دورة حياة المعاملة
+
+### 1. الإنشاء والتوقيع
+
+```typescript
+import { Aptos, AptosConfig, Network, Account } from "@aptos-labs/ts-sdk";
+
+async function createAndSignTransaction() {
+  const aptos = new Aptos(new AptosConfig({ network: Network.TESTNET }));
+  const sender = Account.generate();
+  
+  // إنشاء المعاملة
+  const transaction = await aptos.transaction.build.simple({
+    sender: sender.accountAddress,
+    data: {
+      function: "0x1::coin::transfer",
+      typeArguments: ["0x1::aptos_coin::AptosCoin"],
+      functionArguments: ["0x456...", 1000000],
+    },
+  });
+  
+  // توقيع المعاملة
+  const signedTransaction = aptos.transaction.sign({
+    signer: sender,
+    transaction,
+  });
+  
+  return signedTransaction;
+}
+```
+
+### 2. الإرسال
+
+```typescript
+async function submitTransaction(signedTransaction: any) {
+  const aptos = new Aptos(new AptosConfig({ network: Network.TESTNET }));
+  
+  // إرسال المعاملة
+  const pendingTransaction = await aptos.transaction.submit.simple(signedTransaction);
+  
+  console.log("معرف المعاملة:", pendingTransaction.hash);
+  return pendingTransaction.hash;
+}
+```
+
+### 3. التنفيذ والتأكيد
+
+```typescript
+async function waitForTransaction(txnHash: string) {
+  const aptos = new Aptos(new AptosConfig({ network: Network.TESTNET }));
+  
+  // انتظار التأكيد
+  const executedTransaction = await aptos.waitForTransaction({
+    transactionHash: txnHash,
+  });
+  
+  console.log("حالة المعاملة:", executedTransaction.success ? "نجحت" : "فشلت");
+  return executedTransaction;
+}
+```
+
+## حالة البلوك تشين
+
+### قاعدة البيانات المُرقمة
+
+أبتوس يستخدم **قاعدة بيانات مُرقمة** حيث كل معاملة تنتج إصداراً جديداً من حالة البلوك تشين:
+
+```text
+الإصدار 0: الحالة الابتدائية
+الإصدار 1: الحالة بعد المعاملة الأولى
+الإصدار 2: الحالة بعد المعاملة الثانية
+...
+الإصدار N: الحالة الحالية
+```
+
+### هيكل الحالة
+
+الحالة العالمية تتكون من:
+
+1. **الحسابات** - بيانات وموارد كل حساب
+2. **الوحدات** - العقود الذكية المنشورة
+3. **الموارد** - البيانات المُخزنة في الحسابات
+4. **الأحداث** - سجل الأحداث المُصدرة
+
+```typescript
+interface GlobalState {
+  accounts: Map<Address, AccountData>;
+  modules: Map<ModuleId, CompiledModule>;
+  resources: Map<ResourceKey, ResourceValue>;
+  events: EventStore;
+}
+```
+
+## تنفيذ المعاملات
+
+### التنفيذ المتوازي
+
+أبتوس يدعم **التنفيذ المتوازي** للمعاملات التي لا تتعارض:
+
+```typescript
+// هذه المعاملات يمكن تنفيذها بالتوازي
+const tx1 = transferAPT("Alice", "Bob", 100);    // Alice -> Bob
+const tx2 = transferAPT("Carol", "Dave", 200);   // Carol -> Dave
+
+// هذه المعاملات يجب تنفيذها متسلسلة
+const tx3 = transferAPT("Alice", "Carol", 50);   // Alice -> Carol
+const tx4 = transferAPT("Alice", "Dave", 30);    // Alice -> Dave (نفس المُرسل)
+```
+
+### آلة أبتوس الافتراضية (Move VM)
+
+المعاملات تُنفذ بواسطة Move VM:
+
+1. **التحقق من التوقيع** - التأكد من صحة التوقيعات
+2. **فحص الرصيد** - التأكد من وجود رصيد كافٍ للرسوم
+3. **تحديد التبعيات** - تحديد الموارد المطلوبة
+4. **التنفيذ** - تشغيل كود Move
+5. **تطبيق التغييرات** - تحديث الحالة العالمية
+
+### معالجة الأخطاء
+
+```move
+module MyAddress::SafeTransfer {
+    use std::error;
+    use std::signer;
+    use aptos_framework::coin;
+    
+    const EINSUFFICIENT_BALANCE: u64 = 1;
+    
+    public entry fun safe_transfer<CoinType>(
+        from: &signer,
+        to: address,
+        amount: u64,
+    ) {
+        let from_addr = signer::address_of(from);
+        let balance = coin::balance<CoinType>(from_addr);
+        
+        // التحقق من كفاية الرصيد
+        assert!(balance >= amount, error::invalid_state(EINSUFFICIENT_BALANCE));
+        
+        // تنفيذ النقل
+        coin::transfer<CoinType>(from, to, amount);
+    }
+}
+```
+
+## الأحداث (Events)
+
+الأحداث توفر طريقة لتسجيل ما يحدث أثناء تنفيذ المعاملات:
+
+### إنشاء الأحداث
+
+```move
+module MyAddress::EventExample {
+    use std::event;
+    use std::signer;
+    
+    struct CoinTransferred has drop, store {
+        from: address,
+        to: address,
+        amount: u64,
+    }
+    
+    public entry fun transfer_with_event(
+        from: &signer,
+        to: address,
+        amount: u64,
+    ) {
+        let from_addr = signer::address_of(from);
+        
+        // تنفيذ النقل (مبسط)
+        // ...
+        
+        // إصدار حدث
+        event::emit(CoinTransferred {
+            from: from_addr,
+            to,
+            amount,
+        });
+    }
+}
+```
+
+### الاستعلام عن الأحداث
+
+```typescript
+async function queryEvents() {
+  const aptos = new Aptos(new AptosConfig({ network: Network.TESTNET }));
+  
+  const events = await aptos.getEvents({
+    eventType: "0x123::EventExample::CoinTransferred",
+  });
+  
+  for (const event of events) {
+    console.log("حدث نقل:", {
+      from: event.data.from,
+      to: event.data.to,
+      amount: event.data.amount,
+    });
+  }
+}
+```
+
+## حالات المعاملات
+
+### الحالات المختلفة
+
+1. **معلقة (Pending)** - تم إرسال المعاملة ولكن لم تُنفذ بعد
+2. **منفذة (Executed)** - تم تنفيذ المعاملة بنجاح
+3. **فاشلة (Failed)** - فشل تنفيذ المعاملة
+4. **منتهية الصلاحية (Expired)** - انتهت صلاحية المعاملة
+5. **مرفوضة (Rejected)** - رُفضت المعاملة قبل التنفيذ
+
+### التحقق من حالة المعاملة
+
+```typescript
+async function checkTransactionStatus(txnHash: string) {
+  const aptos = new Aptos(new AptosConfig({ network: Network.TESTNET }));
+  
+  try {
+    const transaction = await aptos.getTransactionByHash({
+      transactionHash: txnHash,
+    });
+    
+    if ('success' in transaction) {
+      if (transaction.success) {
+        console.log("✅ المعاملة نجحت");
+        console.log("الوقود المستخدم:", transaction.gas_used);
+      } else {
+        console.log("❌ المعاملة فشلت");
+        console.log("سبب الفشل:", transaction.vm_status);
+      }
+    } else {
+      console.log("⏳ المعاملة ما زالت معلقة");
+    }
+  } catch (error) {
+    console.log("❓ لم يتم العثور على المعاملة أو انتهت صلاحيتها");
+  }
+}
+```
+
+## أفضل الممارسات
+
+### 1. إدارة أرقام التسلسل
+
+```typescript
+async function sendSequentialTransactions(account: Account, transactions: any[]) {
+  const aptos = new Aptos(new AptosConfig({ network: Network.TESTNET }));
+  
+  // الحصول على رقم التسلسل الحالي
+  let sequenceNumber = await aptos.getAccountInfo({
+    accountAddress: account.accountAddress,
+  }).then(info => parseInt(info.sequence_number));
+  
+  for (const txData of transactions) {
+    const transaction = await aptos.transaction.build.simple({
+      sender: account.accountAddress,
+      data: txData,
+      options: {
+        sequenceNumber: sequenceNumber++, // زيادة رقم التسلسل
+      },
+    });
+    
+    await aptos.signAndSubmitTransaction({
+      signer: account,
+      transaction,
+    });
+  }
+}
+```
+
+### 2. التعامل مع انتهاء الصلاحية
+
+```typescript
+const transaction = await aptos.transaction.build.simple({
+  sender: account.accountAddress,
+  data: { /* بيانات المعاملة */ },
+  options: {
+    expireTimestamp: Math.floor(Date.now() / 1000) + 60, // تنتهي خلال دقيقة
+  },
+});
+```
+
+### 3. تحسين الوقود
+
+```typescript
+// تقدير الوقود أولاً
+const simulation = await aptos.transaction.simulate.simple({
+  signerPublicKey: account.publicKey,
+  transaction,
+});
+
+const estimatedGas = simulation[0].gas_used;
+
+// استخدام تقدير محسن
+const optimizedTransaction = await aptos.transaction.build.simple({
+  sender: account.accountAddress,
+  data: { /* بيانات المعاملة */ },
+  options: {
+    maxGasAmount: Math.ceil(estimatedGas * 1.1), // 10% احتياط
+  },
+});
+```
+
+## مراقبة المعاملات
+
+### في الوقت الفعلي
+
+```typescript
+async function monitorAccountTransactions(accountAddress: string) {
+  const aptos = new Aptos(new AptosConfig({ network: Network.TESTNET }));
+  
+  // الحصول على آخر رقم تسلسل معروف
+  let lastSequenceNumber = 0;
+  
+  setInterval(async () => {
+    const accountInfo = await aptos.getAccountInfo({ accountAddress });
+    const currentSequenceNumber = parseInt(accountInfo.sequence_number);
+    
+    if (currentSequenceNumber > lastSequenceNumber) {
+      console.log(`معاملات جديدة للحساب ${accountAddress}`);
+      
+      // جلب المعاملات الجديدة
+      const transactions = await aptos.getAccountTransactions({
+        accountAddress,
+        options: {
+          start: lastSequenceNumber,
+          limit: currentSequenceNumber - lastSequenceNumber,
+        },
+      });
+      
+      for (const tx of transactions) {
+        console.log("معاملة جديدة:", tx.hash);
+      }
+      
+      lastSequenceNumber = currentSequenceNumber;
+    }
+  }, 5000); // فحص كل 5 ثوانٍ
+}
+```
+
+<Aside type="tip">
+  **نصائح مهمة:**
+
+  - استخدم محاكاة المعاملات للتحقق من النتائج المتوقعة
+  - راقب أرقام التسلسل لتجنب التعارض
+  - استخدم الأحداث لتتبع التغييرات المهمة
+  - اعتبر انتهاء الصلاحية في التطبيقات الحساسة للوقت
+</Aside>
+
+## الخلاصة
+
+المعاملات والحالات في أبتوس تُبنى على:
+
+1. **الذرية** - كل معاملة إما تنجح بالكامل أو تفشل
+2. **التسلسل** - المعاملات لها ترتيب محدد لكل حساب
+3. **التوازي** - المعاملات غير المتعارضة تُنفذ بالتوازي
+4. **الشفافية** - جميع التغييرات قابلة للتتبع والتحقق
+5. **الكفاءة** - تحسينات للأداء والتكلفة
+
+فهم هذه المفاهيم ضروري لبناء تطبيقات موثوقة وفعالة على أبتوس.

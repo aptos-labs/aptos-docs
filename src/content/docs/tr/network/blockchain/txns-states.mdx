@@ -1,0 +1,135 @@
+---
+title: "İşlemler ve Durumlar"
+---
+
+import { ThemedImage } from '~/components/ThemedImage';
+
+import { Aside } from '@astrojs/starlight/components';
+
+Aptos blok zinciri üç tür veri depolar:
+
+- **İşlemler**: İşlemler, blok zincirinde bir hesap tarafından gerçekleştirilmek istenen bir operasyonu temsil eder (örn., varlık transfer etme).
+- **Durumlar**: (Blok zinciri defteri) durumu, işlemlerin yürütme çıktısının birikimini, tüm [kaynaklar](/tr/network/blockchain/resources) içinde depolanan değerleri temsil eder.
+- [**Olaylar**](/tr/network/blockchain/events): Bir işlemin yürütülmesi tarafından yayınlanan yardımcı veriler.
+
+<Aside type="note">
+  Yalnızca işlemler defter durumunu değiştirebilir.
+</Aside>
+
+## İşlemler
+
+Aptos işlemleri gönderenin hesap adresi, gönderenden kimlik doğrulama, Aptos blok zincirinde gerçekleştirilmek istenen operasyon ve gönderenin işlemi yürütmek için ödemeye istekli olduğu gas miktarı gibi bilgileri içerir.
+
+### İşlem durumları
+
+Bir işlem aşağıdaki durumlardan birinde sonlanabilir:
+
+- Blok zincirine taahhüt edildi ve yürütüldü. Bu başarılı bir işlem olarak kabul edilir.
+- Blok zincirine taahhüt edildi ve iptal edildi. İptal kodu, işlemin neden yürütülemediğini belirtir.
+- Yetersiz gas, geçersiz işlem formatı veya yanlış anahtar gibi doğrulama kontrolü nedeniyle işlem gönderimi sırasında reddedildi.
+- İşlem gönderiminden sonra ancak yürütme denemesinden önce reddedildi. Bu, zaman aşımları veya hesabı etkileyen diğer işlemler nedeniyle yetersiz gas'dan kaynaklanabilir.
+
+Gönderenin hesabından herhangi bir taahhüt edilmiş işlem için gas ücreti alınacaktır.
+
+İşlem gönderimi sırasında, gönderen başarılı gönderim veya aksi takdirde doğrulama başarısızlıklarının nedeni hakkında bilgilendirilir.
+
+Başarıyla gönderilmiş ancak sonuçta reddedilmiş bir işlem, erişilebilir herhangi bir Aptos düğümünde veya Aptos ağı içinde görünür bir duruma sahip olmayabilir. Kullanıcı, işlemi yeniden doğrulamak için aynı işlemi yeniden göndermeye çalışabilir. Gönderen düğüm bu işlemin hala geçerli olduğuna inanıyorsa, aynı işlemin gönderildiğini belirten bir hata döndürecektir.
+
+Gönderen, ilerleme kaydetmeye yardımcı olmak ve aşağı akıştaki işlemi reddetmeye neden olan her neyse ona uyum sağlamak için gas maliyetini önemsiz bir miktarla artırmaya çalışabilir.
+
+<Aside type="note">
+  Aptos işlem yaşam döngüsünün kapsamlı bir açıklaması için [Aptos Blok Zinciri Derinlemesine İnceleme](/tr/network/blockchain/blockchain-deep-dive) bölümüne bakın.
+</Aside>
+
+### İşlemin İçeriği
+
+Blok zincirindeki imzalı bir işlem aşağıdaki bilgileri içerir:
+
+- **İmza**: Gönderen, işlemi imzaladıklarını doğrulamak için dijital imza kullanır (yani, kimlik doğrulama).
+- **Gönderen adresi**: Gönderenin [hesap adresi](/tr/network/blockchain/accounts#account-address).
+- **Gönderen genel anahtarı**: İşlemi imzalamak için kullanılan özel kimlik doğrulama anahtarına karşılık gelen genel kimlik doğrulama anahtarı.
+- **Payload**: Alice adına bir eylem veya eylem setini belirtir. Bu bir Move fonksiyonu olması durumunda, zincirdeki Move bytecode'una doğrudan çağrı yapar. Alternatif olarak, Move bytecode eşler arası [işlem betiği](/tr/network/glossary#transaction-script) olabilir. Ayrıca fonksiyon veya betik için girdi listesi içerir. Bu örnekte, Alice hesabından Bob'un hesabına bir miktar Aptos Coin transfer etmek için bir fonksiyon çağrısıdır, burada Alice'in hesabı işlemi göndererek ima edilir ve Bob'un hesabı ile miktar işlem girdileri olarak belirtilir.
+- [**Gas birim fiyatı**](/tr/network/glossary#gas-unit-price): Gönderenin işlemi yürütmek için gas birimi başına ödemek istediği miktar. Bu [Octas](/tr/network/glossary#octa) cinsinden temsil edilir.
+- [**Maksimum gas miktarı**](/tr/network/glossary#maximum-gas-amount): Gönderenin bu işlem için ödemek istediği APT cinsinden [maksimum gas miktarı](/tr/network/blockchain/gas-txn-fee#specifying-gas-fees-within-a-transaction). Gas ücretleri, hesaplama ve IO ile kapsanan temel gas maliyetinin gas fiyatı ile çarpımına eşittir. Gas maliyetleri ayrıca APT-sabit fiyatlı depolama modeli ile depolamayı da içerir. Bu [Octas](/tr/network/glossary#octa) olarak temsil edilir.
+- **Gas fiyatı** (belirtilen gas birimlerinde): Bu, gönderenin işlemi yürütmek için [gas](/tr/network/blockchain/gas-txn-fee) birimi başına ödemek istediği miktardır. [Gas](/tr/network/blockchain/gas-txn-fee), hesaplama ve depolama için ödeme yapmanın bir yoludur. Gas birimi, doğal gerçek dünya değeri olmayan soyut bir hesaplama ölçümüdür.
+- **Sıra numarası**: Bu, yürütme anında gönderenin hesap [sıra numarasına](/tr/network/blockchain/accounts#account-sequence-number) eşit olması gereken işaretsiz bir tamsayıdır.
+- **Son kullanma zamanı**: İşlemin geçerli olmaktan çıktığı (yani, süresi dolan) bir zaman damgası.
+
+### İşlem payload türleri
+
+Belirli bir işlem içinde, en yaygın iki payload türü şunları içerir:
+
+- Bir giriş noktası
+- [Bir betik (payload)](/tr/build/smart-contracts/scripts)
+
+Şu anda, [Python](/tr/build/sdks/python-sdk) ve [Typescript](/tr/build/sdks/ts-sdk) SDK'ları her ikisini de destekler. Bu kılavuz, `coin::transfer` ve `aptos_account::create_account` gibi bu giriş noktalarının çoğunu işaret eder.
+
+Aptos blok zincirindeki tüm operasyonlar giriş noktası çağrıları aracılığıyla kullanılabilir olmalıdır. Birisi seri halinde giriş noktalarını çağıran birden fazla işlem gönderebilirken, bu tür operasyonların çoğu tek bir işlemden atomik olarak çağrılmaktan fayda sağlayabilir. Betik payload işlemi, herhangi bir modül içinde tanımlanan herhangi bir giriş noktasını veya genel fonksiyonu çağırabilir.
+
+<Aside type="note">
+  Geçerli işlemler oluşturmak için [İlk İşleminiz](/tr/build/guides/first-transaction) öğreticisine bakın.
+</Aside>
+
+<Aside type="note">
+  Aptos REST API, JSON'dan BCS kodlu işlemler oluşturmayı destekler. Bu hızlı prototipleme için faydalıdır, ancak işlemi oluşturan fullnode'a çok fazla güven verdiği için Mainnet'te kullanırken dikkatli olun.
+</Aside>
+
+## Durumlar
+
+Aptos blok zincirinin defter durumu veya global durum, Aptos blok zincirindeki tüm hesapların durumunu temsil eder. Blok zincirindeki her doğrulayıcı düğüm, herhangi bir işlemi yürütmek için global durumun en son sürümünü bilmelidir.
+
+Herkes defter durumunu değiştirmek için Aptos blok zincirine bir işlem gönderebilir. Bir işlemin yürütülmesi üzerine, bir işlem çıktısı oluşturulur. İşlem çıktısı, **yazma setleri** adı verilen defter durumunu manipüle etmek için sıfır veya daha fazla operasyon içerir, sonuçlanan olayların bir vektörünü yayınlar, tüketilen gas miktarını ve yürütülen işlem durumunu içerir.
+
+### Kanıtlar
+
+Aptos blok zinciri, blok zinciri verilerinin gerçekliğini ve doğruluğunu doğrulamak için kanıt kullanır.
+
+Aptos blok zinciri içindeki veriler ağ boyunca çoğaltılır. Her doğrulayıcı ve fullnode'un [depolaması](/tr/network/nodes/validator-nodes#storage), üzerinde anlaşılan işlem bloklarını ve bunların yürütme sonuçlarını veritabanına kalıcı hale getirmekle sorumludur.
+
+Blok zinciri, sürekli büyüyen bir [Merkle ağacı](/tr/network/glossary#merkle-trees) olarak temsil edilir, burada ağaca eklenen her yaprak, blok zinciri tarafından yürütülen tek bir işlemi temsil eder.
+
+Blok zinciri tarafından yürütülen tüm operasyonlar ve tüm hesap durumları kriptografik olarak doğrulanabilir. Bu kriptografik kanıtlar şunları sağlar:
+
+- Doğrulayıcı düğümler durum üzerinde anlaşır.
+- İstemci, veri aldığı varlığa güvenmek zorunda değildir. Örneğin, bir istemci bir hesaptan son **n** işlemi getirirse, bir kanıt yanıtta hiçbir işlemin eklenmediğini, atlanmadığını veya değiştirilmediğini tasdik edebilir. İstemci ayrıca bir hesabın durumunu sorgulayabilir, belirli bir işlemin işlenip işlenmediğini sorabilir ve benzerlerini yapabilir.
+
+### Sürümlü veritabanı
+
+Defter durumu, sistemin yürüttüğü işlem sayısına karşılık gelen işaretsiz 64-bit tamsayı kullanılarak sürümlenir. Bu sürümlü veritabanı, doğrulayıcı düğümlerin şunları yapmasına olanak tanır:
+
+- En son sürümde defter durumuna karşı bir işlem yürütmek.
+- Hem mevcut hem de önceki sürümlerde defter geçmişi hakkında istemci sorgularına yanıt vermek.
+
+## İşlemler defter durumunu değiştirir
+
+<ThemedImage
+  alt="İmzalı İşlem Akışı"
+  sources={{
+light: '~/images/transactions-and-state.svg',
+dark: '~/images/transactions-and-state-dark.svg',
+}}
+/>
+
+Yukarıdaki şekil, T<sub>_i_</sub> işleminin yürütülmesinin Aptos blok zincirinin durumunu S<sub>_i-1_</sub>'den S<sub>_i_</sub>'ye nasıl değiştirdiğini gösterir.
+
+Şekilde:
+
+- **A** ve **B** Hesapları: Aptos blok zincirinde Alice ve Bob'un hesaplarını temsil eder.
+- **S<sub>_i-1_</sub>** : Blok zincirinin (_i-1_)-inci durumunu temsil eder. Bu durumda, Alice'in **A** hesabının bakiyesi 110 APT (Aptos coin), Bob'un **B** hesabının bakiyesi ise 52 APT'dir.
+- **T<sub>_i_</sub>** : Bu, blok zincirinde yürütülen _i_-inci işlemdir. Bu örnekte, Alice'in Bob'a 10 APT göndermesini temsil eder.
+- **Apply()**: Bu, belirli bir başlangıç durumu ve belirli bir işlem için her zaman aynı nihai durumu döndüren deterministik bir fonksiyondur. Blok zincirinin mevcut durumu **S<sub>_i-1_</sub>** ise ve **T<sub>_i_</sub>** işlemi **S<sub>_i-1_</sub>** durumunda yürütülürse, blok zincirinin yeni durumu her zaman **S<sub>_i_</sub>** olur. Aptos blok zinciri, deterministik yürütme fonksiyonu **Apply()**'yi uygulamak için [Move dilini](/tr/build/smart-contracts/book/SUMMARY) kullanır.
+- **S<sub>_i_</sub>** : Bu, blok zincirinin _i_-inci durumudur. **T<sub>_i_</sub>** işlemi blok zincirine uygulandığında, yeni **S<sub>_i_</sub>** durumunu oluşturur (**S<sub>_i-1_</sub>** ve **T<sub>_i_</sub>**'ye **Apply(S<sub>_i-1_</sub>, T<sub>_i_</sub>)** uygulamasının sonucu). Bu, Alice'in hesap bakiyesinin 10 azalarak 100 APT'ye düşmesine ve Bob'un hesap bakiyesinin 10 artarak 62 APT'ye yükselmesine neden olur. Yeni **S<sub>_i_</sub>** durumu bu güncellenmiş bakiyeleri gösterir.
+
+## Boyut sınırları
+
+Gas programının bir parçası olarak, [işlemin kendisi](https://github.com/aptos-labs/aptos-core/blob/8074588b5c9c4424fa247c2c9ec5572981ee31cd/aptos-move/aptos-gas-schedule/src/gas_schedule/transaction.rs#L71-L81) ve [çıktıları](https://github.com/aptos-labs/aptos-core/blob/8074588b5c9c4424fa247c2c9ec5572981ee31cd/aptos-move/aptos-gas-schedule/src/gas_schedule/transaction.rs#L152-L177) için zincir üstü yapılandırılabilir boyut sınırları vardır.
+
+| Sınır Türü                     | Mevcut İşlem Başına Sınır |
+| ------------------------------ | ------------------------- |
+| işlem                          | 64KB                      |
+| yönetişim işlemi               | 1MB                       |
+| tek yazma op                   | 1MB                       |
+| tüm yazma op'ları birleştirilmiş | 10MB                      |
+| yazma op sayısı                | 8192                      |
+| tek olay                       | 1MB                       |
+| tüm olaylar birleştirilmiş     | 10MB                      |

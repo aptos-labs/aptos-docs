@@ -1,0 +1,193 @@
+---
+title: "Gas ve Depolama Ücretleri"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Aptos blok zincirinde herhangi bir işlem yürütme işlemi bir işlem ücreti gerektirir. Bugün itibariyle bu ücret iki bileşenden oluşmaktadır:
+
+1. Yürütme ve IO maliyetleri
+
+- Bu, işlemlerinizi işleme ve doğrulanmış kaydı mainnet'in dağıtılmış ağı boyunca yayma gibi geçici hesaplama kaynaklarının kullanımını kapsar.
+- Ağın yüküne göre fiyatı dalgalanabilen Gas Birimlerinde ölçülür. Bu, ağ daha az meşgul olduğunda yürütme ve IO maliyetlerinin düşük olmasını sağlar.
+- Gas'ın bu kısmı, bir işlemin yürütülmesi üzerine kalıcı olarak yakılır.
+
+2. Depolama ücretleri
+
+- Bu, doğrulanmış kaydın dağıtılmış blok zinciri depolamasında kalıcı olarak depolanması maliyetini kapsar.
+- Sabit APT fiyatlarında ölçülür, böylece gas birim fiyatı ağın geçici yükü ile dalgalanırken kalıcı depolama maliyeti stabil kalır.
+- Tahsis edilen depolama slotu silindiğinde depolama ücreti iade edilebilir. Şu anda ağ, bir durum depolama slotunun ömrü boyunca ödenen depolama ücretinin tamamını iade edecek şekilde yapılandırılmıştır.
+- Sistem implementasyonunu basit tutmak için, gas'ın bu kısmı yakılır ve iade üzerine yeniden basılır.
+
+<Aside type="note">
+  Kavramsal olarak, bu ücret ev elektrik veya su faturaları için nasıl ödeme yaptığımıza oldukça benzer şekilde düşünülebilir.
+</Aside>
+
+## Gas birimi
+
+İşlemler ne yaptıklarına bağlı olarak basit ve ucuzdan karmaşığa kadar değişebilir. Aptos blok zincirinde, **gas birimi** hesaplama yapmak veya depolamaya erişmek gibi geçici kaynaklar için temel bir tüketim birimini temsil eder. İkincisi, ayrı olarak depolama ücretleri tarafından karşılandığından, bu tür işlemlerin uzun vadeli depolama yönüyle karıştırılmamalıdır.
+
+Gas ücreti türleri ve mevcut optimizasyonların ayrıntılı açıklaması için [Base Gas Nasıl Çalışır](/tr/network/blockchain/base-gas) bölümüne bakın.
+
+<Aside type="note">
+  👉 **Gas birimi**, boyutsuz bir sayı veya tamsayı olarak ifade edilen coin gibi herhangi bir öğeyle ilişkilendirilmemiş bir birimdir. İşleminiz tarafından tüketilen toplam gas birimleri, işleminizin karmaşıklığına bağlıdır. Öte yandan **gas fiyatı**, Aptos blok zincirinin yerel coin'i [APT](/tr/network/glossary#apt) ve alt birimi [Octas](/tr/network/glossary#octa) cinsinden ifade edilir. Ayrıca Aptos blok zincirine gönderilen bir işlemin nasıl göründüğü için [İşlemler ve Durumlar](/tr/network/blockchain/txns-states) bölümüne bakın.
+</Aside>
+
+## Ücret Beyanı
+
+Aptos Framework sürüm 1.7 itibariyle, ücret tahsilatları ve iadelerinin dökümü `0x1::transaction_fee::FeeStatement` struct'ı ile temsil edilen bir modül olayı olarak yayınlanır.
+
+```move filename="transaction_fee.move"
+#[event]
+/// Bir işlem için ücret tahsilatı ve iadesinin dökümü.
+/// Yapı şöyledir:
+///
+/// - Net tahsilat veya iade (beyanname içinde değil)
+///    - toplam tahsilat: total_charge_gas_units, zincir üstü `TransactionInfo`'daki `gas_used` ile eşleşir.
+///      Bu, aşağıdaki alt öğelerin toplamıdır. Dahili ve harici gas birimleri arasında ve yerel token ile gas
+///      birimleri arasında dönüşümde potansiyel hassasiyet kaybı olduğunu unutmayın, bu nedenle sayıların tam olarak
+///      toplanmaması mümkündür. -- Bu sayı nihai tahsilattır, döküm ise yalnızca bilgilendiricidir.
+///        - yürütme için gas ücreti (CPU zamanı): `execution_gas_units`
+///        - IO için gas ücreti (depolama rastgele erişim): `io_gas_units`
+///        - depolama ücreti tahsilatı (depolama alanı): `storage_fee_octas`, `total_charge_gas_unit`'e
+///          dahil edilmek üzere, bu sayı işlemde kullanıcı tarafından belirtilen `gas_unit_price`'a göre gas birimlerine dönüştürülür.
+///    - depolama silme iadesi: `storage_fee_refund_octas`, bu `gas_used` veya `total_charge_gas_units`'e
+///      dahil değildir, net tahsilat / iade `total_charge_gas_units` * `gas_unit_price` - `storage_fee_refund_octas`
+///      ile hesaplanır.
+///
+/// Bu bir modül olayı olarak yayınlanması amaçlanmıştır.
+struct FeeStatement has drop, store {
+    /// Toplam gas tahsilatı.
+    total_charge_gas_units: u64,
+    /// Yürütme gas tahsilatı.
+    execution_gas_units: u64,
+    /// IO gas tahsilatı.
+    io_gas_units: u64,
+    /// Depolama ücreti tahsilatı.
+    storage_fee_octas: u64,
+    /// Depolama ücreti iadesi.
+    storage_fee_refund_octas: u64,
+}
+```
+
+## Gas fiyatı ve işlemleri önceliklendirme
+
+Aptos ağında, Aptos yönetişimi mutlak minimum gas birim fiyatını belirler. Ancak, belirli bir gas birim fiyatına sahip bir işlemin ne kadar hızlı işlendiğini piyasa belirler. Örneğin, Ethereum gas fiyatının piyasa fiyat hareketlerini gösteren [Ethereum Gas Tracker](https://etherscan.io/gastracker)'a bakın.
+
+Mevcut piyasa fiyatından daha yüksek bir gas birim fiyatı belirterek, daha büyük bir işlem ücreti ödeyerek blok zincirinde işleminizin öncelik seviyesini **artırabilirsiniz**. Konsensüsün bir parçası olarak, lider mempool'undan sonraki bloğun parçası olarak önermek üzere işlemleri seçtiğinde, daha yüksek gas birim fiyatına sahip işlemleri seçmeyi önceleyecektir. Lütfen daha yüksek gas ücretlerinin yalnızca sonraki blok için işlem seçimini öncelediğini unutmayın.
+
+Ancak, bir blok içinde işlem yürütme sırası sistem tarafından belirlenir. Bu sıra, çakışma modellerini dikkate alarak paralel yürütmeyi daha verimli hale getiren [işlem karıştırma](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-27.md) temelinde dayanır. Çoğu durumda bu gereksiz olsa da, ağ yük altındaysa bu önlem işleminizin daha hızlı işlenmesini sağlayabilir. Ayrıntılar için [Simülasyon ile gas birimlerini tahmin etme](#estimating-gas-consumption-via-simulation) altındaki `gas_unit_price` girişine bakın.
+
+<Aside type="caution">
+  👉 Gas birim fiyatını artırıyorsanız, ancak aynı hesap için sürümdeki (taahhüt edilmemiş) işlemleriniz varsa, tüm bu işlemleri daha yüksek gas birim fiyatıyla yeniden göndermelisiniz. Bunun nedeni, aynı hesap içindeki işlemlerin her zaman sıra numarasına saygı göstermek zorunda olmasıdır, bu nedenle etkili olarak daha yüksek gas birim fiyatı işlemi yalnızca sürümdeki işlemler bir bloğa dahil edildikten sonra öncelik artıracaktır.
+</Aside>
+
+## Bir işlem içinde gas ücretlerini belirtme
+
+Aptos blok zincirine bir işlem gönderildiğinde, işlem aşağıdaki zorunlu gas alanlarını içermelidir:
+
+- `max_gas_amount`: İşlemi yürütmek için işlem gönderenin harcamaya istekli olduğu maksimum gas birimi sayısı. Bu, işlem tarafından tüketilebilecek maksimum hesaplama ve depolama kaynaklarını belirler.
+- `gas_price`: İşlem gönderenin ödemek istediği gas birimi başına fiyat. [Octas](/tr/network/glossary#octa) cinsinden ifade edilir.
+
+  İşlem yürütme sırasında, şu şekilde ifade edilen toplam gas miktarı:
+
+  ```text
+  (tüketilen toplam yürütme gas birimleri) + (tüketilen toplam depolama gas birimleri)
+  ```
+
+  `max_gas_amount`'ı aşmamalıdır, aksi takdirde işlem yürütmeyi iptal edecektir.
+
+İstemciden alınan işlem ücreti en fazla `gas_price * max_gas_amount` olacaktır.
+
+## Yönetişim tarafından belirlenen gas parametreleri
+
+Aşağıdaki gas parametreleri Aptos yönetişimi tarafından belirlenir.
+
+<Aside type="note">
+  Bu zincir üstü gas parametreleri Aptos blok zincirinde `0x1::gas_schedule::GasScheduleV2` adresinde yayınlanır.
+</Aside>
+
+- `txn.maximum_number_of_gas_units`: Harcanabilecek maksimum gas birimi sayısı (bu, işlemdeki `max_gas_amount` gas parametresi için izin verilen maksimum değerdir). Bu, dinamik fiyatlandırma ayarlamalarının toplamda ödemek istediğiniz miktarı aşmamasını sağlamak içindir.
+- `txn.min_transaction_gas_units`: Harcanabilecek minimum gas birimi sayısı. İşlemdeki `max_gas_amount` değeri bu parametrenin değerinden büyük olacak şekilde ayarlanmalıdır.
+
+Ayrıca bazı global kategori başına limitler de mevcuttur:
+
+- `txn.max_execution_gas`: Bir işlemin yürütme için harcayabileceği maksimum gas birimi sayısı.
+- `txn.max_io_gas`: Bir işlemin IO için harcayabileceği maksimum gas birimi sayısı.
+- `txn.max_storage_fee`: Bir işlemin kalıcı depolama için harcayabileceği maksimum APT miktarı.
+  Bu limitler bir kategoriyi diğerinden ayırmaya yardımcı olur, `txn.maximum_number_of_gas_units`'i kötüye kullanım konusunda endişelenmeden cömertçe ayarlamamıza olanak tanır.
+
+## Depolama Ücretlerini Hesaplama
+
+Bir işlem için depolama ücreti, global durumda tahsis edilen yeni slot sayısına ve mevcut slotlardaki boyut artışına göre alınır.
+
+Fiyat değişikliği ve geçmiş "ücretsiz kota" altında slot boyutu için ödeme yapmayan eski slotlarla ilgili bazı nüanslar vardır. Daha fazla ayrıntı için [AIP-65](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-65.md#specification)'e bakın.
+
+Ayrıca bazı geriye dönük uyumluluk nedenleriyle, bir işlemin toplam depolama ücretinin şu anda istemciye toplam `gas_used`'ın bir parçası olarak sunulduğunu belirtmek gerekir. Bu, aynı işlem için bile gas birim fiyatına bağlı olarak bu miktarın değişebileceği anlamına gelir.
+
+İşte bir örnek. Yürütme ve IO'da `100` gas birimi ve depolama ücretlerinde `5000` [Octas](/tr/network/glossary#octa) maliyeti olan bir işlemimiz olduğunu varsayalım. Ağ size şunları kullandığınızı gösterecektir:
+
+- Gas birim fiyatı `100` ise `100 + 5000 / 100 = 150` gas birimi, veya
+- Birim fiyat `200` ise `100 + 5000 / 200 = 125` gas birimi.
+
+Bu durumun yaratabileceği kafa karışıklığının farkındayız ve gelecekte bunları ayrı öğeler olarak sunmayı planlıyoruz. Ancak bu, işlem çıktı formatında ve downstream istemcilerde bazı değişiklikler gerektirecektir, bu nedenle bunu gerçekleştirmek için çok çalışırken lütfen sabırlı olun.
+
+## Depolama Silme İadesini Hesaplama
+
+Bir işlem durum öğelerini silerse, serbest bırakılan depolama slotları için işlem ödeyicisine bir iade verilir. Şu anda tam iade verilir -- yani, öğenin ömrü boyunca slot ve baytları için ödenen tüm depolama ücreti.
+
+İade miktarı APT cinsinden ifade edilir ve gas birimlerine dönüştürülmez veya toplam `gas_used`'a dahil edilmez. Bunun yerine, bu iade miktarı [`FeeStatement`](#the-fee-statement)'ın `storage_fee_refund_octas` alanında özellikle detaylandırılır. Sonuç olarak, işlemin ödeyicinin APT bakiyesi üzerindeki net etkisi `gas_used * gas_unit_price - storage_refund` ile belirlenir. Sonuç pozitifse, hesap bakiyesinden bir kesinti vardır; negatifse, bir mevduat vardır.
+
+## Örnekler
+
+### Örnek 1: Hesap bakiyesi vs işlem ücreti
+
+**Gönderenin hesabında işlem ücretini ödemek için yeterli fon bulunmalıdır.**
+
+Diyelim ki, işlem ücretini ödemek için kalan bakiyeniz kalmaması için hesabınızdaki tüm parayı transfer ediyorsunuz. Böyle bir durumda Aptos blok zinciri size işlemin başarısız olacağını bildirir ve transferiniz de başarılı olmaz.
+
+### Örnek 2: İşlem miktarları vs işlem ücreti
+
+**İşlem ücreti, işlemdeki transfer miktarlarından bağımsızdır.**
+
+Örneğin, A işleminde bir hesaptan başka bir hesaba 1000 coin transfer ediyorsunuz. A işlemiyle aynı gas alan değerlerine sahip ikinci bir B işleminde, şimdi bir hesaptan başka bir hesaba 100.000 coin transfer ediyorsunuz. A ve B işlemlerinin her ikisinin de yaklaşık aynı zamanda gönderildiğini varsayarsak, A ve B işlemleri için gas maliyetleri neredeyse aynı olacaktır.
+
+## Simülasyon ile gas tüketimini tahmin etme
+
+Bir işlem için kullanılan gas, burada açıklandığı gibi zincir üzerinde işlemi simüle ederek veya Aptos CLI'nin gas profilleme özelliği aracılığıyla yerel olarak tahmin edilebilir. Simüle edilen işlemin sonuçları, simülasyon anında blok zincirinin **tam** durumunda ihtiyaç duyulan **tam** miktarı temsil eder. Kullanılan bu gas birimleri, zincirin durumuna bağlı olarak değişebilir. Bu nedenle, simülasyondan çıkan herhangi bir miktar yalnızca bir tahmindir ve maksimum gas miktarını ayarlarken, konfor seviyenize ve geçmiş davranışlara dayalı uygun miktarda rezerv alanı içermelidir. Maksimum gas miktarını çok düşük ayarlamak, işlemin iptal olmasına ve hesabın tüketilen her gas için ücretlendirilmesine neden olur.
+
+Zincir üzerinde işlemleri simüle etmek için [`SimulateTransaction`](https://api.devnet.aptoslabs.com/v1/spec#/operations/simulate_transaction) API'sini kullanın. Bu API çalıştırmayı planladığınız tam işlemi çalıştıracaktır.
+
+İşlemi yerel olarak simüle etmek için Aptos CLI'ye entegre edilmiş gas profilleyiciyi kullanın.
+Bu, işleminizin kesin gas kullanımını anlamanıza yardımcı olmak için web tabanlı bir rapor oluşturacaktır.
+Daha fazla ayrıntı için [Gas Profilleme](/tr/build/cli/working-with-move-contracts/local-simulation-benchmarking-and-gas-profiling#gas-profiling) bölümüne bakın.
+
+<Aside type="note">
+  İşlemde sağlanan `Signature`'ın tümünün sıfır olması gerektiğini unutmayın. Bu, birinin geçerli imzayı kullanmasını önlemek içindir.
+</Aside>
+
+İşlemi simüle etmek için iki bayrak vardır:
+
+1. `estimate_gas_unit_price`: Bu bayrak, [`estimate_gas_price`](https://api.devnet.aptoslabs.com/v1/spec#/operations/estimate_gas_price) API'si ile aynı algoritmayı kullanarak işlemde gas birim fiyatını tahmin edecektir.
+2. `estimate_max_gas_amount`: Bu bayrak, kullanabileceğiniz maksimum olası gas'ı bulacak ve size gerçek `gas_used`'ı söylemek için işlemi simüle edecektir.
+
+### Simülasyon adımları
+
+Bir işlem için doğru gas miktarını bulma simülasyon adımları şöyledir:
+
+1. Hem `estimate_gas_unit_price` hem de `estimate_max_gas_amount` `true` olarak ayarlanmış simülasyon ile gas'ı tahmin edin.
+2. Döndürülen işlemdeki `gas_unit_price`'ı yeni işleminizin `gas_unit_price`'ı olarak kullanın.
+3. Döndürülen işlemdeki `gas_used * gas_unit_price` değerlerini işlemin maliyeti için **alt sınır** olarak görüntüleyin.
+4. Maliyetin üst sınırını hesaplamak için, döndürülen işlemdeki `max_gas_amount` ve `gas_used * güvenlik faktörü`'nün **minimumunu** alın. CLI'de `güvenlik faktörü` için `1.5` değeri kullanılır. Bu değeri göndermek istediğiniz işlem için `max_gas_amount` olarak kullanın. İşlemin maliyeti için **üst sınır**'ın `max_gas_amount * gas_unit_price` olduğunu, yani bu işlem göndereninin ücretlendirileceği maksimum miktar olduğunu unutmayın.
+5. Bu noktada artık işleminizi şu şekilde göndermek için `gas_unit_price` ve `max_gas_amount`'ınız var:
+   1. Döndürülen simüle edilmiş işlemden `gas_unit_price`.
+   2. `gas_used` \* `güvenlik faktörü` veya işlemden `max_gas_amount`'ın minimumu olarak `max_gas_amount`.
+6. İşleminizi önceliklendirme veya öncelikten çıkarma ihtiyacı hissederseniz, işlemin `gas_unit_price`'ını ayarlayın. Daha yüksek öncelik için değeri artırın, daha düşük öncelik için değeri azaltın.
+
+<Aside type="note">
+  Önceliklendirme `gas_unit_price` kovalara dayanır. Kovalar [`mempool_config.rs`](https://github.com/aptos-labs/aptos-core/blob/30b385bf38d3dc8c4e8ee0ff045bc5d0d2f67a85/config/src/config/mempool_config.rs#L8)'de tanımlanır. Mevcut kovalar `[0, 150, 300, 500, 1000, 3000, 5000, 10000, 100000, 1000000]`'dır. Bu nedenle, 150 ve 299'luk bir `gas_unit_price` neredeyse aynı şekilde öncelendirilecektir.
+</Aside>
+
+<Aside type="note">
+  `güvenlik faktörü`'nün yalnızca yürütme ve IO ile ilgili değişiklikleri dikkate aldığını unutmayın. Beklenmedik depolama slotu oluşturma yeterince karşılanmayabilir.
+</Aside>

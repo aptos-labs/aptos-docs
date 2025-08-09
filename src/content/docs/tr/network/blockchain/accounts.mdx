@@ -1,0 +1,171 @@
+---
+id: "accounts"
+title: "Hesaplar"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Aptos blokzincirinde bir hesap, zincir üstü para birimi ve NFT'ler dahil olmak üzere bir dizi varlık üzerinde erişim kontrolünü temsil eder. Aptos'ta bu varlıklar, hem erişim kontrolünü hem de kıtlığı vurgulayan **kaynak** olarak bilinen bir Move dil ilkeli ile temsil edilir.
+
+Aptos blokzincirindeki her hesap, 32 baytlık bir hesap adresi ile tanımlanır. Önemli hesaplar için hatırlanabilir ve benzersiz olmaları amacıyla .apt alanlarını güvence altına almak için [www.aptosnames.com](https://www.aptosnames.com/) adresindeki Aptos Name Service'i kullanabilirsiniz.
+
+Hesapların ve adreslerin örtük olduğu diğer blokzincirlerden farklı olarak, Aptos'taki hesaplar açıktır ve işlem gerçekleştirebilmeleri için oluşturulmaları gerekir. Hesap açıkça veya Aptos tokenları (APT) transfer edilerek örtük olarak oluşturulabilir. Daha fazla ayrıntı için [Hesap oluşturma](#hesap-oluşturma) bölümüne bakın. Bir bakıma, bu, bir adresin işlem gönderebilmesi için önce gas için fon gönderilmesi gereken diğer zincirlere benzerdir.
+
+Açık hesaplar, diğer ağlarda bulunmayan birinci sınıf özelliklere izin verir:
+
+- Kimlik doğrulama anahtarını döndürme. Hesabın kimlik doğrulama anahtarı, farklı bir özel anahtar aracılığıyla kontrol edilecek şekilde değiştirilebilir. Bu, web2 dünyasında parolaları değiştirmeye benzerdir.
+- Yerel multisig desteği. Aptos'taki hesaplar, kimlik doğrulama anahtarını oluştururken hem Ed25519 hem de Secp256k1 ECDSA imza şemalarını kullanarak k-of-n multisig'i destekler.
+
+Aptos'ta üç tür hesap vardır:
+
+- _Standart hesap_ - Bu, karşılık gelen bir açık/özel anahtar çifti ile bir adrese karşılık gelen tipik bir hesaptır.
+- [_Kaynak hesabı_](/build/smart-contracts/resource-accounts) - Geliştiriciler tarafından kaynakları depolamak veya zincir üstünde modüller yayınlamak için kullanılan, karşılık gelen özel anahtarı olmayan otonom bir hesap.
+- [_Nesne_](/build/smart-contracts/objects) - Tek bir varlığı temsil eden tek bir adres içinde depolanan karmaşık bir kaynak kümesi.
+
+<Aside type="note">
+  Hesap adresleri 32 bayttır. Genellikle 64 hex karakter olarak gösterilir, her hex karakter bir nibble'dır.
+  Bazen adresin önüne 0x eklenir. Bir adresin nasıl göründüğüne dair bir örnek için [İlk İşleminiz](/build/guides/first-transaction) bölümüne bakın,
+  aşağıda yeniden üretilmiştir:
+</Aside>
+
+```text
+Alice: 0xeeff357ea5c1a4e7bc11b2b17ff2dc2dcca69750bfef1e1ebcaccf8c8018175b
+Bob: 0x19aadeca9388e009d136245b9a67423f3eee242b03142849eb4f81a4a409e59c
+```
+
+## Hesap adresi
+
+Şu anda Aptos, bir hesap için yalnızca tek, birleşik bir tanımlayıcıyı desteklemektedir. Aptos'taki hesaplar evrensel olarak 32 baytlık hex string olarak temsil edilir. 32 bayttan kısa bir hex string de geçerlidir; bu senaryolarda hex string önde sıfırlarla doldurulabilir, örneğin `0x1` => `0x0000000000000...01`. Aptos standartları Adres'ten önde gelen sıfırların kaldırılabileceğini belirtse de, çoğu uygulama bu eski davranıştan kaçınmaya çalışır ve yalnızca `0x0` ile `0xa` arasındaki özel adresler için 0'ların kaldırılmasını destekler.
+
+## Hesap oluşturma
+
+Bir kullanıcı hesap oluşturma talebinde bulunduğunda, örneğin [Aptos SDK](/build/sdks/ts-sdk/account) kullanarak, aşağıdaki adımlar yürütülür:
+
+- Kullanıcının hesabını yönetmek için kimlik doğrulama şemasını seçin, örneğin Ed25519 veya Secp256k1 ECDSA.
+- Yeni bir özel anahtar, açık anahtar çifti oluşturun.
+- 32 baytlık kimlik doğrulama anahtarı ve hesap adresini oluşturmak için açık anahtarı açık anahtarın kimlik doğrulama şeması ile birleştirin.
+
+Kullanıcı bu hesapla ilişkili işlemleri imzalamak için özel anahtarı kullanmalıdır.
+
+## Hesap sıra numarası
+
+Bir hesabın sıra numarası, o hesaptan zincir üstünde gönderilen ve taahhüt edilen işlem sayısını gösterir. Taahhüt edilen işlemler ya sonuçta elde edilen durum değişiklikleri blokzincire taahhüt edilerek yürütülür ya da durum değişikliklerinin atıldığı ve yalnızca işlemin depolandığı durumda iptal edilir.
+
+Gönderilen her işlem, belirli gönderenin hesabı için benzersiz bir sıra numarası içermelidir. Aptos blokzinciri işlemi işlediğinde, işlemdeki sıra numarasına bakar ve bunu zincir üstündeki hesaptaki sıra numarası ile karşılaştırır. İşlem yalnızca sıra numarası mevcut sıra numarasına eşit veya daha büyükse işlenir. İşlemler yalnızca mevcut sıra numarasından itibaren bitişik bir işlem serisi varsa diğer bellek havuzlarına iletilir veya yürütülür. Yürütme, eski işlemlerin tekrar saldırılarını önleyerek ve gelecekteki işlemlerin sıralamasını garanti ederek sıra dışı sıra numaralarını reddeder.
+
+## Kimlik doğrulama anahtarı
+
+İlk hesap adresi, hesap oluşturma sırasında türetilen kimlik doğrulama anahtarına ayarlanır. Ancak kimlik doğrulama anahtarı daha sonra değişebilir, örneğin yeni bir açık-özel anahtar çifti oluşturduğunuzda, anahtarları döndürmek için açık anahtarlar. Bir hesap adresi asla değişmez.
+
+Aptos blokzinciri aşağıdaki kimlik doğrulama şemalarını destekler:
+
+1. [Ed25519](https://ed25519.cr.yp.to/)
+2. [Secp256k1 ECDSA](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-49.md)
+3. [K-of-N çoklu imzalar](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-55.md)
+4. Artık eski olan özel bir MultiEd25519 şeması
+
+<Aside type="note">
+  Aptos blokzinciri varsayılan olarak Ed25519 imza işlemlerini kullanır.
+</Aside>
+
+### Ed25519 kimlik doğrulaması
+
+Ed25519 imzası için bir kimlik doğrulama anahtarı ve hesap adresi oluşturmak için:
+
+1. **Bir anahtar çifti oluşturun**: Yeni bir anahtar çifti (`privkey_A`, `pubkey_A`) oluşturun. Aptos blokzinciri, RFC 8032'de tanımlandığı gibi Ed25519 eğrisi üzerinde PureEdDSA şemasını kullanır.
+2. **32 baytlık kimlik doğrulama anahtarını türetin**: `pubkey_A`'dan 32 baytlık kimlik doğrulama anahtarını türetin:
+   ```text
+   auth_key = sha3-256(pubkey_A | 0x00)
+   ```
+   burada `|` birleştirmeyi gösterir. `0x00`, 1 baytlık tek imza şeması tanımlayıcısıdır.
+3. Bu ilk kimlik doğrulama anahtarını kalıcı hesap adresi olarak kullanın.
+
+### MultiEd25519 kimlik doğrulaması
+
+K-of-N multisig kimlik doğrulaması ile hesap için toplam N imzalayan vardır ve bu N imzadan en az K'sının bir işlemi kimlik doğrulaması için kullanılması gerekir.
+
+K-of-N multisig hesabının kimlik doğrulama anahtarını ve hesap adresini oluşturmak için:
+
+1. **Anahtar çiftleri oluşturun**: `N` ed25519 açık anahtarı `p_1`, ..., `p_n` oluşturun.
+2. İşlemi kimlik doğrulaması için gereken imza sayısı olan `K` değerine karar verin.
+3. **32 baytlık kimlik doğrulama anahtarını türetin**: Kimlik doğrulama anahtarını aşağıda açıklandığı gibi hesaplayın:
+   ```text
+   auth_key = sha3-256(p_1 | . . . | p_n | K | 0x01)
+   ```
+   `0x01`, 1 baytlık multisig şeması tanımlayıcısıdır.
+4. Bu ilk kimlik doğrulama anahtarını kalıcı hesap adresi olarak kullanın.
+
+### Genelleştirilmiş kimlik doğrulama
+
+Genelleştirilmiş kimlik doğrulama hem Ed25519 hem de Secp256k1 ECDSA'yı destekler. Önceki kimlik doğrulama şemalarında olduğu gibi, bu şemalar sırasıyla tek ve çoklu anahtar için `0x02` ve `0x03` şema değeri içerir, ancak ayrıca her anahtar, anahtar türünü belirtmek için bir önek değeri içerir:
+
+| Anahtar türü                          | Önek baytı |
+| ------------------------------------- | ---------- |
+| Ed25519 genelleştirilmiş şema         | `0x00`     |
+| Secp256k1Ecdsa genelleştirilmiş şema  | `0x01`     |
+| Secp256r1Ecdsa WebAuthn şeması        | `0x02`     |
+| Anahtarsız                            | `0x03`     |
+
+`pubkey` açık anahtarını kullanan tek anahtar Secp256k1 ECDSA hesabı için kimlik doğrulama anahtarı şu şekilde türetilir:
+
+```text
+auth_key = sha3-256(0x01 | pubkey | 0x02)
+```
+
+Burada
+
+- ilk giriş olan `0x01`, Secp256k1 ECDSA anahtarının kullanımını temsil eder;
+- son giriş olan `0x02`, kimlik doğrulama şemasını temsil eder.
+
+Tek bir Secp256k1 ECDSA açık anahtarı `pubkey_0` ve tek bir Ed25519 açık anahtarı `pubkey_1` içeren, bir imzanın yeterli olduğu 1-of-2 çoklu anahtar hesabı için kimlik doğrulama anahtarı şu şekilde türetilir:
+
+```text
+auth_key = sha3-256(0x02 | 0x01 | pubkey_0 | 0x00 | pubkey_1 | 0x01 | 0x03)
+```
+
+Burada
+
+- ilk giriş olan `0x02`, toplam anahtar sayısını tek bayt olarak temsil eder;
+- sondan ikinci giriş olan `0x01`, gerekli imza sayısını tek bayt olarak temsil eder;
+- son giriş olan `0x03`, kimlik doğrulama şemasını temsil eder.
+
+## Anahtarları döndürme
+
+Aptos'taki bir Hesap, potansiyel olarak tehlikeye girmiş anahtarların hesaplara erişmek için kullanılamaması için anahtarları döndürme yeteneğine sahiptir. Anahtarlar `account::rotate_authentication_key` fonksiyonu aracılığıyla döndürülebilir.
+
+Anahtarları yenilemek genellikle güvenlik alanında iyi hijyen olarak kabul edilir. Ancak bu, hem özel anahtarı hem de ilişkili hesabını temsil etmek için bir anımsatıcı kullanmaya alışmış sistem entegratörleri için bir zorluk teşkil eder. Sistem entegratörları için bunu basitleştirmek amacıyla Aptos, aptos account lookup-address aracılığıyla zincir üstü haritalama sağlar. Zincir üstü veriler, mevcut anımsatıcı tarafından tanımlanan etkili hesap adresini gerçek hesap adresine haritalandırır.
+
+Daha fazla bilgi için [`account.move`](https://github.com/aptos-labs/aptos-core/blob/a676c1494e246c31c5e96d3363d99e2422e30f49/aptos-move/framework/aptos-framework/sources/account.move#L274) bölümüne bakın.
+
+## Bir hesabın durumu
+
+Her hesabın durumu hem kod (Move modülleri) hem de verilerden (Move kaynakları) oluşur. Bir hesap rastgele sayıda Move modülü ve Move kaynağı içerebilir:
+
+- **Move modülleri**: Move modülleri kod içerir, örneğin tür ve prosedür bildirimleri; ancak veri içermezler. Bir Move modülü, Aptos blokzincirinin global durumunu güncelleme kurallarını kodlar.
+- **Move kaynakları**: Move kaynakları veri içerir ancak kod içermez. Her kaynak değeri, Aptos blokzincirinde yayınlanmış bir modülde bildirilen bir türe sahiptir.
+
+## İmzalayanlarla erişim kontrolü
+
+Bir işlemin göndereni bir imzalayan tarafından temsil edilir. Bir Move modülündeki bir fonksiyon argüman olarak `signer` aldığında, Aptos Move VM, işlemi imzalayan hesabın kimliğini bir Move modülü giriş noktasında bir imzalayana çevirir. Aşağıdaki `initialize` ve `withdraw` fonksiyonlarında `signer` ile Move örnek koduna bakın. Bir fonksiyonda `signer` belirtilmediğinde, örneğin aşağıdaki `deposit` fonksiyonu, bu fonksiyon için imzalayan tabanlı erişim kontrolleri sağlanmayacaktır:
+
+```move filename="coin.move" /account: &signer/
+module Test::Coin {
+  struct Coin has key { amount: u64 }
+
+  public fun initialize(account: &signer) {
+    move_to(account, Coin { amount: 1000 });
+  }
+
+  public fun withdraw(account: &signer, amount: u64): Coin acquires Coin {
+    let balance = &mut borrow_global_mut<Coin>(Signer::address_of(account)).amount;
+    *balance = *balance - amount;
+    Coin { amount }
+  }
+
+  public fun deposit(account: address, coin: Coin) acquires Coin {
+      let balance = &mut borrow_global_mut<Coin>(account).amount;
+      *balance = *balance + coin.amount;
+      Coin { amount: _ } = coin;
+  }
+}
+```

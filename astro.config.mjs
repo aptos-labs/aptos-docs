@@ -28,10 +28,12 @@ import { devServerFileWatcher } from "./src/integrations/dev-server-file-watcher
 // import { rehypeAddDebug } from "./src/plugins";
 
 const ALGOLIA_APP_ID = ENV.ALGOLIA_APP_ID;
+const ALGOLIA_ASSISTANT_ID = ENV.ALGOLIA_ASSISTANT_ID;
 const ALGOLIA_SEARCH_API_KEY = ENV.ALGOLIA_SEARCH_API_KEY;
 const ALGOLIA_INDEX_NAME = ENV.ALGOLIA_INDEX_NAME;
 
-const hasAlgoliaConfig = ALGOLIA_APP_ID && ALGOLIA_SEARCH_API_KEY && ALGOLIA_INDEX_NAME;
+const hasAlgoliaConfig =
+  ALGOLIA_APP_ID && ALGOLIA_SEARCH_API_KEY && ALGOLIA_INDEX_NAME && ALGOLIA_ASSISTANT_ID;
 const enableApiReference = true;
 
 // https://astro.build/config
@@ -244,6 +246,11 @@ export default defineConfig({
   env: {
     schema: {
       ALGOLIA_APP_ID: envField.string({
+        context: "client",
+        access: "public",
+        optional: !hasAlgoliaConfig,
+      }),
+      ALGOLIA_ASSISTANT_ID: envField.string({
         context: "client",
         access: "public",
         optional: !hasAlgoliaConfig,

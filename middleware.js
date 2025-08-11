@@ -232,13 +232,49 @@ const SUPPORTED_LANGUAGES = [
     label: "Español",
   },
   {
+    code: "fr",
+    label: "Français",
+  },
+  {
+    code: "de",
+    label: "Deutsch",
+  },
+  {
+    code: "pt",
+    label: "Português",
+  },
+  {
+    code: "tr",
+    label: "Türkçe",
+  },
+  {
+    code: "ru",
+    label: "Русский",
+  },
+  {
+    code: "id",
+    label: "Bahasa Indonesia",
+  },
+  {
+    code: "ha",
+    label: "Hausa",
+  },
+  {
+    code: "hi",
+    label: "हिन्दी",
+  },
+  {
+    code: "ja",
+    label: "日本語",
+  },
+  {
+    code: "ko",
+    label: "한국어",
+  },
+  {
     code: "zh",
     label: "简体中文",
   },
-  //{
-  //  code: "ja",
-  //  label: "日本語",
-  //},
 ];
 const LANGUAGE_CODES = SUPPORTED_LANGUAGES.map((lang) => lang.code);
 const DEFAULT_LANG = "en";

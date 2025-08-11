@@ -1,0 +1,246 @@
+---
+title: "Ihr erstes fungibles Asset"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+Dieses Tutorial zeigt Ihnen, wie Sie Ihr eigenes Fungible Asset (FA) namens [FACoin](https://github.com/aptos-labs/aptos-core/tree/main/aptos-move/move-examples/fungible_asset/fa_coin) erstellen. Der [Fungible Asset Standard](/de/build/smart-contracts/fungible-asset) bietet eingebaute Unterstützung für das Prägen, Übertragen, Verbrennen und Verfolgen von Kontosalden und ist daher nützlich für die Darstellung fungibler Assets. Wir werden das [TypeScript SDK](/de/build/sdks/ts-sdk) verwenden, um den Vertrag bereitzustellen und zu testen, sobald er on-chain ist.
+
+Auf hoher Ebene funktioniert der Fungible Asset Standard durch zwei Hauptobjekte:
+
+1. Ein `Metadata`-Objekt zur Speicherung von Informationen über das fungible Asset.
+2. `FungibleStore`s für jedes Konto, das das fungible Asset hat, um ihren aktuellen Kontosaldo zu verfolgen.
+
+Das Senden eines fungiblen Assets an jemanden führt dazu, dass er einen `FungibleStore` erhält und die Salden in beiden Konten entsprechend aktualisiert werden.
+
+## Fungible Assets in Aktion sehen
+
+Hier werden wir den Beispielvertrag [FACoin](https://github.com/aptos-labs/aptos-ts-sdk/blob/main/examples/typescript/move/facoin/sources/fa_coin.move) modifizieren, bereitstellen und testen, um zu sehen, wie der Fungible Asset Standard funktioniert. Wenn Sie Ihren eigenen fungiblen Asset-Vertrag schreiben, möchten Sie möglicherweise auch den Stablecoin-Beispielvertrag [hier](https://learn.aptoslabs.com/en/code-examples/stablecoin) als Referenz verwenden.
+
+<Steps>
+  1. Installieren Sie die [Aptos CLI](/de/build/cli).
+
+     Diese wird von den Bereitstellungsskripten verwendet, um den `FACoin`-Vertrag onchain zu veröffentlichen.
+
+  2. Klonen Sie das TypeScript SDK Repository.
+
+     Dieses Repository enthält den Fungible Asset-Beispielcode.
+
+     ```shellscript filename="Terminal"
+     git clone https://github.com/aptos-labs/aptos-ts-sdk.git
+     ```
+
+  3. Navigieren Sie zur obersten Ebene des geklonten Repositorys.
+
+     ```shellscript filename="Terminal"
+     cd aptos-ts-sdk
+     ```
+
+  4. Installieren Sie die Abhängigkeiten des SDKs.
+
+     ```shellscript filename="Terminal"
+     pnpm install
+     ```
+
+  5. Erstellen Sie das TypeScript SDK.
+
+     Das Beispiel erfordert den lokalen Build des TypeScript SDK.
+
+     ```shellscript filename="Terminal"
+     pnpm build
+     ```
+
+  6. Öffnen Sie fa\_coin.move in einem Editor.
+
+     Sie finden `fa_coin.move` unter `examples/typescript/move/facoin/sources/fa_coin.move`.
+
+     Dies ist die Move-Datei, die den Großteil der Vertragslogik enthält. Wir werden uns die Details ansehen, wie dieser Vertrag funktioniert, nachdem wir Ihnen ein Beispiel für seine Funktionsweise gezeigt haben.
+
+  7. Bearbeiten Sie den ASSET\_NAME, um der Name Ihres neuen fungiblen Assets zu sein.
+
+     Z.B. "Tutorial Token". Die Werte, die Sie hier setzen, werden im bereitgestellten Vertrag und beim Testen der Funktionsweise angezeigt.
+
+  8. Navigieren Sie zu examples/typescript.
+
+     ```shellscript filename="Terminal"
+     cd examples/typescript
+     ```
+
+  9. Installieren Sie die Abhängigkeiten für die Beispiele.
+
+     ```shellscript filename="Terminal"
+     pnpm install
+     ```
+
+  10. Führen Sie your\_fungible\_asset aus.
+
+      ```shellscript filename="Terminal"
+      pnpm run your_fungible_asset
+      ```
+
+      Sie sollten eine Ausgabe sehen, die demonstriert, wie die fungiblen Assets erstellt und übertragen werden, die so aussieht:
+
+      ```shellscript filename="Terminal"
+      === Addresses ===
+      Alice: 0x0c5dd7abbd67db06325fa1a2f37a1833f9a92ff2beb90f32495a9d80972429cd
+      Bob: 0x2a796f4255d5c23684fe6cc521069d684516031bb5ae1ad2061ddc5414450807
+      Charlie: 0xd824909be65a224f651ff6e9b82ec99ad5707fcef739d1003be20fc69fb93d7a
+
+      === Compiling FACoin package locally ===
+      In order to run compilation, you must have the `aptos` CLI installed.
+      Running the compilation locally, in a real situation you may want to compile this ahead of time.
+      aptos move build-publish-payload --json-output-file move/facoin/facoin.json --package-dir move/facoin --named-addresses FACoin=0x0c5dd7abbd67db06325fa1a2f37a1833f9a92ff2beb90f32495a9d80972429cd --assume-yes
+      Compiling, may take a little while to download git dependencies...
+      UPDATING GIT DEPENDENCY https://github.com/aptos-labs/aptos-core.git
+      INCLUDING DEPENDENCY AptosFramework
+      INCLUDING DEPENDENCY AptosStdlib
+      INCLUDING DEPENDENCY MoveStdlib
+      BUILDING facoin
+
+      ===Publishing FACoin package===
+      Transaction hash: 0x0c8a24987bdf2e5e40d8a00f6c97ac55419757bc440097d76959a64dbeafc351
+      metadata address: 0x2e0e90c701233467f27150f42d365e27e72eb0be8e2a74ee529c31b813bbb321
+      All the balances in this example refer to balance in primary fungible stores of each account.
+      Alice's initial balance: 0.
+      Bob's initial balance: 0.
+      Charlie's initial balance: 0.
+      Alice mints Charlie 100 coins.
+      Charlie's updated "Tutorial Token" primary fungible store balance: 0.
+      Alice freezes Bob's account.
+      Alice as the admin forcefully transfers the newly minted coins of Charlie to Bob ignoring that Bob's account is frozen.
+      Bob's updated "Tutorial Token" balance: 0.
+      Alice unfreezes Bob's account.
+      Alice burns 50 coins from Bob.
+      Bob's updated "Tutorial Token" balance: 0.
+      Bob transfers 10 coins to Alice as the owner.
+      Alice's updated "Tutorial Token" balance: 0.
+      Bob's updated "Tutorial Token" balance: 0.
+      done.
+      ```
+</Steps>
+
+<Aside type="note">
+  Wenn Sie den Namen des Tokens im `fa_coin.move`-Vertrag ändern, wird die Ausgabe mit diesem Namen aktualisiert.
+</Aside>
+
+## Den `fa_coin.move`-Beispielvertrag verstehen
+
+Der vollständige Vertrag für FACoin.move ist [hier](https://github.com/aptos-labs/aptos-ts-sdk/blob/main/examples/typescript/move/facoin/sources/fa_coin.move) zu finden.
+
+Lassen Sie uns Schritt für Schritt durchgehen, wie dieser Vertrag geschrieben ist.
+
+<Steps>
+  1. Move.toml
+
+     Die Move.toml-Datei ermöglicht es Move, Abhängigkeiten zu importieren, zu bestimmen, welche Adressen zu verwenden sind, und enthält Metadaten über den Vertrag.
+
+     Unabhängig davon, welche Funktionen Sie zu Ihrem fungiblen Asset hinzufügen, wird Ihre Move.toml wahrscheinlich ähnliche Felder wie diese mindestens haben. In diesem Fall haben wir die primäre Vertragsadresse `FACoin`, die zur Bereitstellungszeit spezifiziert werden muss (angezeigt durch das Belassen des Werts als "\_"). Sie enthält auch die GitHub-Abhängigkeit, um den Fungible Asset Standard von "AptosFramework" zu importieren.
+
+     ```toml filename="Move.toml"
+     [package]
+     name = "facoin"
+     version = "1.0.0"
+     authors = []
+
+     [addresses]
+     FACoin = "_"
+
+     [dependencies.AptosFramework]
+     git = "https://github.com/aptos-labs/aptos-core.git"
+     rev = "mainnet"
+     subdir = "aptos-move/framework/aptos-framework"
+     ```
+
+  2. Imports
+
+     Das FACoin-Modul verwendet mehrere wichtige Module:
+
+     1. `fungible_asset` enthält die Logik für die Gewährung von Berechtigungen zum Prägen, Übertragen, Verbrennen und Erstellen Ihres FungibleAsset.
+     2. `object` ermöglicht die Erstellung von Aptos-Objekten.
+     3. `primary_fungible_store` enthält die Logik zur Verfolgung von Kontosalden für das neue Fungible Asset.
+
+     ```move filename="fa_coin.move"
+     module FACoin::fa_coin {
+         use aptos_framework::fungible_asset::{Self, MintRef, TransferRef, BurnRef, Metadata, FungibleAsset};
+         use aptos_framework::object::{Self, Object};
+         use aptos_framework::primary_fungible_store;
+         use std::error;
+         use std::signer;
+         use std::string::utf8;
+         use std::option;
+     		//...
+     }
+     ```
+
+     Diese Imports sind in der `Move.toml`-Datei als GitHub-Abhängigkeiten definiert.
+
+  3. init\_module
+
+     Diese Funktion wird aufgerufen, wenn das Modul initial veröffentlicht wird, um die ordnungsgemäßen Berechtigungen und Objekte einzurichten. Für FACoin wird dies verwendet, um das `MetaData`-Objekt des Assets zu initialisieren (das Dinge wie den Namen und das Symbol des Assets enthält), sowie um die relevanten Referenzen dafür zu erhalten, wie unser fungibles Asset verwendet wird.
+
+     Der `ManagedFungibleAsset`-Standard hilft dabei, zu verfolgen, welche Berechtigungen dieses Modul verwenden darf.
+
+     ```move filename="fa_coin.move"
+     fun init_module(admin: &signer) {
+         let constructor_ref = &object::create_named_object(admin, ASSET_SYMBOL);
+         primary_fungible_store::create_primary_store_enabled_fungible_asset(
+             constructor_ref,
+             option::none(),
+             utf8(ASSET_NAME),
+             utf8(ASSET_SYMBOL),
+             8,
+             utf8(b"http://example.com/favicon.ico"),
+             utf8(b"http://example.com"),
+         );
+
+         let mint_ref = fungible_asset::generate_mint_ref(constructor_ref);
+         let burn_ref = fungible_asset::generate_burn_ref(constructor_ref);
+         let transfer_ref = fungible_asset::generate_transfer_ref(constructor_ref);
+         let metadata_object_signer = object::generate_signer(constructor_ref);
+         move_to(
+             &metadata_object_signer,
+             ManagedFungibleAsset { mint_ref, transfer_ref, burn_ref }
+         )
+     }
+     ```
+
+  4. View-Funktionen
+
+     Beim Erstellen Ihres eigenen fungiblen Assets kann es hilfreich sein, View-Funktionen für alle Daten hinzuzufügen, die später benötigt werden. In diesem Fall wollten wir den Namen des Assets sehen, um zu berichten, welches Asset in unserem Beispielszenario gehandelt wurde.
+
+     ```move filename="fa_coin.move"
+     #[view]
+     public fun get_metadata(): Object<Metadata> {
+         let asset_address = object::create_object_address(&@FACoin, ASSET_SYMBOL);
+         object::address_to_object<Metadata>(asset_address)
+     }
+
+     #[view]
+     public fun get_name(): string::String {
+         let metadata = get_metadata();
+         fungible_asset::name(metadata)
+     }
+     ```
+
+  5. Entry-Funktionen
+
+     Jedes fungible Asset hat eine ähnliche Schnittstelle (mint, transfer, burn, freeze, unfreeze, deposit und withdraw). Hier ist ein Beispiel einer minimalen Mint-Funktion, die prägt und die Mittel an den ordnungsgemäßen Empfänger überträgt:
+
+     ```move filename="fa_coin.move"
+     public entry fun mint(admin: &signer, to: address, amount: u64) acquires ManagedFungibleAsset {
+         let asset = get_metadata();
+         let managed_fungible_asset = authorized_borrow_refs(admin, asset);
+         let to_wallet = primary_fungible_store::ensure_primary_store_exists(to, asset);
+         let fa = fungible_asset::mint(&managed_fungible_asset.mint_ref, amount);
+         fungible_asset::deposit_with_ref(&managed_fungible_asset.transfer_ref, to_wallet, fa);
+     }
+     ```
+</Steps>
+
+## Zusammenfassung
+
+Wenn Sie Ihr eigenes Fungible Asset erstellen möchten, können Sie [`fa_coin.move`](https://github.com/aptos-labs/aptos-ts-sdk/tree/main/examples/typescript/move/facoin) als Ausgangspunkt verwenden oder andere Code-Beispiele [hier](https://learn.aptoslabs.com/en/code-examples) betrachten.
+
+Unabhängig davon wird Ihnen der Fungible Asset Standard dabei helfen, automatisch zu prägen, zu übertragen, zu verbrennen und Salden für welche fungiblen Assets auch immer Sie on-chain darstellen möchten zu verfolgen.
+
+Sie finden die [Move-Referenz für Fungible Assets](/move-reference/mainnet/aptos-framework/fungible_asset) für weitere Details zu den Funktionssignaturen und Implementierungsdetails.

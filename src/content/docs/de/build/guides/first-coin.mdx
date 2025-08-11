@@ -1,0 +1,392 @@
+---
+title: "Ihre erste Münze"
+---
+
+import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
+
+Dieses Tutorial führt ein, wie Sie Ihre eigene Münze kompilieren, bereitstellen und prägen können (wie [hier](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/coin.move) definiert), namens [MoonCoin](https://github.com/aptos-labs/aptos-core/tree/main/aptos-move/move-examples/moon_coin).
+
+## Schritt 1: Ein SDK auswählen
+
+Installieren Sie Ihr bevorzugtes SDK aus der untenstehenden Liste:
+
+- [TypeScript SDK](/de/build/sdks/ts-sdk)
+- [Python SDK](/de/build/sdks/python-sdk)
+
+***
+
+## Schritt 2: Die CLI installieren
+
+[Installieren Sie die vorkompilierte Binärdatei für die Aptos CLI](/de/build/cli).
+
+***
+
+## Schritt 3: Das Beispiel ausführen
+
+<Tabs>
+  <TabItem label="TypeScript">
+    Klonen Sie das `aptos-ts-sdk` Repository und erstellen Sie es:
+
+    ```shellscript filename="Terminal"
+    git clone https://github.com/aptos-labs/aptos-ts-sdk.git
+    cd aptos-ts-sdk
+    pnpm install
+    pnpm build
+    ```
+
+    Navigieren Sie zum TypeScript-Beispielverzeichnis:
+
+    ```shellscript filename="Terminal"
+    cd examples/typescript/
+    ```
+
+    Installieren Sie die notwendigen Abhängigkeiten:
+
+    ```shellscript filename="Terminal"
+    pnpm install
+    ```
+
+    Führen Sie das TypeScript [`your_coin`](https://github.com/aptos-labs/aptos-ts-sdk/blob/main/examples/typescript/your_coin.ts) Beispiel aus:
+
+    ```shellscript filename="Terminal"
+    pnpm run your_coin
+    ```
+
+    Die Anwendung wird abgeschlossen und gibt aus:
+
+    ```shellscript filename="Terminal"
+    Bob's initial MoonCoin balance: 0.
+    Alice mints herself 100 MoonCoin.
+    Alice transfers 100 MoonCoin to Bob.
+    Bob's updated MoonCoin balance: 100.
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    Klonen Sie das `aptos-core` Repository:
+
+    ```shellscript filename="Terminal"
+    git clone https://github.com/aptos-labs/aptos-core
+    ```
+
+    Navigieren Sie zum Python SDK-Verzeichnis:
+
+    ```shellscript filename="Terminal"
+    cd aptos-core/ecosystem/python/sdk
+    ```
+
+    Installieren Sie die notwendigen Abhängigkeiten:
+
+    ```shellscript filename="Terminal"
+    curl -sSL https://install.python-poetry.org | python3
+    poetry install
+    ```
+
+    Führen Sie das Python [`your_coin`](https://github.com/aptos-labs/aptos-python-sdk/blob/main/examples/your_coin.py) Beispiel aus:
+
+    ```shellscript filename="Terminal"
+    poetry run python -m examples.your_coin ~/aptos-core/aptos-move/move-examples/moon_coin
+    ```
+
+    ### Schritt 3.1: Das Paket erstellen
+
+    Die Beispielausführung wird mit der folgenden Ausgabe pausieren:
+
+    ```shellscript filename="Terminal"
+    === Addresses ===
+    Alice: 0x5e603a89cf690d7134cf2f24fdb16ba90c4f5686333721c12e835fb6c76bc7ba
+    Bob: 0xc8421fa4a99153f955e50f1de2a6acff2f3fd0bb33aa17ba1f5b32b699f6c825
+
+    Update the package with Alice's address, compile, and press enter.
+    ```
+
+    Öffnen Sie an diesem Punkt ein anderes Terminal und wechseln Sie das Verzeichnis zum MoonCoin-Paketverzeichnis:
+
+    ```shellscript filename="Terminal"
+    cd ~/aptos-core/aptos-move/move-examples/moon_coin
+    ```
+
+    Als nächstes erstellen Sie das Paket mit der CLI:
+
+    ```shellscript filename="Terminal"
+    aptos move compile --named-addresses MoonCoin=0x5e603a89cf690d7134cf2f24fdb16ba90c4f5686333721c12e835fb6c76bc7ba --save-metadata
+    ```
+
+    Das `--named-addresses` ist eine Liste von Adresszuordnungen, die übersetzt werden müssen, damit das Paket kompiliert werden kann, um in Alices Konto gespeichert zu werden. Beachten Sie, wie `MoonCoin` auf Alices oben gedruckte Adresse gesetzt ist. Auch `--save-metadata` ist erforderlich, um das Paket zu veröffentlichen.
+
+    ***
+
+    ### Schritt 3.2: Das Beispiel abschließen
+
+    Kehren Sie zur vorherigen Eingabeaufforderung zurück und drücken Sie ENTER, da das Paket nun bereit ist, veröffentlicht zu werden.
+
+    Die Anwendung wird abgeschlossen und gibt aus:
+
+    ```shellscript filename="Terminal"
+
+    Publishing MoonCoin package.
+
+    Bob registers the newly created coin so he can receive it from Alice.
+    Bob's initial MoonCoin balance: 0.
+    Alice mints Bob some of the new coin.
+    Bob's updated MoonCoin balance: 100.
+    ```
+  </TabItem>
+</Tabs>
+
+***
+
+## Schritt 4: MoonCoin im Detail
+
+### Schritt 4.1: Das MoonCoin-Paket erstellen und veröffentlichen
+
+Move-Verträge sind effektiv eine Menge von Move-Modulen, die als Paket bekannt sind. Beim Bereitstellen oder Aktualisieren eines neuen Pakets muss der Compiler mit `--save-metadata` aufgerufen werden, um das Paket zu veröffentlichen. Im Fall von MoonCoin sind die folgenden Ausgabedateien kritisch:
+
+- `build/Examples/package-metadata.bcs`: Enthält die mit dem Paket verknüpften Metadaten.
+- `build/Examples/bytecode_modules/moon_coin.mv`: Enthält den Bytecode für das `moon_coin.move`-Modul.
+
+Diese werden vom Beispiel gelesen und auf der Aptos-Blockchain veröffentlicht:
+
+<Tabs>
+  <TabItem label="TypeScript">
+    Im TypeScript-Beispiel verwenden wir den Befehl `aptos move build-publish-payload`, um das Modul zu kompilieren und zu erstellen.
+    Dieser Befehl erstellt den `build`-Ordner, der die `package-metadata.bcs` und den Bytecode für das `moon_coin.mv`-Modul enthält. Der Befehl erstellt auch eine Veröffentlichungstransaktions-Payload und speichert sie in einer JSON-Ausgabedatei, aus der wir später lesen können, um die `metadataBytes` und `byteCode` zu erhalten, um den Vertrag on-chain zu veröffentlichen.
+
+    Das Paket kompilieren:
+
+    ```typescript filename="example.ts"
+    export function compilePackage(
+      packageDir: string,
+      outputFile: string,
+      namedAddresses: Array<{ name: string; address: AccountAddress }>,
+    ) {
+      const addressArg = namedAddresses
+        .map(({ name, address }) => `${name}=${address}`)
+        .join(" ");
+      // Assume-yes überschreibt automatisch die vorherige kompilierte Version, tun Sie dies nur, wenn Sie sicher sind, dass Sie die vorherige Version überschreiben möchten.
+      const compileCommand = `aptos move build-publish-payload --json-output-file ${outputFile} --package-dir ${packageDir} --named-addresses ${addressArg} --assume-yes`;
+      execSync(compileCommand);
+    }
+
+    compilePackage("move/moonCoin", "move/moonCoin/moonCoin.json", [
+      { name: "MoonCoin", address: alice.accountAddress },
+    ]);
+    ```
+
+    Das Paket on-chain veröffentlichen:
+
+    ```typescript filename="example.ts"
+    export function getPackageBytesToPublish(filePath: string) {
+      // aktuelles Arbeitsverzeichnis - der Stammordner dieses Repositorys
+      const cwd = process.cwd();
+      // Zielverzeichnis - aktuelles Arbeitsverzeichnis + filePath (filePath JSON-Datei wird mit dem vorherigen compilePackage CLI-Befehl generiert)
+      const modulePath = path.join(cwd, filePath);
+
+      const jsonData = JSON.parse(fs.readFileSync(modulePath, "utf8"));
+
+      const metadataBytes = jsonData.args[0].value;
+      const byteCode = jsonData.args[1].value;
+
+      return { metadataBytes, byteCode };
+    }
+
+    const { metadataBytes, byteCode } = getPackageBytesToPublish(
+      "move/moonCoin/moonCoin.json",
+    );
+
+    // MoonCoin-Paket on-chain veröffentlichen
+    const transaction = await aptos.publishPackageTransaction({
+      account: alice.accountAddress,
+      metadataBytes,
+      moduleBytecode: byteCode,
+    });
+
+    const pendingTransaction = await aptos.signAndSubmitTransaction({
+      signer: alice,
+      transaction,
+    });
+
+    await aptos.waitForTransaction({ transactionHash: pendingTransaction.hash });
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    ```python filename="example.py"
+    module_path = os.path.join(
+        moon_coin_path, "build", "Examples", "bytecode_modules", "moon_coin.mv"
+    )
+    with open(module_path, "rb") as f:
+        module = f.read()
+
+    metadata_path = os.path.join(
+        moon_coin_path, "build", "Examples", "package-metadata.bcs"
+    )
+    with open(metadata_path, "rb") as f:
+        metadata = f.read()
+
+    print("\nPublishing MoonCoin package.")
+    package_publisher = PackagePublisher(rest_client)
+    txn_hash = await package_publisher.publish_package(alice, metadata, [module])
+    await rest_client.wait_for_transaction(txn_hash)
+    ```
+  </TabItem>
+</Tabs>
+
+***
+
+### Schritt 4.2: Das MoonCoin-Modul verstehen
+
+Das MoonCoin-Modul definiert die `MoonCoin`-Struktur oder den unterschiedlichen Münztyp. Zusätzlich enthält es eine Funktion namens `init_module`. Die `init_module`-Funktion wird aufgerufen, wenn das Modul veröffentlicht wird. In diesem Fall initialisiert MoonCoin den `MoonCoin`-Münztyp als `ManagedCoin`, der vom Besitzer des Kontos verwaltet wird.
+
+<Aside type="note">
+  ManagedCoin-Framework
+  [`ManagedCoin`](https://github.com/aptos-labs/aptos-core/blob/f81ccb01f00227f9c0f36856fead4879f185a9f6/aptos-move/framework/aptos-framework/sources/managed_coin.move#L1) ist ein einfaches Münzverwaltungsframework für Münzen, die direkt von Benutzern verwaltet werden. Es bietet praktische Wrapper um `mint` und `burn`.
+</Aside>
+
+```move filename="moon_coin.mv"
+module MoonCoin::moon_coin {
+    struct MoonCoin {}
+
+    fun init_module(sender: &signer) {
+        aptos_framework::managed_coin::initialize<MoonCoin>(
+            sender,
+            b"Moon Coin",
+            b"MOON",
+            6,
+            false,
+        );
+    }
+}
+```
+
+***
+
+### Schritt 4.3: Münzen verstehen
+
+Münzen haben mehrere Grundelemente:
+
+- **Prägen**: Neue Münzen erstellen.
+- **Verbrennen**: Münzen löschen.
+- **Einfrieren**: Ein Konto daran hindern, Münzen in `CoinStore` zu speichern.
+- **Registrieren**: Eine `CoinStore`-Ressource auf einem Konto zum Speichern von Münzen erstellen.
+- **Übertragen**: Münzen aus `CoinStore` abheben und einzahlen.
+
+<Aside type="note">
+  Die Entität, die eine neue Münze erstellt, erhält die Fähigkeiten zum Prägen, Verbrennen und Einfrieren.
+</Aside>
+
+***
+
+#### Schritt 4.3.1: Eine Münze initialisieren
+
+Sobald ein Münztyp auf der Aptos-Blockchain veröffentlicht wurde, kann die Entität, die diesen Münztyp veröffentlicht hat, ihn initialisieren:
+
+```move
+module 0x1::coin {
+    public fun initialize<CoinType>(
+        account: &signer,
+        name: string::String,
+        symbol: string::String,
+        decimals: u8,
+        monitor_supply: bool,
+    ): (BurnCapability<CoinType>, FreezeCapability<CoinType>, MintCapability<CoinType>) {
+        let account_addr = signer::address_of(account);
+
+        assert!(
+            coin_address<CoinType>() == account_addr,
+            error::invalid_argument(ECOIN_INFO_ADDRESS_MISMATCH),
+        );
+
+        assert!(
+            !exists<CoinInfo<CoinType>>(account_addr),
+            error::already_exists(ECOIN_INFO_ALREADY_PUBLISHED),
+        );
+
+        let coin_info = CoinInfo<CoinType> {
+            name,
+            symbol,
+            decimals,
+            supply: if (monitor_supply) { option::some(optional_aggregator::new(MAX_U128, false)) } else { option::none() },
+        };
+        move_to(account, coin_info);
+
+        (BurnCapability<CoinType>{ }, FreezeCapability<CoinType>{ }, MintCapability<CoinType>{ })
+  }
+}
+```
+
+Dies stellt sicher, dass dieser Münztyp nie zuvor initialisiert wurde. Beachten Sie die Überprüfung in Zeilen 10 und 15, um sicherzustellen, dass der Aufrufer von `initialize` derselbe ist, der tatsächlich dieses Modul veröffentlicht hat, und dass keine `CoinInfo` auf seinem Konto gespeichert ist. Wenn beide Bedingungen erfüllt sind, wird eine `CoinInfo` gespeichert und der Aufrufer erhält Fähigkeiten zum Verbrennen, Einfrieren und Prägen.
+
+<Aside type="note">
+  MoonCoin ruft diese `initialize`-Funktion automatisch bei der Paketveröffentlichung auf.
+</Aside>
+
+***
+
+#### Schritt 4.3.2: Eine Münze registrieren
+
+Um eine Münze zu verwenden, muss eine Entität eine `CoinStore` dafür auf ihrem Konto registrieren:
+
+```move
+public entry fun registerCoinType(account: &signer) {
+```
+
+MoonCoin verwendet `ManagedCoin`, das einen Entry-Function-Wrapper bereitstellt: `managed_coin::register`. Hier ist ein Beispielskript für die Registrierung:
+
+```move
+script {
+    fun register(account: &signer) {
+        aptos_framework::managed_coin::register<MoonCoin::moon_coin::MoonCoin>(account)
+    }
+}
+```
+
+***
+
+#### Schritt 4.3.3: Eine Münze prägen
+
+Das Prägen von Münzen erfordert die Präge-Fähigkeit, die während der Initialisierung erzeugt wurde. Die Funktion `mint` (siehe unten) nimmt diese Fähigkeit und einen Betrag entgegen und gibt eine `Coin<T>`-Struktur zurück, die diesen Betrag an Münzen enthält. Wenn die Münze das Angebot verfolgt, wird es aktualisiert.
+
+```move
+module 0x1::coin {
+    public fun mint<CoinType>(
+        amount: u64,
+        _cap: &MintCapability<CoinType>,
+    ): Coin<CoinType> acquires CoinInfo {
+        if (amount == 0) {
+            return zero<CoinType>()
+        };
+
+        let maybe_supply = &mut borrow_global_mut<CoinInfo<CoinType>>(coin_address<CoinType>()).supply;
+        if (option::is_some(maybe_supply)) {
+            let supply = option::borrow_mut(maybe_supply);
+            optional_aggregator::add(supply, (amount as u128));
+        };
+
+        Coin<CoinType> { value: amount }
+    }
+}
+```
+
+`ManagedCoin` macht dies einfacher, indem es eine Entry-Funktion `managed_coin::mint` bereitstellt.
+
+***
+
+#### Schritt 4.3.4: Eine Münze übertragen
+
+Aptos bietet mehrere Bausteine zur Unterstützung von Münzübertragungen:
+
+- `coin::deposit<CoinType>`: Ermöglicht es jeder Entität, eine Münze in ein Konto einzuzahlen, das bereits `coin::register<CoinType>` aufgerufen hat.
+- `coin::withdraw<CoinType>`: Ermöglicht es jeder Entität, einen Münzbetrag von ihrem Konto zu extrahieren.
+- `aptos_account::transfer_coins<CoinType>`: Münzen eines bestimmten CoinType an einen Empfänger übertragen.
+
+<Aside type="note">
+  Es gibt zwei separate Abhebungs- und Einzahlungsereignisse anstelle eines einzigen Übertragungsereignisses.
+</Aside>
+
+## Unterstützende Dokumentation
+
+- [Aptos CLI](/de/build/cli)
+- [TypeScript SDK](/de/build/sdks/ts-sdk)
+- [Python SDK](/de/build/sdks/python-sdk)
+- [REST API-Spezifikation](/de/network/nodes/aptos-api-spec)

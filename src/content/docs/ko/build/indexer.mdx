@@ -1,0 +1,105 @@
+---
+title: "인덱서"
+---
+
+import { Aside, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+import { GraphQLEditor } from '~/components/react/GraphQLEditor';
+
+Aptos 블록체인에서 인덱싱된 데이터를 가져오는 여러 가지 방법을 제공합니다.
+
+1. [인덱서 API](/ko/build/indexer/indexer-api)를 쿼리하여 거래, 대체 가능한 자산, 토큰에 대한 기본 데이터 가져오기
+2. [인덱서 SDK](/ko/build/indexer/indexer-sdk)로 맞춤형 컨트랙트 인덱싱
+3. [거래 스트림 서비스](/ko/build/indexer/txn-stream)에서 프로세서나 서비스로 원시 거래 스트리밍
+
+## 인덱서 API
+
+Aptos 인덱서는 다음을 얻기 위해 사용할 수 있는 API입니다:
+
+1. 집계 데이터 (예: 얼마나 많은 NFT가 존재하는가?)
+2. 과거 데이터 (예: 이 계정이 제출한 거래는 무엇인가?)
+3. 더 간단한 [Aptos 노드 API](/ko/build/apis/fullnode-rest-api)에서 얻기 어려운 데이터 (예: "ExampleToken"이라는 토큰을 소유한 계정은?)
+
+예를 들어, 인덱서 API를 사용하여 다음과 같이 모든 계정의 대체 가능한 자산 잔액을 조회할 수 있습니다:
+
+<GraphQLEditor
+  query={`query GetFungibleAssetBalances($address: String, $offset: Int) {
+  current_fungible_asset_balances(
+    where: { owner_address: { _eq: $address } }
+    offset: $offset
+    limit: 100
+    order_by: { amount: desc }
+  ) {
+    asset_type
+    amount
+    __typename
+  }
+}`}
+  variables={`{
+  "address": "0x0000000000000000000000000000000000000000000000000000000000000001",
+  "offset": 0
+}`}
+/>
+
+<Aside type="note">
+  인덱서는 온체인에서 발생하는 모든 거래를 추적한 다음 GraphQL API를 통해 해당 데이터를 노출합니다.
+</Aside>
+
+## 인덱서 API 사용하기
+
+인덱서 API 사용 방법, 각 테이블이 나타내는 것, 아키텍처를 알아보세요.
+
+<CardGrid>
+  <LinkCard href="/ko/build/indexer/indexer-api" title="API 액세스" description="인덱서 API를 쿼리하는 방법을 알아보세요." />
+
+  <LinkCard href="/ko/build/indexer/indexer-api/indexer-reference" title="인덱서 테이블 참조" description="인덱서 테이블과 스키마에 대한 자세한 참조." />
+
+  <LinkCard href="/ko/build/indexer/indexer-api/architecture" title="아키텍처" description="인덱서 아키텍처의 자세한 레이아웃." />
+
+  <LinkCard href="/ko/build/indexer/indexer-api/self-hosted" title="자체 호스팅 인덱서 API" description="자체 인덱서 API 호스팅" />
+</CardGrid>
+
+### 예제 쿼리
+
+시작하는 데 도움이 되도록 인덱서가 사용되는 가장 일반적인 쿼리를 소개합니다.
+
+<CardGrid>
+  <LinkCard href="/ko/build/indexer/indexer-api/fungible-asset-balances" title="대체 가능한 자산 잔액 가져오기" description="계정이 현재 소유한 모든 대체 가능한 자산을 가져옵니다." />
+
+  <LinkCard href="/ko/build/indexer/indexer-api/account-transactions" title="계정 거래 가져오기" description="계정에 영향을 미치는 모든 거래를 가져옵니다." />
+
+  <LinkCard href="/ko/build/indexer/indexer-api/ans-lookup" title="Aptos 이름 가져오기" description="계정과 연관된 Aptos 이름을 검색합니다 (ANS를 통해)." />
+
+  <LinkCard href="/ko/build/indexer/indexer-api/fungible-asset-info" title="대체 가능한 자산 정보 가져오기" description="특정 대체 가능한 자산에 대한 자세한 정보를 가져옵니다." />
+
+  <LinkCard href="/ko/build/indexer/indexer-api/get-nft-collections" title="NFT 컬렉션 가져오기" description="특정 계정이 소유한 NFT 컬렉션을 검색합니다." />
+
+  <LinkCard href="/ko/build/indexer/indexer-api/get-nfts" title="NFT 가져오기" description="특정 계정이 소유한 개별 NFT를 검색합니다." />
+
+  <LinkCard href="/ko/build/indexer/indexer-api/token-metadata" title="토큰 메타데이터 가져오기" description="특정 토큰의 메타데이터 정보를 가져옵니다." />
+
+  <LinkCard href="/ko/build/indexer/indexer-api/get-delegators" title="스테이킹 풀 위임자 수 세기" description="스테이킹 풀의 활성 위임자 수를 검색합니다." />
+</CardGrid>
+
+## 인덱서 SDK
+
+호스팅된 인덱서 API가 충분하지 않거나 맞춤형 컨트랙트를 인덱싱하려는 경우 [인덱서 SDK](/ko/build/indexer/indexer-sdk)로 프로세서를 만들 수 있습니다.
+
+<CardGrid>
+  <LinkCard href="/ko/build/indexer/indexer-sdk/quickstart" title="빠른 시작 가이드" description="인덱서 SDK 시작하기" />
+
+  <LinkCard href="/ko/build/indexer/indexer-sdk/documentation" title="문서" description="인덱서 SDK에 대한 문서 읽기" />
+</CardGrid>
+
+## 거래 스트림 서비스
+
+거래 스트림 서비스는 프로세서나 서비스에 원시 거래를 스트리밍하는 GRPC 서비스입니다.
+인덱서 SDK를 사용하는 경우 거래 스트림 서비스에 연결하려면 인증 토큰이 필요합니다.
+
+<CardGrid>
+  <LinkCard href="/ko/build/indexer/txn-stream/aptos-hosted-txn-stream" title="Aptos 호스팅 거래 스트림 서비스" description="Aptos 호스팅 거래 스트림 서비스에 액세스하기" />
+</CardGrid>
+
+## 레거시 인덱서
+
+레거시 인덱서에 대한 정보는 [여기](/ko/build/indexer/legacy)에서 찾을 수 있습니다.

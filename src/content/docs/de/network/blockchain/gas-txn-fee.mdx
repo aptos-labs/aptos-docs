@@ -1,0 +1,142 @@
+---
+title: "Gas- und Speichergebühren"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Jede Transaktionsausführung auf der Aptos-Blockchain erfordert eine Bearbeitungsgebühr. Diese Gebühr umfasst derzeit zwei Komponenten:
+
+1. Ausführungs- und E/A-Kosten
+
+- Dies deckt Ihre Nutzung vorübergehender Rechenressourcen ab, wie die Verarbeitung Ihrer Transaktionen und die Verbreitung des validierten Datensatzes im verteilten Netzwerk des Mainnets.
+- Es wird in Gas-Einheiten gemessen, deren Preis je nach Netzwerklast schwanken kann. Dies ermöglicht es, dass Ausführungs- und E/A-Kosten niedrig sind, wenn das Netzwerk weniger ausgelastet ist.
+- Dieser Teil des Gases wird bei der Ausführung einer Transaktion dauerhaft verbrannt.
+
+2. Speichergebühren
+
+- Dies deckt die Kosten für die dauerhafte Speicherung des validierten Datensatzes im verteilten Blockchain-Speicher ab.
+- Es wird in festen APT-Preisen gemessen, sodass die dauerhafte Speicherkosten stabil bleiben, auch wenn der Gas-Einheitspreis mit der vorübergehenden Last des Netzwerks schwankt.
+- Die Speichergebühr kann zurückerstattet werden, wenn der zugewiesene Speicherplatz gelöscht wird. Derzeit ist das Netzwerk so konfiguriert, dass es die gesamte Speichergebühr zurückerstattet, die über die Lebensdauer eines Zustandsspeicherplatzes gezahlt wurde.
+- Um die Systemimplementierung einfach zu halten, wird dieser Teil des Gases verbrannt und bei der Rückerstattung wieder geprägt.
+
+<Aside type="note">
+  Konzeptionell kann diese Gebühr als ziemlich ähnlich betrachtet werden wie wir für unsere Strom- oder Wasserversorgung zu Hause bezahlen.
+</Aside>
+
+## Gaseinheit
+
+Transaktionen können je nach ihrem Zweck von einfach und kostengünstig bis komplex reichen. In der Aptos-Blockchain repräsentiert eine **Gaseinheit** eine Grundeinheit des Verbrauchs für vorübergehende Ressourcen, wie das Durchführen von Berechnungen oder den Zugriff auf Speicher. Letzteres sollte nicht mit dem langfristigen Speicheraspekt solcher Operationen verwechselt werden, da dies separat durch die Speichergebühren abgedeckt wird.
+
+Siehe [Wie Base Gas funktioniert](/de/network/blockchain/base-gas) für eine detaillierte Beschreibung der Gasgebührentypen und verfügbaren Optimierungen.
+
+<Aside type="note">
+  👉 Eine **Gaseinheit** ist eine dimensionslose Zahl oder eine Einheit, die nicht mit einem bestimmten Element wie einer Münze verbunden ist, ausgedrückt als ganze Zahl. Die gesamten von Ihrer Transaktion verbrauchten Gaseinheiten hängen von der Komplexität Ihrer Transaktion ab. Der **Gaspreis** andererseits wird in Bezug auf die native Münze der Aptos-Blockchain [APT](/de/network/glossary#apt) und ihre Untereinheit [Octas](/de/network/glossary#octa) ausgedrückt. Siehe auch [Transaktionen und Zustände](/de/network/blockchain/txns-states) dafür, wie eine an die Aptos-Blockchain übermittelte Transaktion aussieht.
+</Aside>
+
+## Die Gebührenaufstellung
+
+Ab der Aptos Framework-Version 1.7 wird die Aufschlüsselung von Gebührenbelastungen und -erstattungen als Modulereignis ausgegeben, das durch die Struktur `0x1::transaction_fee::FeeStatement` dargestellt wird.
+
+```move filename="transaction_fee.move"
+#[event]
+/// Aufschlüsselung der Gebührenbelastung und -erstattung für eine Transaktion.
+/// Die Struktur ist:
+///
+/// - Nettobelastung oder -erstattung (nicht in der Aufstellung)
+///    - Gesamtbelastung: total_charge_gas_units, entspricht `gas_used` in der on-chain `TransactionInfo`.
+///      Dies ist die Summe der nachstehenden Unterelemente. Beachten Sie, dass es bei der
+///      Umrechnung zwischen internen und externen Gaseinheiten und zwischen nativen Token und Gas-
+///      einheiten zu Präzisionsverlusten kommen kann, sodass es möglich ist, dass die Zahlen nicht genau aufgehen. -- Diese Zahl ist die endgültige
+///      Belastung, während die Aufschlüsselung lediglich informativer Natur ist.
+///      - Ausführung: execution_gas_units
+///      - E/A: io_gas_units
+///      - Speicher: storage_fee_octas, umgerechnet in Gaseinheiten entsprechend dem Kurs
+///    - Gesamterstattung: total_refund_gas_units
+///      - Erstattete Speichergebühren: storage_fee_refund_octas, umgerechnet in Gaseinheiten entsprechend dem Kurs
+///
+/// Der anwendbare Gaseinheitspreis ist in den Transaktionsinformationen zu finden.
+struct FeeStatement has copy, drop, store {
+    /// Gesamte belastete Gaseinheiten.
+    total_charge_gas_units: u64,
+    /// Belastete Ausführungs-Gaseinheiten.
+    execution_gas_units: u64,
+    /// Belastete E/A-Gaseinheiten.
+    io_gas_units: u64,
+    /// Belastete Speichergebühren in Octas.
+    storage_fee_octas: u64,
+    /// Gesamte erstattete Gaseinheiten.
+    total_refund_gas_units: u64,
+    /// Erstattete Speichergebühren in Octas.
+    storage_fee_refund_octas: u64,
+}
+```
+
+### Beispiele für Gebührenaufstellungen
+
+#### Einfache Übertragungstransaktion
+
+Für eine einfache Übertragungstransaktion könnten Sie so etwas sehen:
+
+```json
+{
+  "total_charge_gas_units": "150",
+  "execution_gas_units": "120", 
+  "io_gas_units": "30",
+  "storage_fee_octas": "0",
+  "total_refund_gas_units": "0",
+  "storage_fee_refund_octas": "0"
+}
+```
+
+#### Transaktion, die neue Daten erstellt
+
+Wenn eine Transaktion neue Ressourcen on-chain erstellt:
+
+```json
+{
+  "total_charge_gas_units": "350",
+  "execution_gas_units": "200",
+  "io_gas_units": "50", 
+  "storage_fee_octas": "1000",
+  "total_refund_gas_units": "0",
+  "storage_fee_refund_octas": "0"
+}
+```
+
+#### Transaktion, die Daten löscht
+
+Wenn eine Transaktion Ressourcen löscht und eine Erstattung erhält:
+
+```json
+{
+  "total_charge_gas_units": "180",
+  "execution_gas_units": "150",
+  "io_gas_units": "30",
+  "storage_fee_octas": "0", 
+  "total_refund_gas_units": "100",
+  "storage_fee_refund_octas": "800"
+}
+```
+
+## Gaspreise und Schätzung
+
+Der Gaspreis auf Aptos ist dynamisch und wird je nach Netzwerknachfrage angepasst. Das Netzwerk zielt auf einen optimalen Transaktionsdurchsatz ab und passt die Preise an, um stabile Leistung zu gewährleisten.
+
+### Schätzung der Transaktionsgebühren
+
+Sie können die Gebühren für Ihre Transaktion mit folgenden Methoden schätzen:
+
+1. **Transaktionssimulation** - Führen Sie Ihre Transaktion im Simulationsmodus aus, um die Gaskosten zu sehen
+2. **Aktueller Gaspreis** - Fragen Sie den aktuellen Gaspreis des Netzwerks über die REST-API ab
+3. **Historische Gebühren** - Untersuchen Sie ähnliche Transaktionen, um Kosten zu schätzen
+
+### Optimierung der Gaskosten
+
+- **Vereinfachen Sie die Logik** - Einfachere Operationen kosten weniger Gas
+- **Batch-Transaktionen** - Kombinieren Sie mehrere Operationen wenn möglich
+- **Ressourcen wiederverwenden** - Vermeiden Sie die Erstellung redundanter Ressourcen
+- **Timing überwachen** - Reichen Sie Transaktionen während Zeiten geringer Nachfrage ein
+
+<Aside type="tip">
+  Verwenden Sie immer die Transaktionssimulation vor der Einreichung, um genaue Gasschätzungen zu erhalten und kostspielige Fehler zu vermeiden.
+</Aside>

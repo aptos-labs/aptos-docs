@@ -1,0 +1,105 @@
+---
+id: "accounts"
+title: "Contas"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Uma conta no blockchain Aptos representa controle de acesso sobre um conjunto de ativos incluindo moeda on-chain e NFTs. No Aptos, esses ativos são representados por um primitivo da linguagem Move conhecido como **recurso** que enfatiza tanto controle de acesso quanto escassez.
+
+Cada conta no blockchain Aptos é identificada por um endereço de conta de 32 bytes. Você pode usar o Serviço de Nomes Aptos em [www.aptosnames.com](https://www.aptosnames.com/) para proteger domínios .apt para contas principais para torná-las memoráveis e únicas.
+
+Diferente de outros blockchains onde contas e endereços são implícitos, contas no Aptos são explícitas e precisam ser criadas antes de poderem executar transações. A conta pode ser criada explicitamente ou implicitamente transferindo tokens Aptos (APT) para lá. Veja a seção [Criando uma conta](#criando-uma-conta) para mais detalhes. De certa forma, isso é similar a outras chains onde um endereço precisa receber fundos para gas antes de poder enviar transações.
+
+Contas explícitas permitem recursos de primeira classe que não estão disponíveis em outras redes, como:
+
+- Rotação de chave de autenticação. A chave de autenticação da conta pode ser alterada para ser controlada por uma chave privada diferente. Isso é similar a trocar senhas no mundo web2.
+- Suporte nativo a multisig. Contas no Aptos suportam multisig k-de-n usando esquemas de assinatura Ed25519 e Secp256k1 ECDSA ao construir a chave de autenticação.
+
+Existem três tipos de contas no Aptos:
+
+- _Conta padrão_ - Esta é uma conta típica correspondendo a um endereço com um par correspondente de chaves pública/privada.
+- [_Conta de recurso_](/pt/build/smart-contracts/resource-accounts) - Uma conta autônoma sem uma chave privada correspondente usada por desenvolvedores para armazenar recursos ou publicar módulos on-chain.
+- [_Objeto_](/pt/build/smart-contracts/objects) - Um conjunto complexo de recursos armazenados dentro de um único endereço representando uma única entidade.
+
+<Aside type="note">
+  Endereços de contas são de 32 bytes. Eles são geralmente mostrados como 64 caracteres hexadecimais, com cada caractere hex representando um nibble.
+  Às vezes o endereço é prefixado com 0x. Veja [Sua Primeira Transação](/pt/build/guides/first-transaction) para um exemplo
+  de como um endereço aparece, reproduzido abaixo:
+</Aside>
+
+```text
+Alice: 0xeeff357ea5c1a4e7bc11b2b17ff2dc2dcca69750bfef1e1ebcaccf8c8018175b
+Bob: 0x19aadeca9388e009d136245b9a67423f3eee242b03142849eb4f81a4a409e59c
+```
+
+## Endereço da conta
+
+Atualmente, o Aptos suporta apenas um único identificador unificado para uma conta. Contas no Aptos são universalmente representadas como uma string hex de 32 bytes. Uma string hex menor que 32 bytes também é válida; nesses cenários, a string hex pode ser preenchida com zeros à esquerda, ex: `0x1` => `0x0000000000000...01`. Embora os padrões Aptos indiquem que zeros à esquerda podem ser removidos de um Endereço, a maioria das aplicações tenta evitar esse comportamento legado e apenas suporta a remoção de 0s para endereços especiais variando de `0x0` a `0xa`.
+
+## Criando uma conta
+
+Quando um usuário solicita criar uma conta, por exemplo usando o [SDK Aptos](/pt/build/sdks/ts-sdk/account), os seguintes passos são executados:
+
+- Selecionar o esquema de autenticação para gerenciar a conta do usuário, ex: Ed25519 ou Secp256k1 ECDSA.
+- Gerar um novo par de chave privada, chave pública.
+- Combinar a chave pública com o esquema de autenticação da chave pública para gerar uma chave de autenticação de 32 bytes e o endereço da conta.
+
+O usuário deve usar a chave privada para assinar as transações associadas a esta conta.
+
+## Número de sequência da conta
+
+O número de sequência para uma conta indica o número de transações que foram enviadas e confirmadas on-chain a partir dessa conta. Transações confirmadas ou executam com as mudanças de estado resultantes confirmadas no blockchain ou abortam onde mudanças de estado são descartadas e apenas a transação é armazenada.
+
+Toda transação enviada deve conter um número de sequência único para a conta do remetente. Quando o blockchain Aptos processa a transação, ele olha o número de sequência na transação e compara com o número de sequência na conta on-chain. A transação é processada apenas se o número de sequência for igual ou maior que o número de sequência atual. Transações são apenas encaminhadas para outros mempools ou executadas se houver uma série contígua de transações a partir do número de sequência atual. A execução rejeita números de sequência fora de ordem prevenindo ataques de replay de transações antigas e garantindo ordem de transações futuras.
+
+## Chave de autenticação
+
+O endereço inicial da conta é definido para a chave de autenticação derivada durante a criação da conta. No entanto, a chave de autenticação pode subsequentemente mudar, por exemplo quando você gera um novo par de chaves pública-privada, chaves públicas para rotacionar as chaves. Um endereço de conta nunca muda.
+
+O blockchain Aptos suporta os seguintes esquemas de autenticação:
+
+1. [Ed25519](https://ed25519.cr.yp.to/)
+2. [Secp256k1 ECDSA](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-49.md)
+3. [Assinaturas múltiplas K-de-N](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-55.md)
+4. Um esquema dedicado, agora legado, MultiEd25519
+
+<Aside type="note">
+  O blockchain Aptos usa como padrão transações de assinatura Ed25519.
+</Aside>
+
+### Autenticação Ed25519
+
+Para gerar uma chave de autenticação e o endereço da conta para uma assinatura Ed25519:
+
+1. **Gerar um par de chaves**: Gerar um par de chaves novo (`privkey_A`, `pubkey_A`). O blockchain Aptos usa o esquema PureEdDSA sobre a curva Ed25519, como definido na RFC 8032.
+2. **Derivar uma chave de autenticação de 32 bytes**: Derivar uma chave de autenticação de 32 bytes a partir da `pubkey_A`:
+   ```text
+   auth_key = sha3-256(pubkey_A | 0x00)
+   ```
+   onde `|` denota concatenação. O `0x00` é o identificador de esquema de assinatura única de 1 byte.
+3. Usar esta chave de autenticação inicial como o endereço permanente da conta.
+
+### Autenticação MultiEd25519
+
+Com autenticação multisig K-de-N, há um total de N assinantes para a conta, e pelo menos K dessas N assinaturas devem ser usadas para autenticar uma transação.
+
+Para gerar a chave de autenticação e o endereço da conta de uma conta multisig K-de-N:
+
+1. **Gerar pares de chaves**: Gerar `N` chaves públicas ed25519 `p_1`, ..., `p_n`.
+2. Decidir sobre o valor de `K`, o número limite de assinaturas necessárias para autenticar a transação.
+3. **Derivar uma chave de autenticação de 32 bytes**: Calcular a chave de autenticação como descrito abaixo:
+   ```text
+   auth_key = sha3-256(p_1 | . . . | p_n | K | 0x01)
+   ```
+   O `0x01` é o identificador de esquema multisig de 1 byte.
+4. Usar esta chave de autenticação inicial como o endereço permanente da conta.
+
+### Autenticação generalizada
+
+A autenticação generalizada suporta tanto Ed25519 quanto Secp256k1 ECDSA. Como os esquemas de autenticação anteriores, esses esquemas incluem valores de esquema de `0x02` e `0x03` para chave única e múltiplas chaves respectivamente, mas cada chave também inclui um valor de prefixo indicando seu tipo de chave:
+
+| Tipo de Chave                | Byte de Prefixo |
+| ---------------------------- | --------------- |
+| Esquema Genérico Ed25519     | `0x00`          |
+| Esquema Genérico Secp256k1   | `0x01`          |

@@ -1,0 +1,890 @@
+---
+title: "Votre Première Transaction"
+---
+
+import { Aside, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
+
+Les transactions sont le moyen fondamental de changer les données sur la blockchain Aptos. Pensez-y comme envoyer un colis : vous devez spécifier ce que vous envoyez, à qui cela va, puis le suivre jusqu'à ce que la livraison soit confirmée. En termes de blockchain, les transactions vous permettent de transférer des pièces, d'appeler des fonctions de contrats intelligents, et de mettre à jour l'état sur la chaîne.
+
+Ce tutoriel vous guidera dans la création et la soumission de votre première transaction sur la blockchain Aptos. Vous apprendrez comment :
+
+1. Configurer votre environnement de développement
+2. Créer des comptes de test et les financer
+3. Construire une transaction pour transférer des pièces
+4. Simuler la transaction pour estimer les coûts
+5. Signer et soumettre la transaction
+6. Vérifier que la transaction a été exécutée avec succès
+
+<Aside type="note">
+  Ce tutoriel s'appuie sur des concepts de la blockchain Aptos. Si vous êtes nouveau au développement blockchain, ne vous inquiétez pas - nous expliquerons les concepts clés en cours de route.
+
+  Vous pouvez aller à l'exemple de code complet [ici](#exemple-de-code-complet) ou continuer la lecture pour un guide étape par étape.
+</Aside>
+
+## 1. Configuration de Votre Environnement
+
+<Tabs>
+  <TabItem label="TypeScript">
+    Avant de pouvoir créer des transactions, nous devons configurer notre environnement de développement avec les outils et SDKs nécessaires.
+
+    <Steps>
+      1. Installer le SDK TypeScript
+
+         Installez le SDK TypeScript en utilisant votre gestionnaire de paquets préféré :
+
+         <Tabs>
+           <TabItem label="npm">
+             ```shellscript filename="Terminal"
+             npm install @aptos-labs/ts-sdk
+             ```
+           </TabItem>
+
+           <TabItem label="yarn">
+             ```shellscript filename="Terminal"
+             yarn add @aptos-labs/ts-sdk
+             ```
+           </TabItem>
+
+           <TabItem label="pnpm">
+             ```shellscript filename="Terminal"
+             pnpm add @aptos-labs/ts-sdk
+             ```
+           </TabItem>
+         </Tabs>
+
+      2. Créer votre fichier de configuration
+
+         Créez un nouveau fichier appelé `first-transaction.ts` et importez les modules nécessaires :
+
+         ```typescript filename="first-transaction.ts"
+         import {
+           Account,
+           Aptos,
+           AptosConfig,
+           Network,
+           NetworkToNetworkName,
+         } from "@aptos-labs/ts-sdk";
+         ```
+
+      3. Configurer la configuration réseau
+
+         Configurez votre client pour se connecter au réseau testnet Aptos :
+
+         ```typescript filename="first-transaction.ts"
+         // Configuration pour le réseau testnet
+         const config = new AptosConfig({ network: Network.TESTNET });
+         const aptos = new Aptos(config);
+
+         console.log(
+           `Connecté au réseau: ${NetworkToNetworkName[config.network]}`
+         );
+         ```
+    </Steps>
+  </TabItem>
+
+  <TabItem label="Python">
+    <Steps>
+      1. Installer le SDK Python
+
+         ```shellscript filename="Terminal"
+         pip install aptos-sdk
+         ```
+
+      2. Créer votre fichier de configuration
+
+         Créez un nouveau fichier appelé `first_transaction.py` et importez les modules nécessaires :
+
+         ```python filename="first_transaction.py"
+         from aptos_sdk.account import Account
+         from aptos_sdk.async_client import RestClient
+         from aptos_sdk.transactions import (
+             TransactionArgument,
+             TransactionPayload,
+             EntryFunction,
+         )
+         import asyncio
+         ```
+
+      3. Configurer le client réseau
+
+         ```python filename="first_transaction.py"
+         # URL pour le réseau testnet
+         TESTNET_URL = "https://fullnode.testnet.aptoslabs.com/v1"
+         client = RestClient(TESTNET_URL)
+
+         print(f"Connecté au réseau testnet à : {TESTNET_URL}")
+         ```
+    </Steps>
+  </TabItem>
+
+  <TabItem label="Rust">
+    <Steps>
+      1. Configurer votre projet Rust
+
+         Créez un nouveau projet Rust et ajoutez les dépendances :
+
+         ```toml filename="Cargo.toml"
+         [dependencies]
+         aptos-sdk = "0.1"
+         tokio = { version = "1.0", features = ["full"] }
+         serde_json = "1.0"
+         ```
+
+      2. Créer votre fichier principal
+
+         ```rust filename="src/main.rs"
+         use aptos_sdk::{
+             crypto::ed25519::Ed25519PrivateKey,
+             move_types::account_address::AccountAddress,
+             rest_client::{Client, FaucetClient},
+             transaction_builder::TransactionBuilder,
+             types::{chain_id::ChainId, LocalAccount},
+         };
+         use std::str::FromStr;
+         ```
+
+      3. Configurer le client
+
+         ```rust filename="src/main.rs"
+         #[tokio::main]
+         async fn main() -> Result<(), Box<dyn std::error::Error>> {
+             // URL du réseau testnet
+             let testnet_url = "https://fullnode.testnet.aptoslabs.com/v1";
+             let client = Client::new(testnet_url.parse()?);
+             
+             println!("Connecté au réseau testnet à : {}", testnet_url);
+             
+             Ok(())
+         }
+         ```
+    </Steps>
+  </TabItem>
+</Tabs>
+
+## 2. Créer et Financer des Comptes
+
+<Tabs>
+  <TabItem label="TypeScript">
+    Chaque transaction sur Aptos nécessite un compte avec des fonds pour payer les frais de gaz. Créons deux comptes : un expéditeur et un destinataire.
+
+    ```typescript filename="first-transaction.ts"
+    async function createAndFundAccounts() {
+      // Créer deux nouveaux comptes
+      const senderAccount = Account.generate();
+      const receiverAccount = Account.generate();
+
+      console.log("=== Informations du compte ===");
+      console.log(`Adresse de l'expéditeur: ${senderAccount.accountAddress}`);
+      console.log(`Adresse du destinataire: ${receiverAccount.accountAddress}`);
+
+      // Financer le compte expéditeur avec des APT testnet
+      console.log("\n=== Financement des comptes ===");
+      
+      const senderFund = await aptos.fundAccount({
+        accountAddress: senderAccount.accountAddress,
+        amount: 100_000_000, // 1 APT = 100,000,000 Octas
+      });
+      
+      console.log(`Transaction de financement de l'expéditeur: ${senderFund}`);
+
+      return { senderAccount, receiverAccount };
+    }
+    ```
+
+    <Aside type="note">
+      **Octas** sont la plus petite unité d'APT (la monnaie native d'Aptos). 1 APT = 100,000,000 Octas, similaire à la façon dont 1 dollar = 100 centimes.
+    </Aside>
+  </TabItem>
+
+  <TabItem label="Python">
+    ```python filename="first_transaction.py"
+    async def create_and_fund_accounts():
+        # Créer deux nouveaux comptes
+        sender_account = Account.generate()
+        receiver_account = Account.generate()
+        
+        print("=== Informations du compte ===")
+        print(f"Adresse de l'expéditeur: {sender_account.address()}")
+        print(f"Adresse du destinataire: {receiver_account.address()}")
+        
+        # Financer le compte expéditeur
+        print("\n=== Financement des comptes ===")
+        
+        faucet_client = FaucetClient("https://faucet.testnet.aptoslabs.com", client)
+        await faucet_client.fund_account(sender_account.address(), 100_000_000)
+        
+        print(f"Compte expéditeur financé avec succès")
+        
+        return sender_account, receiver_account
+    ```
+  </TabItem>
+
+  <TabItem label="Rust">
+    ```rust filename="src/main.rs"
+    async fn create_and_fund_accounts(
+        client: &Client,
+    ) -> Result<(LocalAccount, LocalAccount), Box<dyn std::error::Error>> {
+        // Créer deux nouveaux comptes
+        let sender_account = LocalAccount::generate(&mut rand::thread_rng());
+        let receiver_account = LocalAccount::generate(&mut rand::thread_rng());
+        
+        println!("=== Informations du compte ===");
+        println!("Adresse de l'expéditeur: {}", sender_account.address());
+        println!("Adresse du destinataire: {}", receiver_account.address());
+        
+        // Financer le compte expéditeur
+        println!("\n=== Financement des comptes ===");
+        
+        let faucet_client = FaucetClient::new(
+            "https://faucet.testnet.aptoslabs.com".parse()?,
+            client.clone(),
+        );
+        
+        faucet_client
+            .fund(sender_account.address(), 100_000_000)
+            .await?;
+            
+        println!("Compte expéditeur financé avec succès");
+        
+        Ok((sender_account, receiver_account))
+    }
+    ```
+  </TabItem>
+</Tabs>
+
+## 3. Vérifier les Soldes de Compte
+
+Avant de créer notre transaction, vérifions les soldes de nos comptes pour confirmer que le financement a réussi.
+
+<Tabs>
+  <TabItem label="TypeScript">
+    ```typescript filename="first-transaction.ts"
+    async function checkAccountBalances(
+      senderAddress: string,
+      receiverAddress: string
+    ) {
+      console.log("\n=== Soldes de compte ===");
+      
+      // Vérifier le solde de l'expéditeur
+      const senderBalance = await aptos.getAccountAPTAmount({
+        accountAddress: senderAddress,
+      });
+      console.log(`Solde de l'expéditeur: ${senderBalance} Octas`);
+      
+      // Vérifier le solde du destinataire
+      try {
+        const receiverBalance = await aptos.getAccountAPTAmount({
+          accountAddress: receiverAddress,
+        });
+        console.log(`Solde du destinataire: ${receiverBalance} Octas`);
+      } catch (error) {
+        console.log("Le destinataire n'a pas encore de compte (solde: 0 Octas)");
+      }
+    }
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    ```python filename="first_transaction.py"
+    async def check_account_balances(sender_address, receiver_address):
+        print("\n=== Soldes de compte ===")
+        
+        # Vérifier le solde de l'expéditeur
+        sender_balance = await client.account_balance(sender_address)
+        print(f"Solde de l'expéditeur: {sender_balance} Octas")
+        
+        # Vérifier le solde du destinataire
+        try:
+            receiver_balance = await client.account_balance(receiver_address)
+            print(f"Solde du destinataire: {receiver_balance} Octas")
+        except Exception:
+            print("Le destinataire n'a pas encore de compte (solde: 0 Octas)")
+    ```
+  </TabItem>
+
+  <TabItem label="Rust">
+    ```rust filename="src/main.rs"
+    async fn check_account_balances(
+        client: &Client,
+        sender_address: AccountAddress,
+        receiver_address: AccountAddress,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        println!("\n=== Soldes de compte ===");
+        
+        // Vérifier le solde de l'expéditeur
+        let sender_balance = client
+            .get_account_balance(sender_address)
+            .await?;
+        println!("Solde de l'expéditeur: {} Octas", sender_balance);
+        
+        // Vérifier le solde du destinataire
+        match client.get_account_balance(receiver_address).await {
+            Ok(balance) => println!("Solde du destinataire: {} Octas", balance),
+            Err(_) => println!("Le destinataire n'a pas encore de compte (solde: 0 Octas)"),
+        }
+        
+        Ok(())
+    }
+    ```
+  </TabItem>
+</Tabs>
+
+## 4. Construire la Transaction
+
+Maintenant créons une transaction pour transférer 1 APT (100,000,000 Octas) de l'expéditeur au destinataire.
+
+<Tabs>
+  <TabItem label="TypeScript">
+    ```typescript filename="first-transaction.ts"
+    async function buildTransaction(
+      senderAccount: Account,
+      receiverAddress: string,
+      amount: number
+    ) {
+      console.log("\n=== Construction de la transaction ===");
+      console.log(`Transfert de ${amount} Octas vers ${receiverAddress}`);
+      
+      // Construire la transaction de transfert
+      const transaction = await aptos.transaction.build.simple({
+        sender: senderAccount.accountAddress,
+        data: {
+          // Utiliser la fonction de transfert APT intégrée
+          function: "0x1::aptos_account::transfer",
+          functionArguments: [receiverAddress, amount],
+        },
+      });
+      
+      console.log("Transaction construite avec succès");
+      return transaction;
+    }
+    ```
+
+    <Aside type="tip">
+      La fonction `0x1::aptos_account::transfer` est une fonction système intégrée qui gère les transferts d'APT de manière sécurisée. Le `0x1` fait référence au module de framework Aptos.
+    </Aside>
+  </TabItem>
+
+  <TabItem label="Python">
+    ```python filename="first_transaction.py"
+    async def build_transaction(sender_account, receiver_address, amount):
+        print("\n=== Construction de la transaction ===")
+        print(f"Transfert de {amount} Octas vers {receiver_address}")
+        
+        # Construire la payload de la transaction
+        payload = TransactionPayload(
+            EntryFunction.natural(
+                "0x1::aptos_account",
+                "transfer",
+                [],
+                [
+                    TransactionArgument(receiver_address, "address"),
+                    TransactionArgument(amount, "u64"),
+                ],
+            )
+        )
+        
+        # Construire la transaction
+        transaction = await client.create_bcs_transaction(
+            sender_account, payload
+        )
+        
+        print("Transaction construite avec succès")
+        return transaction
+    ```
+  </TabItem>
+
+  <TabItem label="Rust">
+    ```rust filename="src/main.rs"
+    async fn build_transaction(
+        client: &Client,
+        sender_account: &LocalAccount,
+        receiver_address: AccountAddress,
+        amount: u64,
+    ) -> Result<SignedTransaction, Box<dyn std::error::Error>> {
+        println!("\n=== Construction de la transaction ===");
+        println!("Transfert de {} Octas vers {}", amount, receiver_address);
+        
+        let chain_id = client.get_index().await?.inner().chain_id;
+        
+        let transaction_builder = TransactionBuilder::new(
+            TransactionPayload::EntryFunction(EntryFunction::new(
+                ModuleId::new(
+                    AccountAddress::from_hex_literal("0x1")?,
+                    Identifier::new("aptos_account")?,
+                ),
+                Identifier::new("transfer")?,
+                vec![],
+                vec![
+                    bcs::to_bytes(&receiver_address)?,
+                    bcs::to_bytes(&amount)?,
+                ],
+            )),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)?
+                .as_secs()
+                + 10,
+            ChainId::new(chain_id),
+        );
+        
+        let signed_transaction = sender_account.sign_transaction(transaction_builder);
+        
+        println!("Transaction construite avec succès");
+        Ok(signed_transaction)
+    }
+    ```
+  </TabItem>
+</Tabs>
+
+## 5. Simuler la Transaction
+
+Avant de soumettre, simulons la transaction pour estimer les frais de gaz et nous assurer qu'elle sera exécutée avec succès.
+
+<Tabs>
+  <TabItem label="TypeScript">
+    ```typescript filename="first-transaction.ts"
+    async function simulateTransaction(
+      senderAccount: Account,
+      transaction: any
+    ) {
+      console.log("\n=== Simulation de la transaction ===");
+      
+      // Simuler la transaction pour obtenir les estimations de gaz
+      const [simulationResult] = await aptos.transaction.simulate.simple({
+        signerPublicKey: senderAccount.publicKey,
+        transaction,
+      });
+      
+      console.log("Résultat de la simulation :");
+      console.log(`- Unités de gaz utilisées: ${simulationResult.gas_used}`);
+      console.log(`- Succès: ${simulationResult.success}`);
+      
+      if (!simulationResult.success) {
+        console.error("Erreur de simulation :", simulationResult.vm_status);
+        throw new Error("Échec de la simulation de transaction");
+      }
+      
+      return simulationResult;
+    }
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    ```python filename="first_transaction.py"
+    async def simulate_transaction(sender_account, transaction):
+        print("\n=== Simulation de la transaction ===")
+        
+        # Simuler la transaction
+        simulation_result = await client.simulate_transaction(
+            transaction, sender_account
+        )
+        
+        print("Résultat de la simulation :")
+        print(f"- Unités de gaz utilisées: {simulation_result[0]['gas_used']}")
+        print(f"- Succès: {simulation_result[0]['success']}")
+        
+        if not simulation_result[0]["success"]:
+            print("Erreur de simulation :", simulation_result[0]["vm_status"])
+            raise Exception("Échec de la simulation de transaction")
+            
+        return simulation_result[0]
+    ```
+  </TabItem>
+
+  <TabItem label="Rust">
+    ```rust filename="src/main.rs"
+    async fn simulate_transaction(
+        client: &Client,
+        transaction: &SignedTransaction,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        println!("\n=== Simulation de la transaction ===");
+        
+        let simulation_result = client.simulate_transaction(transaction).await?;
+        
+        println!("Résultat de la simulation :");
+        println!("- Unités de gaz utilisées: {}", simulation_result.gas_used);
+        println!("- Succès: {}", simulation_result.success);
+        
+        if !simulation_result.success {
+            println!("Erreur de simulation : {:?}", simulation_result.vm_status);
+            return Err("Échec de la simulation de transaction".into());
+        }
+        
+        Ok(())
+    }
+    ```
+  </TabItem>
+</Tabs>
+
+## 6. Signer et Soumettre la Transaction
+
+<Tabs>
+  <TabItem label="TypeScript">
+    ```typescript filename="first-transaction.ts"
+    async function submitTransaction(
+      senderAccount: Account,
+      transaction: any
+    ) {
+      console.log("\n=== Soumission de la transaction ===");
+      
+      // Signer et soumettre la transaction
+      const committedTransaction = await aptos.transaction.signAndSubmitTransaction({
+        signer: senderAccount,
+        transaction,
+      });
+      
+      console.log(`Transaction soumise: ${committedTransaction.hash}`);
+      
+      // Attendre que la transaction soit confirmée
+      const executedTransaction = await aptos.waitForTransaction({
+        transactionHash: committedTransaction.hash,
+      });
+      
+      console.log("Transaction confirmée !");
+      console.log(`- Hash: ${executedTransaction.hash}`);
+      console.log(`- Unités de gaz utilisées: ${executedTransaction.gas_used}`);
+      
+      return executedTransaction;
+    }
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    ```python filename="first_transaction.py"
+    async def submit_transaction(sender_account, transaction):
+        print("\n=== Soumission de la transaction ===")
+        
+        # Signer et soumettre la transaction
+        signed_transaction = sender_account.sign(transaction)
+        tx_hash = await client.submit_bcs_transaction(signed_transaction)
+        
+        print(f"Transaction soumise: {tx_hash}")
+        
+        # Attendre la confirmation
+        await client.wait_for_transaction(tx_hash)
+        
+        # Obtenir les détails de la transaction
+        tx_result = await client.get_transaction_by_hash(tx_hash)
+        
+        print("Transaction confirmée !")
+        print(f"- Hash: {tx_result['hash']}")
+        print(f"- Unités de gaz utilisées: {tx_result['gas_used']}")
+        
+        return tx_result
+    ```
+  </TabItem>
+
+  <TabItem label="Rust">
+    ```rust filename="src/main.rs"
+    async fn submit_transaction(
+        client: &Client,
+        transaction: SignedTransaction,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        println!("\n=== Soumission de la transaction ===");
+        
+        // Soumettre la transaction
+        let pending_transaction = client.submit(&transaction).await?;
+        
+        println!("Transaction soumise: {}", pending_transaction.hash);
+        
+        // Attendre la confirmation
+        client.wait_for_transaction(&pending_transaction).await?;
+        
+        println!("Transaction confirmée !");
+        println!("- Hash: {}", pending_transaction.hash);
+        
+        Ok(())
+    }
+    ```
+  </TabItem>
+</Tabs>
+
+## 7. Vérifier le Résultat
+
+Enfin, vérifions les soldes de compte mis à jour pour confirmer que notre transfert a réussi.
+
+<Tabs>
+  <TabItem label="TypeScript">
+    ```typescript filename="first-transaction.ts"
+    // Fonction principale pour exécuter tout le processus
+    async function main() {
+      try {
+        // Créer et financer des comptes
+        const { senderAccount, receiverAccount } = await createAndFundAccounts();
+        
+        // Vérifier les soldes initiaux
+        await checkAccountBalances(
+          senderAccount.accountAddress.toString(),
+          receiverAccount.accountAddress.toString()
+        );
+        
+        // Construire la transaction (transfert 1 APT = 100,000,000 Octas)
+        const transaction = await buildTransaction(
+          senderAccount,
+          receiverAccount.accountAddress.toString(),
+          100_000_000
+        );
+        
+        // Simuler la transaction
+        await simulateTransaction(senderAccount, transaction);
+        
+        // Soumettre la transaction
+        await submitTransaction(senderAccount, transaction);
+        
+        // Vérifier les soldes finaux
+        console.log("\n=== Soldes finaux ===");
+        await checkAccountBalances(
+          senderAccount.accountAddress.toString(),
+          receiverAccount.accountAddress.toString()
+        );
+        
+      } catch (error) {
+        console.error("Erreur :", error);
+      }
+    }
+
+    // Exécuter le script
+    main();
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    ```python filename="first_transaction.py"
+    async def main():
+        try:
+            # Créer et financer des comptes
+            sender_account, receiver_account = await create_and_fund_accounts()
+            
+            # Vérifier les soldes initiaux
+            await check_account_balances(
+                sender_account.address(),
+                receiver_account.address()
+            )
+            
+            # Construire la transaction
+            transaction = await build_transaction(
+                sender_account,
+                receiver_account.address(),
+                100_000_000  # 1 APT
+            )
+            
+            # Simuler la transaction
+            await simulate_transaction(sender_account, transaction)
+            
+            # Soumettre la transaction
+            await submit_transaction(sender_account, transaction)
+            
+            # Vérifier les soldes finaux
+            print("\n=== Soldes finaux ===")
+            await check_account_balances(
+                sender_account.address(),
+                receiver_account.address()
+            )
+            
+        except Exception as error:
+            print(f"Erreur : {error}")
+
+    # Exécuter le script
+    if __name__ == "__main__":
+        asyncio.run(main())
+    ```
+  </TabItem>
+
+  <TabItem label="Rust">
+    ```rust filename="src/main.rs"
+    #[tokio::main]
+    async fn main() -> Result<(), Box<dyn std::error::Error>> {
+        // Configuration du client
+        let testnet_url = "https://fullnode.testnet.aptoslabs.com/v1";
+        let client = Client::new(testnet_url.parse()?);
+        
+        println!("Connecté au réseau testnet à : {}", testnet_url);
+        
+        // Créer et financer des comptes
+        let (sender_account, receiver_account) = create_and_fund_accounts(&client).await?;
+        
+        // Vérifier les soldes initiaux
+        check_account_balances(&client, sender_account.address(), receiver_account.address()).await?;
+        
+        // Construire la transaction
+        let transaction = build_transaction(
+            &client,
+            &sender_account,
+            receiver_account.address(),
+            100_000_000, // 1 APT
+        ).await?;
+        
+        // Simuler la transaction
+        simulate_transaction(&client, &transaction).await?;
+        
+        // Soumettre la transaction
+        submit_transaction(client, transaction).await?;
+        
+        println!("\n=== Transaction terminée avec succès ! ===");
+        
+        Ok(())
+    }
+    ```
+  </TabItem>
+</Tabs>
+
+## Exemple de Code Complet
+
+<Tabs>
+  <TabItem label="TypeScript">
+    ```typescript filename="first-transaction.ts"
+    import {
+      Account,
+      Aptos,
+      AptosConfig,
+      Network,
+      NetworkToNetworkName,
+    } from "@aptos-labs/ts-sdk";
+
+    // Configuration pour le réseau testnet
+    const config = new AptosConfig({ network: Network.TESTNET });
+    const aptos = new Aptos(config);
+
+    async function createAndFundAccounts() {
+      const senderAccount = Account.generate();
+      const receiverAccount = Account.generate();
+
+      console.log("=== Informations du compte ===");
+      console.log(`Adresse de l'expéditeur: ${senderAccount.accountAddress}`);
+      console.log(`Adresse du destinataire: ${receiverAccount.accountAddress}`);
+
+      console.log("\n=== Financement des comptes ===");
+      const senderFund = await aptos.fundAccount({
+        accountAddress: senderAccount.accountAddress,
+        amount: 100_000_000,
+      });
+      console.log(`Transaction de financement de l'expéditeur: ${senderFund}`);
+
+      return { senderAccount, receiverAccount };
+    }
+
+    async function checkAccountBalances(senderAddress: string, receiverAddress: string) {
+      console.log("\n=== Soldes de compte ===");
+      const senderBalance = await aptos.getAccountAPTAmount({
+        accountAddress: senderAddress,
+      });
+      console.log(`Solde de l'expéditeur: ${senderBalance} Octas`);
+
+      try {
+        const receiverBalance = await aptos.getAccountAPTAmount({
+          accountAddress: receiverAddress,
+        });
+        console.log(`Solde du destinataire: ${receiverBalance} Octas`);
+      } catch (error) {
+        console.log("Le destinataire n'a pas encore de compte (solde: 0 Octas)");
+      }
+    }
+
+    async function buildTransaction(senderAccount: Account, receiverAddress: string, amount: number) {
+      console.log("\n=== Construction de la transaction ===");
+      console.log(`Transfert de ${amount} Octas vers ${receiverAddress}`);
+
+      const transaction = await aptos.transaction.build.simple({
+        sender: senderAccount.accountAddress,
+        data: {
+          function: "0x1::aptos_account::transfer",
+          functionArguments: [receiverAddress, amount],
+        },
+      });
+
+      console.log("Transaction construite avec succès");
+      return transaction;
+    }
+
+    async function simulateTransaction(senderAccount: Account, transaction: any) {
+      console.log("\n=== Simulation de la transaction ===");
+
+      const [simulationResult] = await aptos.transaction.simulate.simple({
+        signerPublicKey: senderAccount.publicKey,
+        transaction,
+      });
+
+      console.log("Résultat de la simulation :");
+      console.log(`- Unités de gaz utilisées: ${simulationResult.gas_used}`);
+      console.log(`- Succès: ${simulationResult.success}`);
+
+      if (!simulationResult.success) {
+        console.error("Erreur de simulation :", simulationResult.vm_status);
+        throw new Error("Échec de la simulation de transaction");
+      }
+
+      return simulationResult;
+    }
+
+    async function submitTransaction(senderAccount: Account, transaction: any) {
+      console.log("\n=== Soumission de la transaction ===");
+
+      const committedTransaction = await aptos.transaction.signAndSubmitTransaction({
+        signer: senderAccount,
+        transaction,
+      });
+
+      console.log(`Transaction soumise: ${committedTransaction.hash}`);
+
+      const executedTransaction = await aptos.waitForTransaction({
+        transactionHash: committedTransaction.hash,
+      });
+
+      console.log("Transaction confirmée !");
+      console.log(`- Hash: ${executedTransaction.hash}`);
+      console.log(`- Unités de gaz utilisées: ${executedTransaction.gas_used}`);
+
+      return executedTransaction;
+    }
+
+    async function main() {
+      try {
+        console.log(`Connecté au réseau: ${NetworkToNetworkName[config.network]}`);
+
+        const { senderAccount, receiverAccount } = await createAndFundAccounts();
+
+        await checkAccountBalances(
+          senderAccount.accountAddress.toString(),
+          receiverAccount.accountAddress.toString()
+        );
+
+        const transaction = await buildTransaction(
+          senderAccount,
+          receiverAccount.accountAddress.toString(),
+          100_000_000
+        );
+
+        await simulateTransaction(senderAccount, transaction);
+        await submitTransaction(senderAccount, transaction);
+
+        console.log("\n=== Soldes finaux ===");
+        await checkAccountBalances(
+          senderAccount.accountAddress.toString(),
+          receiverAccount.accountAddress.toString()
+        );
+
+      } catch (error) {
+        console.error("Erreur :", error);
+      }
+    }
+
+    main();
+    ```
+  </TabItem>
+</Tabs>
+
+## Prochaines Étapes
+
+Félicitations ! Vous avez réussi à créer et soumettre votre première transaction sur Aptos. Voici ce que vous pouvez explorer ensuite :
+
+- **[Votre Premier Module Move](/fr/build/guides/first-move-module)** - Apprenez à écrire et déployer des contrats intelligents
+- **[Votre Première DApp](/fr/build/guides/build-e2e-dapp)** - Construisez une application décentralisée complète
+- **[SDKs](/fr/build/sdks)** - Explorez nos SDKs officiels pour différents langages
+- **[Documentation de l'API](/fr/build/apis)** - Plongez profondément dans nos APIs REST et GraphQL
+
+## Concepts Clés Appris
+
+- **Comptes** : Chaque utilisateur a un compte identifié par une adresse de 32 octets
+- **Transactions** : Unités atomiques de changement sur la blockchain
+- **Gaz** : Frais de traitement payés pour l'exécution de transactions
+- **Simulation** : Moyen de tester les transactions avant la soumission
+- **Octas** : Plus petite unité d'APT (1 APT = 100,000,000 Octas)

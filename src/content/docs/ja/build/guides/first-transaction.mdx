@@ -1,0 +1,514 @@
+---
+title: "あなたの最初のトランザクション"
+---
+
+import { Aside, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
+
+トランザクションは、Aptosブロックチェーン上でデータを変更する基本的な方法です。パッケージを送るようなものと考えてください：何を送るか、誰に送るか、そして配達が確認されるまで追跡する必要があります。ブロックチェーンの用語では、トランザクションによってコインを転送し、スマートコントラクト関数を呼び出し、オンチェーン状態を更新できます。
+
+このチュートリアルでは、Aptosブロックチェーン上で最初のトランザクションを作成・送信する方法をガイドします。以下のことを学びます：
+
+1. 開発環境のセットアップ
+2. テストアカウントの作成と資金調達
+3. コイン転送トランザクションの構築
+4. コスト見積もりのためのトランザクションシミュレーション
+5. トランザクションの署名と送信
+6. トランザクションが正常に実行されたことの確認
+
+<Aside type="note">
+  このチュートリアルは、Aptosブロックチェーンの概念に基づいています。ブロックチェーン開発が初めてでも心配ありません - 重要な概念を進行しながら説明します。
+
+  完全なコードサンプルには[こちら](#完全なコードサンプル)からジャンプできます。または、ステップバイステップのウォークスルーを続けて読むこともできます。
+</Aside>
+
+## 1. 環境のセットアップ
+
+<Tabs>
+  <TabItem label="TypeScript">
+    トランザクションを作成する前に、必要なツールとSDKで開発環境をセットアップする必要があります。
+
+    <Steps>
+      1. TypeScript SDKをインストール
+
+         お好みのパッケージマネージャーを使用してTypeScript SDKをインストール：
+
+         <Tabs>
+           <TabItem label="npm">
+             ```shellscript filename="Terminal"
+             npm install @aptos-labs/ts-sdk
+             ```
+           </TabItem>
+
+           <TabItem label="yarn">
+             ```shellscript filename="Terminal"
+             yarn add @aptos-labs/ts-sdk
+             ```
+           </TabItem>
+
+           <TabItem label="pnpm">
+             ```shellscript filename="Terminal"
+             pnpm add @aptos-labs/ts-sdk
+             ```
+           </TabItem>
+         </Tabs>
+
+      2. プロジェクトディレクトリを作成
+
+         プロジェクト用の新しいディレクトリを作成：
+
+         ```shellscript filename="Terminal"
+         mkdir my-first-transaction
+         cd my-first-transaction
+         ```
+
+      3. 新しいファイルを作成
+
+         `transaction.ts`という名前の新しいファイルを作成：
+
+         <Tabs>
+           <TabItem label="Mac/Linux">
+             ```shellscript filename="Terminal"
+             touch transaction.ts
+             ```
+           </TabItem>
+
+           <TabItem label="Windows">
+             ```shellscript filename="Terminal"
+             type nul > transaction.ts
+             ```
+           </TabItem>
+         </Tabs>
+    </Steps>
+  </TabItem>
+
+  <TabItem label="Python">
+    トランザクションを作成する前に、必要なツールとSDKで開発環境をセットアップする必要があります。
+
+    <Steps>
+      1. Python SDKをインストール
+
+         pipを使用してPython SDKをインストール：
+
+         ```shellscript filename="Terminal"
+         pip install aptos-sdk
+         ```
+
+      2. プロジェクトディレクトリを作成
+
+         プロジェクト用の新しいディレクトリを作成：
+
+         ```shellscript filename="Terminal"
+         mkdir my-first-transaction
+         cd my-first-transaction
+         ```
+
+      3. 新しいファイルを作成
+
+         `transaction.py`という名前の新しいファイルを作成：
+
+         <Tabs>
+           <TabItem label="Mac/Linux">
+             ```shellscript filename="Terminal"
+             touch transaction.py
+             ```
+           </TabItem>
+
+           <TabItem label="Windows">
+             ```shellscript filename="Terminal"
+             type nul > transaction.py
+             ```
+           </TabItem>
+         </Tabs>
+    </Steps>
+  </TabItem>
+</Tabs>
+
+## 2. テストアカウントの作成
+
+<Tabs>
+  <TabItem label="TypeScript">
+    ブロックチェーンでは、すべてのトランザクションはアカウントから発信される必要があります。2つのテストアカウントを作成しましょう：コインを送信するアカウント（Alice）と受信するアカウント（Bob）。
+
+    <Steps>
+      1. クライアントをセットアップ
+
+         まず、ブロックチェーンに接続するAptosクライアントを初期化する必要があります。エディターで`transaction.ts`を開き、以下を追加：
+
+         ```typescript filename="transaction.ts"
+         import {
+           Account,
+           Aptos,
+           AptosConfig,
+           Network,
+         } from "@aptos-labs/ts-sdk";
+
+         async function main() {
+           // Aptosクライアントを初期化
+           const config = new AptosConfig({ network: Network.DEVNET });
+           const aptos = new Aptos(config);
+
+           console.log("Aptos devnetに接続されました");
+
+           // ここにさらにコードが追加されます
+         }
+
+         main().catch(console.error);
+         ```
+
+         <Aside type="note">
+           実際のコインを使用せずに実験できるテストネットワークであるAptos devnetに接続しています。devnetは定期的にリセットされるため、重要なものは保存しないでください。[aptos-ts-sdkリポジトリ](https://github.com/aptos-labs/aptos-ts-sdk)で完全なTypeScript SDKソースコードを探索できます。
+         </Aside>
+
+      2. アカウントを生成
+
+         `main()`関数内にこのコードを追加して、2つのアカウント - Alice（送信者）とBob（受信者）を作成：
+
+         ```typescript filename="transaction.ts"
+         // 2つのアカウントを生成
+         const alice = Account.generate();
+         const bob = Account.generate();
+
+         console.log("=== アドレス ===");
+         console.log(`Aliceのアドレス: ${alice.accountAddress}`);
+         console.log(`Bobのアドレス: ${bob.accountAddress}`);
+         ```
+
+         <Aside type="note">
+           各アカウントには固有のアドレス（銀行口座番号のようなもの）とキーペア（ログイン認証情報のようなもの）があります。アドレスは公開鍵から導出され、秘密鍵は秘密に保たれ、トランザクションの署名に使用されます。Aptosでアカウントがどのように機能するかの詳細については、[アカウントの基本](/ja/network/blockchain/accounts)を参照してください。
+         </Aside>
+
+      3. アカウントに資金提供
+
+         アカウント生成後にこのコードを追加して、フォーセットからテストコインを取得：
+
+         ```typescript filename="transaction.ts"
+         // devnetフォーセットからテストAPTでアカウントに資金提供
+         console.log("\n=== アカウント資金提供 ===");
+         await aptos.fundAccount({
+           accountAddress: alice.accountAddress,
+           amount: 100_000_000, // 1 APT = 100,000,000 octas
+         });
+         console.log("アカウントの資金提供が成功しました");
+
+         // 初期残高を確認
+         const aliceBalance = await aptos.getAccountAPTAmount({
+           accountAddress: alice.accountAddress,
+         });
+         const bobBalance = await aptos.getAccountAPTAmount({
+           accountAddress: bob.accountAddress,
+         });
+
+         console.log(`Aliceの残高: ${aliceBalance} octas`);
+         console.log(`Bobの残高: ${bobBalance} octas`);
+         ```
+    </Steps>
+  </TabItem>
+
+  <TabItem label="Python">
+    ブロックチェーンでは、すべてのトランザクションはアカウントから発信される必要があります。2つのテストアカウントを作成しましょう：コインを送信するアカウント（Alice）と受信するアカウント（Bob）。
+
+    ```python filename="transaction.py"
+    import asyncio
+    from aptos_sdk.client import RestClient
+    from aptos_sdk.account import Account
+
+    async def main():
+        # Aptosクライアントを初期化
+        client = RestClient("https://fullnode.devnet.aptoslabs.com/v1")
+        
+        # 2つのアカウントを生成
+        alice = Account.generate()
+        bob = Account.generate()
+        
+        print("=== アドレス ===")
+        print(f"Aliceのアドレス: {alice.address()}")
+        print(f"Bobのアドレス: {bob.address()}")
+        
+        # devnetフォーセットからアカウントに資金提供
+        print("\n=== アカウント資金提供 ===")
+        await client.fund_account(alice.address(), 100_000_000)
+        print("アカウントの資金提供が成功しました")
+
+    if __name__ == "__main__":
+        asyncio.run(main())
+    ```
+  </TabItem>
+</Tabs>
+
+## 3. トランザクションの構築と送信
+
+<Tabs>
+  <TabItem label="TypeScript">
+    <Steps>
+      1. 転送トランザクションを構築
+
+         `main()`関数に以下のコードを追加して、AliceからBobに1 APTを転送するトランザクションを作成：
+
+         ```typescript filename="transaction.ts"
+         // 転送トランザクションを構築
+         console.log("\n=== トランザクション構築 ===");
+         const transaction = await aptos.transaction.build.simple({
+           sender: alice.accountAddress,
+           data: {
+             function: "0x1::coin::transfer",
+             typeArguments: ["0x1::aptos_coin::AptosCoin"],
+             functionArguments: [bob.accountAddress, 100_000_000], // 1 APT
+           },
+         });
+         console.log("トランザクションが構築されました");
+         ```
+
+      2. トランザクションをシミュレート
+
+         実際に送信する前に、トランザクションをシミュレートしてガス料金を見積もり：
+
+         ```typescript filename="transaction.ts"
+         // トランザクションをシミュレート
+         console.log("\n=== トランザクションシミュレーション ===");
+         const simulationResult = await aptos.transaction.simulate.simple({
+           signerPublicKey: alice.publicKey,
+           transaction,
+         });
+         console.log("シミュレーション結果:", simulationResult[0]);
+         ```
+
+      3. トランザクションに署名して送信
+
+         ```typescript filename="transaction.ts"
+         // トランザクションに署名して送信
+         console.log("\n=== トランザクション送信 ===");
+         const committedTransaction = await aptos.transaction.signAndSubmitTransaction({
+           signer: alice,
+           transaction,
+         });
+
+         console.log("トランザクションハッシュ:", committedTransaction.hash);
+
+         // トランザクションの確認を待機
+         const executedTransaction = await aptos.waitForTransaction({
+           transactionHash: committedTransaction.hash,
+         });
+         console.log("トランザクションが実行されました:", executedTransaction.success);
+         ```
+    </Steps>
+  </TabItem>
+
+  <TabItem label="Python">
+    ```python filename="transaction.py"
+    # 転送トランザクションの構築と送信
+    print("\n=== トランザクション送信 ===")
+
+    # 転送トランザクションを構築
+    transaction = {
+        "function": "0x1::coin::transfer",
+        "type_arguments": ["0x1::aptos_coin::AptosCoin"],
+        "arguments": [str(bob.address()), "100000000"]  # 1 APT
+    }
+
+    # トランザクションを送信
+    txn_hash = await client.submit_transaction(alice, transaction)
+    print(f"トランザクションハッシュ: {txn_hash}")
+
+    # トランザクションの確認を待機
+    await client.wait_for_transaction(txn_hash)
+    print("トランザクションが確認されました!")
+    ```
+  </TabItem>
+</Tabs>
+
+## 4. 結果の確認
+
+<Tabs>
+  <TabItem label="TypeScript">
+    最後に、転送後の残高を確認しましょう：
+
+    ```typescript filename="transaction.ts"
+    // 最終残高を確認
+    console.log("\n=== 最終残高 ===");
+    const finalAliceBalance = await aptos.getAccountAPTAmount({
+      accountAddress: alice.accountAddress,
+    });
+    const finalBobBalance = await aptos.getAccountAPTAmount({
+      accountAddress: bob.accountAddress,
+    });
+
+    console.log(`Aliceの最終残高: ${finalAliceBalance} octas`);
+    console.log(`Bobの最終残高: ${finalBobBalance} octas`);
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    ```python filename="transaction.py"
+    # 最終残高を確認
+    print("\n=== 最終残高 ===")
+    alice_balance = await client.account_balance(alice.address())
+    bob_balance = await client.account_balance(bob.address())
+
+    print(f"Aliceの最終残高: {alice_balance} octas")
+    print(f"Bobの最終残高: {bob_balance} octas")
+    ```
+  </TabItem>
+</Tabs>
+
+## 5. コードの実行
+
+<Tabs>
+  <TabItem label="TypeScript">
+    ターミナルでスクリプトを実行：
+
+    ```shellscript filename="Terminal"
+    npx ts-node transaction.ts
+    ```
+
+    または、TypeScriptをJavaScriptにコンパイルしてから実行：
+
+    ```shellscript filename="Terminal"
+    npx tsc transaction.ts && node transaction.js
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    ターミナルでスクリプトを実行：
+
+    ```shellscript filename="Terminal"
+    python transaction.py
+    ```
+  </TabItem>
+</Tabs>
+
+## 完全なコードサンプル
+
+<Tabs>
+  <TabItem label="TypeScript">
+    ```typescript filename="transaction.ts"
+    import {
+      Account,
+      Aptos,
+      AptosConfig,
+      Network,
+    } from "@aptos-labs/ts-sdk";
+
+    async function main() {
+      // Aptosクライアントを初期化
+      const config = new AptosConfig({ network: Network.DEVNET });
+      const aptos = new Aptos(config);
+      console.log("Aptos devnetに接続されました");
+
+      // 2つのアカウントを生成
+      const alice = Account.generate();
+      const bob = Account.generate();
+      console.log("=== アドレス ===");
+      console.log(`Aliceのアドレス: ${alice.accountAddress}`);
+      console.log(`Bobのアドレス: ${bob.accountAddress}`);
+
+      // アカウントに資金提供
+      console.log("\n=== アカウント資金提供 ===");
+      await aptos.fundAccount({
+        accountAddress: alice.accountAddress,
+        amount: 100_000_000,
+      });
+      console.log("アカウントの資金提供が成功しました");
+
+      // 初期残高を確認
+      const aliceBalance = await aptos.getAccountAPTAmount({
+        accountAddress: alice.accountAddress,
+      });
+      console.log(`Aliceの残高: ${aliceBalance} octas`);
+
+      // 転送トランザクションを構築
+      console.log("\n=== トランザクション構築 ===");
+      const transaction = await aptos.transaction.build.simple({
+        sender: alice.accountAddress,
+        data: {
+          function: "0x1::coin::transfer",
+          typeArguments: ["0x1::aptos_coin::AptosCoin"],
+          functionArguments: [bob.accountAddress, 100_000_000],
+        },
+      });
+
+      // トランザクションに署名して送信
+      console.log("\n=== トランザクション送信 ===");
+      const committedTransaction = await aptos.transaction.signAndSubmitTransaction({
+        signer: alice,
+        transaction,
+      });
+      console.log("トランザクションハッシュ:", committedTransaction.hash);
+
+      // トランザクションの確認を待機
+      await aptos.waitForTransaction({
+        transactionHash: committedTransaction.hash,
+      });
+
+      // 最終残高を確認
+      console.log("\n=== 最終残高 ===");
+      const finalAliceBalance = await aptos.getAccountAPTAmount({
+        accountAddress: alice.accountAddress,
+      });
+      const finalBobBalance = await aptos.getAccountAPTAmount({
+        accountAddress: bob.accountAddress,
+      });
+      console.log(`Aliceの最終残高: ${finalAliceBalance} octas`);
+      console.log(`Bobの最終残高: ${finalBobBalance} octas`);
+    }
+
+    main().catch(console.error);
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    ```python filename="transaction.py"
+    import asyncio
+    from aptos_sdk.client import RestClient
+    from aptos_sdk.account import Account
+
+    async def main():
+        # Aptosクライアントを初期化
+        client = RestClient("https://fullnode.devnet.aptoslabs.com/v1")
+        
+        # 2つのアカウントを生成
+        alice = Account.generate()
+        bob = Account.generate()
+        print("=== アドレス ===")
+        print(f"Aliceのアドレス: {alice.address()}")
+        print(f"Bobのアドレス: {bob.address()}")
+        
+        # アカウントに資金提供
+        print("\n=== アカウント資金提供 ===")
+        await client.fund_account(alice.address(), 100_000_000)
+        print("アカウントの資金提供が成功しました")
+        
+        # 転送トランザクションの送信
+        print("\n=== トランザクション送信 ===")
+        transaction = {
+            "function": "0x1::coin::transfer",
+            "type_arguments": ["0x1::aptos_coin::AptosCoin"],
+            "arguments": [str(bob.address()), "100000000"]
+        }
+        
+        txn_hash = await client.submit_transaction(alice, transaction)
+        print(f"トランザクションハッシュ: {txn_hash}")
+        
+        # トランザクションの確認を待機
+        await client.wait_for_transaction(txn_hash)
+        print("トランザクションが確認されました!")
+        
+        # 最終残高を確認
+        print("\n=== 最終残高 ===")
+        alice_balance = await client.account_balance(alice.address())
+        bob_balance = await client.account_balance(bob.address())
+        print(f"Aliceの最終残高: {alice_balance} octas")
+        print(f"Bobの最終残高: {bob_balance} octas")
+
+    if __name__ == "__main__":
+        asyncio.run(main())
+    ```
+  </TabItem>
+</Tabs>
+
+## 次のステップ
+
+おめでとうございます！あなたは最初のAptosトランザクションを正常に作成し、送信しました。次に以下を試してみてください：
+
+- [あなたの最初のMove モジュール](/ja/build/guides/first-move-module) - 独自のスマートコントラクトを作成
+- [Aptos インデクサー](/ja/build/indexer) - オンチェーンデータのクエリ
+- [エンドツーエンドdApp構築](/ja/build/guides/build-e2e-dapp) - 完全なアプリケーションの構築

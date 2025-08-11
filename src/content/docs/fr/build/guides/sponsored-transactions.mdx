@@ -1,0 +1,389 @@
+---
+title: "Transactions Sponsorisées"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+Les transactions sponsorisées permettent à un compte (le sponsor) de payer les frais de gaz pour une transaction soumise par un autre compte (l'utilisateur). Cette fonctionnalité est particulièrement utile pour améliorer l'expérience utilisateur en permettant aux nouveaux utilisateurs d'interagir avec des dApps sans avoir besoin d'APT pour les frais de gaz.
+
+<Aside type="note">
+  Les transactions sponsorisées sont natives sur Aptos, ce qui signifie qu'elles sont intégrées directement dans le protocole blockchain sans nécessiter de contrats intelligents supplémentaires.
+</Aside>
+
+## Cas d'Usage
+
+Les transactions sponsorisées sont utiles dans plusieurs scénarios :
+
+- **Onboarding utilisateur** : Permettre aux nouveaux utilisateurs d'essayer votre dApp sans acquérir d'APT d'abord
+- **Gaming** : Sponsoriser les actions de jeu pour une expérience fluide
+- **DeFi** : Permettre aux utilisateurs d'échanger des tokens sans avoir d'APT pour le gaz
+- **NFT Minting** : Sponsoriser le minting de NFT pour des événements promotionnels
+
+## Comment Fonctionnent les Transactions Sponsorisées
+
+Le processus implique trois parties :
+
+1. **Utilisateur** : Crée et signe la transaction (sans payer le gaz)
+2. **Sponsor** : Paie les frais de gaz et signe en tant que payeur de frais
+3. **Blockchain** : Exécute la transaction et déduit les frais du compte du sponsor
+
+<Steps>
+  1) L'utilisateur crée une transaction brute
+  2) L'utilisateur signe la transaction comme soumetteur
+  3) Le sponsor examine et approuve la transaction
+  4) Le sponsor signe la transaction comme payeur de frais
+  5) La transaction est soumise avec les deux signatures
+  6) La blockchain exécute la transaction et facture le sponsor
+</Steps>
+
+## Exemple de Code
+
+<Aside type="note">
+  Cet exemple utilise le SDK TypeScript. Des implémentations similaires sont disponibles dans d'autres SDK Aptos.
+</Aside>
+
+### Configuration Basique
+
+```typescript
+import {
+  Account,
+  Aptos,
+  AptosConfig,
+  Network,
+  InputGenerateTransactionOptions,
+} from "@aptos-labs/ts-sdk";
+
+// Configurer le client Aptos
+const config = new AptosConfig({ network: Network.TESTNET });
+const aptos = new Aptos(config);
+
+// Créer les comptes
+const userAccount = Account.generate();
+const sponsorAccount = Account.generate();
+
+// Financer le sponsor (l'utilisateur n'a pas besoin de fonds)
+await aptos.fundAccount({
+  accountAddress: sponsorAccount.accountAddress,
+  amount: 100_000_000, // 1 APT
+});
+```
+
+### Créer une Transaction Sponsorisée
+
+```typescript
+async function createSponsoredTransaction() {
+  // 1. L'utilisateur crée la transaction
+  const transaction = await aptos.transaction.build.simple({
+    sender: userAccount.accountAddress,
+    data: {
+      function: "0x1::aptos_account::transfer",
+      functionArguments: [
+        "0x123...", // adresse du destinataire
+        1000000,   // montant en Octas
+      ],
+    },
+    options: {
+      // Marquer comme transaction sponsorisée
+      maxGasAmount: 1000,
+      gasUnitPrice: 100,
+    },
+  });
+
+  // 2. L'utilisateur signe la transaction
+  const senderAuthenticator = aptos.transaction.sign({
+    signer: userAccount,
+    transaction,
+  });
+
+  // 3. Le sponsor examine et signe comme payeur de frais
+  const sponsorAuthenticator = aptos.transaction.signAsFeePayer({
+    signer: sponsorAccount,
+    transaction,
+  });
+
+  // 4. Combiner les signatures et soumettre
+  const committedTransaction = await aptos.transaction.submit.simple({
+    transaction,
+    senderAuthenticator,
+    feePayerAuthenticator: sponsorAuthenticator,
+  });
+
+  // 5. Attendre la confirmation
+  await aptos.waitForTransaction({
+    transactionHash: committedTransaction.hash,
+  });
+
+  console.log("Transaction sponsorisée confirmée !");
+  return committedTransaction;
+}
+```
+
+### Exemple Complet avec Vérifications de Sécurité
+
+```typescript
+async function sponsorTransactionWithValidation() {
+  try {
+    // 1. Créer la transaction que l'utilisateur veut exécuter
+    const transferTransaction = await aptos.transaction.build.simple({
+      sender: userAccount.accountAddress,
+      data: {
+        function: "0x1::aptos_account::transfer", 
+        functionArguments: [
+          receiverAccount.accountAddress,
+          50_000, // 0.0005 APT
+        ],
+      },
+    });
+
+    // 2. Le sponsor valide la transaction
+    if (!isTransactionAllowed(transferTransaction)) {
+      throw new Error("Transaction non autorisée pour sponsoring");
+    }
+
+    // 3. Simuler pour estimer le coût en gaz
+    const [simulationResult] = await aptos.transaction.simulate.simple({
+      signerPublicKey: userAccount.publicKey,
+      transaction: transferTransaction,
+    });
+
+    console.log(`Coût estimé en gaz: ${simulationResult.gas_used}`);
+
+    // 4. Vérifier que le sponsor a suffisamment de fonds
+    const sponsorBalance = await aptos.getAccountAPTAmount({
+      accountAddress: sponsorAccount.accountAddress,
+    });
+
+    const estimatedCost = BigInt(simulationResult.gas_used) * BigInt(100); // Prix unitaire du gaz
+    if (sponsorBalance < estimatedCost) {
+      throw new Error("Fonds insuffisants du sponsor");
+    }
+
+    // 5. L'utilisateur signe d'abord
+    const userSignature = aptos.transaction.sign({
+      signer: userAccount,
+      transaction: transferTransaction,
+    });
+
+    // 6. Le sponsor signe comme payeur de frais
+    const sponsorSignature = aptos.transaction.signAsFeePayer({
+      signer: sponsorAccount,
+      transaction: transferTransaction,
+    });
+
+    // 7. Soumettre la transaction avec les deux signatures
+    const result = await aptos.transaction.submit.simple({
+      transaction: transferTransaction,
+      senderAuthenticator: userSignature,
+      feePayerAuthenticator: sponsorSignature,
+    });
+
+    console.log("Hash de transaction :", result.hash);
+    
+    // 8. Attendre la confirmation
+    await aptos.waitForTransaction({ transactionHash: result.hash });
+    
+    return result;
+
+  } catch (error) {
+    console.error("Erreur de transaction sponsorisée :", error);
+    throw error;
+  }
+}
+
+// Fonction d'exemple pour valider les transactions
+function isTransactionAllowed(transaction: any): boolean {
+  // Implémenter votre logique de validation ici
+  // Par exemple : vérifier le type de fonction, les montants, etc.
+  
+  const allowedFunctions = [
+    "0x1::aptos_account::transfer",
+    "0x1::coin::transfer",
+    // Ajouter d'autres fonctions autorisées
+  ];
+  
+  return allowedFunctions.includes(transaction.rawTransaction.payload.function);
+}
+```
+
+## Meilleures Pratiques de Sécurité
+
+### Validation des Transactions
+
+```typescript
+class TransactionValidator {
+  static validateTransfer(transaction: any): boolean {
+    // Vérifier le montant du transfert
+    const amount = transaction.rawTransaction.payload.functionArguments[1];
+    const maxAllowedAmount = 1_000_000; // 0.01 APT max
+    
+    if (amount > maxAllowedAmount) {
+      return false;
+    }
+    
+    // Vérifier l'adresse du destinataire
+    const recipient = transaction.rawTransaction.payload.functionArguments[0];
+    if (!this.isAllowedRecipient(recipient)) {
+      return false;
+    }
+    
+    return true;
+  }
+  
+  static isAllowedRecipient(address: string): boolean {
+    // Liste blanche des destinataires autorisés
+    const allowedRecipients = [
+      "0x1234...", // Adresse de votre contrat
+      "0x5678...", // Autre adresse approuvée
+    ];
+    
+    return allowedRecipients.includes(address);
+  }
+}
+```
+
+### Limitation du Taux
+
+```typescript
+class SponsorshipManager {
+  private sponsorshipCounts = new Map<string, number>();
+  private readonly maxSponsorshipsPerHour = 10;
+  
+  canSponsor(userAddress: string): boolean {
+    const count = this.sponsorshipCounts.get(userAddress) || 0;
+    return count < this.maxSponsorshipsPerHour;
+  }
+  
+  recordSponsorship(userAddress: string): void {
+    const count = this.sponsorshipCounts.get(userAddress) || 0;
+    this.sponsorshipCounts.set(userAddress, count + 1);
+    
+    // Réinitialiser le compteur après une heure
+    setTimeout(() => {
+      this.sponsorshipCounts.delete(userAddress);
+    }, 60 * 60 * 1000);
+  }
+}
+```
+
+## Surveillance et Logging
+
+```typescript
+async function monitorSponsoredTransactions() {
+  // Logger les métriques importantes
+  console.log({
+    timestamp: new Date().toISOString(),
+    sponsorAddress: sponsorAccount.accountAddress.toString(),
+    userAddress: userAccount.accountAddress.toString(),
+    gasUsed: simulationResult.gas_used,
+    transactionHash: result.hash,
+  });
+  
+  // Vérifier le solde du sponsor
+  const remainingBalance = await aptos.getAccountAPTAmount({
+    accountAddress: sponsorAccount.accountAddress,
+  });
+  
+  if (remainingBalance < 10_000_000) { // Moins de 0.1 APT
+    console.warn("Solde du sponsor faible, recharge nécessaire");
+  }
+}
+```
+
+## Considérations d'Implémentation
+
+### Côté Frontend
+
+```javascript
+// Exemple d'intégration frontend
+async function requestSponsoredTransaction(userWallet, transactionData) {
+  try {
+    // 1. Créer la transaction
+    const transaction = await aptos.transaction.build.simple({
+      sender: userWallet.account.address,
+      data: transactionData,
+    });
+    
+    // 2. L'utilisateur signe dans son wallet
+    const userSignature = await userWallet.signTransaction(transaction);
+    
+    // 3. Envoyer au service de sponsoring
+    const response = await fetch('/api/sponsor-transaction', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        transaction: transaction,
+        userSignature: userSignature,
+      }),
+    });
+    
+    const result = await response.json();
+    return result.transactionHash;
+    
+  } catch (error) {
+    console.error('Erreur de transaction sponsorisée:', error);
+    throw error;
+  }
+}
+```
+
+### Côté Backend
+
+```javascript
+// Exemple d'endpoint API
+app.post('/api/sponsor-transaction', async (req, res) => {
+  try {
+    const { transaction, userSignature } = req.body;
+    
+    // Valider la transaction
+    if (!TransactionValidator.validateTransfer(transaction)) {
+      return res.status(400).json({ error: 'Transaction non valide' });
+    }
+    
+    // Vérifier les limites de taux
+    const userAddress = transaction.sender;
+    if (!sponsorshipManager.canSponsor(userAddress)) {
+      return res.status(429).json({ error: 'Limite de taux dépassée' });
+    }
+    
+    // Signer comme payeur de frais
+    const sponsorSignature = aptos.transaction.signAsFeePayer({
+      signer: sponsorAccount,
+      transaction,
+    });
+    
+    // Soumettre la transaction
+    const result = await aptos.transaction.submit.simple({
+      transaction,
+      senderAuthenticator: userSignature,
+      feePayerAuthenticator: sponsorSignature,
+    });
+    
+    // Enregistrer l'usage
+    sponsorshipManager.recordSponsorship(userAddress);
+    
+    res.json({ transactionHash: result.hash });
+    
+  } catch (error) {
+    console.error('Erreur serveur:', error);
+    res.status(500).json({ error: 'Erreur interne du serveur' });
+  }
+});
+```
+
+## Conclusion
+
+Les transactions sponsorisées sont un outil puissant pour améliorer l'expérience utilisateur sur Aptos en supprimant les barrières de frais de gaz. En implémentant des validations appropriées, une limitation de taux et une surveillance, vous pouvez offrir en toute sécurité cette fonctionnalité dans vos dApps.
+
+### Points Clés à Retenir
+
+- Les transactions sponsorisées sont natives sur Aptos
+- Implémentez toujours une validation stricte des transactions
+- Surveillez l'usage et les balances des sponsors
+- Utilisez une limitation de taux pour prévenir les abus
+- Testez soigneusement sur testnet avant le déploiement
+
+### Prochaines Étapes
+
+- Explorez les [capacités avancées de transaction](/fr/build/smart-contracts/advanced-concepts)
+- Apprenez sur la [gestion des frais de gaz](/fr/network/blockchain/gas-txn-fee)
+- Intégrez dans votre [DApp end-to-end](/fr/build/guides/build-e2e-dapp)

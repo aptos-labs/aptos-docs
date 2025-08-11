@@ -1,0 +1,510 @@
+---
+title: "Газ и Комиссии за Транзакции"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+В блокчейне Aptos **газ** - это единица измерения стоимости вычислений, а **комиссия за транзакцию** - это сумма APT, которую пользователь платит за выполнение транзакции. Эта система обеспечивает справедливое ценообразование и предотвращает злоупотребления сетевыми ресурсами.
+
+## Понимание Газа
+
+### Что такое Газ?
+
+Газ представляет вычислительную работу, необходимую для выполнения операций в блокчейне Aptos. Каждая операция - от простых переводов до сложных выполнений смарт-контрактов - потребляет определенное количество газа.
+
+```
+Газ ≈ Вычислительная Работа
+```
+
+**Ключевые принципы:**
+
+- **Детерминизм**: Одинаковые операции всегда потребляют одинаковое количество газа
+- **Справедливость**: Более сложные операции стоят больше газа
+- **Предсказуемость**: Разработчики могут оценить стоимость газа заранее
+- **Защита**: Предотвращение бесконечных циклов и атак DoS
+
+### Единицы Газа
+
+В Aptos газ измеряется в **единицах газа**:
+
+```rust
+pub struct GasUsed {
+    pub computation: u64,    // Вычислительные операции
+    pub storage: u64,        // Операции с хранилищем
+    pub io: u64,             // Операции ввода/вывода
+}
+```
+
+**Типы потребления газа:**
+
+- **Вычислительный газ**: Выполнение инструкций Move
+- **Газ хранилища**: Чтение/запись состояния блокчейна
+- **Газ ввода/вывода**: Сетевые операции и события
+
+## Модель Ценообразования
+
+### Базовая Формула
+
+```
+Комиссия за Транзакцию = Использованные Единицы Газа × Цена за Единицу Газа
+```
+
+### Компоненты Стоимости
+
+**Цена за Единицу Газа**
+
+- Устанавливается пользователем при отправке транзакции
+- Минимальная цена: 100 единиц за единицу газа
+- Более высокие цены получают приоритет
+
+**Лимит Газа**
+
+- Максимальное количество газа, которое пользователь готов потратить
+- Предотвращает неожиданно высокие комиссии
+- Неиспользованный газ возвращается
+
+### Примеры Стоимости
+
+| Тип Транзакции | Приблизительный Газ | Стоимость (100 единиц/газ) |
+|----------------|---------------------|---------------------------|
+| Простой перевод APT | 1,000 единиц | 0.001 APT |
+| Перевод токенов | 1,500 единиц | 0.0015 APT |
+| Развертывание модуля | 10,000 единиц | 0.01 APT |
+| Сложная dApp операция | 5,000 единиц | 0.005 APT |
+| NFT Minting | 3,000 единиц | 0.003 APT |
+
+<Aside type="note">
+  Фактические расходы на газ могут варьироваться в зависимости от сложности операции и сетевой нагрузки. Всегда симулируйте транзакции для точной оценки.
+</Aside>
+
+## Оценка Газа
+
+### Симуляция Транзакций
+
+Aptos позволяет симулировать транзакции перед отправкой для оценки стоимости газа:
+
+```typescript
+// TypeScript SDK пример
+const transaction = await aptos.transaction.build.simple({
+  sender: sender.accountAddress,
+  data: {
+    function: "0x1::aptos_account::transfer",
+    functionArguments: [recipient, amount],
+  },
+});
+
+// Симулировать для оценки газа
+const simulation = await aptos.transaction.simulate.simple({
+  signerPublicKey: sender.publicKey,
+  transaction,
+});
+
+console.log(`Оценка газа: ${simulation[0].gas_used} единиц`);
+console.log(`Оценка стоимости: ${simulation[0].gas_used * 100} octas`);
+```
+
+```python
+# Python SDK пример
+from aptos_sdk import RestClient
+
+rest_client = RestClient("https://fullnode.devnet.aptoslabs.com/v1")
+
+# Симулировать транзакцию
+simulation = await rest_client.simulate_transaction(
+    signed_transaction, 
+    estimate_gas_unit_price=True
+)
+
+print(f"Оценка газа: {simulation['gas_used']} единиц")
+print(f"Оценка стоимости: {int(simulation['gas_used']) * 100} octas")
+```
+
+### Инструменты Оценки
+
+**Aptos CLI**
+
+```bash
+aptos move view \
+  --function-id "0x1::aptos_account::transfer" \
+  --args address:0x123... u64:1000000 \
+  --estimate-gas
+```
+
+**REST API**
+
+```bash
+curl -X POST "https://fullnode.devnet.aptoslabs.com/v1/transactions/simulate" \
+  -H "Content-Type: application/json" \
+  -d '{"transaction": "...", "estimate_gas_unit_price": true}'
+```
+
+## Управление Газом
+
+### Установка Лимитов Газа
+
+```typescript
+const transaction = await aptos.transaction.build.simple({
+  sender: sender.accountAddress,
+  data: {
+    function: "0x1::aptos_account::transfer",
+    functionArguments: [recipient, amount],
+  },
+  options: {
+    maxGasAmount: 10000,        // Максимально 10,000 единиц газа
+    gasUnitPrice: 100,          // 100 единиц за единицу газа
+    expireTimestamp: Math.floor(Date.now() / 1000) + 30, // Истекает через 30 секунд
+  },
+});
+```
+
+### Стратегии Оптимизации
+
+**1. Установка Разумных Лимитов**
+
+```typescript
+// Используйте симуляцию + буфер
+const simulation = await aptos.transaction.simulate.simple({...});
+const gasLimit = Math.ceil(simulation[0].gas_used * 1.2); // 20% буфер
+```
+
+**2. Мониторинг Использования Газа**
+
+```typescript
+const result = await aptos.waitForTransaction({
+  transactionHash: pendingTxn.hash
+});
+
+console.log(`Фактическое использование газа: ${result.gas_used}`);
+console.log(`Эффективность: ${(result.gas_used / gasLimit * 100).toFixed(1)}%`);
+```
+
+**3. Пакетная Обработка Операций**
+
+```move
+// Пример: пакетный перевод (более эффективно по газу)
+public entry fun batch_transfer(
+    sender: &signer,
+    recipients: vector<address>,
+    amounts: vector<u64>
+) {
+    let i = 0;
+    let len = vector::length(&recipients);
+    while (i < len) {
+        let recipient = vector::borrow(&recipients, i);
+        let amount = vector::borrow(&amounts, i);
+        aptos_account::transfer(sender, *recipient, *amount);
+        i = i + 1;
+    };
+}
+```
+
+## Приоритизация Транзакций
+
+### Как Работает Приоритизация
+
+Aptos использует **аукцион газа** для приоритизации транзакций:
+
+1. **Более высокая цена газа** = **более высокий приоритет**
+2. Валидаторы выбирают транзакции с наивысшими ценами газа первыми
+3. Во время загруженности сети низкоприоритетные транзакции могут быть отложены
+
+### Стратегии Ценообразования
+
+**Стандартная Цена (100 единиц за газ)**
+
+```typescript
+const standardPricing = {
+  gasUnitPrice: 100,  // Минимум
+  priority: "низкий"
+};
+```
+
+**Приоритетная Цена (200-500 единиц за газ)**
+
+```typescript
+const priorityPricing = {
+  gasUnitPrice: 300,  // 3x минимум
+  priority: "средний"
+};
+```
+
+**Срочная Цена (1000+ единиц за газ)**
+
+```typescript
+const urgentPricing = {
+  gasUnitPrice: 1000,  // 10x минимум
+  priority: "высокий"
+};
+```
+
+### Динамическое Ценообразование
+
+```typescript
+async function getDynamicGasPrice(urgency: 'low' | 'medium' | 'high') {
+  // Получить текущую оценку цены газа
+  const gasEstimate = await aptos.getGasEstimate();
+  
+  const multipliers = {
+    low: 1.0,
+    medium: 1.5,
+    high: 2.0
+  };
+  
+  return Math.ceil(gasEstimate.gas_price * multipliers[urgency]);
+}
+```
+
+## Возврат Газа
+
+### Неиспользованный Газ
+
+Aptos автоматически возвращает неиспользованный газ:
+
+```
+Фактическая Комиссия = Использованный Газ × Цена за Единицу Газа
+Возврат = (Лимит Газа - Использованный Газ) × Цена за Единицу Газа
+```
+
+### Неудачные Транзакции
+
+**Полная Неудача**
+
+- Газ, потраченный на валидацию, НЕ возвращается
+- Газ, потраченный на выполнение, НЕ потребляется
+- Только комиссия за валидацию вычитается
+
+**Частичная Неудача**
+
+- Газ, потребленный до точки отказа, оплачивается
+- Оставшийся газ возвращается
+- События и изменения состояния отменяются
+
+## Оптимизация для dApps
+
+### Эффективные Паттерны
+
+**1. Пакетные Операции**
+
+```move
+public entry fun batch_mint_nfts(
+    creator: &signer,
+    collection: String,
+    names: vector<String>,
+    descriptions: vector<String>,
+    uris: vector<String>
+) {
+    // Более эффективно, чем отдельные вызовы mint
+    let i = 0;
+    let len = vector::length(&names);
+    while (i < len) {
+        // Логика mint
+        i = i + 1;
+    };
+}
+```
+
+**2. Ленивые Вычисления**
+
+```move
+public fun expensive_computation(): u64 acquires ComputationCache {
+    if (!exists<ComputationCache>(@aptos_framework)) {
+        let result = perform_heavy_computation();
+        move_to(@aptos_framework, ComputationCache { value: result });
+        result
+    } else {
+        borrow_global<ComputationCache>(@aptos_framework).value
+    }
+}
+```
+
+**3. Эффективные Структуры Данных**
+
+```move
+// Предпочитайте vector<T> вместо множественных полей
+struct EfficientStorage has key {
+    items: vector<Item>,  // Лучше
+}
+
+// Избегайте
+struct InefficientStorage has key {
+    item1: Item,
+    item2: Item,
+    item3: Item,
+    // ... много полей
+}
+```
+
+### Мониторинг Газа в Продакшене
+
+```typescript
+class GasMonitor {
+  private gasMetrics: Array<{transaction: string, gasUsed: number, timestamp: number}> = [];
+
+  async trackTransaction(txHash: string) {
+    const result = await aptos.waitForTransaction({ transactionHash: txHash });
+    
+    this.gasMetrics.push({
+      transaction: txHash,
+      gasUsed: parseInt(result.gas_used),
+      timestamp: Date.now()
+    });
+
+    // Предупредить, если использование газа неожиданно высокое
+    if (parseInt(result.gas_used) > this.getAverageGasUsage() * 2) {
+      console.warn(`Высокое использование газа: ${result.gas_used} единиц`);
+    }
+  }
+
+  getAverageGasUsage(): number {
+    if (this.gasMetrics.length === 0) return 0;
+    const total = this.gasMetrics.reduce((sum, metric) => sum + metric.gasUsed, 0);
+    return total / this.gasMetrics.length;
+  }
+}
+```
+
+## Сравнение Сетей
+
+### Стоимость Газа по Сетям
+
+| Сеть | Назначение | Типичная Цена Газа | Стоимость Простого Перевода |
+|------|------------|-------------------|---------------------------|
+| Devnet | Разработка | 100 единиц/газ | ~0.001 APT (тест) |
+| Testnet | Тестирование | 100 единиц/газ | ~0.001 APT (тест) |
+| Mainnet | Продакшен | 100+ единиц/газ | ~0.001+ APT (реальный) |
+
+### Рыночная Динамика
+
+**Факторы, Влияющие на Цены Газа:**
+
+- Активность сети (больше транзакций = выше цены)
+- Сложность dApp (более сложные контракты = больше газа)
+- Конкуренция пользователей за пропускную способность блоков
+- Стимулы валидаторов
+
+## Лучшие Практики
+
+### Для Разработчиков
+
+**1. Всегда Симулируйте Первым**
+
+```typescript
+// ✅ Хорошо
+const simulation = await aptos.transaction.simulate.simple({...});
+const gasLimit = Math.ceil(simulation[0].gas_used * 1.1);
+
+// ❌ Плохо
+const gasLimit = 100000; // Произвольное большое число
+```
+
+**2. Установите Разумные Сроки Истечения**
+
+```typescript
+const expiration = Math.floor(Date.now() / 1000) + 30; // 30 секунд
+```
+
+**3. Обрабатывайте Ошибки Газа**
+
+```typescript
+try {
+  const result = await aptos.signAndSubmitTransaction({...});
+} catch (error) {
+  if (error.message.includes('INSUFFICIENT_BALANCE_FOR_TRANSACTION_FEE')) {
+    console.error('Недостаточно APT для оплаты газа');
+  } else if (error.message.includes('MAX_GAS_UNITS_EXCEEDED')) {
+    console.error('Транзакция превысила лимит газа');
+  }
+}
+```
+
+### Для Пользователей
+
+**1. Мониторинг Балансов**
+
+- Поддерживайте достаточный баланс APT для комиссий
+- Учитывайте несколько транзакций в планах
+
+**2. Выбор Цены Газа**
+
+- Используйте стандартные цены для некритичных операций
+- Повышайте цены во время высокой активности сети
+
+**3. Проверка Статуса Транзакций**
+
+- Мониторинг неудачных транзакций
+- Повторная отправка с корректированными параметрами газа
+
+## Устранение Неполадок
+
+### Распространенные Ошибки Газа
+
+**Недостаточные Средства**
+
+```
+Error: INSUFFICIENT_BALANCE_FOR_TRANSACTION_FEE
+```
+
+_Решение_: Пополнить аккаунт APT
+
+**Превышение Лимита Газа**
+
+```
+Error: MAX_GAS_UNITS_EXCEEDED
+```
+
+_Решение_: Увеличить maxGasAmount
+
+**Цена Газа Слишком Низкая**
+
+```
+Error: GAS_UNIT_PRICE_BELOW_MIN_BOUND
+```
+
+_Решение_: Установить gasUnitPrice >= 100
+
+**Истечение Срока Транзакции**
+
+```
+Error: TRANSACTION_EXPIRED
+```
+
+_Решение_: Увеличить время истечения
+
+### Инструменты Отладки
+
+**Проверка Статуса Транзакции**
+
+```bash
+aptos account balance --account 0x123...
+aptos transaction show --transaction-hash 0xabc...
+```
+
+**Анализ Газа**
+
+```typescript
+const receipt = await aptos.waitForTransaction({ transactionHash });
+console.log('Анализ газа:', {
+  запрошено: receipt.max_gas_amount,
+  использовано: receipt.gas_used,
+  эффективность: (receipt.gas_used / receipt.max_gas_amount * 100).toFixed(1) + '%'
+});
+```
+
+## Заключение
+
+Понимание газа и комиссий за транзакции критично для эффективной разработки на Aptos. Ключевые моменты:
+
+- **Симулируйте транзакции** для точной оценки стоимости
+- **Установите подходящие лимиты газа** с разумными буферами
+- **Оптимизируйте код смарт-контрактов** для эффективности газа
+- **Мониторьте использование газа** в продакшен приложениях
+- **Обрабатывайте ошибки газа** грациозно
+
+С этими принципами вы сможете создавать экономически эффективные dApps на блокчейне Aptos.
+
+## Дополнительные Ресурсы
+
+- [Справочник по операциям Move](/ru/build/smart-contracts/book)
+- [Руководство по оптимизации производительности](/ru/build/smart-contracts/performance)
+- [Документация по API транзакций](/reference/api)
+- [Калькулятор стоимости газа Aptos](https://aptoslabs.com/gas-calculator)

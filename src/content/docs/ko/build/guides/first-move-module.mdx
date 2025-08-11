@@ -1,0 +1,222 @@
+---
+title: "첫 번째 Move 모듈"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+Aptos 블록체인은 개발자들이 안전하게 설계된 Move 언어로 튜링 완전한 스마트 컨트랙트("모듈"이라고 함)를 작성할 수 있게 해줍니다. 스마트 컨트랙트는 사용자가 블록체인으로 돈을 보낼 수 있게 할 뿐만 아니라, 게임까지도 포함한 임의의 코드를 작성할 수 있게 해줍니다! 모든 것은 배포된("게시된") Move 모듈을 저장할 계정을 생성하는 Aptos CLI에서 시작됩니다.
+
+이 튜토리얼은 최소한의 Aptos 환경을 설정한 다음, Aptos 블록체인에서 Move 모듈을 컴파일, 테스트, 게시 및 상호작용하는 방법을 안내하여 Move 모듈을 이해하는 데 도움이 됩니다. 다음을 배우게 됩니다:
+
+1. 환경 설정, CLI 설치
+2. 데브넷 계정 생성 및 자금 조달
+3. Move 모듈 컴파일 및 테스트
+4. Aptos 블록체인에 Move 모듈 게시(또는 "배포")
+5. 모듈과 상호작용
+6. Aptos로 계속 구축하기 (다음 단계)
+
+<Aside type="note">
+  이 튜토리얼은 Move의 기본 사항을 가르치는 것이 목적이 아닙니다. 그것은 [Move Book](/ko/build/smart-contracts/book)을 통해 가장 잘 배울 수 있는 더 긴 주제입니다.
+</Aside>
+
+## 1. 설정
+
+블록체인에 대한 변경 사항을 "거래"라고 하며, 네트워크 수수료("가스 수수료")를 지불할 계정이 필요합니다. 그 수수료를 지불하고 게시된 컨트랙트를 소유할 수 있는 APT가 있는 계정을 만들어야 합니다. 이를 위해 Aptos CLI를 사용해야 합니다.
+
+<Steps>
+  1. Aptos CLI 설치
+
+     [Aptos CLI 설치](/ko/build/cli) (아직 설치하지 않았다면).
+
+  2. 새 터미널 열기
+
+     새 터미널 창이나 탭을 여세요.
+
+  3. 설치 확인
+
+     `aptos --version`을 실행하여 설치되었는지 확인하세요.
+
+     ```shellscript filename="Terminal"
+     aptos --version
+     ```
+
+     `aptos 4.6.1`과 같은 응답을 볼 수 있어야 합니다.
+
+  4. 프로젝트 폴더 생성
+
+     다음을 실행하여 이 튜토리얼을 위한 새 폴더를 만드세요:
+
+     ```shellscript filename="Terminal"
+     mkdir my-first-module
+     ```
+
+  5. 프로젝트 폴더로 이동
+
+     `cd my-first-module`을 실행하여 새 폴더로 이동하세요.
+
+  6. 계정 초기화
+
+     `aptos init`을 실행하고 각 설정 단계에서 'enter'를 눌러 `devnet`에서 테스트 계정을 만드세요.
+
+     <Aside type="note">
+       이 폴더에 대해 Aptos CLI를 구성하고 있으므로, 이 설정이 블록체인 자체의 논리를 따른다는 점에 주목하세요:
+
+       1. 어떤 네트워크와 작업하고 있는가 (기본값 `devnet`, 매주 새로 고침)?
+       2. 어떤 계정에서 거래하고 있는가 (고유한 개인 키를 생성하고, 이는 암호학적 공개 키와 계정 주소를 생성)?
+       3. "가스"를 어떻게 지불하는가? (devnet, testnet, 로컬 네트워크의 경우, Aptos CLI가 이 계정에 Aptos 코인, APT로 자금을 조달해줍니다).
+
+       지금은 모든 기본값을 수락하기 위해 'enter'를 반복해서 누르세요.
+     </Aside>
+
+     다음과 같은 성공 메시지를 볼 수 있어야 합니다:
+
+     ```shellscript filename="Terminal"
+     ---
+     Aptos CLI is now set up for account 0x9ec1cfa30b885a5c9d595f32f3381ec16d208734913b587be9e210f60be9f9ba as profile default!
+     {
+       "Result": "Success"
+     }
+     ```
+
+  7. 계정 자금 조달
+
+     테스트 계정에 자금을 조달하세요:
+
+     ```shellscript filename="Terminal"
+     aptos account fund-with-faucet --account default
+     ```
+
+     성공하면 다음과 같은 메시지를 볼 수 있습니다:
+
+     ```shellscript filename="Terminal"
+     {
+       "Result": "Added 100000000 Octas to account 0x9ec1cfa30b885a5c9d595f32f3381ec16d208734913b587be9e210f60be9f9ba"
+     }
+     ```
+</Steps>
+
+## 2. Move 모듈 만들기
+
+이제 첫 번째 Move 모듈을 만들어보겠습니다.
+
+<Steps>
+  1. Move 패키지 초기화
+
+     Move 패키지를 초기화하세요:
+
+     ```shellscript filename="Terminal"
+     aptos move init --name hello_blockchain
+     ```
+
+     이렇게 하면 다음과 같은 폴더 구조가 생성됩니다:
+
+     ```
+     my-first-module/
+     ├── Move.toml
+     └── sources/
+     ```
+
+  2. 첫 번째 Move 모듈 작성
+
+     `sources/` 폴더에 `hello_blockchain.move`라는 새 파일을 만드세요:
+
+     ```move filename="sources/hello_blockchain.move"
+     module hello_blockchain::message {
+         use std::error;
+         use std::signer;
+         use std::string;
+         use aptos_framework::event;
+
+         /// 메시지가 너무 긴 경우 오류 코드
+         const E_MESSAGE_TOO_LONG: u64 = 1;
+
+         /// 메시지의 최대 길이
+         const MAX_MESSAGE_LENGTH: u64 = 1000;
+
+         /// 메시지 리소스
+         struct MessageHolder has key {
+             message: string::String,
+         }
+
+         /// 메시지 변경 이벤트
+         #[event]
+         struct MessageChangeEvent has drop, store {
+             account: address,
+             from_message: string::String,
+             to_message: string::String,
+         }
+
+         /// 메시지 설정 함수
+         public entry fun set_message(account: signer, message: string::String) 
+         acquires MessageHolder {
+             let account_addr = signer::address_of(&account);
+             assert!(
+                 string::length(&message) <= MAX_MESSAGE_LENGTH,
+                 error::invalid_argument(E_MESSAGE_TOO_LONG),
+             );
+
+             if (!exists<MessageHolder>(account_addr)) {
+                 move_to(&account, MessageHolder {
+                     message,
+                 })
+             } else {
+                 let old_message_holder = borrow_global_mut<MessageHolder>(account_addr);
+                 let from_message = old_message_holder.message;
+                 event::emit(MessageChangeEvent {
+                     account: account_addr,
+                     from_message,
+                     to_message: copy message,
+                 });
+                 old_message_holder.message = message;
+             }
+         }
+
+         /// 메시지 읽기 함수
+         #[view]
+         public fun get_message(account_addr: address): string::String 
+         acquires MessageHolder {
+             assert!(exists<MessageHolder>(account_addr), error::not_found(E_MESSAGE_NOT_FOUND));
+             borrow_global<MessageHolder>(account_addr).message
+         }
+     }
+     ```
+</Steps>
+
+## 3. 모듈 컴파일 및 테스트
+
+<Steps>
+  1. 모듈 컴파일
+
+     Move 모듈을 컴파일하세요:
+
+     ```shellscript filename="Terminal"
+     aptos move compile
+     ```
+
+     성공하면 다음과 같은 출력을 볼 수 있습니다:
+
+     ```shellscript filename="Terminal"
+     Compiling, may take a little while to download git dependencies...
+     INCLUDING DEPENDENCY AptosFramework
+     INCLUDING DEPENDENCY AptosStdlib
+     INCLUDING DEPENDENCY MoveStdlib
+     BUILDING hello_blockchain
+     {
+       "Result": [
+         "9ec1cfa30b885a5c9d595f32f3381ec16d208734913b587be9e210f60be9f9ba::message"
+       ]
+     }
+     ```
+
+  2. 모듈 게시
+
+     컴파일된 모듈을 블록체인에 게시하세요:
+
+     ```shellscript filename="Terminal"
+     aptos move publish
+     ```
+
+     성공하면 거래 해시와 함께 성공 메시지를 볼 수 있습니다.
+</Steps>
+
+축하합니다! 첫 번째 Move 모듈을 성공적으로 작성하고 Aptos 블록체인에 배포했습니다! 🎉

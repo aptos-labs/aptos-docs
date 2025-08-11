@@ -1,0 +1,386 @@
+---
+title: "첫 번째 NFT"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+이 튜토리얼은 Aptos TypeScript SDK (`@aptos-labs/ts-sdk`)를 사용하여 Aptos에서 새로운 디지털 자산(흔히 NFT라고 불림)을 생성하는 과정을 안내합니다. 이 튜토리얼을 마치면 다음을 수행하는 방법을 알게 됩니다:
+
+1. 디지털 자산(NFT) 컬렉션 생성
+2. 해당 컬렉션 내에서 새로운 디지털 자산(NFT) 민팅
+3. 계정 간 디지털 자산(NFT) 전송
+4. 업데이트된 잔액을 확인하여 디지털 자산(NFT)의 이동 검증
+
+<Aside type="note">
+  이 튜토리얼은 [Aptos CLI](/ko/build/cli) 사용에 익숙하고, Node.js와 npm이 설치되어 있으며, 기본적인 JavaScript/TypeScript 개념을 이해하고 있다고 가정합니다. 더 많은 정보가 필요하다면 [Node.js 소개](https://nodejs.org/en/learn/getting-started/introduction-to-nodejs)나 [Aptos TypeScript SDK](/ko/build/sdks/ts-sdk) 문서를 확인하세요.
+</Aside>
+
+## 코드 살펴보기
+
+아래는 온체인에서 디지털 자산을 생성, 전송 및 상호 작용하는 방법에 대한 단계별 설명입니다. 예제 코드(끝에 전체 코드가 표시됨)가 어떻게 작동하는지 살펴보겠습니다. 코드 실행으로 바로 이동하려면 [**예제 실행**](#running-an-example)을 참조하세요.
+
+### 코드 연습
+
+<Steps>
+  1. 클라이언트 설정
+
+     SDK에서 `Aptos` 클라이언트를 가져와서 지정된 네트워크에 연결하도록 구성합니다:
+
+     ```tsx filename="index.ts"
+     const APTOS_NETWORK = NetworkToNetworkName[process.env.APTOS_NETWORK] || Network.DEVNET;
+     const config = new AptosConfig({ network: APTOS_NETWORK });
+     const aptos = new Aptos(config);
+     ```
+
+     이 `aptos` 객체를 통해 Aptos 블록체인과 상호 작용할 수 있습니다(계정 펀딩, 자산 생성, 거래 제출 등).
+
+  2. 계정 생성 및 펀딩
+
+     Alice와 Bob이라는 두 계정을 생성합니다. 개발넷에서는 테스트 APT로 쉽게 펀딩할 수 있습니다.
+
+     ```tsx filename="index.ts"
+     const alice = Account.generate();
+     const bob = Account.generate();
+
+     await aptos.fundAccount({ accountAddress: alice.accountAddress, amount: INITIAL_BALANCE });
+     await aptos.fundAccount({ accountAddress: bob.accountAddress, amount: INITIAL_BALANCE });
+     ```
+
+  3. 컬렉션 생성
+
+     Alice의 계정에 컬렉션을 생성합니다. 컬렉션은 디지털 자산의 "폴더"나 "카테고리" 역할을 합니다. 이 경우 `"Example Collection"`을 생성합니다.
+
+     ```tsx filename="index.ts"
+     const createCollectionTransaction = await aptos.createCollectionTransaction({
+       creator: alice,
+       description: "This is an example collection.",
+       name: "Example Collection",
+       uri: "aptos.dev",
+     });
+
+     const committedTxn = await aptos.signAndSubmitTransaction({
+       signer: alice,
+       transaction: createCollectionTransaction,
+     });
+     await aptos.waitForTransaction({ transactionHash: committedTxn.hash });
+     ```
+
+     <Aside type="note">
+       계속 진행하기 전에 항상 `waitForTransaction`을 사용하여 거래가 완료될 때까지 기다리세요. 이는 민팅을 시도하기 전에 컬렉션이 준비되었는지 확인합니다.
+     </Aside>
+
+  4. 디지털 자산 민팅
+
+     컬렉션이 생성되면 이제 컬렉션에 대한 디지털 자산(NFT)을 민팅할 수 있습니다. 이름, 설명, URI(종종 이미지와 같은 메타데이터에 링크)와 같은 세부 정보를 제공해야 합니다.
+
+     ```tsx filename="index.ts"
+     const mintTokenTransaction = await aptos.mintDigitalAssetTransaction({
+       creator: alice,
+       collection: "Example Collection",
+       description: "This is an example digital asset.",
+       name: "Example Asset",
+       uri: "https://aptos.dev/asset.png",
+     });
+
+     const mintTxn = await aptos.signAndSubmitTransaction({
+       signer: alice,
+       transaction: mintTokenTransaction,
+     });
+     await aptos.waitForTransaction({ transactionHash: mintTxn.hash });
+     ```
+
+     <Aside type="note">
+       이러한 값을 변경하여 온체인에서 디지털 자산을 사용자 정의할 수 있습니다.
+     </Aside>
+
+  5. 디지털 자산 전송
+
+     민팅되면 자산은 Alice에게 속합니다. Alice의 디지털 자산을 가져와서 이를 확인할 수 있습니다. 그런 다음 이 자산을 Bob에게 전송하는 거래를 구축하고 제출합니다.
+
+     ```tsx filename="index.ts"
+     const aliceDigitalAssets = await aptos.getOwnedDigitalAssets({ ownerAddress: alice.accountAddress });
+     const digitalAssetAddress = aliceDigitalAssets[0].token_data_id;
+
+     const transferTransaction = await aptos.transferDigitalAssetTransaction({
+       sender: alice,
+       digitalAssetAddress,
+       recipient: bob.accountAddress,
+     });
+
+     const transferTxn = await aptos.signAndSubmitTransaction({
+       signer: alice,
+       transaction: transferTransaction,
+     });
+     await aptos.waitForTransaction({ transactionHash: transferTxn.hash });
+     ```
+
+     완료 후 자산이 이제 Bob의 계정에 나타나야 합니다.
+
+  6. 잔액 확인
+
+     마지막으로 Alice와 Bob의 계정을 모두 확인하여 Alice가 더 이상 자산을 갖고 있지 않고 Bob이 이제 자산을 갖고 있는지 확인합니다.
+
+     ```tsx filename="index.ts"
+     const aliceDigitalAssetsAfter = await aptos.getOwnedDigitalAssets({ ownerAddress: alice.accountAddress });
+     const bobDigitalAssetsAfter = await aptos.getOwnedDigitalAssets({ ownerAddress: bob.accountAddress });
+
+     console.log(`Alice's digital asset balance: ${aliceDigitalAssetsAfter.length}`);
+     console.log(`Bob's digital asset balance: ${bobDigitalAssetsAfter.length}`);
+     ```
+</Steps>
+
+## 예제 실행
+
+### 시작하기
+
+<Steps>
+  1. 프로젝트 설정
+
+     프로젝트를 위한 새 디렉토리를 생성하고 Node.js 프로젝트를 초기화합니다:
+
+     ```shellscript filename="Terminal"
+     mkdir aptos-digital-asset-tutorial
+     cd aptos-digital-asset-tutorial
+     npm init -y
+     ```
+
+     이렇게 하면 `package.json` 파일이 생성되어 의존성을 설치하고 스크립트를 실행할 수 있습니다.
+
+  2. 의존성 설치
+
+     Aptos TypeScript SDK와 환경 변수를 관리하기 위한 `dotenv`가 필요합니다:
+
+     ```shellscript filename="Terminal"
+     npm install @aptos-labs/ts-sdk dotenv
+     npm install --save-dev @types/node
+     ```
+
+  3. tsconfig.json 생성
+
+     다음 내용으로 `tsconfig.json` 파일을 생성합니다:
+
+     ```json filename="tsconfig.json"
+     {
+       "compilerOptions": {
+         "target": "es2020",
+         "module": "commonjs",
+         "esModuleInterop": true,
+         "forceConsistentCasingInFileNames": true,
+         "strict": true,
+         "skipLibCheck": true,
+         "types": ["node"],
+         "lib": ["es2020"]
+       }
+     }
+     ```
+
+     이 구성은 TypeScript가 Node.js 타입을 올바르게 인식하고 적절한 타입 검사를 제공하도록 합니다.
+
+  4. 환경 변수 구성
+
+     다음 내용으로 `.env` 파일을 생성합니다:
+
+     ```shellscript filename="Terminal"
+     APTOS_NETWORK=devnet
+     ```
+
+     <Aside type="note">
+       기본적으로 `devnet`을 사용하지만, 필요에 따라 `testnet` 또는 `mainnet`을 선택할 수도 있습니다.
+     </Aside>
+
+  5. index.ts 추가
+
+     다음 내용으로 `index.ts` 파일을 생성합니다:
+
+     ```tsx filename="index.ts"
+     // 아래 TODO를 업데이트하여 이 디지털 자산을 필요에 맞게 사용자 정의하세요.
+     // 컬렉션 값과 개별 디지털 자산 값을 사용자 정의하고 싶을 것입니다.
+     // 이 예제는 컬렉션 생성, 디지털 자산으로 채우기, 전송하는 방법을 보여줍니다.
+
+     import "dotenv/config";
+     import {
+         Account,
+         Aptos,
+         AptosConfig,
+         Network,
+         NetworkToNetworkName,
+     } from "@aptos-labs/ts-sdk";
+
+     // 환경 변수가 로드되었는지 확인
+     console.log("Environment variables loaded:", {
+         APTOS_NETWORK: process.env.APTOS_NETWORK || "not set"
+     });
+
+     const INITIAL_BALANCE = 100_000_000;
+
+     console.log("Step 1: Setting up a client to connect to Aptos");
+     const APTOS_NETWORK = NetworkToNetworkName[process.env.APTOS_NETWORK!] || Network.DEVNET;
+     const config = new AptosConfig({ network: APTOS_NETWORK });
+     const aptos = new Aptos(config);
+
+     async function example() {
+         console.log("\n=== Step 2: Creating and funding accounts ===\n");
+         const alice = Account.generate();
+         const bob = Account.generate();
+
+         console.log(`Alice's address: ${alice.accountAddress}`);
+         console.log(`Bob's address: ${bob.accountAddress}`);
+
+         console.log("Funding Alice's account...");
+         await aptos.fundAccount({ accountAddress: alice.accountAddress, amount: INITIAL_BALANCE });
+         console.log("Alice's account funded!");
+
+         console.log("Funding Bob's account...");
+         await aptos.fundAccount({ accountAddress: bob.accountAddress, amount: INITIAL_BALANCE });
+         console.log("Bob's account funded!");
+
+         console.log("\n=== Step 3: Creating a collection ===\n");
+         // TODO: 디지털 자산을 사용자 정의하려면 이러한 값을 업데이트하세요!
+         const collectionName = "Example Collection";
+         const collectionDescription = "This is an example collection.";
+         const collectionURI = "aptos.dev";
+
+         console.log("Building the collection creation transaction...");
+         const createCollectionTransaction = await aptos.createCollectionTransaction({
+             creator: alice,
+             description: collectionDescription,
+             name: collectionName,
+             uri: collectionURI,
+         });
+
+         console.log("Submitting the collection creation transaction...");
+         const committedTxn = await aptos.signAndSubmitTransaction({
+             signer: alice,
+             transaction: createCollectionTransaction,
+         });
+
+         console.log("Waiting for the collection creation transaction to complete...");
+         await aptos.waitForTransaction({ transactionHash: committedTxn.hash });
+         console.log("Collection created successfully!");
+
+         console.log("\n=== Step 4: Minting a digital asset ===\n");
+         // TODO: 민팅하는 디지털 자산의 값을 업데이트하세요!
+         const tokenName = "Example Asset";
+         const tokenDescription = "This is an example digital asset.";
+         const tokenURI = "aptos.dev/asset";
+
+         console.log("Building the mint transaction...");
+         const mintTokenTransaction = await aptos.mintDigitalAssetTransaction({
+             creator: alice,
+             collection: collectionName,
+             description: tokenDescription,
+             name: tokenName,
+             uri: tokenURI,
+         });
+         console.log(mintTokenTransaction)
+
+         console.log("Submitting the mint transaction...");
+         const mintTxn = await aptos.signAndSubmitTransaction({
+             signer: alice,
+             transaction: mintTokenTransaction,
+         });
+         console.log(mintTxn)
+
+         console.log("Waiting for the mint transaction to complete...");
+         await aptos.waitForTransaction({ transactionHash: mintTxn.hash });
+         console.log("Digital asset minted successfully!");
+
+         console.log("\n=== Step 5: Transferring the digital asset ===\n");
+
+         // 인덱서가 온체인의 최신 데이터로 업데이트될 때까지 기다림
+         await new Promise((resolve) => setTimeout(resolve, 5000));
+
+         const aliceDigitalAssets = await aptos.getOwnedDigitalAssets({
+             ownerAddress: alice.accountAddress,
+         });
+
+         // 액세스하기 전에 Alice가 디지털 자산을 가지고 있는지 확인
+         if (aliceDigitalAssets.length === 0) {
+             console.error("No digital assets found for Alice. Make sure the minting was successful.");
+             return;
+         }
+
+         const digitalAssetAddress = aliceDigitalAssets[0].token_data_id;
+
+         console.log("Building the transfer transaction...");
+         const transferTransaction = await aptos.transferDigitalAssetTransaction({
+             sender: alice,
+             digitalAssetAddress,
+             recipient: bob.accountAddress,
+         });
+
+         console.log("Submitting the transfer transaction...");
+         const transferTxn = await aptos.signAndSubmitTransaction({
+             signer: alice,
+             transaction: transferTransaction,
+         });
+
+         console.log("Waiting for the transfer transaction to complete...");
+         await aptos.waitForTransaction({ transactionHash: transferTxn.hash });
+         console.log("Digital asset transferred successfully!");
+
+         console.log("\n=== Step 6: Verifying digital asset balances ===\n");
+         const aliceDigitalAssetsAfter = await aptos.getOwnedDigitalAssets({
+             ownerAddress: alice.accountAddress,
+         });
+         const bobDigitalAssetsAfter = await aptos.getOwnedDigitalAssets({
+             ownerAddress: bob.accountAddress,
+         });
+
+         console.log(`Alice's digital asset balance: ${aliceDigitalAssetsAfter.length}`);
+         console.log(`Bob's digital asset balance: ${bobDigitalAssetsAfter.length}`);
+
+         console.log("\n=== Step 7: Transaction hashes for explorer ===\n");
+         console.log(`Collection creation transaction: ${committedTxn.hash}`);
+         console.log(`Mint transaction: ${mintTxn.hash}`);
+         console.log(`Transfer transaction: ${transferTxn.hash}`);
+         console.log("\nYou can view these transactions on the Aptos Explorer:");
+         console.log("https://explorer.aptoslabs.com/?network=devnet");
+     }
+
+     example();
+     ```
+
+  6. 코드 실행
+
+     ```shellscript filename="Terminal"
+     npx ts-node index.ts
+     ```
+
+     모든 것이 올바르게 설정되었다면 각 단계, 거래 해시 및 최종 잔액을 자세히 설명하는 출력 로그를 볼 수 있습니다.
+
+  7. 탐색기에서 거래 보기
+
+     코드를 실행한 후 콘솔 출력에서 거래 해시를 볼 수 있습니다. 특히 쉬운 참조를 위해 모든 거래 해시를 표시하는 Step 7에서:
+
+     ```shellscript filename="Terminal"
+     === Step 7: Transaction hashes for explorer ===
+
+     Collection creation transaction: 0x8c5d2a4ce32d76349bfb4f3830740c1c103399e8cbc31d6e2c7a871c88e6ad48
+     Mint transaction: 0x673d2cbb9fef468fe41f271c0fcf20872e9fa79afb6a2000368394000071b02e
+     Transfer transaction: 0x3a1e99d6fd3f8e7e962c311f3dfd92c11e468da5b6084123b8f7e0248a37ffa7
+
+     You can view these transactions on the Aptos Explorer:
+     https://explorer.aptoslabs.com/?network=devnet
+     ```
+
+     Aptos 탐색기에서 이러한 거래를 볼 수 있습니다:
+
+     1. 콘솔에서 거래 해시를 복사합니다
+     2. [Aptos 탐색기](https://explorer.aptoslabs.com/?network=devnet)를 방문합니다
+     3. 올바른 네트워크(Devnet)에 있는지 확인합니다
+     4. 검색창에 거래 해시를 붙여넣습니다
+     5. 다음을 포함하여 거래의 세부 정보를 확인합니다:
+        - 발신자 및 수신자 주소
+        - 거래가 처리된 정확한 시간
+        - 지불된 가스 수수료
+        - 전송된 디지털 자산
+
+     이는 거래를 확인하고 블록체인에 어떻게 기록되는지 이해하는 좋은 방법입니다.
+</Steps>
+
+### 추가 읽기 및 리소스
+
+- [aptos ts-sdk 문서](/ko/build/sdks/ts-sdk)
+- [계정 기본 사항](/ko/network/blockchain/accounts)
+- [REST API 사양](/ko/network/nodes/aptos-api-spec)

@@ -1,0 +1,392 @@
+---
+title: "첫 번째 코인"
+---
+
+import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
+
+이 튜토리얼은 [MoonCoin](https://github.com/aptos-labs/aptos-core/tree/main/aptos-move/move-examples/moon_coin)이라는 이름의 자체 코인([여기](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/coin.move)에 정의된 대로)을 컴파일, 배포 및 민팅하는 방법을 소개합니다.
+
+## 1단계: SDK 선택
+
+아래 목록에서 선호하는 SDK를 설치하세요:
+
+- [TypeScript SDK](/ko/build/sdks/ts-sdk)
+- [Python SDK](/ko/build/sdks/python-sdk)
+
+***
+
+## 2단계: CLI 설치
+
+[Aptos CLI용 사전 컴파일된 바이너리를 설치](/ko/build/cli)하세요.
+
+***
+
+## 3단계: 예제 실행
+
+<Tabs>
+  <TabItem label="TypeScript">
+    `aptos-ts-sdk` 저장소를 복제하고 빌드하세요:
+
+    ```shellscript filename="Terminal"
+    git clone https://github.com/aptos-labs/aptos-ts-sdk.git
+    cd aptos-ts-sdk
+    pnpm install
+    pnpm build
+    ```
+
+    TypeScript 예제 디렉토리로 이동하세요:
+
+    ```shellscript filename="Terminal"
+    cd examples/typescript/
+    ```
+
+    필요한 의존성을 설치하세요:
+
+    ```shellscript filename="Terminal"
+    pnpm install
+    ```
+
+    TypeScript [`your_coin`](https://github.com/aptos-labs/aptos-ts-sdk/blob/main/examples/typescript/your_coin.ts) 예제를 실행하세요:
+
+    ```shellscript filename="Terminal"
+    pnpm run your_coin
+    ```
+
+    애플리케이션이 완료되면서 다음과 같이 출력됩니다:
+
+    ```shellscript filename="Terminal"
+    Bob's initial MoonCoin balance: 0.
+    Alice mints herself 100 MoonCoin.
+    Alice transfers 100 MoonCoin to Bob.
+    Bob's updated MoonCoin balance: 100.
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    `aptos-core` 저장소를 복제하세요:
+
+    ```shellscript filename="Terminal"
+    git clone https://github.com/aptos-labs/aptos-core
+    ```
+
+    Python SDK 디렉토리로 이동하세요:
+
+    ```shellscript filename="Terminal"
+    cd aptos-core/ecosystem/python/sdk
+    ```
+
+    필요한 의존성을 설치하세요:
+
+    ```shellscript filename="Terminal"
+    curl -sSL https://install.python-poetry.org | python3
+    poetry install
+    ```
+
+    Python [`your_coin`](https://github.com/aptos-labs/aptos-python-sdk/blob/main/examples/your_coin.py) 예제를 실행하세요:
+
+    ```shellscript filename="Terminal"
+    poetry run python -m examples.your_coin ~/aptos-core/aptos-move/move-examples/moon_coin
+    ```
+
+    ### 3.1단계: 패키지 빌드
+
+    예제 실행이 다음 출력과 함께 일시 중지됩니다:
+
+    ```shellscript filename="Terminal"
+    === Addresses ===
+    Alice: 0x5e603a89cf690d7134cf2f24fdb16ba90c4f5686333721c12e835fb6c76bc7ba
+    Bob: 0xc8421fa4a99153f955e50f1de2a6acff2f3fd0bb33aa17ba1f5b32b699f6c825
+
+    Update the package with Alice's address, compile, and press enter.
+    ```
+
+    이 시점에서 다른 터미널을 열고 MoonCoin 패키지의 디렉토리로 이동하세요:
+
+    ```shellscript filename="Terminal"
+    cd ~/aptos-core/aptos-move/move-examples/moon_coin
+    ```
+
+    다음으로 CLI를 사용하여 패키지를 빌드하세요:
+
+    ```shellscript filename="Terminal"
+    aptos move compile --named-addresses MoonCoin=0x5e603a89cf690d7134cf2f24fdb16ba90c4f5686333721c12e835fb6c76bc7ba --save-metadata
+    ```
+
+    `--named-addresses`는 패키지가 Alice의 계정에 저장되도록 컴파일되기 위해 번역되어야 하는 주소 매핑 목록입니다. `MoonCoin`이 위에 출력된 Alice의 주소로 설정된 것을 주목하세요. 또한 패키지를 게시하려면 `--save-metadata`가 필요합니다.
+
+    ***
+
+    ### 3.2단계: 예제 완료
+
+    이전 프롬프트로 돌아가서 패키지가 이제 게시될 준비가 되었으므로 ENTER를 누르세요.
+
+    애플리케이션이 완료되면서 다음과 같이 출력됩니다:
+
+    ```shellscript filename="Terminal"
+
+    Publishing MoonCoin package.
+
+    Bob registers the newly created coin so he can receive it from Alice.
+    Bob's initial MoonCoin balance: 0.
+    Alice mints Bob some of the new coin.
+    Bob's updated MoonCoin balance: 100.
+    ```
+  </TabItem>
+</Tabs>
+
+***
+
+## 4단계: MoonCoin 자세히 살펴보기
+
+### 4.1단계: MoonCoin 패키지 빌드 및 게시
+
+Move 컨트랙트는 패키지로 알려진 Move 모듈 집합입니다. 새 패키지를 배포하거나 업그레이드할 때 패키지를 게시하려면 컴파일러를 `--save-metadata`와 함께 호출해야 합니다. MoonCoin의 경우 다음 출력 파일이 중요합니다:
+
+- `build/Examples/package-metadata.bcs`: 패키지와 관련된 메타데이터를 포함합니다.
+- `build/Examples/bytecode_modules/moon_coin.mv`: `moon_coin.move` 모듈의 바이트코드를 포함합니다.
+
+이것들은 예제에서 읽혀서 Aptos 블록체인에 게시됩니다:
+
+<Tabs>
+  <TabItem label="TypeScript">
+    TypeScript 예제에서는 `aptos move build-publish-payload` 명령을 사용하여 모듈을 컴파일하고 빌드합니다.
+    이 명령은 `package-metadata.bcs`와 `moon_coin.mv` 모듈의 바이트코드를 포함하는 `build` 폴더를 빌드합니다. 이 명령은 또한 게시 거래 페이로드를 빌드하고 JSON 출력 파일에 저장하여 나중에 읽어서 `metadataBytes`와 `byteCode`를 가져와 체인에 컨트랙트를 게시할 수 있습니다.
+
+    패키지 컴파일:
+
+    ```typescript filename="example.ts"
+    export function compilePackage(
+      packageDir: string,
+      outputFile: string,
+      namedAddresses: Array<{ name: string; address: AccountAddress }>,
+    ) {
+      const addressArg = namedAddresses
+        .map(({ name, address }) => `${name}=${address}`)
+        .join(" ");
+      // Assume-yes는 이전 컴파일된 버전을 자동으로 덮어씁니다. 이전 버전을 덮어쓰려는 것이 확실한 경우에만 수행하세요.
+      const compileCommand = `aptos move build-publish-payload --json-output-file ${outputFile} --package-dir ${packageDir} --named-addresses ${addressArg} --assume-yes`;
+      execSync(compileCommand);
+    }
+
+    compilePackage("move/moonCoin", "move/moonCoin/moonCoin.json", [
+      { name: "MoonCoin", address: alice.accountAddress },
+    ]);
+    ```
+
+    체인에 패키지 게시:
+
+    ```typescript filename="example.ts"
+    export function getPackageBytesToPublish(filePath: string) {
+      // 현재 작업 디렉토리 - 이 저장소의 루트 폴더
+      const cwd = process.cwd();
+      // 대상 디렉토리 - 현재 작업 디렉토리 + filePath (filePath JSON 파일은 이전 compilePackage CLI 명령으로 생성됨)
+      const modulePath = path.join(cwd, filePath);
+
+      const jsonData = JSON.parse(fs.readFileSync(modulePath, "utf8"));
+
+      const metadataBytes = jsonData.args[0].value;
+      const byteCode = jsonData.args[1].value;
+
+      return { metadataBytes, byteCode };
+    }
+
+    const { metadataBytes, byteCode } = getPackageBytesToPublish(
+      "move/moonCoin/moonCoin.json",
+    );
+
+    // 체인에 MoonCoin 패키지 게시
+    const transaction = await aptos.publishPackageTransaction({
+      account: alice.accountAddress,
+      metadataBytes,
+      moduleBytecode: byteCode,
+    });
+
+    const pendingTransaction = await aptos.signAndSubmitTransaction({
+      signer: alice,
+      transaction,
+    });
+
+    await aptos.waitForTransaction({ transactionHash: pendingTransaction.hash });
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    ```python filename="example.py"
+    module_path = os.path.join(
+        moon_coin_path, "build", "Examples", "bytecode_modules", "moon_coin.mv"
+    )
+    with open(module_path, "rb") as f:
+        module = f.read()
+
+    metadata_path = os.path.join(
+        moon_coin_path, "build", "Examples", "package-metadata.bcs"
+    )
+    with open(metadata_path, "rb") as f:
+        metadata = f.read()
+
+    print("\nPublishing MoonCoin package.")
+    package_publisher = PackagePublisher(rest_client)
+    txn_hash = await package_publisher.publish_package(alice, metadata, [module])
+    await rest_client.wait_for_transaction(txn_hash)
+    ```
+  </TabItem>
+</Tabs>
+
+***
+
+### 4.2단계: MoonCoin 모듈 이해하기
+
+MoonCoin 모듈은 `MoonCoin` 구조체, 즉 고유한 코인 타입을 정의합니다. 또한 `init_module`이라는 함수를 포함합니다. `init_module` 함수는 모듈이 게시될 때 호출됩니다. 이 경우 MoonCoin은 계정 소유자가 유지 관리하는 `ManagedCoin`으로 `MoonCoin` 코인 타입을 초기화합니다.
+
+<Aside type="note">
+  ManagedCoin 프레임워크
+  [`ManagedCoin`](https://github.com/aptos-labs/aptos-core/blob/f81ccb01f00227f9c0f36856fead4879f185a9f6/aptos-move/framework/aptos-framework/sources/managed_coin.move#L1)은 사용자가 직접 관리하는 코인을 위한 간단한 코인 관리 프레임워크입니다. `mint`와 `burn` 주변의 편의 래퍼를 제공합니다.
+</Aside>
+
+```move filename="moon_coin.mv"
+module MoonCoin::moon_coin {
+    struct MoonCoin {}
+
+    fun init_module(sender: &signer) {
+        aptos_framework::managed_coin::initialize<MoonCoin>(
+            sender,
+            b"Moon Coin",
+            b"MOON",
+            6,
+            false,
+        );
+    }
+}
+```
+
+***
+
+### 4.3단계: 코인 이해하기
+
+코인에는 여러 기본 요소가 있습니다:
+
+- **민팅**: 새로운 코인 생성
+- **소각**: 코인 삭제
+- **동결**: 계정이 `CoinStore`에 코인을 저장하는 것을 방지
+- **등록**: 코인을 저장하기 위해 계정에 `CoinStore` 리소스 생성
+- **전송**: `CoinStore`에서 코인을 인출하고 입금
+
+<Aside type="note">
+  새로운 코인을 생성하는 엔티티는 민팅, 소각 및 동결 기능을 얻습니다.
+</Aside>
+
+***
+
+#### 4.3.1단계: 코인 초기화
+
+코인 타입이 Aptos 블록체인에 게시되면, 해당 코인 타입을 게시한 엔티티가 이를 초기화할 수 있습니다:
+
+```move
+module 0x1::coin {
+    public fun initialize<CoinType>(
+        account: &signer,
+        name: string::String,
+        symbol: string::String,
+        decimals: u8,
+        monitor_supply: bool,
+    ): (BurnCapability<CoinType>, FreezeCapability<CoinType>, MintCapability<CoinType>) {
+        let account_addr = signer::address_of(account);
+
+        assert!(
+            coin_address<CoinType>() == account_addr,
+            error::invalid_argument(ECOIN_INFO_ADDRESS_MISMATCH),
+        );
+
+        assert!(
+            !exists<CoinInfo<CoinType>>(account_addr),
+            error::already_exists(ECOIN_INFO_ALREADY_PUBLISHED),
+        );
+
+        let coin_info = CoinInfo<CoinType> {
+            name,
+            symbol,
+            decimals,
+            supply: if (monitor_supply) { option::some(optional_aggregator::new(MAX_U128, false)) } else { option::none() },
+        };
+        move_to(account, coin_info);
+
+        (BurnCapability<CoinType>{ }, FreezeCapability<CoinType>{ }, MintCapability<CoinType>{ })
+  }
+}
+```
+
+이는 이 코인 타입이 이전에 초기화된 적이 없음을 보장합니다. 10번째와 15번째 줄의 검사를 주목하세요. 이는 `initialize`를 호출하는 사람이 실제로 이 모듈을 게시한 사람과 동일하고, 그들의 계정에 `CoinInfo`가 저장되지 않았음을 확인합니다. 두 조건이 모두 확인되면 `CoinInfo`가 저장되고 호출자는 소각, 동결 및 민팅 기능을 얻습니다.
+
+<Aside type="note">
+  MoonCoin은 패키지 게시 시 이 `initialize` 함수를 자동으로 호출합니다.
+</Aside>
+
+***
+
+#### 4.3.2단계: 코인 등록
+
+코인을 사용하려면 엔티티가 자신의 계정에 해당 코인에 대한 `CoinStore`를 등록해야 합니다:
+
+```move
+public entry fun registerCoinType(account: &signer) {
+```
+
+MoonCoin은 엔트리 함수 래퍼를 제공하는 `ManagedCoin`을 사용합니다: `managed_coin::register`. 등록을 위한 예제 스크립트는 다음과 같습니다:
+
+```move
+script {
+    fun register(account: &signer) {
+        aptos_framework::managed_coin::register<MoonCoin::moon_coin::MoonCoin>(account)
+    }
+}
+```
+
+***
+
+#### 4.3.3단계: 코인 민팅
+
+코인 민팅에는 초기화 중에 생성된 민트 기능이 필요합니다. 아래 `mint` 함수는 해당 기능과 양을 받아서 해당 양의 코인을 포함하는 `Coin<T>` 구조체를 반환합니다. 코인이 공급량을 추적하는 경우 업데이트됩니다.
+
+```move
+module 0x1::coin {
+    public fun mint<CoinType>(
+        amount: u64,
+        _cap: &MintCapability<CoinType>,
+    ): Coin<CoinType> acquires CoinInfo {
+        if (amount == 0) {
+            return zero<CoinType>()
+        };
+
+        let maybe_supply = &mut borrow_global_mut<CoinInfo<CoinType>>(coin_address<CoinType>()).supply;
+        if (option::is_some(maybe_supply)) {
+            let supply = option::borrow_mut(maybe_supply);
+            optional_aggregator::add(supply, (amount as u128));
+        };
+
+        Coin<CoinType> { value: amount }
+    }
+}
+```
+
+`ManagedCoin`은 엔트리 함수 `managed_coin::mint`를 제공하여 이를 더 쉽게 만듭니다.
+
+***
+
+#### 4.3.4단계: 코인 전송
+
+Aptos는 코인 전송을 지원하는 여러 구성 요소를 제공합니다:
+
+- `coin::deposit<CoinType>`: 모든 엔티티가 이미 `coin::register<CoinType>`을 호출한 계정에 코인을 입금할 수 있게 합니다.
+- `coin::withdraw<CoinType>`: 모든 엔티티가 자신의 계정에서 코인 양을 추출할 수 있게 합니다.
+- `aptos_account::transfer_coins<CoinType>`: 특정 CoinType의 코인을 수신자에게 전송합니다.
+
+<Aside type="note">
+  하나의 전송 이벤트 대신 별도의 출금 및 입금 이벤트가 있습니다.
+</Aside>
+
+## 지원 문서
+
+- [Aptos CLI](/ko/build/cli)
+- [TypeScript SDK](/ko/build/sdks/ts-sdk)
+- [Python SDK](/ko/build/sdks/python-sdk)
+- [REST API 사양](/ko/network/nodes/aptos-api-spec)

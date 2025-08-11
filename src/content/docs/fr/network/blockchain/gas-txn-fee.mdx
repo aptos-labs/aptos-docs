@@ -1,0 +1,142 @@
+---
+title: "Frais de Gaz et de Stockage"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Toute exécution de transaction sur la blockchain Aptos nécessite des frais de traitement. À ce jour, ces frais comprennent deux composants :
+
+1. Coûts d'exécution et d'E/S
+
+- Cela couvre votre utilisation de ressources de calcul transitoires, telles que le traitement de vos transactions et la propagation de l'enregistrement validé à travers le réseau distribué du mainnet.
+- Il est mesuré en Unités de Gaz dont le prix peut fluctuer selon la charge du réseau. Cela permet aux coûts d'exécution et d'E/S d'être faibles quand le réseau est moins occupé.
+- Cette portion du gaz est brûlée de façon permanente lors de l'exécution d'une transaction.
+
+2. Frais de stockage
+
+- Cela couvre le coût pour stocker de façon persistante l'enregistrement validé dans le stockage blockchain distribué.
+- Il est mesuré en prix APT fixes, donc le coût de stockage permanent reste stable même quand le prix des unités de gaz fluctue avec la charge transitoire du réseau.
+- Les frais de stockage peuvent être remboursés quand l'emplacement de stockage alloué est supprimé. Actuellement, le réseau est configuré pour rembourser l'intégralité des frais de stockage payés au cours de la durée de vie d'un emplacement de stockage d'état.
+- Pour garder l'implémentation système simple, cette portion du gaz est brûlée et frappée à nouveau lors du remboursement.
+
+<Aside type="note">
+  Conceptuellement, ces frais peuvent être considérés comme assez similaires à la façon dont nous payons nos utilitaires domestiques d'électricité ou d'eau.
+</Aside>
+
+## Unité de gaz
+
+Les transactions peuvent aller de simples et peu coûteuses à compliquées selon ce qu'elles font. Dans la blockchain Aptos, une **unité de gaz** représente une unité de base de consommation pour les ressources transitoires, telles que faire du calcul ou accéder au stockage. Cette dernière ne doit pas être confondue avec l'aspect de stockage à long terme de telles opérations, car cela est couvert séparément par les frais de stockage.
+
+Voir [Comment Fonctionne le Gaz de Base](/fr/network/blockchain/base-gas) pour une description détaillée des types de frais de gaz et des optimisations disponibles.
+
+<Aside type="note">
+  👉 Une **unité de gaz** est un nombre sans dimension ou une unité qui n'est associée à aucun élément particulier tel qu'une pièce, exprimée comme un entier. Les unités de gaz totales consommées par votre transaction dépendent de la complexité de votre transaction. Le **prix du gaz**, d'autre part, est exprimé en termes de pièce native de la blockchain Aptos [APT](/fr/network/glossary#apt) et de sa sous-unité [Octas](/fr/network/glossary#octa). Voir aussi [Transactions et États](/fr/network/blockchain/txns-states) pour comment une transaction soumise à la blockchain Aptos ressemble.
+</Aside>
+
+## La Déclaration de Frais
+
+À partir de la version 1.7 du Framework Aptos, la ventilation des charges et remboursements de frais est émise comme un événement de module représenté par la structure `0x1::transaction_fee::FeeStatement`.
+
+```move filename="transaction_fee.move"
+#[event]
+/// Ventilation des charges et remboursements de frais pour une transaction.
+/// La structure est :
+///
+/// - Charge ou remboursement net (pas dans la déclaration)
+///    - charge totale : total_charge_gas_units, correspond à `gas_used` dans le `TransactionInfo` sur la chaîne.
+///      Ceci est la somme des sous-éléments ci-dessous. Notez qu'il y a une perte de précision potentielle lors de
+///      la conversion entre les unités de gaz internes et externes et entre le jeton natif et les unités de gaz,
+///      donc il est possible que les nombres ne s'additionnent pas exactement. -- Ce nombre est la charge finale,
+///      tandis que la ventilation est simplement informative.
+///      - exécution : execution_gas_units
+///      - E/S : io_gas_units
+///      - stockage : storage_fee_octas, converti en unités de gaz selon rate
+///    - remboursement total : total_refund_gas_units
+///      - frais de stockage remboursés : storage_fee_refund_octas, converti en unités de gaz selon rate
+///
+/// Le prix du gaz unitaire applicable peut être trouvé dans les informations de transaction.
+struct FeeStatement has copy, drop, store {
+    /// Unités de gaz totales facturées.
+    total_charge_gas_units: u64,
+    /// Unités de gaz d'exécution facturées.
+    execution_gas_units: u64,
+    /// Unités de gaz d'E/S facturées.
+    io_gas_units: u64,
+    /// Frais de stockage facturés en octas.
+    storage_fee_octas: u64,
+    /// Unités de gaz totales remboursées.
+    total_refund_gas_units: u64,
+    /// Frais de stockage remboursés en octas.
+    storage_fee_refund_octas: u64,
+}
+```
+
+### Exemples de déclarations de frais
+
+#### Transaction simple de transfert
+
+Pour une transaction de transfert simple, vous pourriez voir quelque chose comme :
+
+```json
+{
+  "total_charge_gas_units": "150",
+  "execution_gas_units": "120", 
+  "io_gas_units": "30",
+  "storage_fee_octas": "0",
+  "total_refund_gas_units": "0",
+  "storage_fee_refund_octas": "0"
+}
+```
+
+#### Transaction créant de nouvelles données
+
+Quand une transaction crée de nouvelles ressources sur la chaîne :
+
+```json
+{
+  "total_charge_gas_units": "350",
+  "execution_gas_units": "200",
+  "io_gas_units": "50", 
+  "storage_fee_octas": "1000",
+  "total_refund_gas_units": "0",
+  "storage_fee_refund_octas": "0"
+}
+```
+
+#### Transaction supprimant des données
+
+Quand une transaction supprime des ressources et obtient un remboursement :
+
+```json
+{
+  "total_charge_gas_units": "180",
+  "execution_gas_units": "150",
+  "io_gas_units": "30",
+  "storage_fee_octas": "0", 
+  "total_refund_gas_units": "100",
+  "storage_fee_refund_octas": "800"
+}
+```
+
+## Prix du gaz et estimation
+
+Le prix du gaz sur Aptos est dynamique et ajusté selon la demande du réseau. Le réseau cible un débit de transaction optimal et ajuste les prix pour maintenir des performances stables.
+
+### Estimation des frais de transaction
+
+Vous pouvez estimer les frais de votre transaction en utilisant :
+
+1. **Simulation de transaction** - Exécutez votre transaction en mode simulation pour voir les coûts en gaz
+2. **Prix du gaz actuel** - Consultez le prix du gaz actuel du réseau via l'API REST
+3. **Frais historiques** - Examinez des transactions similaires pour estimer les coûts
+
+### Optimisation des coûts en gaz
+
+- **Simplifiez la logique** - Les opérations plus simples coûtent moins de gaz
+- **Lot de transactions** - Combinez plusieurs opérations quand possible
+- **Réutilisez les ressources** - Évitez de créer des ressources redondantes
+- **Surveillez le timing** - Soumettez les transactions pendant les périodes de faible demande
+
+<Aside type="tip">
+  Utilisez toujours la simulation de transaction avant de soumettre pour obtenir des estimations précises de gaz et éviter les échecs coûteux.
+</Aside>

@@ -1,0 +1,337 @@
+---
+title: "あなたの最初のMoveモジュール"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+Aptosブロックチェーンにより、開発者は設計により安全なMove言語でチューリング完全なスマートコントラクト（「モジュール」と呼ばれる）を書くことができます。スマートコントラクトにより、ユーザーはブロックチェーンでお金を送ることができ、さらに任意のコード、ゲームさえも書くことができます！すべてはAptos CLIでアカウントを作成し、デプロイ（「公開」）されたMoveモジュールを格納することから始まります。
+
+このチュートリアルでは、最小限のAptos環境をセットアップし、Aptosブロックチェーン上でMoveモジュールをコンパイル、テスト、公開、操作する方法をガイドして、Moveモジュールを理解するのに役立ちます。以下のことを学びます：
+
+1. 環境のセットアップ、CLIのインストール
+2. devnetアカウントの作成と資金調達
+3. Moveモジュールのコンパイルとテスト
+4. AptosブロックチェーンへのMoveモジュールの公開（または「デプロイ」）
+5. モジュールとの相互作用
+6. Aptosでの構築を続ける（次のステップ）
+
+<Aside type="note">
+  このチュートリアルは、Moveの基礎を教えることを意図していません。それは[Move Book](/ja/build/smart-contracts/book)を通じて最もよく学ばれるより長いトピックです。
+</Aside>
+
+## 1. セットアップ
+
+ブロックチェーンへの変更は「トランザクション」と呼ばれ、ネットワーク手数料（「ガス手数料」）を支払うアカウントが必要です。その手数料を支払い、公開されたコントラクトを所有するために、いくらかのAPTを持つアカウントを作成する必要があります。それを行うために、Aptos CLIを使用する必要があります。
+
+<Steps>
+  1. Aptos CLIをインストール
+
+     [Aptos CLIをインストール](/ja/build/cli)（まだインストールしていない場合）。
+
+  2. 新しいターミナルを開く
+
+     新しいターミナルウィンドウまたはタブを開きます。
+
+  3. インストールを確認
+
+     `aptos --version`を実行してインストールされていることを確認します。
+
+     ```shellscript filename="Terminal"
+     aptos --version
+     ```
+
+     `aptos 4.6.1`のような応答が表示されるはずです。
+
+  4. プロジェクトフォルダを作成
+
+     以下を実行してこのチュートリアル用の新しいフォルダを作成：
+
+     ```shellscript filename="Terminal"
+     mkdir my-first-module
+     ```
+
+  5. プロジェクトフォルダに移動
+
+     `cd my-first-module`を実行して新しいフォルダに移動します。
+
+  6. アカウントを初期化
+
+     `aptos init`を実行し、`devnet`上でテストアカウントを作成するためのセットアップの各ステップで「enter」を押します。
+
+     <Aside type="note">
+       このフォルダ用にAptos CLIを設定しているため、このセットアップはブロックチェーン自体のロジックに従っていることに注意してください：
+
+       1. どのネットワークで作業しているか（デフォルトは`devnet`で、毎週リフレッシュされます）？
+       2. トランザクションを行うアカウントは何か（一意の秘密鍵を作成し、それが暗号学的公開鍵とアカウントアドレスを生成します）？
+       3. 「ガス」の支払い方法は？（devnet、testnet、ローカルネットワークの場合、Aptos CLIはこのアカウントにAptos Coin、APTで親切に資金を提供します）。
+
+       今のところ、すべてのデフォルトを受け入れるために「enter」を繰り返し押してください。
+     </Aside>
+
+     このような成功メッセージが表示されるはずです：
+
+     ```shellscript filename="Terminal"
+     ---
+     Aptos CLI is now set up for account 0x9ec1cfa30b885a5c9d595f32f3381ec16d208734913b587be9e210f60be9f9ba as profile default!
+     {
+       "Result": "Success"
+     }
+     ```
+
+     <Aside type="note">
+       気づかなかったかもしれませんが、Aptos CLIは秘密鍵、公開鍵、アカウントアドレスを含むアカウント情報が入った`.gitignore`と`config.yaml`を含む新しい隠しフォルダ`.aptos/`を作成しました。
+
+       Unix/Macターミナルでは`ls -a`、Windowsでは`dir /ah`で隠しファイルを表示できます。
+     </Aside>
+</Steps>
+
+## 2. （オプション）オンチェーンで今行ったことを探索
+
+<Steps>
+  1. アカウントアドレスをコピー
+
+     新しいアカウントのコマンドラインからアドレスをコピーします。
+
+     アドレスは`0x9ec1cfa30b885a5c9d595f32f3381ec16d208734913b587be9e210f60be9f9ba`のような形で、以下の行で見つけることができます：
+
+     ```shellscript filename="Terminal"
+     Aptos CLI is now set up for account 0x9ec1cfa30b885a5c9d595f32f3381ec16d208734913b587be9e210f60be9f9ba as profile default!
+     ```
+
+  2. Aptos Explorerを開く
+
+     [Aptos Explorer](https://explorer.aptoslabs.com/?network=devnet)にアクセスします。
+
+     これは、devnet、testnet、またはmainnetで何が起こっているかを素早くチェックする主要な方法です。後でデプロイされたコントラクトを表示するために使用します。
+
+  3. Devnetネットワークにいることを確認
+
+     右上角で「Devnet」を探すか、「Mainnet」ドロップダウンをクリックしてDevnetを選択してネットワークを切り替えます。
+
+  4. アカウントを検索
+
+     新しく作成したアドレスを検索バーに貼り付けます。
+
+     <Aside type="caution">
+       Enterを押さないでください！Enterで検索すると動作しない既知のバグがあります。
+     </Aside>
+
+  5. 検索結果を表示
+
+     結果が表示されるまで待ち、上位の結果をクリックします。
+
+  6. トランザクションを確認
+
+     新しく作成されたアカウントと、devnetトークンで資金調達するフォーセット関数のトランザクションが表示されるはずです。
+
+  7. 残高を確認
+
+     「Coins」タブをクリックして、Aptos Coinの1 APTがあることを確認します。これにより、aptos devnet上でスマートコントラクトを公開し、相互作用できるようになります。
+
+     <Aside type="note">
+       Explorerは、デプロイしているコントラクトを見るための重要なツールで、コントラクトが何をするかを調べる方法も提供します。コントラクトがデプロイされているアドレスを検索するだけで、そのモジュールのコードを見ることができます。
+     </Aside>
+</Steps>
+
+## 3. 最初のモジュールの記述とコンパイル
+
+環境をセットアップし、アカウントを作成したので、最初のMoveモジュールを記述してコンパイルしましょう。コントラクトが独立して存在するEthereumとは異なり、Moveはすべてをアカウントに結び付けます - モジュールとそのリソースの両方です。コアコンセプトを理解するために、シンプルな例から始めましょう。
+
+### Moveモジュールとは？
+
+Moveモジュールは他のブロックチェーンのスマートコントラクトに似ていますが、いくつかの重要な違いがあります：
+
+- **リソース**: 状態がコントラクト変数に保存されるSolidityとは異なり、Moveは「リソース」を使用します - 一度に一箇所にしか存在できず、常にアカウントに結び付けられる特別なデータタイプです
+- **モジュールベース**: Solidityのように完全なコントラクトを独立したユニットとしてデプロイするのではなく、Moveコードは境界を越えてリソースを共有し処理できる再利用可能なモジュールに組織化されます。モジュールは一緒にまたは別々に公開できる標準ライブラリパッケージのようなもので、コード組織のより細かい制御を提供します。
+- **設計による安全性**: Moveの型システムとリソースセマンティクスは、一般的なスマートコントラクトの脆弱性を防ぐのに役立ちます
+
+<Aside type="note">
+  Rustに慣れている場合、Moveの構文は非常に似ていることがわかります。Solidityから来ている場合は、モジュールを再利用可能なスマートコントラクトライブラリと考えてください。
+</Aside>
+
+### あなたの最初のMoveモジュール
+
+最初のモジュールは、アカウントがメッセージを保存・取得できるシンプルなメッセージストレージシステムになります。`my-first-module`フォルダ内に新しいmoveプロジェクトを作成しましょう：
+
+<Steps>
+  1. プロジェクトを初期化
+
+     `aptos move init --name my_first_module`で新しいmoveプロジェクトを初期化します。
+
+     これにより、`sources`ディレクトリと`Move.toml`ファイルを含むプロジェクト構造が作成されます。
+
+  2. モジュールファイルを作成
+
+     モジュールコードで新しいファイル`sources/message.move`を作成：
+
+     ```move filename="message.move"
+     module my_first_module::message {
+         use std::string;
+         use std::signer;
+
+         struct MessageHolder has key, store, drop {
+             message: string::String,
+         }
+
+         public entry fun set_message(account: &signer, message: string::String) acquires MessageHolder {
+             let account_addr = signer::address_of(account);
+
+             if (exists<MessageHolder>(account_addr)) {
+                 move_from<MessageHolder>(account_addr);
+             };
+
+             move_to(account, MessageHolder { message });
+         }
+
+         public fun get_message(account_addr: address): string::String acquires MessageHolder {
+             assert!(exists<MessageHolder>(account_addr), 0);
+             let message_holder = borrow_global<MessageHolder>(account_addr);
+             message_holder.message
+         }
+     }
+     ```
+
+  3. コードを理解する
+
+     この簡単なモジュールは以下のことを行います：
+
+     - **構造体定義**: `MessageHolder`は`has key, store, drop`能力を持つリソースです
+       - `key`: グローバルストレージに保存できる
+       - `store`: 他の構造体内に保存できる
+       - `drop`: 削除できる
+     - **set\_message関数**: アカウントにメッセージを保存（既存のものがあれば置換）
+     - **get\_message関数**: アカウントからメッセージを読み取り
+
+  4. モジュールをコンパイル
+
+     プロジェクトディレクトリで以下を実行：
+
+     ```shellscript filename="Terminal"
+     aptos move compile
+     ```
+
+     成功すると、コンパイル結果が表示されます：
+
+     ```shellscript filename="Terminal"
+     Compiling, may take a little while to download git dependencies...
+     INCLUDING DEPENDENCY AptosFramework
+     INCLUDING DEPENDENCY AptosStdlib
+     INCLUDING DEPENDENCY MoveStdlib
+     BUILDING my_first_module
+     {
+       "Result": [
+         "9ec1cfa30b885a5c9d595f32f3381ec16d208734913b587be9e210f60be9f9ba::message"
+       ]
+     }
+     ```
+</Steps>
+
+## 4. モジュールのテスト
+
+Moveにはテストを書くための組み込みサポートがあります。モジュールをデプロイする前にテストしましょう：
+
+<Steps>
+  1. テストファイルを作成
+
+     `sources/message_test.move`を作成：
+
+     ```move filename="message_test.move"
+     #[test_only]
+     module my_first_module::message_tests {
+         use std::string;
+         use my_first_module::message;
+
+         #[test(account = @0x1)]
+         public fun test_set_and_get_message(account: &signer) {
+             let message_text = string::utf8(b"Hello, Aptos!");
+             message::set_message(account, message_text);
+             
+             let stored_message = message::get_message(@0x1);
+             assert!(stored_message == string::utf8(b"Hello, Aptos!"), 0);
+         }
+     }
+     ```
+
+  2. テストを実行
+
+     ```shellscript filename="Terminal"
+     aptos move test
+     ```
+
+     テストが通れば、以下のような出力が表示されます：
+
+     ```shellscript filename="Terminal"
+     Running Move unit tests
+     [ PASS    ] 0x9ec1cfa30b885a5c9d595f32f3381ec16d208734913b587be9e210f60be9f9ba::message_tests::test_set_and_get_message
+     Test result: OK. Total tests: 1; passed: 1; failed: 0
+     ```
+</Steps>
+
+## 5. モジュールの公開
+
+テストが通ったので、モジュールをdevnetに公開しましょう：
+
+<Steps>
+  1. モジュールを公開
+
+     ```shellscript filename="Terminal"
+     aptos move publish
+     ```
+
+  2. 公開を確認
+
+     プロンプトで「yes」と入力して公開を確認します。
+
+     成功すると、トランザクションハッシュが表示されます：
+
+     ```shellscript filename="Terminal"
+     package size 1755 bytes
+     Do you want to submit a transaction for a range of [600 - 900] Octas at a gas unit price of 100 Octas? [yes/no] >
+     yes
+     {
+       "Result": {
+         "transaction_hash": "0x64b9e3bd21c5b3ca1cab0e1b10dc06c0add1d2f7bfcf0b4ce1de3c1b7c3e8dc8",
+         "gas_used": 721,
+         "gas_unit_price": 100,
+         "sender": "9ec1cfa30b885a5c9d595f32f3381ec16d208734913b587be9e210f60be9f9ba",
+         "success": true,
+         "version": 502312001,
+         "vm_status": "Executed successfully"
+       }
+     }
+     ```
+</Steps>
+
+## 6. モジュールとの相互作用
+
+モジュールが公開されたので、相互作用してみましょう：
+
+<Steps>
+  1. メッセージを設定
+
+     ```shellscript filename="Terminal"
+     aptos move run --function-id default::message::set_message --args string:"Hello from my first module!"
+     ```
+
+  2. メッセージを取得
+
+     ```shellscript filename="Terminal"
+     aptos move view --function-id default::message::get_message --args address:your_account_address
+     ```
+
+     あなたのアカウントアドレスを実際のアドレスに置き換えてください。
+
+  3. Explorerで確認
+
+     [Aptos Explorer](https://explorer.aptoslabs.com/?network=devnet)でアカウントアドレスを検索し、「Resources」タブでMessageHolderリソースを確認できます。
+</Steps>
+
+## 次のステップ
+
+おめでとうございます！あなたは最初のMoveモジュールを正常に作成、テスト、公開、相互作用しました。次に以下を試してみてください：
+
+- [Move Book](/ja/build/smart-contracts/book) - Moveプログラミング言語の詳細を学ぶ
+- [エンドツーエンドdApp構築](/ja/build/guides/build-e2e-dapp) - フロントエンドでモジュールを統合
+- [Aptos標準](/ja/build/smart-contracts) - より高度なMoveパターンとベストプラクティスを探索
+
+Move開発の旅を楽しんでください！

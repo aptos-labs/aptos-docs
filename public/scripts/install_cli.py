@@ -19,11 +19,14 @@ import subprocess
 import sys
 import sysconfig
 import tempfile
+import time
 import warnings
 from contextlib import closing
+from functools import wraps
 from io import UnsupportedOperation
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Callable, Any
+from urllib.error import URLError, HTTPError
 from urllib.request import Request, urlopen, urlretrieve
 
 try:
@@ -202,6 +205,26 @@ After this, restart your terminal.
 """
 
 
+def retry_network_operation(max_retries: int = 4):
+    """Decorator to retry network operations with exponential backoff."""
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        def wrapper(self, *args, **kwargs) -> Any:
+            for attempt in range(max_retries):
+                try:
+                    return func(self, *args, **kwargs)
+                except Exception as e:
+                    if attempt < max_retries - 1:
+                        wait_time = 3 ** attempt  # Exponential backoff
+                        self._write(f"Error on attempt {attempt + 1}, retrying in {wait_time} seconds: {e}")
+                        time.sleep(wait_time)
+                    else:
+                        self._write(f"Failed after {max_retries} attempts")
+                        raise
+        return wrapper
+    return decorator
+
+
 class InstallationError(RuntimeError):
     def __init__(self, return_code: int = 0, log: Optional[str] = None):
         super().__init__()
@@ -244,7 +267,7 @@ class Installer:
     @property
     def release_info(self):
         if not self._release_info:
-            self._release_info = json.loads(self._get(self.METADATA_URL).decode())
+            self._release_info = self._get_json(self.METADATA_URL)
         return self._release_info
 
     @property
@@ -298,7 +321,10 @@ class Installer:
 
         with tempfile.TemporaryDirectory() as tmpdirname:
             zip_file = os.path.join(tmpdirname, "aptos-cli.zip")
-            urlretrieve(url, zip_file)
+            
+            # Download with retry logic
+            self._download_file(url, zip_file)
+            
             # This assumes that the binary within the zip file is always
             # called `aptos` / `aptos.exe`.
             shutil.unpack_archive(zip_file, self.bin_dir)
@@ -621,11 +647,25 @@ class Installer:
     def _write(self, line) -> None:
         sys.stdout.write(line + "\n")
 
-    def _get(self, url):
+    @retry_network_operation()
+    def _get_json(self, url, expect_non_empty: bool = True):
+        """Download data from URL with retry logic."""
         request = Request(url, headers={"User-Agent": "Aptos CLI Installer"})
-
+        
         with closing(urlopen(request)) as r:
-            return r.read()
+            if r.getcode() != 200:
+                raise RuntimeError(f"HTTP request failed with status code {r.getcode()} for URL: {url}")
+            content = r.read().decode()
+        
+        out = json.loads(content)
+        if expect_non_empty and not out:
+            raise RuntimeError(f"Expected non-empty JSON response from URL: {url}")
+        return out
+
+    @retry_network_operation()
+    def _download_file(self, url, local_path):
+        """Download a file from URL to local path with retry logic."""
+        urlretrieve(url, local_path)
 
 
 def main():

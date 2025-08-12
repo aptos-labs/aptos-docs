@@ -1,0 +1,86 @@
+---
+id: "accounts"
+title: "Konten"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Ein Konto auf der Aptos-Blockchain repräsentiert die Zugriffskontrolle über eine Reihe von Assets, einschließlich On-Chain-Währung und NFTs. In Aptos werden diese Assets durch ein Move-Sprach-Primitiv namens **Ressource** dargestellt, das sowohl Zugriffskontrolle als auch Knappheit betont.
+
+Jedes Konto auf der Aptos-Blockchain wird durch eine 32-Byte-Kontoadresse identifiziert. Sie können den Aptos Name Service unter [www.aptosnames.com](https://www.aptosnames.com/) nutzen, um .apt-Domains für wichtige Konten zu sichern und sie einprägsam und einzigartig zu machen.
+
+Anders als bei anderen Blockchains, wo Konten und Adressen implizit sind, sind Konten auf Aptos explizit und müssen erstellt werden, bevor sie Transaktionen ausführen können. Das Konto kann explizit oder implizit durch Übertragung von Aptos-Tokens (APT) dorthin erstellt werden. Siehe den Abschnitt [Erstellen eines Kontos](#erstellen-eines-kontos) für weitere Details. In gewisser Weise ist dies ähnlich wie bei anderen Chains, wo eine Adresse Geld für Gas erhalten muss, bevor sie Transaktionen senden kann.
+
+Explizite Konten ermöglichen erstklassige Funktionen, die auf anderen Netzwerken nicht verfügbar sind, wie:
+
+- Rotation des Authentifizierungsschlüssels. Der Authentifizierungsschlüssel des Kontos kann geändert werden, um über einen anderen privaten Schlüssel kontrolliert zu werden. Dies ist ähnlich wie das Ändern von Passwörtern in der Web2-Welt.
+- Native Multisig-Unterstützung. Konten auf Aptos unterstützen k-of-n Multisig mit sowohl Ed25519- als auch Secp256k1 ECDSA-Signaturschemas beim Konstruieren des Authentifizierungsschlüssels.
+
+Es gibt drei Arten von Konten auf Aptos:
+
+- _Standardkonto_ - Dies ist ein typisches Konto, das einer Adresse mit einem entsprechenden Paar von öffentlichen/privaten Schlüsseln entspricht.
+- [_Ressourcenkonto_](/de/build/smart-contracts/resource-accounts) - Ein autonomes Konto ohne entsprechenden privaten Schlüssel, das von Entwicklern verwendet wird, um Ressourcen zu speichern oder Module on-chain zu veröffentlichen.
+- [_Objekt_](/de/build/smart-contracts/objects) - Ein komplexer Satz von Ressourcen, die innerhalb einer einzelnen Adresse gespeichert sind und eine einzelne Entität darstellen.
+
+<Aside type="note">
+  Kontoadressen sind 32 Bytes lang. Sie werden normalerweise als 64 Hex-Zeichen angezeigt, wobei jedes Hex-Zeichen ein Nibble ist.
+  Manchmal ist die Adresse mit einem 0x vorangestellt. Siehe [Ihre Erste Transaktion](/de/build/guides/first-transaction) für ein Beispiel
+  dafür, wie eine Adresse aussieht, unten reproduziert:
+</Aside>
+
+```text
+Alice: 0xeeff357ea5c1a4e7bc11b2b17ff2dc2dcca69750bfef1e1ebcaccf8c8018175b
+Bob: 0x19aadeca9388e009d136245b9a67423f3eee242b03142849eb4f81a4a409e59c
+```
+
+## Kontoadresse
+
+Derzeit unterstützt Aptos nur einen einheitlichen Identifikator für ein Konto. Konten auf Aptos werden universell als 32-Byte-Hex-String dargestellt. Ein Hex-String, der kürzer als 32 Bytes ist, ist ebenfalls gültig; in diesen Szenarien kann der Hex-String mit führenden Nullen aufgefüllt werden, z.B. `0x1` => `0x0000000000000...01`. Während Aptos-Standards anzeigen, dass führende Nullen von einer Adresse entfernt werden können, versuchen die meisten Anwendungen, dieses Legacy-Verhalten zu vermeiden und unterstützen nur die Entfernung von 0en für spezielle Adressen im Bereich von `0x0` bis `0xa`.
+
+## Erstellen eines Kontos
+
+Wenn ein Benutzer die Erstellung eines Kontos anfordert, zum Beispiel durch Verwendung des [Aptos SDK](/de/build/sdks/ts-sdk/account), werden die folgenden Schritte ausgeführt:
+
+- Auswahl des Authentifizierungsschemas zur Verwaltung des Benutzerkontos, z.B. Ed25519 oder Secp256k1 ECDSA.
+- Generierung eines neuen privaten Schlüssels, öffentlichen Schlüssel-Paars.
+- Kombination des öffentlichen Schlüssels mit dem Authentifizierungsschema des öffentlichen Schlüssels zur Generierung eines 32-Byte-Authentifizierungsschlüssels und der Kontoadresse.
+
+Der Benutzer sollte den privaten Schlüssel zum Signieren der mit diesem Konto verbundenen Transaktionen verwenden.
+
+## Kontosequenznummer
+
+Die Kontosequenznummer für ein Konto gibt die Anzahl der Transaktionen an, die von diesem Konto eingereicht und on-chain committed wurden. Sie dient als Schutz gegen Replay-Angriffe.
+
+Jede von einem Konto eingereichte Transaktion muss die aktuelle Sequenznummer des Kontos enthalten. Sobald die Transaktion ausgeführt wurde, wird die Kontosequenznummer um 1 erhöht. Ein Konto kann maximal 2^64 - 1 Transaktionen in seiner Lebensdauer haben.
+
+## Kontostatus
+
+Der Status eines Kontos auf Aptos besteht aus:
+
+- **Code-Modul**: Von dem Konto veröffentlichter Move-Code.
+- **Ressourcen**: Strukturierte Daten, die unter diesem Konto gespeichert sind.
+
+Der gesamte Kontostatus wird durch einen Merkle-Baum authentifiziert. Das bedeutet, dass ein Client den Status eines Kontos zu einem bestimmten Zeitpunkt verifizieren kann, ohne dem Server zu vertrauen, der ihm die Daten bereitstellt.
+
+## Authentifizierungsschlüssel und Rotation
+
+Als wir das Konto erstellt haben, leiteten wir die Kontoadresse vom ursprünglichen Authentifizierungsschlüssel ab. Der Authentifizierungsschlüssel ist ein 32-Byte SHA3-256-Wert, der vom öffentlichen Schlüssel des Kontos und einem Signaturschema abgeleitet wird, das identifiziert, zu welcher Art von Signatur der öffentliche Schlüssel gehört.
+
+Aptos unterstützt zwei Signaturschemata:
+
+- **Ed25519**: Wird für einzelne Signaturen verwendet. Erfordert eine einzelne Signatur, die dem öffentlichen Schlüssel entspricht.
+- **MultiEd25519**: Wird für k-of-n-Signaturen verwendet. Erfordert k Signaturen von n öffentlichen Schlüsseln.
+
+Mit der Schlüsselrotation können Sie den privaten Schlüssel eines Kontos rotieren, ohne seine Adresse auf der Blockchain zu ändern. Dies ist manchmal für die Kontosicherheit erforderlich, wenn Sie vermuten, dass Ihr privater Schlüssel kompromittiert wurde.
+
+### Rotationsprozess
+
+1. Generieren Sie ein neues öffentliches/privates Schlüsselpaar
+2. Leiten Sie einen neuen Authentifizierungsschlüssel vom neuen öffentlichen Schlüssel ab
+3. Reichen Sie eine Schlüsselrotationstransaktion ein, die mit dem alten privaten Schlüssel signiert ist
+4. Der neue Authentifizierungsschlüssel ersetzt den alten im Konto
+5. Zukünftige Transaktionen müssen mit dem neuen privaten Schlüssel signiert werden
+
+<Aside type="caution">
+  Sobald ein Authentifizierungsschlüssel rotiert wurde, kann der alte private Schlüssel keine Transaktionen mehr für dieses Konto signieren. Stellen Sie sicher, dass Sie Ihren neuen privaten Schlüssel sicher speichern, bevor Sie die Rotation durchführen.
+</Aside>

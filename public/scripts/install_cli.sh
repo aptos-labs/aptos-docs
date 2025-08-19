@@ -42,14 +42,45 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
+# Retry function for network operations
+retry_command() {
+    local max_retries=4
+    local attempt=1
+    local exit_code=0
+    
+    while [ $attempt -le $max_retries ]; do
+        "$@"
+        exit_code=$?
+        
+        if [ $exit_code -eq 0 ]; then
+            if [ $attempt -gt 1 ]; then
+                print_message "$GREEN" "✓ $command_description succeeded on attempt $attempt"
+            fi
+            return 0
+        fi
+        
+        if [ $attempt -lt $max_retries ]; then
+            wait_time=$((2 ** (attempt - 1)))  # Exponential backoff: 1s, 2s, 4s
+            print_message "$YELLOW" "Network operation failed on attempt $attempt, retrying in ${wait_time}s..."
+            sleep $wait_time
+        else
+            print_message "$RED" "Network operation failed after $max_retries attempts"
+        fi
+        
+        attempt=$((attempt + 1))
+    done
+    
+    return $exit_code
+}
+
 # Install required packages using universal installer
 install_required_packages() {
     # Download universal installer if not present
     print_message "$YELLOW" "Downloading universal installer..."
     if command_exists curl; then
-        curl -s "$UNIVERSAL_INSTALLER_URL" -o /tmp/install_pkg.sh
+        retry_command curl -s "$UNIVERSAL_INSTALLER_URL" -o /tmp/install_pkg.sh || die "Failed to download universal installer"
     elif command_exists wget; then
-        wget -q "$UNIVERSAL_INSTALLER_URL" -O /tmp/install_pkg.sh
+        retry_command wget -q "$UNIVERSAL_INSTALLER_URL" -O /tmp/install_pkg.sh || die "Failed to download universal installer"
     else
         die "Neither curl nor wget is installed. Please install one of them manually."
     fi
@@ -65,19 +96,21 @@ install_required_packages() {
 
 # Get the latest version from GitHub API
 get_latest_version() {
+    local tmp_file="/tmp/releases.json"
+    
     if command_exists curl; then
-        curl -s "https://api.github.com/repos/aptos-labs/aptos-core/releases?per_page=100" | \
-        grep -m 1 '"tag_name": "aptos-cli-v' | \
-        cut -d'"' -f4 | \
-        sed 's/aptos-cli-v//'
+        retry_command curl -s "https://api.github.com/repos/aptos-labs/aptos-core/releases?per_page=100" -o "$tmp_file" || die "Failed to get latest version"
     elif command_exists wget; then
-        wget -qO- "https://api.github.com/repos/aptos-labs/aptos-core/releases?per_page=100" | \
-        grep -m 1 '"tag_name": "aptos-cli-v' | \
-        cut -d'"' -f4 | \
-        sed 's/aptos-cli-v//'
+        retry_command wget -qO "$tmp_file" "https://api.github.com/repos/aptos-labs/aptos-core/releases?per_page=100" || die "Failed to get latest version"
     else
         die "Neither curl nor wget is installed. Please install one of them."
     fi
+    
+    grep -m 1 '"tag_name": "aptos-cli-v' "$tmp_file" | \
+    cut -d'"' -f4 | \
+    sed 's/aptos-cli-v//'
+    
+    rm -f "$tmp_file"
 }
 
 # Determine the target platform
@@ -153,9 +186,9 @@ install_cli() {
     
     # Download and extract
     if command_exists curl; then
-        curl -L "$url" -o "$tmp_dir/aptos-cli.zip"
+        retry_command curl -L "$url" -o "$tmp_dir/aptos-cli.zip" || die "Failed to download CLI binary"
     elif command_exists wget; then
-        wget "$url" -O "$tmp_dir/aptos-cli.zip"
+        retry_command wget "$url" -O "$tmp_dir/aptos-cli.zip" || die "Failed to download CLI binary"
     else
         die "Neither curl nor wget is installed. Please install one of them."
     fi

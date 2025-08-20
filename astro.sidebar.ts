@@ -538,6 +538,7 @@ export const sidebar = [
         label: "Tooling",
         collapsed: true,
         items: [
+          "build/smart-contracts/move-vscode-extension",
           "build/smart-contracts/prover",
           "build/smart-contracts/prover/prover-guide",
           "build/smart-contracts/prover/spec-lang",

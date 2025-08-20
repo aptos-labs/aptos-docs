@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Root as ScrollAreaRoot, Viewport, Scrollbar, Thumb } from "@radix-ui/react-scroll-area";
-import { MessageCircle, Pencil, Trash2 } from "lucide-react";
+import { MessageCircle, Pencil } from "lucide-react";
 import type { Chat } from "./types";
 
 export interface ChatSidebarProps {
@@ -53,7 +53,6 @@ const ChatList = ({
   editingTitle,
   isCollapsed,
   onSelectChat,
-  onDeleteChat,
   handleEditStart,
   handleKeyDown,
   setEditingTitle,
@@ -111,16 +110,6 @@ const ChatList = ({
                   className="chat-sidebar-action"
                 >
                   <Pencil className="chat-sidebar-action-icon" />
-                </button>
-                <button
-                  onClick={() => {
-                    if (chat.id) {
-                      onDeleteChat?.(chat.id);
-                    }
-                  }}
-                  className="chat-sidebar-action"
-                >
-                  <Trash2 className="chat-sidebar-action-icon" />
                 </button>
               </div>
             </>

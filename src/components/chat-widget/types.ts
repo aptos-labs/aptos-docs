@@ -36,4 +36,6 @@ export interface ChatWidgetProps {
   onDeleteChat?: (chatId: string) => void;
   onUpdateChatTitle?: (chatId: string, title: string) => void;
   onToggleFastMode?: (enabled: boolean) => void;
+  isSharedChatMode?: boolean;
+  sharedChatId?: string | null;
 }

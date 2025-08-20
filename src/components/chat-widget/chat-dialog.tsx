@@ -1,7 +1,9 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import * as ScrollArea from "@radix-ui/react-scroll-area";
-import { ChevronRight, ChevronLeft, Pencil, Trash2, X } from "lucide-react";
+import { ChevronRight, ChevronLeft, Pencil, Trash2, X, Share2 } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
+import { useChatbot } from "@aptos-labs/ai-chatbot-client";
+import { ShareModal } from "./share-modal";
 import type { Message, Chat, ChatWidgetProps } from "./types";
 import { ChatSidebar } from "./chat-sidebar";
 import { ChatMessage } from "./chat-message";
@@ -39,8 +41,19 @@ export function ChatDialog({
   onDeleteChat,
   onUpdateChatTitle,
   onToggleFastMode,
-}: ChatDialogProps) {
+  error,
+  onDismissError,
+  isSharedChatMode,
+}: ChatDialogProps & {
+  error?: string | null;
+  onDismissError?: () => void;
+  isSharedChatMode?: boolean;
+  sharedChatId?: string | null;
+}) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const { shareChat } = useChatbot();
+
   const chatInputRef = useRef<ChatInputRef>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
 
@@ -50,21 +63,29 @@ export function ChatDialog({
     timestamp: typeof msg.timestamp === "string" ? Date.parse(msg.timestamp) : msg.timestamp,
   }));
 
-  const scrollToBottom = () => {
+  const scrollToBottom = (smooth = true) => {
     if (viewportRef.current) {
       viewportRef.current.scrollTo({
         top: viewportRef.current.scrollHeight,
-        behavior: "smooth",
+        behavior: smooth ? "smooth" : "instant",
       });
     }
   };
 
+  // Only scroll to bottom when opening a new chat
   useEffect(() => {
-    const timeoutId = setTimeout(scrollToBottom, 100);
+    const timeoutId = setTimeout(() => {
+      scrollToBottom(true);
+    }, 100);
     return () => {
       clearTimeout(timeoutId);
     };
-  }, [messages, isTyping]);
+  }, [open]);
+
+  // Scroll to bottom when switching chats
+  useEffect(() => {
+    scrollToBottom(false);
+  }, [currentChatId]);
 
   const handleNewChat = () => {
     onNewChat?.();
@@ -111,9 +132,28 @@ export function ChatDialog({
                   </div>
                 </button>
                 {currentChatId && (
-                  <button onClick={() => onDeleteChat?.(currentChatId)} className="chat-button">
-                    <Trash2 className="h-5 w-5" />
-                  </button>
+                  <>
+                    {!isSharedChatMode && currentChatId && (
+                      <>
+                        <button
+                          onClick={() => {
+                            setIsShareModalOpen(true);
+                          }}
+                          className="chat-button"
+                        >
+                          <Share2 className="h-5 w-5" />
+                        </button>
+                        <ShareModal
+                          open={isShareModalOpen}
+                          onOpenChange={setIsShareModalOpen}
+                          onShare={(options) => shareChat(currentChatId, options)}
+                        />
+                      </>
+                    )}
+                    <button onClick={() => onDeleteChat?.(currentChatId)} className="chat-button">
+                      <Trash2 className="h-5 w-5" />
+                    </button>
+                  </>
                 )}
                 <Dialog.Close className="chat-button">
                   <X className="h-5 w-5" />
@@ -185,11 +225,20 @@ export function ChatDialog({
                             className={messageClassName}
                           />
                         ))}
-                        {isTyping && (
-                          <div className="chat-typing">
-                            <div className="chat-typing-dot" />
-                            <div className="chat-typing-dot" />
-                            <div className="chat-typing-dot" />
+                        {isGenerating && !isTyping && (
+                          <div className="chat-message">
+                            <div className="chat-message-content">
+                              <div className="chat-message-text">
+                                <div className="chat-thinking">
+                                  <img
+                                    src="/favicon.svg"
+                                    alt="Aptos AI"
+                                    className="chat-thinking-logo"
+                                  />
+                                  <span>AskAptos is thinking...</span>
+                                </div>
+                              </div>
+                            </div>
                           </div>
                         )}
                       </div>
@@ -205,6 +254,27 @@ export function ChatDialog({
 
                 <div className="chat-bottom">
                   <div className="chat-input-container">
+                    {error && (
+                      <div
+                        className="chat-error-message"
+                        onAnimationEnd={(e) => {
+                          if (e.animationName === "fade-out") {
+                            onDismissError?.();
+                          }
+                        }}
+                      >
+                        <span>{error}</span>
+                        <button
+                          onClick={(e) => {
+                            e.currentTarget.parentElement?.classList.add("fade-out");
+                          }}
+                          className="chat-error-dismiss"
+                          aria-label="Dismiss error"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    )}
                     <ChatInput
                       ref={chatInputRef}
                       onSend={onSendMessage}

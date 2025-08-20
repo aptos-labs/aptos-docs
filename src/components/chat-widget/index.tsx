@@ -23,6 +23,8 @@ function ChatDialogContainer() {
     updateChatTitle,
     setFastMode,
     updateConfig,
+    isSharedChatMode,
+    sharedChatId,
   } = useChatbot();
 
   const [isOpen, setIsOpen] = useState(false);
@@ -43,9 +45,20 @@ function ChatDialogContainer() {
     try {
       await sendMessage(message);
     } catch (err: unknown) {
-      const errorMessage =
-        err instanceof Error ? err.message : "Failed to send message. Please try again.";
+      let errorMessage = "Failed to send message. Please try again.";
+      if (err instanceof Error) {
+        if (err.message === "RATE_LIMIT_EXCEEDED") {
+          errorMessage =
+            "You've reached the rate limit. Please wait a moment before sending more messages.";
+        } else {
+          errorMessage = err.message;
+        }
+      }
       setError(errorMessage);
+      // Auto dismiss after 5 seconds
+      setTimeout(() => {
+        setError(null);
+      }, 5000);
     }
   };
 
@@ -78,12 +91,13 @@ function ChatDialogContainer() {
           setFastMode(enabled);
           updateConfig({ fastMode: enabled });
         }}
+        error={error}
+        onDismissError={() => {
+          setError(null);
+        }}
+        isSharedChatMode={isSharedChatMode}
+        sharedChatId={sharedChatId}
       />
-      {error && (
-        <div className="fixed bottom-4 right-4 rounded-lg bg-red-500 px-4 py-2 text-white">
-          {error}
-        </div>
-      )}
     </>
   );
 }

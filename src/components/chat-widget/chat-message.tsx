@@ -1,5 +1,5 @@
 import { type ComponentProps, useState } from "react";
-import { Copy, ThumbsUp, ThumbsDown, Trash2 } from "lucide-react";
+import { Copy, ThumbsUp, ThumbsDown } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
@@ -8,14 +8,12 @@ import type { Message } from "./types";
 
 interface ChatMessageProps extends ComponentProps<"div"> {
   message: Message;
-  onDelete?: () => void;
   onCopy?: () => void;
   onFeedback?: (messageId: string, feedback: "positive" | "negative") => void;
 }
 
 export function ChatMessage({
   message,
-  onDelete,
   onCopy,
   onFeedback,
   className,
@@ -29,13 +27,22 @@ export function ChatMessage({
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={{
+                h1: ({ children }) => <h1 className="chat-message-h1">{children}</h1>,
+                h2: ({ children }) => <h2 className="chat-message-h2">{children}</h2>,
+                h3: ({ children }) => <h3 className="chat-message-h3">{children}</h3>,
+                h4: ({ children }) => <h4 className="chat-message-h4">{children}</h4>,
+                h5: ({ children }) => <h5 className="chat-message-h5">{children}</h5>,
+                h6: ({ children }) => <h6 className="chat-message-h6">{children}</h6>,
+                strong: ({ children }) => (
+                  <strong className="chat-message-strong">{children}</strong>
+                ),
                 code: ({ className, children }) => {
-                  const match = /language-(\w+)/.exec(className ?? "");
                   // Check if code is inline by seeing if it's a single line
                   const isInline = !className;
-                  // For inline code, use simple styling
+                  const match = /language-(\w+)/.exec(className ?? "");
+                  // Use the inline prop to determine if it's inline code
                   if (isInline) {
-                    return <code className={className}>{children}</code>;
+                    return <code>{children}</code>;
                   }
 
                   // For code blocks, use syntax highlighting
@@ -129,9 +136,6 @@ export function ChatMessage({
           )}
           <button onClick={onCopy} className="chat-message-action">
             <Copy className="chat-button-icon" />
-          </button>
-          <button onClick={onDelete} className="chat-message-action">
-            <Trash2 className="chat-button-icon" />
           </button>
         </div>
       </div>

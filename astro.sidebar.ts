@@ -572,17 +572,6 @@ export const sidebar = [
     items: [
       "network/nodes", // Added Nodes Overview/Landing page
 
-      // Localnet
-      {
-        label: "Localnet",
-        collapsed: true,
-        items: [
-          "network/nodes/localnet",
-          "network/nodes/localnet/local-development-network",
-          "network/nodes/localnet/run-a-localnet",
-        ],
-      },
-
       // Validator Node
       {
         label: "Validator Node",
@@ -742,6 +731,18 @@ export const sidebar = [
               "network/nodes/configure/node-files-all-networks/node-files-devnet",
             ],
           },
+        ],
+      },
+
+      // Localnet
+      {
+        label: "Local Networks",
+        collapsed: true,
+        items: [
+          "network/nodes/localnet",
+          "network/nodes/localnet/local-development-network",
+          "network/nodes/localnet/run-a-localnet",
+          "network/nodes/localnet/run-a-multinode-localnet",
         ],
       },
     ],

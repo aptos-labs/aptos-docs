@@ -84,7 +84,7 @@ script {
 
 ## Operaciones
 
-`vector` proporciona varias operaciones vía el módulo `std::vector` en la biblioteca estándar de Move, como se muestra abajo. Más operaciones pueden ser agregadas con el tiempo. Documentación actualizada sobre `vector` se puede encontrar [aquí](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/move-stdlib/doc/vector.md).
+`vector` proporciona varias operaciones vía el módulo `std::vector` en la biblioteca estándar de Move, como se muestra abajo. Más operaciones pueden ser agregadas con el tiempo. Documentación actualizada sobre `vector` se puede encontrar [aquí](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/move-stdlib/vector).
 
 ### Operaciones Básicas
 
@@ -95,21 +95,21 @@ script {
   fun example() {
     // Crear un vector vacío
     let v = vector::empty<u64>();
-    
+
     // Agregar elementos
     vector::push_back(&mut v, 1);
     vector::push_back(&mut v, 2);
     vector::push_back(&mut v, 3);
-    
+
     // Obtener longitud
     let len = vector::length(&v); // 3
-    
+
     // Acceder a elementos
     let first = *vector::borrow(&v, 0); // 1
-    
+
     // Remover elemento del final
     let last = vector::pop_back(&mut v); // 3
-    
+
     // Verificar si está vacío
     let is_empty = vector::is_empty(&v); // false
   }
@@ -123,19 +123,19 @@ use std::vector;
 
 public fun access_operations() {
   let v = vector[10, 20, 30, 40];
-  
+
   // Préstamo inmutable
   let first_ref = vector::borrow(&v, 0);
   assert!(*first_ref == 10, 1);
-  
-  // Préstamo mutable  
+
+  // Préstamo mutable
   let v_mut = vector[10, 20, 30];
   let second_ref = vector::borrow_mut(&mut v_mut, 1);
   *second_ref = 25;
-  
+
   // Intercambio de elementos
   vector::swap(&mut v_mut, 0, 2); // [30, 25, 10]
-  
+
   // Reverso
   vector::reverse(&mut v_mut); // [10, 25, 30]
 }
@@ -148,11 +148,11 @@ use std::vector;
 
 public fun search_operations() {
   let v = vector[1, 3, 5, 7, 9];
-  
+
   // Contiene elemento
   let has_five = vector::contains(&v, &5); // true
   let has_four = vector::contains(&v, &4); // false
-  
+
   // Encontrar índice
   let (found, index) = vector::index_of(&v, &7);
   if (found) {
@@ -169,16 +169,16 @@ use std::vector;
 public fun manipulation_operations() {
   let mut v1 = vector[1, 2, 3];
   let mut v2 = vector[4, 5, 6];
-  
+
   // Concatenar vectores
   vector::append(&mut v1, v2); // v1 es ahora [1, 2, 3, 4, 5, 6]
-  
+
   // Insertar en posición específica
   vector::insert(&mut v1, 2, 99); // [1, 2, 99, 3, 4, 5, 6]
-  
+
   // Remover en posición específica
   let removed = vector::remove(&mut v1, 2); // remueve 99
-  
+
   // Intercambiar y remover
   let swapped = vector::swap_remove(&mut v1, 0); // remueve 1, eficiente
 }
@@ -216,13 +216,13 @@ module 0x42::todo_list {
   public fun add_task(account: &signer, description: String) acquires TodoList {
     let addr = std::signer::address_of(account);
     let todo_list = borrow_global_mut<TodoList>(addr);
-    
+
     let new_item = TodoItem {
       id: todo_list.next_id,
       description,
       completed: false
     };
-    
+
     vector::push_back(&mut todo_list.items, new_item);
     todo_list.next_id = todo_list.next_id + 1;
   }
@@ -231,7 +231,7 @@ module 0x42::todo_list {
   public fun complete_task(account: &signer, task_id: u64) acquires TodoList {
     let addr = std::signer::address_of(account);
     let todo_list = borrow_global_mut<TodoList>(addr);
-    
+
     let len = vector::length(&todo_list.items);
     let mut i = 0;
     while (i < len) {
@@ -248,7 +248,7 @@ module 0x42::todo_list {
   public fun get_pending_tasks(addr: address): vector<u64> acquires TodoList {
     let todo_list = borrow_global<TodoList>(addr);
     let pending = vector::empty<u64>();
-    
+
     let len = vector::length(&todo_list.items);
     let mut i = 0;
     while (i < len) {
@@ -258,7 +258,7 @@ module 0x42::todo_list {
       };
       i = i + 1;
     };
-    
+
     pending
   }
 }
@@ -283,20 +283,20 @@ module 0x42::inventory {
 
   /// Agrega un item al inventario
   public fun add_item(
-    account: &signer, 
-    id: u64, 
-    name: vector<u8>, 
-    quantity: u64, 
+    account: &signer,
+    id: u64,
+    name: vector<u8>,
+    quantity: u64,
     price: u64
   ) acquires Inventory {
     let addr = std::signer::address_of(account);
-    
+
     if (!exists<Inventory>(addr)) {
       move_to(account, Inventory { items: vector::empty<Item>() });
     };
-    
+
     let inventory = borrow_global_mut<Inventory>(addr);
-    
+
     // Verificar si el item ya existe
     let (found, index) = find_item_index(&inventory.items, id);
     if (found) {
@@ -312,21 +312,21 @@ module 0x42::inventory {
 
   /// Remueve cantidad de un item
   public fun remove_quantity(
-    account: &signer, 
-    item_id: u64, 
+    account: &signer,
+    item_id: u64,
     quantity: u64
   ) acquires Inventory {
     let addr = std::signer::address_of(account);
     let inventory = borrow_global_mut<Inventory>(addr);
-    
+
     let (found, index) = find_item_index(&inventory.items, item_id);
     assert!(found, 1); // Item no encontrado
-    
+
     let item = vector::borrow_mut(&mut inventory.items, index);
     assert!(item.quantity >= quantity, 2); // Cantidad insuficiente
-    
+
     item.quantity = item.quantity - quantity;
-    
+
     // Remover item si cantidad es 0
     if (item.quantity == 0) {
       vector::remove(&mut inventory.items, index);
@@ -351,7 +351,7 @@ module 0x42::inventory {
   public fun get_total_value(addr: address): u64 acquires Inventory {
     let inventory = borrow_global<Inventory>(addr);
     let mut total = 0;
-    
+
     let len = vector::length(&inventory.items);
     let mut i = 0;
     while (i < len) {
@@ -359,7 +359,7 @@ module 0x42::inventory {
       total = total + (item.quantity * item.price);
       i = i + 1;
     };
-    
+
     total
   }
 }
@@ -394,7 +394,7 @@ module 0x42::voting {
   ) {
     let creator_addr = std::signer::address_of(creator);
     let end_time = timestamp::now_seconds() + duration;
-    
+
     move_to(creator, Poll {
       question,
       options,
@@ -408,16 +408,16 @@ module 0x42::voting {
   public fun vote(voter: &signer, poll_addr: address, choice: u8) acquires Poll {
     let voter_addr = std::signer::address_of(voter);
     let poll = borrow_global_mut<Poll>(poll_addr);
-    
+
     // Verificar que la encuesta no haya terminado
     assert!(timestamp::now_seconds() <= poll.end_time, 1);
-    
+
     // Verificar que la opción es válida
     assert!((choice as u64) < vector::length(&poll.options), 2);
-    
+
     // Verificar que el usuario no haya votado ya
     assert!(!has_voted(&poll.votes, voter_addr), 3);
-    
+
     // Agregar voto
     let vote = Vote {
       voter: voter_addr,
@@ -446,14 +446,14 @@ module 0x42::voting {
     let poll = borrow_global<Poll>(poll_addr);
     let options_count = vector::length(&poll.options);
     let mut results = vector::empty<u64>();
-    
+
     // Inicializar contadores
     let mut i = 0;
     while (i < options_count) {
       vector::push_back(&mut results, 0);
       i = i + 1;
     };
-    
+
     // Contar votos
     let votes_len = vector::length(&poll.votes);
     i = 0;
@@ -463,7 +463,7 @@ module 0x42::voting {
       *vector::borrow_mut(&mut results, (vote.choice as u64)) = current_count + 1;
       i = i + 1;
     };
-    
+
     results
   }
 }
@@ -530,7 +530,7 @@ fun find_user_index(users: &vector<User>, target_id: u64): (bool, u64) {
 public fun process_range(v: &vector<u64>, start: u64, end: u64) {
   assert!(start <= end, E_INVALID_RANGE);
   assert!(end <= vector::length(v), E_OUT_OF_BOUNDS);
-  
+
   let mut i = start;
   while (i < end) {
     // procesar vector::borrow(v, i)

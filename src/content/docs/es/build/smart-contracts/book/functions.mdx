@@ -1,0 +1,357 @@
+---
+title: "Funciones"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+La sintaxis de función en Move es compartida entre funciones de módulo y funciones de script. Las funciones dentro de módulos son reutilizables, mientras que las funciones de script solo se usan una vez para invocar una transacción.
+
+## Declaración
+
+Las funciones se declaran con la palabra clave `fun` seguida del nombre de la función, parámetros de tipo, parámetros, un tipo de retorno, anotaciones acquires, y finalmente el cuerpo de la función.
+
+```text
+fun <identifier><[type_parameters: constraint],*>([identifier: type],*): <return_type> <acquires [identifier],*> <function_body>
+```
+
+Por ejemplo:
+
+```move
+fun foo<T1, T2>(x: u64, y: T1, z: T2): (T2, T1, u64) { (z, y, x) }
+```
+
+### Visibilidad
+
+Las funciones de módulo, por defecto, solo pueden ser llamadas dentro del mismo módulo. Estas funciones internas (a veces llamadas privadas) no pueden ser llamadas desde otros módulos o desde scripts.
+
+```move
+address 0x42 {
+module m {
+    fun foo(): u64 { 0 }
+
+    fun calls_foo(): u64 { foo() } // válido
+}
+
+module other {
+    fun calls_m_foo(): u64 {
+        0x42::m::foo() // ERROR!
+        //       ^^^^^ `foo` es interno a `0x42::m`
+    }
+}
+}
+
+script {
+    fun calls_m_foo(): u64 {
+        0x42::m::foo() // ERROR!
+        //       ^^^^^ `foo` es interno a `0x42::m`
+    }
+}
+```
+
+Para permitir acceso desde otros módulos o desde scripts, la función debe ser declarada `public` o `public(friend)`.
+
+#### Visibilidad `public`
+
+Una función `public` puede ser llamada por _cualquier_ función definida en _cualquier_ módulo o script. Como se muestra en el siguiente ejemplo, una función `public` puede ser llamada por:
+
+- otras funciones definidas en el mismo módulo,
+- funciones definidas en otro módulo, o
+- la función definida en un script.
+
+Tampoco hay restricciones para qué tipos de argumento puede tomar una función pública y su tipo de retorno.
+
+```move
+address 0x42 {
+module m {
+    public fun foo(): u64 { 0 }
+
+    fun calls_foo(): u64 { foo() } // válido
+}
+
+module other {
+    fun calls_m_foo(): u64 {
+        0x42::m::foo() // válido
+    }
+}
+}
+
+script {
+    fun calls_m_foo(): u64 {
+        0x42::m::foo() // válido
+    }
+}
+```
+
+#### Visibilidad `package`
+
+_Desde la Versión del Lenguaje 2.0_
+
+Una función `package` solo puede ser llamada dentro del mismo paquete. La noción de un paquete es definida por el entorno de hosting de Move, y no explícita en el lenguaje. Típicamente, el paquete se define por un archivo manifest `Move.toml` que es procesado por el entorno de construcción.
+
+```move
+module 0x42::m {
+  package fun foo(): u64 { 0 }
+}
+
+module 0x42::other {
+  fun calls_m_foo(): u64 {
+    0x42::m::foo() // válido
+  }
+}
+```
+
+#### Visibilidad `public(friend)`
+
+El modificador de visibilidad `public(friend)` es una forma más restringida del modificador `public` para dar más control sobre dónde se puede usar una función. Una función `public(friend)` puede ser llamada por:
+
+- otras funciones definidas en el mismo módulo, o
+- funciones definidas en módulos que están explícitamente especificados en la lista de friends del módulo actual.
+
+## Parámetros
+
+Los parámetros de función son variables locales que son inicializadas con los argumentos pasados cuando la función es llamada.
+
+```move
+fun example(x: u64, y: bool): u64 {
+    if (y) x else 0
+}
+```
+
+### Parámetros Mutables
+
+Por defecto, los parámetros de función son inmutables. Para hacer un parámetro mutable, añade la palabra clave `mut`:
+
+```move
+fun example(mut x: u64): u64 {
+    x = x + 1;
+    x
+}
+```
+
+## Tipo de Retorno
+
+Una función puede devolver un valor especificando un tipo de retorno después de los parámetros:
+
+```move
+fun get_sum(x: u64, y: u64): u64 {
+    x + y
+}
+```
+
+### Múltiples Valores de Retorno
+
+Una función puede devolver múltiples valores usando tuplas:
+
+```move
+fun swap<T1, T2>(x: T1, y: T2): (T2, T1) {
+    (y, x)
+}
+```
+
+### Sin Tipo de Retorno
+
+Si no se especifica tipo de retorno, la función devuelve el tipo unit `()`:
+
+```move
+fun print_sum(x: u64, y: u64) {
+    let sum = x + y;
+    std::debug::print(&sum);
+    // implícitamente devuelve ()
+}
+```
+
+## Cuerpo de Función
+
+El cuerpo de una función es un bloque de expresiones. El valor de la función es el valor de la última expresión en el bloque:
+
+```move
+fun example(): u64 {
+    let x = 1;
+    let y = 2;
+    x + y // esta expresión es el valor de retorno
+}
+```
+
+### Return Temprano
+
+Puedes usar `return` para salir temprano de una función:
+
+```move
+fun early_return(x: u64): u64 {
+    if (x == 0) {
+        return 42;
+    };
+    x * 2
+}
+```
+
+## Llamadas de Función
+
+Cuando llamas a una función, debes proporcionar argumentos para todos los parámetros:
+
+```move
+fun caller() {
+    let result = add(5, 3); // llama la función add con argumentos 5 y 3
+}
+
+fun add(x: u64, y: u64): u64 {
+    x + y
+}
+```
+
+## Parámetros de Tipo (Genéricos)
+
+Las funciones pueden ser genéricas sobre tipos usando parámetros de tipo:
+
+```move
+fun identity<T>(x: T): T {
+    x
+}
+
+fun example() {
+    let _x = identity<u64>(42);
+    let _y = identity<bool>(true);
+    // A menudo se puede inferir el tipo
+    let _z = identity(42); // T se infiere como u64
+}
+```
+
+### Restricciones de Tipo
+
+Los parámetros de tipo pueden tener restricciones (habilidades):
+
+```move
+fun destroy<T: drop>(x: T) {
+    // T debe tener la habilidad drop
+}
+
+fun copy_and_return<T: copy>(x: T): T {
+    let y = x; // copia x
+    x // devuelve el original
+}
+```
+
+## Anotaciones Acquires
+
+Cuando una función accede a recursos globales, debe declarar qué tipos de recursos adquiere:
+
+```move
+struct Counter has key {
+    value: u64
+}
+
+fun increment(addr: address): u64 acquires Counter {
+    let counter_ref = borrow_global_mut<Counter>(addr);
+    counter_ref.value = counter_ref.value + 1;
+    counter_ref.value
+}
+```
+
+## Funciones de Entrada
+
+Las funciones de entrada son funciones especiales que pueden ser llamadas directamente por transacciones. Deben:
+
+1. Ser funciones `public entry`
+2. No tener tipo de retorno
+3. Tener solo tipos primitivos o `signer` como parámetros
+
+```move
+public entry fun create_account(account: &signer, initial_balance: u64) {
+    // lógica para crear cuenta
+}
+```
+
+## Ejemplos Prácticos
+
+### Función Simple
+
+```move
+/// Calcula el área de un rectángulo
+public fun calculate_area(width: u64, height: u64): u64 {
+    width * height
+}
+```
+
+### Función con Genéricos
+
+```move
+/// Intercambia dos valores del mismo tipo
+public fun swap<T>(x: T, y: T): (T, T) {
+    (y, x)
+}
+```
+
+### Función con Recursos
+
+```move
+struct Wallet has key {
+    balance: u64
+}
+
+/// Deposita dinero en una wallet
+public fun deposit(addr: address, amount: u64) acquires Wallet {
+    let wallet = borrow_global_mut<Wallet>(addr);
+    wallet.balance = wallet.balance + amount;
+}
+```
+
+### Función de Validación
+
+```move
+/// Valida que una dirección no sea cero
+public fun validate_address(addr: address) {
+    assert!(addr != @0x0, E_INVALID_ADDRESS);
+}
+
+const E_INVALID_ADDRESS: u64 = 1;
+```
+
+## Buenas Prácticas
+
+1. **Nombres descriptivos**: Usa nombres de función que describan claramente lo que hacen:
+
+```move
+// ✓ Bueno
+public fun transfer_tokens(from: address, to: address, amount: u64) { ... }
+
+// ✗ Poco claro
+public fun do_stuff(a: address, b: address, c: u64) { ... }
+```
+
+2. **Documentación**: Documenta funciones públicas con comentarios:
+
+```move
+/// Transfiere tokens de una cuenta a otra
+/// @param from: La cuenta origen
+/// @param to: La cuenta destino  
+/// @param amount: La cantidad a transferir
+public fun transfer_tokens(from: address, to: address, amount: u64) { ... }
+```
+
+3. **Validación de entrada**: Valida parámetros en funciones públicas:
+
+```move
+public fun set_age(age: u8) {
+    assert!(age <= 150, E_INVALID_AGE);
+    // ...
+}
+```
+
+4. **Manejo de errores**: Usa códigos de error descriptivos:
+
+```move
+const E_INSUFFICIENT_BALANCE: u64 = 1;
+const E_INVALID_RECIPIENT: u64 = 2;
+const E_TRANSFER_TO_SELF: u64 = 3;
+```
+
+5. **Funciones pequeñas**: Mantén las funciones enfocadas en una sola responsabilidad:
+
+```move
+// ✓ Bueno: función enfocada
+public fun validate_transfer(from: address, to: address, amount: u64) { ... }
+public fun execute_transfer(from: address, to: address, amount: u64) { ... }
+
+// ✗ Demasiado complejo
+public fun transfer_with_validation_and_logging(...) { ... }
+```

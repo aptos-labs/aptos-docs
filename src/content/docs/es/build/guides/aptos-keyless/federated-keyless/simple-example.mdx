@@ -1,0 +1,491 @@
+---
+title: "Ejemplo Simple de Keyless Federado"
+---
+
+El Ejemplo de Keyless Federado muestra cómo configurar una cuenta Keyless Federada usando Auth0 como proveedor IAM.
+
+Explora el código en el [repositorio aptos-keyless-example](https://github.com/aptos-labs/aptos-keyless-example/tree/main/examples/federated-keyless-example/).
+
+## Implementación Paso a Paso
+
+### 1. Configuración del Proyecto
+
+```bash
+# Clonar el repositorio de ejemplo
+git clone https://github.com/aptos-labs/aptos-keyless-example.git
+cd aptos-keyless-example/examples/federated-keyless-example
+
+# Instalar dependencias
+npm install
+
+# Configurar variables de entorno
+cp .env.example .env.local
+```
+
+### 2. Configurar Auth0
+
+```typescript
+// auth0-config.ts
+export const auth0Config = {
+  domain: process.env.NEXT_PUBLIC_AUTH0_DOMAIN!,
+  clientId: process.env.NEXT_PUBLIC_AUTH0_CLIENT_ID!,
+  redirectUri: typeof window !== 'undefined' ? window.location.origin : '',
+  audience: process.env.NEXT_PUBLIC_AUTH0_AUDIENCE,
+  scope: 'openid profile email'
+};
+
+// Configurar Auth0Provider
+import { Auth0Provider } from '@auth0/auth0-react';
+
+export function Auth0Wrapper({ children }: { children: React.ReactNode }) {
+  return (
+    <Auth0Provider
+      domain={auth0Config.domain}
+      clientId={auth0Config.clientId}
+      authorizationParams={{
+        redirect_uri: auth0Config.redirectUri,
+        audience: auth0Config.audience,
+        scope: auth0Config.scope
+      }}
+    >
+      {children}
+    </Auth0Provider>
+  );
+}
+```
+
+### 3. Registrar JWKS en Blockchain
+
+```typescript
+// jwks-setup.ts
+import { Aptos, AptosConfig, Network, Account, Ed25519PrivateKey } from '@aptos-labs/ts-sdk';
+
+async function setupJWKS() {
+  // Configurar Aptos para testnet
+  const aptos = new Aptos(new AptosConfig({ 
+    network: Network.TESTNET 
+  }));
+
+  // Crear o cargar cuenta para JWKS
+  const jwkOwner = Account.fromPrivateKey({
+    privateKey: new Ed25519PrivateKey(process.env.JWK_OWNER_PRIVATE_KEY!)
+  });
+
+  // URL del issuer de Auth0
+  const issuer = `https://${process.env.NEXT_PUBLIC_AUTH0_DOMAIN}`;
+
+  try {
+    console.log('Registrando JWKS para:', issuer);
+    
+    // Crear transacción para actualizar JWKS
+    const transaction = await aptos.updateFederatedKeylessJwkSetTransaction({
+      sender: jwkOwner.accountAddress,
+      iss: issuer
+    });
+
+    // Firmar y enviar transacción
+    const response = await aptos.signAndSubmitTransaction({
+      signer: jwkOwner,
+      transaction
+    });
+
+    // Esperar confirmación
+    await aptos.waitForTransaction({
+      transactionHash: response.hash
+    });
+
+    console.log('✅ JWKS registrado exitosamente');
+    console.log('🔑 Dirección del propietario JWKS:', jwkOwner.accountAddress.toString());
+    console.log('📝 Hash de transacción:', response.hash);
+
+    return jwkOwner.accountAddress.toString();
+
+  } catch (error) {
+    console.error('❌ Error registrando JWKS:', error);
+    throw error;
+  }
+}
+
+// Ejecutar configuración
+setupJWKS().catch(console.error);
+```
+
+### 4. Componente de Autenticación Principal
+
+```typescript
+// KeylessAuth.tsx
+import React, { useState, useEffect } from 'react';
+import { useAuth0 } from '@auth0/auth0-react';
+import { 
+  Aptos, 
+  AptosConfig, 
+  Network, 
+  KeylessAccount,
+  EphemeralKeyPair 
+} from '@aptos-labs/ts-sdk';
+
+export function KeylessAuth() {
+  const { 
+    loginWithRedirect, 
+    logout, 
+    isAuthenticated, 
+    getIdTokenClaims, 
+    user, 
+    isLoading 
+  } = useAuth0();
+
+  const [keylessAccount, setKeylessAccount] = useState<KeylessAccount | null>(null);
+  const [accountLoading, setAccountLoading] = useState(false);
+  const [balance, setBalance] = useState<number>(0);
+
+  const aptos = new Aptos(new AptosConfig({ 
+    network: Network.TESTNET 
+  }));
+
+  // Dirección del propietario JWKS (obtenida del paso anterior)
+  const JWK_ADDRESS = process.env.NEXT_PUBLIC_JWK_ADDRESS!;
+
+  useEffect(() => {
+    if (isAuthenticated && !keylessAccount && !accountLoading) {
+      createKeylessAccount();
+    }
+  }, [isAuthenticated, keylessAccount, accountLoading]);
+
+  const createKeylessAccount = async () => {
+    try {
+      setAccountLoading(true);
+
+      // Obtener token JWT de Auth0
+      const tokenClaims = await getIdTokenClaims();
+      if (!tokenClaims?.__raw) {
+        throw new Error('No se pudo obtener token JWT');
+      }
+
+      console.log('🔐 Creando cuenta Keyless...');
+
+      // Generar par de claves efímeras
+      const ephemeralKeyPair = EphemeralKeyPair.generate();
+
+      // Crear cuenta Keyless
+      const account = await KeylessAccount.create({
+        jwt: tokenClaims.__raw,
+        ephemeralKeyPair,
+        jwkAddress: JWK_ADDRESS,
+        pepper: await getPepper(tokenClaims.__raw)
+      });
+
+      console.log('✅ Cuenta Keyless creada:', account.accountAddress.toString());
+
+      // Financiar cuenta en testnet
+      await fundAccount(account);
+
+      setKeylessAccount(account);
+      await updateBalance(account);
+
+    } catch (error) {
+      console.error('❌ Error creando cuenta Keyless:', error);
+      alert('Error creando cuenta Keyless: ' + error.message);
+    } finally {
+      setAccountLoading(false);
+    }
+  };
+
+  const getPepper = async (jwt: string): Promise<Uint8Array> => {
+    // Para testnet, usar el servicio de pepper de Aptos
+    const response = await fetch('https://api.testnet.aptoslabs.com/v1/keyless/pepper', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ jwt_b64: btoa(jwt) })
+    });
+
+    if (!response.ok) {
+      throw new Error('Error obteniendo pepper del servicio');
+    }
+
+    const data = await response.json();
+    return new Uint8Array(Buffer.from(data.pepper, 'hex'));
+  };
+
+  const fundAccount = async (account: KeylessAccount) => {
+    try {
+      console.log('💰 Financiando cuenta...');
+      
+      await aptos.fundAccount({
+        accountAddress: account.accountAddress,
+        amount: 100000000 // 1 APT
+      });
+
+      console.log('✅ Cuenta financiada con 1 APT');
+    } catch (error) {
+      console.error('❌ Error financiando cuenta:', error);
+    }
+  };
+
+  const updateBalance = async (account: KeylessAccount) => {
+    try {
+      const resources = await aptos.getAccountResources({
+        accountAddress: account.accountAddress
+      });
+
+      const coinResource = resources.find(
+        r => r.type === '0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>'
+      );
+
+      if (coinResource) {
+        const balance = (coinResource.data as any).coin.value;
+        setBalance(parseInt(balance) / 100000000); // Convertir a APT
+      }
+    } catch (error) {
+      console.error('Error obteniendo balance:', error);
+    }
+  };
+
+  const sendTransaction = async () => {
+    if (!keylessAccount) return;
+
+    try {
+      console.log('📤 Enviando transacción de prueba...');
+
+      // Crear transacción simple de transferencia
+      const transaction = await aptos.transaction.build.simple({
+        sender: keylessAccount.accountAddress,
+        data: {
+          function: '0x1::aptos_account::transfer',
+          functionArguments: [
+            '0x1', // Dirección de destino (puede ser cualquiera para prueba)
+            1000000 // 0.01 APT
+          ]
+        }
+      });
+
+      // Firmar y enviar transacción
+      const response = await aptos.signAndSubmitTransaction({
+        signer: keylessAccount,
+        transaction
+      });
+
+      console.log('✅ Transacción enviada:', response.hash);
+
+      // Esperar confirmación
+      await aptos.waitForTransaction({
+        transactionHash: response.hash
+      });
+
+      console.log('✅ Transacción confirmada');
+      await updateBalance(keylessAccount);
+
+    } catch (error) {
+      console.error('❌ Error enviando transacción:', error);
+      alert('Error enviando transacción: ' + error.message);
+    }
+  };
+
+  const handleLogout = () => {
+    setKeylessAccount(null);
+    setBalance(0);
+    logout({ 
+      logoutParams: { 
+        returnTo: window.location.origin 
+      } 
+    });
+  };
+
+  if (isLoading || accountLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500"></div>
+          <p className="mt-4 text-lg">
+            {accountLoading ? 'Configurando tu cuenta blockchain...' : 'Cargando...'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="max-w-md w-full bg-white rounded-lg shadow-md p-6">
+          <h1 className="text-2xl font-bold text-center mb-6">
+            Keyless Federado Demo
+          </h1>
+          <p className="text-gray-600 text-center mb-6">
+            Conecta con tu cuenta Auth0 para crear una cuenta blockchain sin claves privadas.
+          </p>
+          <button
+            onClick={() => loginWithRedirect()}
+            className="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+          >
+            Iniciar Sesión con Auth0
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-100 py-8">
+      <div className="max-w-4xl mx-auto px-4">
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-2xl font-bold">Panel de Cuenta Keyless</h1>
+            <button
+              onClick={handleLogout}
+              className="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded"
+            >
+              Cerrar Sesión
+            </button>
+          </div>
+
+          {/* Información del Usuario */}
+          <div className="grid md:grid-cols-2 gap-6 mb-6">
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <h3 className="text-lg font-semibold mb-2">Información de Usuario</h3>
+              <p><strong>Email:</strong> {user?.email}</p>
+              <p><strong>Nombre:</strong> {user?.name}</p>
+              <p><strong>Proveedor:</strong> Auth0</p>
+            </div>
+
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <h3 className="text-lg font-semibold mb-2">Cuenta Blockchain</h3>
+              {keylessAccount ? (
+                <>
+                  <p><strong>Dirección:</strong></p>
+                  <p className="text-sm font-mono break-all">
+                    {keylessAccount.accountAddress.toString()}
+                  </p>
+                  <p className="mt-2"><strong>Balance:</strong> {balance.toFixed(4)} APT</p>
+                </>
+              ) : (
+                <p>Configurando cuenta...</p>
+              )}
+            </div>
+          </div>
+
+          {/* Acciones */}
+          {keylessAccount && (
+            <div className="border-t pt-6">
+              <h3 className="text-lg font-semibold mb-4">Acciones de Blockchain</h3>
+              <div className="flex gap-4">
+                <button
+                  onClick={() => updateBalance(keylessAccount)}
+                  className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
+                >
+                  Actualizar Balance
+                </button>
+                <button
+                  onClick={sendTransaction}
+                  className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+                >
+                  Enviar Transacción de Prueba
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Información Técnica */}
+          <div className="border-t pt-6 mt-6">
+            <h3 className="text-lg font-semibold mb-4">Información Técnica</h3>
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <p><strong>Red:</strong> Testnet</p>
+              <p><strong>Dirección JWKS:</strong> <code className="text-sm">{JWK_ADDRESS}</code></p>
+              <p><strong>Estado:</strong> <span className="text-green-600">✅ Conectado</span></p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+```
+
+### 5. Configuración de Variables de Entorno
+
+```bash
+# .env.local
+NEXT_PUBLIC_AUTH0_DOMAIN=your-auth0-domain.auth0.com
+NEXT_PUBLIC_AUTH0_CLIENT_ID=your-auth0-client-id
+NEXT_PUBLIC_AUTH0_AUDIENCE=https://your-auth0-domain.auth0.com/api/v2/
+NEXT_PUBLIC_JWK_ADDRESS=0x123...abc
+JWK_OWNER_PRIVATE_KEY=0x123...def
+```
+
+### 6. Aplicación Principal
+
+```typescript
+// pages/_app.tsx (Next.js) o App.tsx (React)
+import { Auth0Wrapper } from '../components/Auth0Wrapper';
+import { KeylessAuth } from '../components/KeylessAuth';
+
+export default function App() {
+  return (
+    <Auth0Wrapper>
+      <KeylessAuth />
+    </Auth0Wrapper>
+  );
+}
+```
+
+## Funcionalidades del Ejemplo
+
+### ✅ Características Implementadas
+
+1. **Autenticación Auth0**: Login social completo
+2. **Creación Automática de Cuenta**: Cuenta blockchain sin claves privadas
+3. **Financiamiento Automático**: Para testnet/devnet
+4. **Interface Intuitiva**: Dashboard limpio y fácil de usar
+5. **Transacciones de Prueba**: Demostración de funcionalidad blockchain
+6. **Manejo de Errores**: Feedback claro para usuarios
+
+### 🔧 Personalización
+
+```typescript
+// Personalizar configuración de cuenta
+const customAccountConfig = {
+  network: Network.MAINNET, // Cambiar a mainnet
+  pepperService: 'https://api.mainnet.aptoslabs.com/v1/keyless/pepper',
+  jwkAddress: 'your-mainnet-jwk-address',
+  autoFunding: false // Deshabilitar auto-funding en mainnet
+};
+
+// Personalizar métodos de autenticación Auth0
+const auth0CustomConfig = {
+  // Habilitar autenticación por SMS
+  connection: 'sms',
+  
+  // Configurar autenticación empresarial
+  connection: 'google-oauth2',
+  
+  // Usar autenticación personalizada
+  connection: 'Username-Password-Authentication'
+};
+```
+
+### 🚀 Ejecutar el Ejemplo
+
+```bash
+# Desarrollo
+npm run dev
+
+# Producción
+npm run build
+npm start
+
+# Linting
+npm run lint
+
+# Testing
+npm run test
+```
+
+### 📱 Casos de Uso Demostrados
+
+1. **Onboarding Sin Fricción**: Usuario se registra con Auth0 y automáticamente obtiene cuenta blockchain
+2. **Transacciones Simplificadas**: Envío de transacciones sin gestionar claves privadas
+3. **Experiencia Web2**: Interfaz familiar para usuarios no-crypto
+4. **Seguridad Mantenida**: Seguridad blockchain completa sin complejidad de usuario
+
+Este ejemplo demuestra cómo Keyless Federado puede revolucionar la experiencia de usuario en aplicaciones Web3, eliminando barreras técnicas mientras mantiene la seguridad y funcionalidad completa de blockchain.

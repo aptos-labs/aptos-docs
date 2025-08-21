@@ -1,4 +1,5 @@
 import type { StarlightUserConfig } from "@astrojs/starlight/types";
+import { openAPISidebarGroups } from "starlight-openapi";
 import { group } from "./src/config/sidebar";
 
 // Define icons for top-level sidebar groups
@@ -130,6 +131,10 @@ export const sidebar = [
           "build/sdks/ts-sdk/quickstart",
           "build/sdks/ts-sdk/ts-examples",
           "build/sdks/ts-sdk/type-safe-contract",
+          {
+            label: "React Hooks",
+            link: "https://js-pro.aptos.dev",
+          },
           {
             label: "Account",
             collapsed: true,
@@ -430,6 +435,10 @@ export const sidebar = [
         items: ["build/create-aptos-dapp", "build/create-aptos-dapp/faq"],
       },
       "network/faucet",
+      {
+        label: "Sign in with Aptos",
+        link: "https://siwa.aptos.dev",
+      },
     ],
   }),
 
@@ -585,18 +594,35 @@ export const sidebar = [
             collapsed: true,
             items: [
               "network/nodes/validator-node/node-requirements",
-              "network/nodes/validator-node/operator",
-              "network/nodes/validator-node/connect-nodes",
-              "network/nodes/validator-node/connect-nodes/connect-to-aptos-network",
-              "network/nodes/validator-node/connect-nodes/delegation-pool-operations",
-              "network/nodes/validator-node/connect-nodes/staking-pool-operations",
-              "network/nodes/validator-node/connect-nodes/staking-pool-voter",
-              "network/nodes/validator-node/deploy-nodes",
-              "network/nodes/validator-node/deploy-nodes/using-aws",
-              "network/nodes/validator-node/deploy-nodes/using-azure",
-              "network/nodes/validator-node/deploy-nodes/using-docker",
-              "network/nodes/validator-node/deploy-nodes/using-gcp",
-              "network/nodes/validator-node/deploy-nodes/using-source-code",
+              {
+                label: "Deploy Nodes",
+                collapsed: true,
+                items: [
+                  "network/nodes/validator-node/deploy-nodes",
+                  "network/nodes/validator-node/deploy-nodes/using-source-code",
+                  "network/nodes/validator-node/deploy-nodes/using-docker",
+                  "network/nodes/validator-node/deploy-nodes/using-aws",
+                  "network/nodes/validator-node/deploy-nodes/using-azure",
+                  "network/nodes/validator-node/deploy-nodes/using-gcp",
+                ],
+              },
+              {
+                label: "Connect Nodes",
+                collapsed: true,
+                items: [
+                  "network/nodes/validator-node/connect-nodes",
+                  "network/nodes/validator-node/connect-nodes/connect-to-aptos-network",
+                ],
+              },
+              {
+                label: "Pool Operations",
+                collapsed: true,
+                items: [
+                  "network/nodes/validator-node/connect-nodes/delegation-pool-operations",
+                  "network/nodes/validator-node/connect-nodes/staking-pool-operations",
+                  "network/nodes/validator-node/connect-nodes/staking-pool-voter",
+                ],
+              },
             ],
           },
           {
@@ -604,9 +630,9 @@ export const sidebar = [
             collapsed: true,
             items: [
               "network/nodes/validator-node/modify-nodes",
-              "network/nodes/validator-node/modify-nodes/rotate-consensus-key",
-              "network/nodes/validator-node/modify-nodes/shutting-down-nodes",
               "network/nodes/validator-node/modify-nodes/update-validator-node",
+              "network/nodes/validator-node/modify-nodes/shutting-down-nodes",
+              "network/nodes/validator-node/modify-nodes/rotate-consensus-key",
             ],
           },
           {
@@ -614,8 +640,8 @@ export const sidebar = [
             collapsed: true,
             items: [
               "network/nodes/validator-node/verify-nodes",
-              "network/nodes/validator-node/verify-nodes/leaderboard-metrics",
               "network/nodes/validator-node/verify-nodes/node-liveness-criteria",
+              "network/nodes/validator-node/verify-nodes/leaderboard-metrics",
             ],
           },
         ],
@@ -632,11 +658,17 @@ export const sidebar = [
             collapsed: true,
             items: [
               "network/nodes/full-node/pfn-requirements",
+              {
+                label: "Deploy a PFN",
+                collapsed: true,
+                items: [
+                  "network/nodes/full-node/deployments",
+                  "network/nodes/full-node/deployments/using-source-code",
+                  "network/nodes/full-node/deployments/using-docker",
+                  "network/nodes/full-node/deployments/using-gcp",
+                ],
+              },
               "network/nodes/full-node/verify-pfn",
-              "network/nodes/full-node/deployments",
-              "network/nodes/full-node/deployments/using-docker",
-              "network/nodes/full-node/deployments/using-gcp",
-              "network/nodes/full-node/deployments/using-source-code",
             ],
           },
           {
@@ -644,9 +676,9 @@ export const sidebar = [
             collapsed: true,
             items: [
               "network/nodes/full-node/modify",
-              "network/nodes/full-node/modify/fullnode-network-connections",
-              "network/nodes/full-node/modify/network-identity-fullnode",
               "network/nodes/full-node/modify/update-fullnode-with-new-releases",
+              "network/nodes/full-node/modify/network-identity-fullnode",
+              "network/nodes/full-node/modify/fullnode-network-connections",
             ],
           },
           {
@@ -668,14 +700,9 @@ export const sidebar = [
         items: [
           "network/nodes/configure",
           "network/nodes/configure/consensus-observer",
-          "network/nodes/configure/data-pruning",
           "network/nodes/configure/state-sync",
+          "network/nodes/configure/data-pruning",
           "network/nodes/configure/telemetry",
-          "network/nodes/configure/node-files-all-networks",
-          "network/nodes/configure/node-files-all-networks/node-files-devnet",
-          "network/nodes/configure/node-files-all-networks/node-files-mainnet",
-          "network/nodes/configure/node-files-all-networks/node-files-testnet",
-          "network/nodes/building-from-source",
         ],
       },
 
@@ -685,16 +712,37 @@ export const sidebar = [
         collapsed: true,
         items: [
           "network/nodes/measure",
-          "network/nodes/measure/important-metrics",
-          "network/nodes/measure/node-health-checker",
-          "network/nodes/measure/node-health-checker-faq",
           "network/nodes/measure/node-inspection-service",
+          "network/nodes/measure/important-metrics",
+          {
+            label: "Node Health Checker",
+            collapsed: true,
+            items: [
+              "network/nodes/measure/node-health-checker",
+              "network/nodes/measure/node-health-checker-faq",
+            ],
+          },
         ],
       },
+
+      // Network Information
       {
         label: "Network Information",
         collapsed: true,
-        items: ["network/nodes/networks", "network/releases"],
+        items: [
+          "network/nodes/networks",
+          "network/releases",
+          {
+            label: "Locating Network Files",
+            collapsed: true,
+            items: [
+              "network/nodes/configure/node-files-all-networks",
+              "network/nodes/configure/node-files-all-networks/node-files-mainnet",
+              "network/nodes/configure/node-files-all-networks/node-files-testnet",
+              "network/nodes/configure/node-files-all-networks/node-files-devnet",
+            ],
+          },
+        ],
       },
     ],
   }),
@@ -770,8 +818,9 @@ export const sidebar = [
       }),
       "build/indexer/indexer-api",
       "build/indexer/indexer-api/indexer-reference",
-      "build/apis/fullnode-rest-api",
       "network/glossary",
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      ...(openAPISidebarGroups as never[]),
     ],
   }),
 

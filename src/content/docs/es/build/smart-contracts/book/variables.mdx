@@ -1,0 +1,526 @@
+---
+title: "Variables Locales y Ámbito"
+---
+
+Las variables locales en Move tienen ámbito léxico (estático). Las nuevas variables se introducen con la palabra clave `let`, que ocultará cualquier variable local anterior con el mismo nombre. Las variables locales son mutables y pueden ser actualizadas tanto directamente como vía una referencia mutable.
+
+## Declarando Variables Locales
+
+### Enlaces `let`
+
+Los programas Move usan `let` para enlazar nombres de variables a valores:
+
+```move
+script {
+  fun example() {
+    let x = 1;
+    let y = x + x;
+  }
+}
+```
+
+`let` también puede ser usado sin enlazar un valor a la variable local.
+
+```move
+script {
+  fun example() {
+    let x;
+  }
+}
+```
+
+La variable local puede entonces ser asignada un valor más tarde.
+
+```move
+script {
+  fun example() {
+    let x;
+    if (cond) {
+      x = 1
+    } else {
+      x = 0
+    }
+  }
+}
+```
+
+Esto puede ser muy útil cuando se intenta extraer un valor de un bucle cuando no se puede proporcionar un valor por defecto.
+
+```move
+script {
+  fun example() {
+    let x;
+    let cond = true;
+    let i = 0;
+    loop {
+      (x, cond) = foo(i);
+      if (!cond) break;
+      i = i + 1;
+    }
+  }
+}
+```
+
+### Las variables deben ser asignadas antes de usar
+
+El sistema de tipos de Move previene que una variable local sea usada antes de que haya sido asignada.
+
+```move
+script {
+  fun example() {
+    let x;
+    x + x; // ERROR!
+  }
+}
+```
+
+```move
+script {
+  fun example() {
+    let x;
+    if (cond) x = 0;
+    x + x; // ERROR!
+  }
+}
+```
+
+```move
+script {
+  fun example() {
+    let x;
+    while (cond) x = 0;
+    x + x; // ERROR!
+  }
+}
+```
+
+### Nombres de variables válidos
+
+Los nombres de variables pueden contener guiones bajos `_`, letras `a` a `z`, letras `A` a `Z`, y dígitos `0` a `9`. Los nombres de variables deben comenzar con un guion bajo `_` o una letra `a` a `z`. _No pueden_ comenzar con letras mayúsculas.
+
+```move
+script {
+  fun example() {
+    // todos válidos
+    let x = e;
+    let _x = e;
+    let _A = e;
+    let x0 = e;
+    let xA = e;
+    let foobar_123 = e;
+
+    // todos inválidos
+    let X = e; // ERROR!
+    let Foo = e; // ERROR!
+  }
+}
+```
+
+## Declaraciones de Tipo
+
+La variable local puede opcionalmente incluir una anotación de tipo explícita.
+
+```move
+script {
+  fun example() {
+    let x: u64 = 0;
+  }
+}
+```
+
+La anotación de tipo debe ser exacta. No se realiza coerción implícita:
+
+```move
+script {
+  fun example() {
+    let x: u64 = 0; // válido
+    let y: u32 = 0; // válido
+    let z: u32 = 0u64; // ERROR! tipo incorrecto
+  }
+}
+```
+
+## Variables Mutables
+
+Por defecto, las variables locales son inmutables. Para hacer una variable mutable, usa la palabra clave `mut`:
+
+```move
+script {
+  fun example() {
+    let mut x = 5;
+    x = x + 1; // válido porque x es mutable
+  }
+}
+```
+
+### Mutabilidad y Referencias
+
+Las variables inmutables no pueden ser prestadas mutablemente:
+
+```move
+script {
+  fun example() {
+    let x = 5;
+    let y = &mut x; // ERROR! x no es mutable
+  }
+}
+```
+
+Las variables mutables pueden ser prestadas tanto inmutable como mutablemente:
+
+```move
+script {
+  fun example() {
+    let mut x = 5;
+    let y = &x;     // válido: préstamo inmutable
+    let z = &mut x; // válido: préstamo mutable
+  }
+}
+```
+
+## Asignaciones
+
+### Asignaciones Simples
+
+Después de que se introduce una variable local con `let`, puede ser modificada vía una asignación:
+
+```move
+script {
+  fun example() {
+    let mut x;
+    x = 0
+  }
+}
+```
+
+La expresión a la derecha de la asignación (`=`) se evalúa antes de que la asignación se haga a la variable local.
+
+```move
+script {
+  fun example() {
+    let mut x = 0;
+    x = x + 1
+  }
+}
+```
+
+### Asignaciones via Referencias
+
+Además de asignar directamente con `=`, una variable local se puede modificar vía una referencia mutable.
+
+```move
+script {
+  fun example() {
+    let mut x = 0;
+    let y = &mut x;
+    *y = *y + 1
+  }
+}
+```
+
+## Move y Copy
+
+Todas las variables locales en Move pueden ser usadas de dos maneras: por `move` o por `copy`. Si uno o el otro no se especifica, el compilador de Move es capaz de inferir si una `copy` o `move` debe ser usado. Esto significa que en los ejemplos de arriba, las anotaciones `copy` y `move` se omitieron.
+
+### `copy`
+
+Cualquier valor con la habilidad [`copy`](/es/build/smart-contracts/book/abilities) puede ser copiado fuera de una variable local con `copy`.
+
+```move
+script {
+  fun example() {
+    let x = 0;
+    let y = copy x + 1; // copia el valor de x
+    let z = x + 2;      // también copia el valor de x implícitamente
+  }
+}
+```
+
+### `move`
+
+Cualquier valor, independientemente de sus [habilidades](/es/build/smart-contracts/book/abilities), puede ser movido fuera de una variable local con `move`.
+
+```move
+script {
+  fun example() {
+    let x = 0;
+    let y = move x + 1; // mueve el valor de x, x ya no es accesible
+    // let z = x + 2;   // ERROR! x fue movido arriba
+  }
+}
+```
+
+### Inferencia de Seguridad
+
+El compilador de Move analizará todos los usos de la variable para determinar si la variable debe ser copiada o movida.
+
+```move
+script {
+  fun example() {
+    let x = 0;
+    let y = x + 1;      // x es copiado
+    let z = x + 2;      // x es copiado otra vez
+  }
+}
+```
+
+```move
+script {
+  fun example() {
+    let x = 0;
+    let y = x + 1;      // x es copiado
+    // x nunca es usado otra vez, por lo que el último uso podría haber sido un move
+  }
+}
+```
+
+Para más detalles, ve las secciones sobre [type abilities](/es/build/smart-contracts/book/abilities) y [uses of variables](/es/build/smart-contracts/book/variables#move-and-copy).
+
+## Sombreado (Shadowing)
+
+Puedes introducir una variable local con un nombre que es el mismo que una variable local que está actualmente en ámbito. Esto se conoce como _sombreado_.
+
+```move
+script {
+  fun example() {
+    let x = 0;
+    assert!(x == 0, 42);
+
+    let x = 1; // sombrea la x anterior
+    assert!(x == 1, 42);
+  }
+}
+```
+
+Cuando sombreado ocurre, no puede acceder al valor anterior que fue sombreado. Es como si esa variable ya no existiera.
+
+```move
+script {
+  fun example() {
+    let x = 0;
+    let x = x + 1; // sombrea x, pero usa el valor anterior de x para computar el nuevo valor
+    assert!(x == 1, 42);
+  }
+}
+```
+
+Note que la expresión a la derecha de `let` se evalúa antes de que la variable se introduzca, por lo que es válido sombrear una variable con sí misma.
+
+## Desestructuración
+
+Move soporta la desestructuración de tuplas y structs en asignaciones y enlaces `let`:
+
+### Desestructuración de Tuplas
+
+```move
+script {
+  fun example() {
+    let (x, y, z) = (1, 2, 3);
+    assert!(x == 1, 42);
+    assert!(y == 2, 42);
+    assert!(z == 3, 42);
+  }
+}
+```
+
+### Desestructuración de Structs
+
+```move
+module 0x42::example {
+  struct Point { x: u64, y: u64 }
+
+  fun example() {
+    let point = Point { x: 1, y: 2 };
+    let Point { x, y } = point;
+    assert!(x == 1, 42);
+    assert!(y == 2, 42);
+  }
+}
+```
+
+### Wildcards en Desestructuración
+
+Puedes usar `_` como wildcard en patrones de desestructuración para ignorar valores:
+
+```move
+script {
+  fun example() {
+    let (x, _, z) = (1, 2, 3);
+    // y es ignorado
+    assert!(x == 1, 42);
+    assert!(z == 3, 42);
+  }
+}
+```
+
+```move
+module 0x42::example {
+  struct Point { x: u64, y: u64 }
+
+  fun example() {
+    let point = Point { x: 1, y: 2 };
+    let Point { x, y: _ } = point;
+    // y es ignorado
+    assert!(x == 1, 42);
+  }
+}
+```
+
+## Ámbito (Scope)
+
+Cualquier declaración local introducida por `let` está disponible para cualquier expresión posterior, _dentro de ese ámbito_. Los ámbitos se definen por bloques de expresiones, `{...}`.
+
+Las variables locales no pueden ser referenciadas fuera del ámbito en el que fueron declaradas.
+
+```move
+script {
+  fun example() {
+    let x = 0; // x declarado en el ámbito exterior
+    {
+      let y = 1; // y declarado en el ámbito interior
+      x + y      // válido: tanto x como y están en ámbito
+    };
+    x + y        // ERROR! y no está en ámbito aquí
+  }
+}
+```
+
+### Ámbito y Sombreado
+
+El sombreado de variables locales está permitido solo dentro del mismo ámbito.
+
+```move
+script {
+  fun example() {
+    let x = 0;
+    {
+      let x = 1; // sombrea la x del ámbito exterior
+      assert!(x == 1, 42);
+    };
+    assert!(x == 0, 42); // la x original está de vuelta en ámbito
+  }
+}
+```
+
+## Patrones Comunes
+
+### Intercambio de Variables
+
+```move
+script {
+  fun example() {
+    let mut x = 1;
+    let mut y = 2;
+    
+    // Intercambiar usando desestructuración
+    (x, y) = (y, x);
+    
+    assert!(x == 2, 42);
+    assert!(y == 1, 42);
+  }
+}
+```
+
+### Inicialización Condicional
+
+```move
+script {
+  fun example(condition: bool) {
+    let result = if (condition) {
+      expensive_computation()
+    } else {
+      default_value()
+    };
+    
+    // usar result...
+  }
+}
+```
+
+### Extracción de Valores de Bucles
+
+```move
+script {
+  fun example() {
+    let mut i = 0;
+    let result;
+    
+    loop {
+      if (some_condition(i)) {
+        result = compute_result(i);
+        break;
+      };
+      i = i + 1;
+      if (i > 100) {
+        result = default_result();
+        break;
+      }
+    };
+    
+    // usar result...
+  }
+}
+```
+
+## Buenas Prácticas
+
+### 1. Usa Nombres Descriptivos
+
+```move
+// ✓ Bueno
+let user_balance = get_balance(user_addr);
+let transaction_fee = calculate_fee(amount);
+
+// ✗ Poco claro
+let x = get_balance(user_addr);
+let fee = calculate_fee(amount);
+```
+
+### 2. Declara Mutabilidad Solo Cuando Sea Necesaria
+
+```move
+// ✓ Bueno: inmutable por defecto
+let total = calculate_total(items);
+
+// ✓ Bueno: mutable cuando necesario
+let mut counter = 0;
+loop {
+  counter = counter + 1;
+  if (counter > 10) break;
+}
+```
+
+### 3. Usa Desestructuración para Claridad
+
+```move
+// ✓ Bueno: claro qué valores se extraen
+let Point { x: pos_x, y: pos_y } = position;
+
+// ✗ Menos claro
+let pos_x = position.x;
+let pos_y = position.y;
+```
+
+### 4. Limita el Ámbito de Variables
+
+```move
+// ✓ Bueno: variables limitadas a donde se necesitan
+{
+  let temp_result = expensive_computation();
+  process_result(temp_result);
+} // temp_result sale de ámbito aquí
+
+// resto del código...
+```
+
+### 5. Evita Sombreado Innecesario
+
+```move
+// ✓ Bueno: nombres únicos
+let initial_balance = get_balance(addr);
+let updated_balance = initial_balance + deposit;
+
+// ✗ Confuso: sombreado innecesario
+let balance = get_balance(addr);
+let balance = balance + deposit;
+```

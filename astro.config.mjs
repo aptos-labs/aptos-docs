@@ -30,10 +30,9 @@ import { devServerFileWatcher } from "./src/integrations/dev-server-file-watcher
 const ALGOLIA_APP_ID = ENV.ALGOLIA_APP_ID;
 const ALGOLIA_SEARCH_API_KEY = ENV.ALGOLIA_SEARCH_API_KEY;
 const ALGOLIA_INDEX_NAME = ENV.ALGOLIA_INDEX_NAME;
-const ENABLE_API_REFERENCE = ENV.ENABLE_API_REFERENCE;
 
 const hasAlgoliaConfig = ALGOLIA_APP_ID && ALGOLIA_SEARCH_API_KEY && ALGOLIA_INDEX_NAME;
-const enableApiReference = ENABLE_API_REFERENCE === "true";
+const enableApiReference = true;
 
 // https://astro.build/config
 export default defineConfig({
@@ -214,7 +213,7 @@ export default defineConfig({
   vite: {
     plugins: [tailwindcss()],
     optimizeDeps: {
-      exclude: ["@rollup/browser", "@scalar/openapi-parser"],
+      exclude: ["@rollup/browser"],
     },
     resolve: {
       alias: {
@@ -269,7 +268,7 @@ export default defineConfig({
         context: "server",
         access: "public",
         optional: true,
-        default: "false",
+        default: "true",
       }),
       ENABLE_MOVE_REFERENCE: envField.string({
         context: "server",

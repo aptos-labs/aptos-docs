@@ -359,6 +359,159 @@ This tracks the asset balances of each account on-chain. It includes v1 token da
 | cufab\_owner\_at\_index                         | owner\_address, asset\_type |
 | current\_unified\_fungible\_asset\_balances\_pkey | storage\_id                |
 
+## Delegated Staking
+
+With [AIP-6](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-6.md) we added the ability for staking pools to be formed with delegated funds (delegation pools). Once these pools hold over 1M APT, they can become a staking pool (validator node).
+
+### `current_delegated_staking_pool_balances`
+
+This table tracks the current balances of each account in a delegated staking pool.
+
+| Field                        | Type   | Primary Key | Description                                                                 |
+|------------------------------|--------|-------------|-----------------------------------------------------------------------------|
+| staking\_pool\_address         | String | Yes         | The address of the delegation pool. |
+| total\_coins                  | bigint |             | Amount of APT in the staking pool.                              |
+| total\_shares                 | bigint |             | The total number of shares in the delegation pool. |
+| operator\_commission\_percentage | bigint |          | The commission percentage taken by the staking pool operator.                 |
+| inactive\_table\_handle        | String |             | The table handle for the inactive table.                                    |
+| active\_table\_handle          | String |             | The table handle for the active table.                                      |
+| last\_transaction\_version     | int8   |             | Transaction version (identifier) for the last transaction involving this staking pool. |
+| inserted\_at                  | String |             | The timestamp when the record was inserted.                                 |
+
+| Index Name | Indexed Columns |
+|------------|----------------|
+| current\_delegated\_staking\_pool\_balances\_pkey | staking\_pool\_address |
+
+### `current_delegated_voter`
+
+This table tracks the current delegated voters of a delegation pool.
+
+| Field                      | Type   | Primary Key | Description |
+|----------------------------|--------|-------------|-------------|
+| delegation\_pool\_address    | String | Yes         | The address of the delegation pool. |
+| delegator\_address          | String | Yes         | The address of the delegator. |
+| table\_handle               | String |             | The table handle tracking this position. |
+| voter                      | String |             | The address of the current voter in the delegation pool. |
+| pending\_voter              | String |             | The address of the pending voter awaiting confirmation. |
+| last\_transaction\_version   | bigint |             | The transaction version (identifier) of the last transaction involving this delegation. |
+| last\_transaction\_timestamp | Timestamp |          | The block timestamp of the last transaction involving this delegation. |
+| inserted\_at                | Timestamp |          | The timestamp when the record was inserted into the database. |
+
+| Index Name | Indexed Columns |
+|------------|----------------|
+| current\_delegated\_voter\_pkey | delegation\_pool\_address, delegator\_address |
+| cdv\_da\_index | delegator\_address |
+
+### `current_delegator_balances`
+
+This table tracks the current balances of each account in a delegated staking pool.
+
+| Field                    | Type   | Primary Key | Description |
+|----------------------------|--------|-------------|-------------|
+| delegator\_address          | String | Yes            | The address of the delegator.            |
+| pool\_address               | String |             | The address of the delegator pool.            |
+| pool\_type                | String |             | If the shares are active or inactive |
+| table\_handle             | String |             | The table handle for the pool. |
+| shares                   | bigint |             | The number of shares in the pool. |
+| parent\_table\_handle      | String |             | The table handle for the parent table. |
+| last\_transaction\_version     | bigint   |             | Transaction version (identifier) for the last transaction involving this staking pool. |
+| inserted\_at              | Timestamp |             | The timestamp when the record was inserted. |
+
+| Index Name | Indexed Columns |
+|------------|----------------|
+| current\_delegator\_balances\_pkey | delegator\_address, pool\_address, pool\_type, table\_handle |
+
+### `current_staking_pool_voter`
+
+This table tracks the current voters of a staking pool.
+
+| Field                    | Type   | Primary Key | Description |
+|----------------------------|--------|-------------|-------------|
+| staking\_pool\_address       | String | Yes            | The address of the staking pool.            |
+| voter\_address              | String |             | The address of the voter.            |
+| operator\_address         | String |             | The address of the operator. |
+| last\_transaction\_version     | bigint   |             | Transaction version (identifier) for the last transaction involving this staking pool. |
+| inserted\_at              | Timestamp |             | The timestamp when the record was inserted. |
+
+| Index Name | Indexed Columns |
+|------------|----------------|
+| current\_staking\_pool\_voter\_pkey | staking\_pool\_address |
+| ctpv\_va\_index | voter\_address |
+| ctpv\_insat\_index | inserted\_at |
+
+### `delegated_staking_activities`
+
+This table tracks delegated staking events.
+
+| Field                    | Type   | Primary Key | Description |
+|----------------------------|--------|-------------|-------------|
+| transaction\_version     | bigint   |             | Transaction version (identifier) for activity |
+| event\_index              | bigint |             | The index of the event. Ex. 1 |
+| delegator\_address        | String |             | The address of the delegator.            |
+| pool\_address             | String |             | The address of the pool.            |
+| event\_type               | String |             | DistributeRewards, AddStake, UnlikeStake, ReactiveStake, WithdrawStake |
+| amount                   | bigint |             | The amount being staked. Ex. 1000 |
+| inserted\_at              | Timestamp |             | The timestamp when the record was inserted. |
+
+| Index Name | Indexed Columns |
+|------------|----------------|
+| delegated\_staking\_activities\_pkey | transaction\_version, event\_index |
+| dsa\_pa\_da\_index | pool\_address, delegator\_address, transaction\_version, event\_index |
+| dsa\_insat\_index | inserted\_at |
+
+### `delegated_staking_pool_balances`
+
+This table tracks the historical balances of each account in a delegated staking pool.
+
+| Field                    | Type   | Primary Key | Description |
+|----------------------------|--------|-------------|-------------|
+| transaction\_version        | bigint |             | Transaction version (identifier) for activity |
+| staking\_pool\_address       | String |             | The address of the delegation pool. |
+| total\_coins                  | bigint |             | Amount of APT in the staking pool. |
+| total\_shares                 | bigint |             | The total number of shares in the delegation pool. |
+| operator\_commission\_percentage | bigint |             | The commission percentage taken by the staking pool operator. |
+| inactive\_table\_handle        | String |             | The table handle for the inactive table. |
+| active\_table\_handle          | String |             | The table handle for the active table. |
+| inserted\_at                  | String |             | The timestamp when the record was inserted. |
+
+| Index Name | Indexed Columns |
+|------------|----------------|
+| delegated\_staking\_pool\_balances\_pkey | transaction\_version, staking\_pool\_address |
+
+### `delegated_staking_pools`
+
+This table tracks when a delegated pool was created.
+
+| Field                    | Type   | Primary Key | Description |
+|----------------------------|--------|-------------|-------------|
+| staking\_pool\_address       | String |             | The address of the staking pool. |
+| first\_transaction\_version  | bigint |             | The version number of the first transaction involving this pool. Ex. 5000000 |
+| inserted\_at                | Timestamp |             | The timestamp when the record was inserted. |
+
+| Index Name | Indexed Columns |
+|------------|----------------|
+| delegated\_staking\_pools\_pkey | staking\_pool\_address |
+
+### `delegator_balances`
+
+This table tracks the historical balances of each account in a delegation pool.
+
+| Field                    | Type   | Primary Key | Description |
+|----------------------------|--------|-------------|-------------|
+| transaction\_version        | bigint |             | The version number of the transaction. Ex. 5000000 |
+| write\_set\_change\_index     | bigint |             | The index of the write set change. Ex. 1 |
+| delegator\_address          | String |             | The address of the delegator.            |
+| pool\_address               | String |             | The address of the delegator pool.            |
+| pool\_type                | String |             | The type of the pool. Ex. "delegated" |
+| table\_handle             | String |             | The table handle for the pool. |
+| shares                   | bigint |             | The number of shares in the pool. |
+| parent\_table\_handle      | String |             | The table handle for the parent table. |
+| inserted\_at              | Timestamp |             | The timestamp when the record was inserted. |
+
+| Index Name | Indexed Columns |
+|------------|----------------|
+| delegator\_balances\_pkey | transaction\_version, write\_set\_change\_index |
+
 ## Aptos Naming Service (ANS)
 
 ### `current_aptos_names`
@@ -412,8 +565,8 @@ The following tables are planned for deprecation, or are already deprecated. See
 | Table                               | Notes                                                                                                                                                           |
 | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | address\_version\_from\_move\_resources | Replace with account\_transactions                                                                                                                               |
-| address\_events\_summary              | To query custom events, you should create a [No-Code Indexer](https://build.aptoslabs.com/docs/no-code-indexing)                                                |
-| address\_version\_from\_events         | To query custom events, you should create a [No-Code Indexer](https://build.aptoslabs.com/docs/no-code-indexing)                                                |
+| address\_events\_summary              | To query custom events, you should create a [No-Code Indexer](https://geomi.dev/docs/no-code-indexing)                                                |
+| address\_version\_from\_events         | To query custom events, you should create a [No-Code Indexer](https://geomi.dev/docs/no-code-indexing)                                                |
 | coin\_activities                     | Replace with fungible\_asset\_activities                                                                                                                          |
 | coin\_balances                       | Replace with current\_fungible\_asset\_balances                                                                                                                    |
 | coin\_infos                          | Replace with fungible\_asset\_metadata                                                                                                                            |
@@ -424,7 +577,7 @@ The following tables are planned for deprecation, or are already deprecated. See
 | current\_collection\_datas            | Replace with current\_collections\_v2                                                                                                                             |
 | current\_token\_datas                 | Replace with current\_token\_datas\_v2                                                                                                                             |
 | current\_token\_ownerships            | Replace with current\_token\_ownerships\_v2                                                                                                                        |
-| events\_view                         | To query custom events, you should create a [No-Code Indexer](https://build.aptoslabs.com/docs/no-code-indexing)                                                |
+| events\_view                         | To query custom events, you should create a [No-Code Indexer](https://geomi.dev/docs/no-code-indexing)                                                |
 | move\_resources                      | Replace with account\_transactions                                                                                                                               |
 | move\_resources\_view                 | Replace with account\_transactions                                                                                                                               |
 | nft\_marketplace\_v2\_\*                | Replace with [NFT Aggregator API](/build/indexer/nft-aggregator)                                                                            |

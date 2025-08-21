@@ -1,0 +1,503 @@
+---
+title: "Eventos"
+---
+
+Los eventos se emiten durante la ejecución de una transacción. Cada módulo Move puede definir sus propios eventos y elegir cuándo emitir los eventos al ejecutar el módulo. Aptos Move soporta dos formas de eventos: eventos de módulo y eventos EventHandle. Los eventos de módulo son el mecanismo de eventos moderno y se enviaron en la versión 1.7 del framework. Los eventos EventHandle están deprecados y se enviaron con el framework original. Debido a cómo funcionan las blockchains, los eventos EventHandle probablemente nunca se removerán completamente de Aptos.
+
+## Eventos de Módulo
+
+Los eventos de módulo son flujos de eventos globales identificados por un tipo struct. Para definir un struct de evento, agrega el atributo `#[event]` a un struct Move normal que tenga las habilidades `drop` y `store`. Por ejemplo:
+
+```move
+/// 0xcafe::my_module_name
+/// Un ejemplo de struct de evento de módulo denota una transferencia de coin.
+#[event]
+struct TransferEvent has drop, store {
+    sender: address,
+    receiver: address,
+    amount: u64
+}
+```
+
+Y luego crear y emitir el evento:
+
+```move
+// Definir un evento.
+let event = TransferEvent {
+    sender: 0xcafe,
+    receiver: 0xface,
+    amount: 100
+};
+// Emitir el evento recién definido.
+0x1::event::emit(event);
+```
+
+Ejemplos de eventos de módulo están disponibles [aquí](https://explorer.aptoslabs.com/txn/682252266/events?network=testnet). Los índices 0, 1, 2 son tres eventos de módulo de tipo `0x66c34778730acbb120cefa57a3d98fd21e0c8b3a51e9baee530088b2e444e94c::event::MyEvent`. Para compatibilidad de API, los eventos de módulo contienen los campos `Account Address`, `Creation Number` y `Sequence Number` todos establecidos en 0.
+
+![Ejemplo de evento de módulo](~/images/module-event.png "Ejemplo de evento de módulo")
+
+## Acceso en Pruebas
+
+Los eventos se almacenan en un árbol merkle separado llamado acumulador de eventos para cada transacción. Como es efímero y por lo tanto independiente del árbol de estado, MoveVM no tiene acceso de lectura a eventos al ejecutar transacciones en producción. Pero en pruebas, Aptos Move soporta dos funciones nativas que leen eventos emitidos para propósitos de prueba y depuración:
+
+```move
+/// Retorna todos los eventos de módulo emitidos con tipo T como un vector.
+#[test_only]
+public native fun emitted_events<T: drop + store>(): vector<T>;
+
+/// Retorna true si y solo si `msg` fue emitido.
+#[test_only]
+public fun was_event_emitted<T: drop + store>(msg: &T): bool
+```
+
+## Acceso API
+
+Hay soporte para consultar tanto eventos de módulo como eventos EventHandle usando la [API GraphQL](/es/network/nodes/networks).
+
+## Eventos Event-Handle (Deprecados)
+
+Como parte de nuestro legado, Aptos heredó los flujos de eventos de Libra/Diem derivados de EventHandles. Donde cada EventHandle está identificado por un valor globalmente único, GUID, y un número de secuencia por evento y almacenado dentro de un resource. Cada evento dentro de un flujo tiene un número de secuencia único derivado del número de secuencia del EventHandle.
+
+Por ejemplo, durante una [transferencia de coin](/es/build/guides/first-transaction), tanto las cuentas del remitente como del receptor emitirán `SentEvent` y `ReceivedEvent`, respectivamente. Estos datos se almacenan dentro del ledger y pueden ser consultados vía la interfaz REST's [Get events by event handle](https://api.devnet.aptoslabs.com/v1/spec#/operations/get_events_by_event_handle).
+
+Asumiendo que una cuenta `0xc40f1c9b9fdc204cf77f68c9bb7029b0abbe8ad9e5561f7794964076a4fbdcfd` había enviado coins a otra cuenta, la siguiente consulta podría hacerse a la interfaz REST: `https://api.devnet.aptoslabs.com/v1/accounts/c40f1c9b9fdc204cf77f68c9bb7029b0abbe8ad9e5561f7794964076a4fbdcfd/events/0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>/withdraw_events`. La salida sería todos los `WithdrawEvent`s almacenados en esa cuenta, se vería como:
+
+```json
+[
+  {
+    "key": "0x0000000000000000caa60eb4a01756955ab9b2d1caca52ed",
+    "sequence_number": "0",
+    "type": "0x1::coin::WithdrawEvent",
+    "data": {
+      "amount": "1000"
+    }
+  }
+]
+```
+
+Cada evento registrado tiene una `key` única. La key `0x0000000000000000caa60eb4a01756955ab9b2d1caca52ed` mapea al evento `0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>/sent_events` registrado en la cuenta `0xc40f1c9b9fdc204cf77f68c9bb7029b0abbe8ad9e5561f7794964076a4fbdcfd`. Esta key puede entonces ser usada para hacer consultas de eventos directamente, por ejemplo, `https://api.devnet.aptoslabs.com/v1/events/0x0000000000000000caa60eb4a01756955ab9b2d1caca52ed`.
+
+Estos representan flujos de eventos, o una lista de eventos con cada entrada conteniendo un `sequence_number` secuencialmente creciente comenzando en `0`, un `type`, y `data`. Cada evento debe ser definido por algún `type`. Puede haber múltiples eventos definidos por los mismos o similares `type`s especialmente cuando se usan genéricos. Los eventos tienen `data` asociados. El principio general es incluir todos los datos necesarios para entender los cambios a los resources subyacentes antes y después de la ejecución de la transacción que cambió los datos y emitió el evento.
+
+## Migración a Eventos de Módulo
+
+Con el lanzamiento de eventos de módulo, los eventos EventHandle están deprecados. Para soportar migración a los eventos de módulo, los proyectos deben emitir un evento de módulo donde sea que actualmente emitan eventos EventHandle. Una vez que los sistemas externos hayan adoptado suficientemente los eventos de módulo, el evento heredado puede ya no necesitar ser emitido.
+
+Nota, los eventos EventHandle no pueden y no serán eliminados y por lo tanto los proyectos que no puedan actualizar continuarán siendo capaces de aprovecharlos.
+
+## Ejemplos Prácticos de Eventos
+
+### Evento de Transferencia Básico
+
+```move
+module transfer_example {
+    use std::event;
+
+    #[event]
+    struct TransferEvent has drop, store {
+        from: address,
+        to: address,
+        amount: u64,
+        timestamp: u64
+    }
+
+    public fun transfer_with_event(
+        from: &signer,
+        to: address,
+        amount: u64
+    ) {
+        // Ejecutar lógica de transferencia...
+        execute_transfer(from, to, amount);
+        
+        // Emitir evento
+        event::emit(TransferEvent {
+            from: std::signer::address_of(from),
+            to,
+            amount,
+            timestamp: aptos_framework::timestamp::now_seconds()
+        });
+    }
+}
+```
+
+### Eventos de Estado de Usuario
+
+```move
+module user_events {
+    use std::event;
+
+    #[event]
+    struct UserRegisteredEvent has drop, store {
+        user_address: address,
+        username: vector<u8>,
+        registration_time: u64
+    }
+
+    #[event]
+    struct ProfileUpdatedEvent has drop, store {
+        user_address: address,
+        field_updated: vector<u8>, // "name", "email", etc.
+        old_value: vector<u8>,
+        new_value: vector<u8>
+    }
+
+    public fun register_user(
+        user: &signer,
+        username: vector<u8>
+    ) {
+        let user_addr = std::signer::address_of(user);
+        
+        // Crear perfil de usuario...
+        create_user_profile(user, username);
+        
+        // Emitir evento de registro
+        event::emit(UserRegisteredEvent {
+            user_address: user_addr,
+            username,
+            registration_time: aptos_framework::timestamp::now_seconds()
+        });
+    }
+
+    public fun update_profile_field(
+        user: &signer,
+        field_name: vector<u8>,
+        old_value: vector<u8>,
+        new_value: vector<u8>
+    ) {
+        // Actualizar campo en el profile...
+        update_field_internal(user, field_name, new_value);
+        
+        // Emitir evento de actualización
+        event::emit(ProfileUpdatedEvent {
+            user_address: std::signer::address_of(user),
+            field_updated: field_name,
+            old_value,
+            new_value
+        });
+    }
+}
+```
+
+### Eventos de Marketplace
+
+```move
+module marketplace_events {
+    use std::event;
+
+    #[event]
+    struct ItemListedEvent has drop, store {
+        seller: address,
+        item_id: u64,
+        price: u64,
+        category: vector<u8>
+    }
+
+    #[event]
+    struct ItemSoldEvent has drop, store {
+        seller: address,
+        buyer: address,
+        item_id: u64,
+        final_price: u64,
+        marketplace_fee: u64
+    }
+
+    #[event]
+    struct PriceUpdatedEvent has drop, store {
+        seller: address,
+        item_id: u64,
+        old_price: u64,
+        new_price: u64
+    }
+
+    public fun list_item(
+        seller: &signer,
+        item_id: u64,
+        price: u64,
+        category: vector<u8>
+    ) {
+        // Lógica para listar item...
+        list_item_internal(seller, item_id, price);
+        
+        event::emit(ItemListedEvent {
+            seller: std::signer::address_of(seller),
+            item_id,
+            price,
+            category
+        });
+    }
+
+    public fun purchase_item(
+        buyer: &signer,
+        seller: address,
+        item_id: u64,
+        agreed_price: u64
+    ) {
+        // Ejecutar compra...
+        let (final_price, fee) = execute_purchase(buyer, seller, item_id, agreed_price);
+        
+        event::emit(ItemSoldEvent {
+            seller,
+            buyer: std::signer::address_of(buyer),
+            item_id,
+            final_price,
+            marketplace_fee: fee
+        });
+    }
+}
+```
+
+### Eventos de Gamificación
+
+```move
+module game_events {
+    use std::event;
+
+    #[event]
+    struct PlayerLevelUpEvent has drop, store {
+        player: address,
+        old_level: u64,
+        new_level: u64,
+        experience_gained: u64
+    }
+
+    #[event]
+    struct AchievementUnlockedEvent has drop, store {
+        player: address,
+        achievement_id: u64,
+        achievement_name: vector<u8>,
+        reward_amount: u64
+    }
+
+    #[event]
+    struct ItemCraftedEvent has drop, store {
+        player: address,
+        item_id: u64,
+        item_type: vector<u8>,
+        materials_used: vector<u64>,
+        success: bool
+    }
+
+    public fun level_up_player(
+        player: &signer,
+        experience_gained: u64
+    ) {
+        let player_addr = std::signer::address_of(player);
+        let old_level = get_player_level(player_addr);
+        
+        // Actualizar nivel del jugador...
+        add_experience(player, experience_gained);
+        let new_level = get_player_level(player_addr);
+        
+        if (new_level > old_level) {
+            event::emit(PlayerLevelUpEvent {
+                player: player_addr,
+                old_level,
+                new_level,
+                experience_gained
+            });
+        }
+    }
+}
+```
+
+## Eventos en Testing
+
+### Verificación de Eventos en Pruebas
+
+```move
+#[test_only]
+module event_tests {
+    use std::event;
+    use transfer_example::TransferEvent;
+
+    #[test(from = @0x123, to = @0x456)]
+    fun test_transfer_emits_event(from: signer, to: address) {
+        // Ejecutar transferencia
+        transfer_example::transfer_with_event(&from, to, 100);
+        
+        // Verificar que el evento fue emitido
+        let events = event::emitted_events<TransferEvent>();
+        assert!(std::vector::length(&events) == 1, 1);
+        
+        let emitted_event = std::vector::borrow(&events, 0);
+        assert!(emitted_event.from == @0x123, 2);
+        assert!(emitted_event.to == @0x456, 3);
+        assert!(emitted_event.amount == 100, 4);
+    }
+
+    #[test]
+    fun test_specific_event_was_emitted() {
+        // Configurar y ejecutar
+        setup_test_scenario();
+        execute_operation_that_emits_event();
+        
+        // Verificar evento específico
+        let expected_event = TransferEvent {
+            from: @0x123,
+            to: @0x456,
+            amount: 100,
+            timestamp: 1234567890
+        };
+        
+        assert!(event::was_event_emitted(&expected_event), 1);
+    }
+}
+```
+
+## Consultas de Eventos via API
+
+### TypeScript/JavaScript
+
+```typescript
+import { AptosClient } from "aptos";
+
+const client = new AptosClient("https://fullnode.mainnet.aptoslabs.com");
+
+// Consultar eventos de módulo por tipo
+async function getTransferEvents(address: string) {
+    try {
+        const events = await client.getEventsByEventType(
+            "0xcafe::transfer_example::TransferEvent",
+            {
+                start: 0,
+                limit: 10
+            }
+        );
+        
+        console.log("Eventos de transferencia:", events);
+        return events;
+    } catch (error) {
+        console.error("Error consultando eventos:", error);
+    }
+}
+
+// Consultar eventos por handle (deprecado pero aún soportado)
+async function getLegacyEvents(address: string) {
+    try {
+        const events = await client.getEventsByEventHandle(
+            address,
+            "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>",
+            "withdraw_events",
+            { start: 0, limit: 10 }
+        );
+        
+        console.log("Eventos legacy:", events);
+        return events;
+    } catch (error) {
+        console.error("Error consultando eventos legacy:", error);
+    }
+}
+```
+
+### GraphQL
+
+```graphql
+query GetTransferEvents($address: String!) {
+    events(
+        where: {
+            type: { _eq: "0xcafe::transfer_example::TransferEvent" }
+            account_address: { _eq: $address }
+        }
+        order_by: { transaction_version: desc }
+        limit: 10
+    ) {
+        account_address
+        creation_number
+        data
+        sequence_number
+        transaction_version
+        type
+    }
+}
+```
+
+## Mejores Prácticas para Eventos
+
+### 1. Diseño de Eventos
+
+```move
+// ✓ Bueno: evento informativo y estructurado
+#[event]
+struct OrderCompletedEvent has drop, store {
+    order_id: u64,
+    buyer: address,
+    seller: address,
+    items: vector<u64>,
+    total_amount: u64,
+    payment_method: vector<u8>,
+    completion_time: u64
+}
+
+// ✗ Malo: evento vago e incompleto
+#[event]
+struct SomethingHappenedEvent has drop, store {
+    user: address,
+    data: vector<u8>
+}
+```
+
+### 2. Frecuencia de Eventos
+
+```move
+// ✓ Bueno: eventos significativos
+public fun complete_major_milestone(player: &signer) {
+    // ... lógica importante ...
+    event::emit(MilestoneCompletedEvent { ... });
+}
+
+// ✗ Malo: eventos excesivamente frecuentes
+public fun move_one_step(player: &signer) {
+    // ... cada movimiento menor ...
+    event::emit(StepTakenEvent { ... }); // Demasiado granular
+}
+```
+
+### 3. Contenido de Eventos
+
+```move
+// ✓ Bueno: incluye contexto suficiente para reconstruir estado
+#[event]
+struct BalanceChangedEvent has drop, store {
+    account: address,
+    old_balance: u64,
+    new_balance: u64,
+    change_amount: u64,
+    change_type: vector<u8>, // "deposit", "withdrawal", "transfer"
+    related_account: address, // para transferencias
+    timestamp: u64
+}
+```
+
+### 4. Versionado de Eventos
+
+```move
+// Para compatibilidad futura, considera versionado
+#[event]
+struct TransferEventV2 has drop, store {
+    version: u8, // para evolución futura
+    from: address,
+    to: address,
+    amount: u64,
+    token_type: vector<u8>, // nueva funcionalidad
+    metadata: vector<u8>    // extensibilidad futura
+}
+```
+
+### 5. Optimización de Costos
+
+```move
+// ✓ Eficiente: eventos por lotes
+public fun process_batch(items: vector<Item>) {
+    let processed_count = 0;
+    // ... procesar items ...
+    
+    // Un evento resumen en lugar de uno por item
+    event::emit(BatchProcessedEvent {
+        items_count: vector::length(&items),
+        total_value: calculate_total_value(&items),
+        processing_time: get_elapsed_time()
+    });
+}
+```
+
+Los eventos son fundamentales para la observabilidad y la integración de sistemas externos con tu aplicación Aptos, permitiendo que interfaces de usuario, analytics, y otros servicios reaccionen a cambios de estado de manera eficiente.

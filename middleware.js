@@ -364,13 +364,15 @@ export const config = {
     "/build/:path*",
     "/contribute/:path*",
     "/guides/:path*",
-    "/ja/:path*",
     "/network/:path*",
-    "/zh/:path*",
     "/move-reference",
     "/move-reference/:path*",
     "/en",
     "/en/:path*",
+    "/es",
+    "/es/:path*",
+    "/zh",
+    "/zh/:path*",
   ],
 };
 export default async function middleware(req) {

@@ -1,0 +1,86 @@
+---
+id: "accounts"
+title: "Comptes"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Un compte sur la blockchain Aptos représente le contrôle d'accès sur un ensemble d'actifs incluant la monnaie sur la chaîne et les NFT. Dans Aptos, ces actifs sont représentés par une primitive du langage Move connue sous le nom de **ressource** qui met l'accent à la fois sur le contrôle d'accès et la rareté.
+
+Chaque compte sur la blockchain Aptos est identifié par une adresse de compte de 32 octets. Vous pouvez utiliser le Service de Noms Aptos sur [www.aptosnames.com](https://www.aptosnames.com/) pour sécuriser des domaines .apt pour les comptes clés afin de les rendre mémorables et uniques.
+
+Différemment des autres blockchains où les comptes et adresses sont implicites, les comptes sur Aptos sont explicites et doivent être créés avant de pouvoir exécuter des transactions. Le compte peut être créé explicitement ou implicitement en y transférant des jetons Aptos (APT). Voir la section [Créer un compte](#créer-un-compte) pour plus de détails. D'une certaine manière, cela est similaire aux autres chaînes où une adresse doit recevoir des fonds pour le gaz avant de pouvoir envoyer des transactions.
+
+Les comptes explicites permettent des fonctionnalités de première classe qui ne sont pas disponibles sur d'autres réseaux telles que :
+
+- Rotation de la clé d'authentification. La clé d'authentification du compte peut être changée pour être contrôlée via une clé privée différente. Cela est similaire au changement de mots de passe dans le monde web2.
+- Support natif de multisig. Les comptes sur Aptos supportent la multisig k-of-n en utilisant les schémas de signature Ed25519 et Secp256k1 ECDSA lors de la construction de la clé d'authentification.
+
+Il y a trois types de comptes sur Aptos :
+
+- _Compte standard_ - Il s'agit d'un compte typique correspondant à une adresse avec une paire correspondante de clés publique/privée.
+- [_Compte de ressource_](/fr/build/smart-contracts/resource-accounts) - Un compte autonome sans clé privée correspondante utilisé par les développeurs pour stocker des ressources ou publier des modules sur la chaîne.
+- [_Objet_](/fr/build/smart-contracts/objects) - Un ensemble complexe de ressources stockées dans une seule adresse représentant une entité unique.
+
+<Aside type="note">
+  Les adresses de compte font 32 octets. Elles sont généralement affichées comme 64 caractères hexadécimaux, avec chaque caractère hexadécimal un nibble.
+  Parfois l'adresse est préfixée avec un 0x. Voir [Votre Première Transaction](/fr/build/guides/first-transaction) pour un exemple
+  de comment une adresse apparaît, reproduit ci-dessous :
+</Aside>
+
+```text
+Alice: 0xeeff357ea5c1a4e7bc11b2b17ff2dc2dcca69750bfef1e1ebcaccf8c8018175b
+Bob: 0x19aadeca9388e009d136245b9a67423f3eee242b03142849eb4f81a4a409e59c
+```
+
+## Adresse de compte
+
+Actuellement, Aptos ne supporte qu'un seul identifiant unifié pour un compte. Les comptes sur Aptos sont universellement représentés comme une chaîne hexadécimale de 32 octets. Une chaîne hexadécimale plus courte que 32 octets est également valide ; dans ces scénarios, la chaîne hexadécimale peut être complétée avec des zéros en tête, par exemple, `0x1` => `0x0000000000000...01`. Bien que les standards Aptos indiquent que les zéros en tête peuvent être supprimés d'une Adresse, la plupart des applications tentent d'éviter ce comportement hérité et ne supportent que la suppression de 0s pour les adresses spéciales allant de `0x0` à `0xa`.
+
+## Créer un compte
+
+Quand un utilisateur demande de créer un compte, par exemple en utilisant le [SDK Aptos](/fr/build/sdks/ts-sdk/account), les étapes suivantes sont exécutées :
+
+- Sélectionner le schéma d'authentification pour gérer le compte de l'utilisateur, par exemple, Ed25519 ou Secp256k1 ECDSA.
+- Générer une nouvelle paire de clés privée, clé publique.
+- Combiner la clé publique avec le schéma d'authentification de la clé publique pour générer une clé d'authentification de 32 octets et l'adresse du compte.
+
+L'utilisateur devrait utiliser la clé privée pour signer les transactions associées à ce compte.
+
+## Numéro de séquence du compte
+
+Le numéro de séquence du compte pour un compte indique le nombre de transactions qui ont été soumises et engagées sur la chaîne depuis ce compte. Il sert de protection contre les attaques de rediffusion.
+
+Chaque transaction soumise depuis un compte doit contenir le numéro de séquence actuel du compte. Une fois que la transaction a été exécutée, le numéro de séquence du compte est incrémenté de 1. Un compte peut avoir au maximum 2^64 - 1 transactions dans sa durée de vie.
+
+## État du compte
+
+L'état d'un compte sur Aptos est composé de :
+
+- **Module de code** : Code Move publié par le compte.
+- **Ressources** : Données structurées stockées sous ce compte.
+
+L'ensemble de l'état du compte est authentifié par un arbre Merkle. Cela signifie qu'un client peut vérifier l'état d'un compte à un moment donné sans faire confiance au serveur qui lui fournit les données.
+
+## Clé d'authentification et rotation
+
+Quand nous avons créé le compte, nous avons dérivé l'adresse du compte de la clé d'authentification initiale. La clé d'authentification est une valeur SHA3-256 de 32 octets dérivée de la clé publique du compte et d'un schéma de signature qui identifie de quel type de signature la clé publique fait partie.
+
+Aptos supporte deux schémas de signature :
+
+- **Ed25519** : Utilisé pour une seule signature. Nécessite une seule signature correspondant à la clé publique.
+- **MultiEd25519** : Utilisé pour les signatures k-of-n. Nécessite k signatures sur n clés publiques.
+
+Avec la rotation de clé, vous pouvez faire tourner la clé privée d'un compte sans changer son adresse sur la blockchain. C'est parfois nécessaire pour la sécurité du compte si vous suspectez que votre clé privée a été compromise.
+
+### Processus de rotation
+
+1. Générer une nouvelle paire de clés publique/privée
+2. Dériver une nouvelle clé d'authentification de la nouvelle clé publique
+3. Soumettre une transaction de rotation de clé signée avec l'ancienne clé privée
+4. La nouvelle clé d'authentification remplace l'ancienne dans le compte
+5. Les transactions futures doivent être signées avec la nouvelle clé privée
+
+<Aside type="caution">
+  Une fois qu'une clé d'authentification a été fait tourner, l'ancienne clé privée ne peut plus signer de transactions pour ce compte. Assurez-vous de stocker en sécurité votre nouvelle clé privée avant d'effectuer la rotation.
+</Aside>

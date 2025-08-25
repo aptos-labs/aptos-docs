@@ -10,10 +10,11 @@ interface ChatInputProps {
   onSend?: (message: string) => void;
   onStop?: () => void;
   isLoading?: boolean;
+  disabled?: boolean;
 }
 
 export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatInput(
-  { onSend, onStop, isLoading },
+  { onSend, onStop, isLoading, disabled },
   ref,
 ) {
   const [message, setMessage] = useState("");
@@ -65,7 +66,8 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
           onKeyDown={handleKeyDown}
           placeholder="Ask about Aptos and Move"
           rows={1}
-          className="chat-input"
+          className={`chat-input ${disabled ? "chat-input-disabled" : ""}`}
+          disabled={disabled}
         />
       </div>
       {isLoading ? (

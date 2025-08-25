@@ -44,11 +44,13 @@ export function ChatDialog({
   error,
   onDismissError,
   isSharedChatMode,
+  isRateLimited,
 }: ChatDialogProps & {
   error?: string | null;
   onDismissError?: () => void;
   isSharedChatMode?: boolean;
   sharedChatId?: string | null;
+  isRateLimited?: boolean;
 }) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
@@ -280,6 +282,7 @@ export function ChatDialog({
                       onSend={onSendMessage}
                       onStop={onStopGenerating}
                       isLoading={isGenerating}
+                      disabled={isRateLimited}
                     />
                     <div className="chat-disclaimer">
                       By messaging AskAptos, you agree to our{" "}

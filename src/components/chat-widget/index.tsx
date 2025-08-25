@@ -25,10 +25,27 @@ function ChatDialogContainer() {
     updateConfig,
     isSharedChatMode,
     sharedChatId,
+    error: chatbotError,
   } = useChatbot();
 
   const [isOpen, setIsOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isRateLimited, setIsRateLimited] = useState(false);
+
+  // Handle chatbot errors and successful requests
+  useEffect(() => {
+    if (chatbotError) {
+      if (chatbotError.message === "RATE_LIMIT_EXCEEDED") {
+        setError("Rate limit exceeded. Please try again later.");
+        setIsRateLimited(true);
+      } else {
+        setError(chatbotError.message);
+      }
+    } else if (messages.length > 0) {
+      // If we successfully got messages, we're not rate limited anymore
+      setIsRateLimited(false);
+    }
+  }, [chatbotError, messages]);
 
   // Listen for toggle events
   useEffect(() => {
@@ -41,24 +58,23 @@ function ChatDialogContainer() {
     };
   }, []);
 
+  const handleError = (err: unknown, defaultMessage: string) => {
+    let errorMessage = defaultMessage;
+    if (err instanceof Error) {
+      if (err.message === "RATE_LIMIT_EXCEEDED") {
+        errorMessage = "You've reached the rate limit. Please wait a moment before trying again.";
+      } else {
+        errorMessage = err.message;
+      }
+    }
+    setError(errorMessage);
+  };
+
   const handleSendMessage = async (message: string) => {
     try {
       await sendMessage(message);
     } catch (err: unknown) {
-      let errorMessage = "Failed to send message. Please try again.";
-      if (err instanceof Error) {
-        if (err.message === "RATE_LIMIT_EXCEEDED") {
-          errorMessage =
-            "You've reached the rate limit. Please wait a moment before sending more messages.";
-        } else {
-          errorMessage = err.message;
-        }
-      }
-      setError(errorMessage);
-      // Auto dismiss after 5 seconds
-      setTimeout(() => {
-        setError(null);
-      }, 5000);
+      handleError(err, "Failed to send message. Please try again.");
     }
   };
 
@@ -94,7 +110,9 @@ function ChatDialogContainer() {
         error={error}
         onDismissError={() => {
           setError(null);
+          // Keep isRateLimited true until we successfully make a new request
         }}
+        isRateLimited={isRateLimited}
         isSharedChatMode={isSharedChatMode}
         sharedChatId={sharedChatId}
       />

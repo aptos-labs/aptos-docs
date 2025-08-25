@@ -67,6 +67,10 @@ Checks for binary operations where both operands are the same, which is likely a
 
 This lint does not catch cases where the operands are vector access.
 
+### `empty_range`
+
+Checks for empty ranges in `for` loops, such as `for i in 0..0 { ... }`, which do not execute the loop body. This can happen when the start of the range is greater than or equal to the end of the range, resulting in an empty iteration.
+
 ### `find_unnecessary_casts`
 
 Checks for unnecessary type casts where the source expression already has the same type as the target type. These casts are redundant and can be removed to improve code readability.
@@ -139,7 +143,8 @@ Checks for patterns where there are needless references taken when accessing a f
 - `(&mut s).f = 42;` can be simplified to `s.f = 42;`
 
 ### `needless_return`
-Checks for unnecessary `return` statements in functions that can be simplified. This lint identifies cases where a `return` statement is used to return a value that can be directly returned without the `return` keyword. 
+
+Checks for unnecessary `return` statements in functions that can be simplified. This lint identifies cases where a `return` statement is used to return a value that can be directly returned without the `return` keyword.
 For example, the following function:
 
 ```move
@@ -278,6 +283,19 @@ Consider the following example expressions that are caught by the lint, and the 
 - `x >= 0`, `0 <= x`, `x <= MAX`, `MAX >= x`, are always true, rewrite code to remove this comparison
 - `x <= 0`, `0 >= x`, `x >= MAX`, `MAX <= x`, can all be simplified to use `==` instead
 - `x > 0`, `0 < x`, `x < MAX`, `MAX > x`, can all be clarified to use `!=` instead
+
+### `redundant_comparison`
+
+Checks for redundant, contradictory, and tautological numerical comparisons over the same variable in boolean expressions combined with `&&` and `||`. This lint identifies logic errors in conditional statements that can lead to unreachable code or always-true/false conditions.
+
+Examples of patterns caught by this lint:
+
+- **Redundant with `&&`**: `x <= 400 && x < 500` - the second condition is redundant since it's always satisfied when the first is true
+- **Contradictory with `&&`**: `x <= 400 && x > 500` - these conditions can never both be true, making the expression always false
+- **Redundant with `||`**: `x > 10 || x >= 5` - the first condition is redundant since the second covers more cases
+- **Tautology with `||`**: `x < 5 || x >= 5` - this expression is always true for any value of x
+
+The lint only triggers when comparisons are on the same variable and can detect constants on either side of the comparison operator.
 
 ### `while_true`
 

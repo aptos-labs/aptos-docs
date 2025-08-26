@@ -104,7 +104,7 @@ export default defineConfig({
       ],
       components: {
         Head: "./src/starlight-overrides/Head.astro",
-        // Header: "./src/starlight-overrides/Header.astro",
+        Header: "./src/starlight-overrides/Header.astro",
         LanguageSelect: "./src/starlight-overrides/LanguageSelect.astro",
         MobileMenuToggle: "./src/starlight-overrides/MobileMenuToggle.astro",
         PageFrame: "./src/starlight-overrides/PageFrame.astro",
@@ -164,7 +164,7 @@ export default defineConfig({
     }),
     react({
       experimentalReactChildren: true,
-      include: ["**/GraphQLEditor.tsx"],
+      include: ["**/GraphQLEditor.tsx", "**/chat-widget/**/*.tsx"],
     }),
     favicons({
       name: "Aptos Docs",

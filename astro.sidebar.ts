@@ -538,6 +538,7 @@ export const sidebar = [
         label: "Tooling",
         collapsed: true,
         items: [
+          "build/smart-contracts/move-vscode-extension",
           "build/smart-contracts/prover",
           "build/smart-contracts/prover/prover-guide",
           "build/smart-contracts/prover/spec-lang",
@@ -571,17 +572,6 @@ export const sidebar = [
     collapsed: true,
     items: [
       "network/nodes", // Added Nodes Overview/Landing page
-
-      // Localnet
-      {
-        label: "Localnet",
-        collapsed: true,
-        items: [
-          "network/nodes/localnet",
-          "network/nodes/localnet/local-development-network",
-          "network/nodes/localnet/run-a-localnet",
-        ],
-      },
 
       // Validator Node
       {
@@ -742,6 +732,18 @@ export const sidebar = [
               "network/nodes/configure/node-files-all-networks/node-files-devnet",
             ],
           },
+        ],
+      },
+
+      // Localnet
+      {
+        label: "Local Networks",
+        collapsed: true,
+        items: [
+          "network/nodes/localnet",
+          "network/nodes/localnet/local-development-network",
+          "network/nodes/localnet/run-a-localnet",
+          "network/nodes/localnet/run-a-multinode-localnet",
         ],
       },
     ],

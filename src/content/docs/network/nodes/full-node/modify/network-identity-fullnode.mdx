@@ -4,27 +4,27 @@ title: "Generate a PFN Identity"
 
 import { Aside } from '@astrojs/starlight/components';
 
-<Aside type="caution">
+<Aside type="danger">
   Validators and VFNs have their identities initialized when first created and their identities are long-lived (immutable).
-  PFN identities are more ephemeral and can be regenerated on demand. As such, generating an identity using this
+  PFN identities are more ephemeral and can be regenerated. As such, generating an identity using this
   guide **should only be done for PFNs**, and not for validators or VFNs.
 </Aside>
 
 ## Ephemeral vs. Static Identities
 
-<Aside type="danger">
+Public fullnodes (PFNs) will automatically start up with a randomly generated (ephemeral) network identity unless a static identity is provided. This works well for
+regular PFNs. However, there are cases where you may want to generate and assign a static network identity to your PFN (e.g., for monitoring purposes).
+
+<Aside type="caution">
   PFN identities should be unique across the network. If you are running multiple PFNs, make sure to generate a
   unique identity for each PFN. Attempting to share the same identity across multiple PFNs will result in degraded
   node performance.
 </Aside>
 
-Public fullnodes (PFNs) will automatically start up with a randomly generated (ephemeral) network identity unless a static identity is provided. This works well for
-regular PFNs. However, there are cases where you may want to generate and assign a static network identity to your PFN.
-
 ### Ephemeral Identity
 
-- Automatically generated on startup. The same ephemeral identity is used across restarts if the identity key file already exists.
-- Stored at `/opt/aptos/data/db/ephemeral_identity_key`.
+- Automatically generated on node startup. The same ephemeral identity is used across restarts if the identity key file already exists.
+- By default, the identity file is stored at `/opt/aptos/data/db/ephemeral_identity_key`.
 
 ### Static Identity
 
@@ -33,10 +33,6 @@ This is useful when:
 - You wish to advertise your PFN as a seed (i.e., for other Aptos PFNs to connect to).
 - You wish to add your PFN to an allowlist of known identities on an upstream PFN or VFN.
 - You wish to fix the identity of your PFN across restarts and releases so that telemetry and other monitoring tools can track your PFN over time.
-
-<Aside type="caution">
-  Before you proceed, make sure that you already know how to start your local PFN. See [Run a PFN](/network/nodes/full-node) for detailed documentation.
-</Aside>
 
 ## Generate a static identity
 
@@ -219,3 +215,18 @@ full_node_networks:
 ```
 
 Starting your PFN with this configuration will assign your PFN with the static network identity you generated.
+
+## Check your node identity
+
+If you want to check the identity of your node at runtime, there are several ways to do so. Two of the simplest
+methods are:
+
+- **Using the REST API**: You can query the `/v1/info` endpoint of your node's [REST API](/build/apis/fullnode-rest-api)
+  to retrieve the identity information.
+- **Using the Node Inspection Service**: You can query the `/identity_information` endpoint on your node's inspection service
+  to retrieve the identity information of your node. You can read more [here](/network/nodes/measure/node-inspection-service#examine-identity-information).
+
+<Aside type="note">
+  Nodes with multiple network connection types (e.g., `VFN` and `public` networks) will have identities for each connection type.
+  For public fullnodes (PFNs), there is only one network connection type (`public`), so there will be only one identity.
+</Aside>

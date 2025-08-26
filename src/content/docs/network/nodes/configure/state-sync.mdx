@@ -6,95 +6,94 @@ import { Aside } from '@astrojs/starlight/components';
 
 Nodes in an Aptos network (e.g., validators, VFNs and PFNs) must always be synchronized to the latest blockchain state.
 The [state synchronization](https://medium.com/aptoslabs/the-evolution-of-state-sync-the-path-to-100k-transactions-per-second-with-sub-second-latency-at-52e25a2c6f10) (state sync) component that runs on each node is responsible for this. State sync
-identifies and fetches new blockchain data from the peers, validates the data and persists it to local storage. This
-document explains how state sync works and how to configure it.
-
-<Aside type="caution">
-  **Manual configuration**<br />
-  Most users should not need to configure state sync. State sync will automatically select the
-  best configuration for your node. You should only manually configure state sync if you have a specific use case
-  that requires it. Selecting the wrong configuration will lead to slower syncing times and degraded performance.
-</Aside>
+identifies and fetches new blockchain data from peers, validates the data and persists it to local storage. This
+document explains how to configure state sync on your node.
 
 ## State sync
 
-At a high-level, state sync operates in two phases. First, all nodes will bootstrap on startup (in the **bootstrapping phase**).
-This allows the node to catch up to the latest state in the Aptos blockchain. Next, the node will stay up-to-date with the blockchain
-by continuously syncing (in the **continuous syncing phase**). Each of these phases has different modes of operation.
+At a high-level, state sync operates in two phases. First, nodes bootstrap on startup (in the **bootstrapping phase**).
+This allows the node to catch up to the latest state in the Aptos blockchain. Then, the node will stay up-to-date with the blockchain
+by continuously syncing (in the **continuous syncing phase**).
 
-<Aside type="note">
-  Need to start a node quickly?
-  If you need to start a node quickly, here's what we recommend by network and use case:
+<Aside type="tip">
+  **Need to start a node quickly? Here's what we recommend:**<br />
 
-  - **Devnet**: To sync the entire blockchain history, use [intelligent syncing](/network/nodes/configure/state-sync#intelligent-syncing). Otherwise, use [fast sync](/network/nodes/configure/state-sync#fast-syncing).
-  - **Testnet**: To sync the entire blockchain history, restore from a [backup](/network/nodes/bootstrap-fullnode/aptos-db-restore). Otherwise, download [a snapshot](/network/nodes/bootstrap-fullnode/bootstrap-fullnode) or use [fast sync](/network/nodes/configure/state-sync#fast-syncing).
   - **Mainnet**: To sync the entire blockchain history, restore from a [backup](/network/nodes/bootstrap-fullnode/aptos-db-restore). Otherwise, use [fast sync](/network/nodes/configure/state-sync#fast-syncing).
+  - **Testnet**: To sync the entire blockchain history, restore from a [backup](/network/nodes/bootstrap-fullnode/aptos-db-restore). Otherwise, use [fast sync](/network/nodes/configure/state-sync#fast-syncing).
+  - **Devnet**: To sync the entire blockchain history, use [intelligent syncing](/network/nodes/configure/state-sync#intelligent-syncing). Otherwise, use [fast sync](/network/nodes/configure/state-sync#fast-syncing).
 </Aside>
 
-### Bootstrapping phase
+### Bootstrapping modes
 
-When the node starts, state sync will perform bootstrapping by using the configured bootstrapping mode. There are several
-bootstrapping modes:
+When the node starts, state sync will perform bootstrapping using the configured bootstrapping mode.
 
-- **Execute all the transactions since genesis**. In this mode, the node will retrieve from the Aptos network all the
-  transactions since genesis, i.e., since the start of the blockchain's history, and re-execute those transactions.
-  Naturally, this mode takes the longest amount of time because it must process all transactions since the network began.
-- **Apply transaction outputs since genesis**. In this mode, the node will retrieve all the transactions since genesis,
-  but it will skip transaction re-execution and instead apply the outputs of the transactions that were previously
-  produced by validator execution. This mode reduces the amount of CPU time required, but still processes all transactions
-  since the network began.
-- **Intelligent syncing since genesis**. In this mode, the node will retrieve all the transactions
-  since genesis and will either execute the transactions, or apply the transaction outputs, depending on whichever is
-  faster, per data chunk. This allows the node to adapt to CPU and network resource constraints more efficiently.
-  This mode is the default mode for devnet and other testing environments.
-- **Fast syncing**. In this mode, the node will skip the transaction history in the blockchain and will download only
-  the latest blockchain state directly. As a result, the node will not have the historical transaction data, but it will
-  be able to catch up to the Aptos network much more rapidly. This mode is the default mode for testnet and mainnet.
+<Aside type="tip">
+  **Default bootstrapping modes?** <br />
 
-<Aside type="note">
-  **Bootstrapping defaults?** <br />
-  The default bootstrapping mode depends on the network type:
-
-  - **Testnet and Mainnet**: The default bootstrapping mode is fast sync, because these networks are long-lived
+  - **Mainnet and Testnet**: The default bootstrapping mode is **fast syncing**, because these networks are long-lived
     and have a large amount of historical data.
-  - **Devnet and other networks**: The default bootstrapping mode is intelligent syncing, because these networks are
-    typically short-lived and have a small amount of historical data.
+  - **Devnet**: The default bootstrapping mode is **intelligent syncing from genesis**, because this network is
+    short-lived and typically has a small amount of historical data.
 </Aside>
 
-### Continuous syncing phase
+There are several bootstrapping modes:
 
-After the node has bootstrapped and caught up to the Aptos network initially, state sync will then move into
-the continuous syncing phase to stay up-to-date with the blockchain. There are several continuous syncing modes:
+- **Execute transactions from genesis**. This mode will fetch all transactions since genesis (i.e., the
+  start of the blockchain's history), and re-execute each transaction. This mode is the slowest bootstrapping mode.
+- **Apply transaction outputs from genesis**. This mode will fetch all transactions since genesis (i.e., the start of
+  the blockchain's history), but it will skip transaction re-execution and instead apply the outputs of the
+  transactions as originally produced by validator execution.
+- **Intelligent syncing from genesis**. This mode is a hybrid of the previous two modes. It will fetch all transactions
+  since genesis (i.e., the start of the blockchain's history), and will either execute the transactions, or apply the
+  transaction outputs, depending on whichever is faster, per data chunk. This allows the node to adapt to CPU and network
+  resource constraints more efficiently.
+- **Fast syncing**. This mode will fetch the latest blockchain state directly, skipping all historical transactions.
+  As a result, the node will not have historical transaction data, but it will be able to catch up much more quickly.
 
-- **Executing transactions**. This mode will keep the node up-to-date by executing new transactions as they are
+<Aside type="caution">
+  **Syncing from genesis?** <br />
+  Most nodes in Mainnet and Testnet do not keep all transaction data since genesis. If you wish to sync all
+  data since genesis, you need to manually add seed peers to node's configuration file, so
+  that your node can connect to peers with the data. See [Connecting to Seed Peers](/network/nodes/full-node/modify/fullnode-network-connections#connecting-to-seed-peers).
+</Aside>
+
+### Continuous syncing modes
+
+After the node has bootstrapped, state sync will move into the continuous syncing phase to stay up-to-date with the
+blockchain.
+
+<Aside type="tip">
+  **Default continuous syncing modes?**<br />
+  The default continuous syncing mode is always intelligent syncing, because this mode is the most performant.
+</Aside>
+
+There are several continuous syncing modes:
+
+- **Executing transactions**. This mode will keep the node up-to-date by executing transactions as they are
   committed to the blockchain.
 - **Applying transaction outputs**. This mode will keep the node up-to-date by skipping the transaction execution
   and only applying the outputs of the transactions as previously produced by validator execution.
 - **Intelligent syncing**. This mode will keep the node up-to-date by either executing the transactions, or applying
   the transaction outputs, depending on whichever is faster, per data chunk. This allows the node to adapt to CPU and
-  network resource constraints more efficiently. This is the default mode for all environments.
-
-<Aside type="note">
-  **Continuous syncing defaults?**<br />
-  The default continuous syncing mode is always intelligent syncing, because this mode is the most performant.
-</Aside>
+  network resource constraints more efficiently.
 
 ## Configuring state sync
 
 The snippets below provide instructions for configuring state sync on your nodes for different use cases.
 These configurations can be added to your node's configuration file, e.g., `fullnode.yaml` or `validator.yaml`.
 
-<Aside type="caution">
-  **Manual configuration**<br />
-  You should only manually configure state sync if you have a specific use case that requires it. Selecting the wrong
-  configuration will lead to slower syncing times and degraded performance.
+<Aside type="danger">
+  **Do you need to configure state sync?**<br />
+  Most users should not need to configure state sync manually. State sync will automatically select the
+  best configuration for your node and network. You should only configure state sync if you have a use case
+  that requires it. Selecting the wrong configuration will lead to slower syncing times and degraded performance.
 </Aside>
 
-### Executing all transactions
+### Executing transactions from genesis
 
-To execute all the transactions since genesis and continue to execute new
+To execute all transactions from genesis and continue to execute new
 transactions as they are committed, add the following to your node
-configuration file (for example, `fullnode.yaml` or `validator.yaml`):
+configuration file:
 
 ```yaml filename="fullnode.yaml"
 state_sync:
@@ -103,15 +102,9 @@ state_sync:
     continuous_syncing_mode: ExecuteTransactions
 ```
 
-<Aside type="caution">
-  **Verify node syncing**<br />
-  While your node is syncing, you'll be able to see the
-  [`aptos_state_sync_version{type="synced"}`](/network/nodes/full-node/verify-pfn) metric gradually increase.
-</Aside>
+### Applying transaction outputs from genesis
 
-### Applying all transaction outputs
-
-To apply all transaction outputs since genesis and continue to apply new
+To apply all transaction outputs from genesis and continue to apply new
 transaction outputs as transactions are committed, add the following to your
 node configuration file:
 
@@ -122,13 +115,7 @@ state_sync:
     continuous_syncing_mode: ApplyTransactionOutputs
 ```
 
-<Aside type="note">
-  **Verify node syncing**<br />
-  While your node is syncing, you'll be able to see the
-  [`aptos_state_sync_version{type="synced"}`](/network/nodes/full-node/verify-pfn) metric gradually increase.
-</Aside>
-
-### Intelligent syncing
+### Intelligent syncing from genesis
 
 To execute or apply all transactions and outputs since genesis (and continue to
 do the same as new transactions are committed), add the following to your node
@@ -141,21 +128,7 @@ state_sync:
     continuous_syncing_mode: ExecuteTransactionsOrApplyOutputs
 ```
 
-<Aside type="note">
-  **Verify node syncing**<br />
-  While your node is syncing, you'll be able to see the
-  [`aptos_state_sync_version{type="synced"}`](/network/nodes/full-node/verify-pfn) metric gradually increase.
-</Aside>
-
 ### Fast syncing
-
-<Aside type="caution">
-  **Proceed with caution**<br />
-  Fast sync should only be used as a last resort for validators and VFNs. This is because fast sync skips the
-  blockchain history, and: (i) reduces data availability in the network (as the blockchain history is truncated on
-  the fast synced nodes); and (ii) hinders validator consensus performance (if too much data has been skipped).
-  Validators that fast sync may require additional running time before they are eligible to participate in consensus.
-</Aside>
 
 To download the latest blockchain state and continue to process new
 transactions as they are committed, add the following to your
@@ -168,26 +141,39 @@ state_sync:
     continuous_syncing_mode: ExecuteTransactionsOrApplyOutputs
 ```
 
-<Aside type="caution">
-  **Verify node syncing**<br />
-  While your node is syncing, you'll be able to see the
-  `aptos_state_sync_version{type="synced_states"}` metric gradually increase.
-  However, `aptos_state_sync_version{type="synced"}` will only increase once
-  the node has bootstrapped. This may take several hours depending on the
-  amount of data, network bandwidth and node resources available.
+## Verifying Syncing Progress
 
-  **Note:** If `aptos_state_sync_version{type="synced_states"}` does not
-  increase then do the following:
+To verify that your node is syncing correctly, you can monitor the relevant state sync metrics exposed by the
+[Node Inspection Service](/network/nodes/measure/node-inspection-service).
 
-  1. Double-check the node configuration file has correctly been updated.
-  2. Make sure that the node is starting up with an empty storage database
-     (i.e., that it has not synced any state previously).
+If your node is bootstrapping in **fast syncing** mode, you should monitor the following metric:
+
+- `aptos_state_sync_version{type="synced_states"}`: This metric indicates the highest blockchain state that has been
+  processed. This metric will increase as your node fast syncs. Once all states have been downloaded, this metric will
+  stop increasing and your node will begin processing transactions as usual.
+
+During normal node operation, you should monitor the following metric:
+
+- `aptos_state_sync_version{type="synced"}`: This metric indicates the highest transaction version that has been
+  fully processed by your node. This metric will increase as long as your node is syncing correctly.
+
+<Aside type="tip">
+  **Fast syncing times**<br />
+  The speed of fast syncing depends on several factors, including your network bandwidth and disk performance.
+  On most well-provisioned nodes, fast syncing usually completes within a few hours.
 </Aside>
 
 ## Archival PFNs
 
+<Aside type="danger">
+  **Archival nodes are deprecated**<br />
+  Running archival nodes is expensive and slow, as the amount of data being stored
+  on the node will grow indefinitely. As a result, archival nodes have officially been deprecated.
+  If you wish to store and maintain the entire blockchain history, we recommend using an [Indexer](/build/indexer).
+</Aside>
+
 To operate an archival PFN (which is a PFN that contains all blockchain data
-since the start of the network, i.e., genesis), you should:
+since the start of the network, i.e., genesis), you can:
 
 1. Make sure that your PFN is **not** using fast syncing as the bootstrapping mode.
    Fast syncing will skip the transaction history. Instead, using a mode that syncs from genesis,
@@ -199,38 +185,29 @@ Following these two steps together will ensure that your PFN fetches all data si
 genesis, and continues to synchronize without pruning any data.
 
 <Aside type="caution">
-  **Archival nodes are deprecated**<br />
-  Running and maintaining archival nodes is expensive and slow, as the amount of data being stored
-  on the node will grow endlessly. As a result, archival nodes have officially been deprecated.
-  If you wish to store and maintain the entire blockchain history, we recommend using an [Indexer](/build/indexer).
+  **Syncing from genesis?** <br />
+  As mentioned above, if you wish to sync all data since genesis, you need to manually add seed peers to
+  your node's configuration file. See [Connecting to Seed Peers](/network/nodes/full-node/modify/fullnode-network-connections#connecting-to-seed-peers).
 </Aside>
 
 ## Security implications and data integrity
 
-Each of the different state sync syncing modes perform data integrity verifications to
-ensure that the data being synced to the node has been correctly produced
-and signed by the validators. This occurs slightly differently for
-each syncing mode:
+All state syncing modes perform data integrity verifications to ensure that data is correct and appropriately signed
+by the validators. However, there are some differences in the security guarantees provided by each mode:
 
-1. **Executing transactions**: Executing transactions from genesis is the most secure syncing mode. It will
-   verify that all transactions since the beginning of time were correctly agreed
-   upon by consensus and that all transactions were correctly executed by the
-   validators. All resulting blockchain state will thus be re-verified by the
-   syncing node.
-2. **Applying transaction outputs**: Applying transaction outputs from genesis is faster than executing all
-   transactions, but it requires that the syncing node trusts the validators to
-   have executed the transactions correctly. However, all other
-   blockchain state is still manually re-verified, e.g., consensus messages,
-   the transaction history and the state hashes are still verified.
-3. **Intelligent syncing**: Intelligent syncing will either execute or apply the transaction outputs
-   depending on whichever is faster, per data chunk. Thus, the security implications of using this mode
-   are identical to those of applying transaction outputs.
-4. **Fast syncing**: Fast syncing skips the transaction history and downloads the latest
-   blockchain state before continuously syncing. To do this, it requires that the
-   syncing node trust the validators to have correctly agreed upon all
-   transactions in the transaction history as well as trust that all transactions
-   were correctly executed by the validators. However, all other blockchain state
-   is still manually re-verified, e.g., epoch changes and the resulting blockchain states.
+1. **Executing transactions from genesis**: Executing transactions from genesis is the most secure syncing mode.
+   It will verify that all transactions since the beginning of time were correctly agreed upon by consensus and
+   that all transactions were appropriately executed by the validators.
+2. **Applying transaction outputs from genesis**: Applying transaction outputs from genesis requires that the
+   syncing node trust the validators to have executed the transactions correctly. However, all other
+   blockchain state is still manually re-verified, e.g., consensus messages, the transaction history and state hashes.
+3. **Intelligent syncing**: Intelligent syncing will either execute transactions or apply transaction outputs
+   depending on whichever is faster, per data chunk. The security implications of using this mode
+   are identical to above, depending on which method is used for each data chunk.
+4. **Fast syncing**: Fast syncing skips the transaction history and downloads the latest blockchain state before
+   continuously syncing. To do this, it requires that the syncing node trust the validators to have correctly
+   agreed upon all transactions in the transaction history as well as the results of executing those transactions.
+   However, all other blockchain data is still manually re-verified, e.g., epoch changes and the resulting blockchain states.
 
 All the syncing modes get their root of trust from the validator set
 and cryptographic signatures from those validators over the blockchain data.

@@ -23,10 +23,15 @@ export function ShareModal({ open, onOpenChange, onShare }: ShareModalProps) {
         title: title || undefined,
         expiresInHours,
       });
+      if (!response.share_url) {
+        throw new Error("Failed to get share URL. Please try again.");
+      }
       setShareUrl(response.share_url);
       setStep("url");
     } catch (error) {
       console.error("Failed to share chat:", error);
+      // Show error message to user
+      alert(error instanceof Error ? error.message : "Failed to share chat. Please try again.");
     } finally {
       setIsLoading(false);
     }

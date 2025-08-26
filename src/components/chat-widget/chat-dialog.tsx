@@ -142,8 +142,12 @@ export function ChatDialog({
                             setIsShareModalOpen(true);
                           }}
                           className="chat-button"
+                          disabled={!currentChatId}
+                          title={
+                            !currentChatId ? "Chat must be saved before sharing" : "Share chat"
+                          }
                         >
-                          <Share2 className="h-5 w-5" />
+                          <Share2 className={`h-5 w-5 ${!currentChatId ? "opacity-50" : ""}`} />
                         </button>
                         <ShareModal
                           open={isShareModalOpen}
@@ -202,15 +206,23 @@ export function ChatDialog({
                               <img src="/favicon.svg" alt="Aptos AI" className="chat-empty-logo" />
                             </div>
                             <div className="chat-empty-content">
-                              <h3 className="chat-empty-title">Ask me anything about Aptos!</h3>
+                              <h3 className="chat-empty-title">
+                                Ask me anything about Aptos documentation!
+                              </h3>
                               <p className="chat-empty-text">
-                                I'm here to help you with Move development, blockchain concepts,
-                                tools, and more.
+                                I'm here to help you navigate and understand the Aptos
+                                documentation, answer your questions, and provide relevant
+                                information from the docs.
                               </p>
                               <div className="chat-empty-tip">
                                 <p className="chat-tip-text">
                                   💡 Pro tip: Toggle "Fast mode" in the sidebar for quicker
                                   responses. Note that fast responses might be less detailed.
+                                </p>
+                                <p className="chat-tip-text mt-2">
+                                  ⚠️ Note: While I can provide code examples, they may not always be
+                                  100% accurate. Please verify any code suggestions against the
+                                  official documentation.
                                 </p>
                               </div>
                             </div>
@@ -302,7 +314,17 @@ export function ChatDialog({
                         className="chat-disclaimer-link"
                       >
                         Privacy Policy
-                      </a>
+                      </a>{" "}
+                      Join our{" "}
+                      <a
+                        href="https://t.me/geomi_dev/507"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="chat-disclaimer-link"
+                      >
+                        Telegram group
+                      </a>{" "}
+                      to provide feedback.
                     </div>
                   </div>
                 </div>

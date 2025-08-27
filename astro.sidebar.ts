@@ -827,7 +827,6 @@ export const sidebar = [
   }),
 
   group("ai", {
-    badge: { text: "NEW", variant: "tip" },
     items: [
       group("ai.group.aptos-mcp", {
         collapsed: true,

@@ -1,4 +1,8 @@
+import { defineMiddleware } from "astro/middleware";
 import { SUPPORTED_LANGUAGES } from "../config/18n";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore - auto-generated import
+import { i18MatcherRegexp } from "./matcher-routes-dynamic";
 
 const LANGUAGE_CODES = SUPPORTED_LANGUAGES.map((lang) => lang.code);
 const DEFAULT_LANG = "en";
@@ -66,25 +70,35 @@ function isCrawler(userAgent: string | null): boolean {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-invalid-void-type
-export default function middleware(request: Request): Response | void {
-  const url = new URL(request.url);
+export default defineMiddleware((ctx, next) => {
+  const url = new URL(ctx.request.url);
   const pathname = url.pathname;
 
+  // Skip prerendered pages, since they are static and don't have access to request headers & cookies.
+  // But when this middleware is deployed as edge middleware to Vercel, ctx.isPrerendered is always false.
+  if (ctx.isPrerendered) {
+    return next();
+  }
+
+  if (!(i18MatcherRegexp as unknown as RegExp).test(pathname)) {
+    return next();
+  }
+
   // Check if the request is from a crawler
-  const userAgent = request.headers.get("user-agent");
+  const userAgent = ctx.request.headers.get("user-agent");
 
   if (isCrawler(userAgent)) {
-    return undefined; // Do not redirect crawlers
+    return next(); // Do not redirect crawlers
   }
 
   // Check for cookie
-  const cookies = request.headers.get("cookie") ?? "";
+  const cookies = ctx.request.headers.get("cookie") ?? "";
   const langCookieMatch = /preferred_locale=([a-z-]+)/.exec(cookies);
   let preferredLocale = langCookieMatch ? langCookieMatch[1] : null;
 
   // Fallback to Accept-Language
   if (!preferredLocale) {
-    const acceptLanguage = request.headers.get("accept-language") ?? "";
+    const acceptLanguage = ctx.request.headers.get("accept-language") ?? "";
     preferredLocale = acceptLanguage.split(",")[0]?.split(";")[0]?.split("-")[0] ?? DEFAULT_LANG;
   }
 
@@ -107,5 +121,5 @@ export default function middleware(request: Request): Response | void {
     }
   }
 
-  return undefined;
-}
+  return next();
+});

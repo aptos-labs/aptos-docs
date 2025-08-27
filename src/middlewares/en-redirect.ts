@@ -5,9 +5,11 @@
  * - /en -> /
  */
 
+import { defineMiddleware } from "astro/middleware";
+
 // eslint-disable-next-line @typescript-eslint/no-invalid-void-type
-export default function middleware(request: Request): Response | void {
-  const url = new URL(request.url);
+export default defineMiddleware((ctx, next) => {
+  const url = new URL(ctx.request.url);
   const pathname = url.pathname;
 
   // Check if the path starts with /en
@@ -25,5 +27,5 @@ export default function middleware(request: Request): Response | void {
   }
 
   // If not an /en path, continue to the next middleware
-  return undefined;
-}
+  return next();
+});

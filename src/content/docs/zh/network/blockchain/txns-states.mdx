@@ -1,0 +1,138 @@
+---
+title: "交易和状态"
+description: "了解交易如何在 Aptos 上修改区块链状态，包括交易类型、执行状态和版本化数据库模型。"
+sidebar:
+  label: "交易和状态"
+---
+
+import { ThemedImage } from '~/components/ThemedImage';
+
+import { Aside } from '@astrojs/starlight/components';
+
+Aptos区块链存储三种类型的数据：
+
+- **交易**：交易代表账户在区块链上执行的预期操作（例如，转移资产）。
+- **状态**：（区块链账本）状态代表交易执行输出的积累，存储在所有[资源](/zh/network/blockchain/resources)中的值。
+- [**事件**](/zh/network/blockchain/events)：由交易执行发布的辅助数据。
+
+<Aside type="note">
+  只有交易可以改变账本状态。
+</Aside>
+
+## 交易
+
+Aptos交易包含诸如发送者的账户地址、来自发送者的认证、在Aptos区块链上执行的期望操作以及发送者愿意支付的gas量来执行交易等信息。
+
+### 交易状态
+
+交易可能以以下状态之一结束：
+
+- 在区块链上提交并执行。这被认为是成功的交易。
+- 在区块链上提交但中止。中止代码指示交易执行失败的原因。
+- 在交易提交期间由于验证检查而被丢弃，例如gas不足、交易格式无效或密钥不正确。
+- 在交易提交后但在尝试执行之前被丢弃。这可能由超时或由于影响账户的其他交易导致的gas不足引起。
+
+发送者的账户将为任何已提交的交易收取gas费用。
+
+在交易提交期间，提交者会收到成功提交的通知或失败验证的原因。
+
+成功提交但最终被丢弃的交易在任何可访问的Aptos节点或Aptos网络内可能没有可见状态。用户可以尝试重新提交相同的交易以重新验证交易。如果提交节点认为此交易仍然有效，它将返回错误，说明已提交相同的交易。
+
+提交者可以尝试将gas成本增加一个微小的量，以帮助取得进展并调整可能在下游导致交易被丢弃的原因。
+
+<Aside type="note">
+  参见[Aptos区块链深度剖析](/zh/network/blockchain/blockchain-deep-dive)了解Aptos交易生命周期的全面描述。
+</Aside>
+
+### 交易内容
+
+区块链上的已签名交易包含以下信息：
+
+- **签名**：发送者使用数字签名来验证他们签署了交易（即认证）。
+- **发送者地址**：发送者的[账户地址](/zh/network/blockchain/accounts#account-address)。
+- **发送者公钥**：与用于签署交易的私有认证密钥对应的公共认证密钥。
+- **有效载荷**：指示代表Alice的操作或操作集。如果这是一个Move函数，它直接调用链上的Move字节码。或者，它可能是Move字节码点对点[交易脚本](/zh/network/glossary#transaction-script)。它还包含函数或脚本的输入列表。对于此示例，它是一个函数调用，将一定数量的Aptos币从Alice账户转移到Bob的账户，其中Alice的账户通过发送交易隐含，Bob的账户和数量被指定为交易输入。
+- [**Gas单位价格**](/zh/network/glossary#gas-unit-price)：发送者愿意为每个gas单位支付的金额，以执行交易。这以[Octas](/zh/network/glossary#octa)表示。
+- [**最大gas量**](/zh/network/glossary#maximum-gas-amount)：发送者愿意为此交易支付的[最大gas量](/zh/network/blockchain/gas-txn-fee#specifying-gas-fees-within-a-transaction)（以APT为单位）。Gas费用等于由计算和IO覆盖的基础gas成本乘以gas价格。Gas成本还包括具有APT固定价格存储模型的存储。这表示为[Octas](/zh/network/glossary#octa)。
+- **Gas价格**（以指定的gas单位）：这是发送者愿意为每个[gas](/zh/network/blockchain/gas-txn-fee)单位支付的金额，以执行交易。[Gas](/zh/network/blockchain/gas-txn-fee)是支付计算和存储的一种方式。Gas单位是计算的抽象测量，没有固有的现实世界价值。
+- **序列号**：这是一个无符号整数，必须等于执行时发送者账户的[序列号](/zh/network/blockchain/accounts#account-sequence-number)。
+- **过期时间**：交易停止有效（即过期）的时间戳。
+
+### 交易有效载荷类型
+
+在给定的交易中，两种最常见的有效载荷类型包括：
+
+- 入口点
+- [脚本（有效载荷）](/zh/build/smart-contracts/scripts)
+
+目前，SDK [Python](/zh/build/sdks/python-sdk)和[Typescript](/zh/build/sdks/ts-sdk)都支持这两种。本指南指出了许多这些入口点，例如`coin::transfer`和`aptos_account::create_account`。
+
+Aptos区块链上的所有操作都应通过入口点调用可用。虽然可以提交多个交易串行调用入口点，但许多这样的操作可能会受益于从单个交易原子调用。脚本有效载荷交易可以调用任何模块内定义的任何入口点或公共函数。
+
+<Aside type="note">
+  参见[您的第一笔交易](/zh/build/guides/first-transaction)教程了解如何生成有效交易。
+</Aside>
+
+<Aside type="note">
+  Aptos REST API支持从JSON生成BCS编码的交易。这对于快速原型设计很有用，但在主网上使用时要谨慎，因为这对生成交易的全节点给予了很大的信任。
+</Aside>
+
+## 状态
+
+Aptos区块链的账本状态或全局状态表示Aptos区块链中所有账户的状态。区块链中的每个验证者节点必须知道全局状态的最新版本才能执行任何交易。
+
+任何人都可以向Aptos区块链提交交易以修改账本状态。执行交易后，会生成交易输出。交易输出包含零个或多个操作来操作账本状态，称为**写入集**，发出结果事件向量、消耗的gas量和执行的交易状态。
+
+### 证明
+
+Aptos区块链使用证明来验证区块链数据的真实性和正确性。
+
+Aptos区块链内的数据在网络中复制。每个验证者和全节点的[存储](/zh/network/blockchain/validator-nodes#storage)负责将商定的交易块及其执行结果持久化到数据库。
+
+区块链表示为不断增长的[Merkle树](/zh/network/glossary#merkle-trees)，其中附加到树的每个叶子代表区块链执行的单个交易。
+
+区块链执行的所有操作和所有账户状态都可以进行加密验证。这些加密证明确保：
+
+- 验证者节点就状态达成一致。
+- 客户端不需要信任它从中接收数据的实体。例如，如果客户端从账户获取最后**n**个交易，证明可以证明响应中没有添加、省略或修改交易。客户端还可以查询账户状态，询问是否处理了特定交易等。
+
+### 版本化数据库
+
+账本状态使用与系统执行的交易数量相对应的无符号64位整数进行版本控制。这个版本化数据库允许验证者节点：
+
+- 对最新版本的账本状态执行交易。
+- 响应客户端对当前和先前版本的账本历史查询。
+
+## 交易改变账本状态
+
+<ThemedImage
+  alt="已签名交易流程"
+  sources={{
+light: '~/images/transactions-and-state.svg',
+dark: '~/images/transactions-and-state-dark.svg',
+}}
+/>
+
+上图显示了执行交易T<sub>_i_</sub>如何将Aptos区块链的状态从S<sub>_i-1_</sub>更改为S<sub>_i_</sub>。
+
+在图中：
+
+- 账户**A**和**B**：代表Alice和Bob在Aptos区块链上的账户。
+- **S<sub>_i-1_</sub>**：代表区块链的第(_i-1_)个状态。在此状态下，Alice的账户**A**余额为110 APT（Aptos币），Bob的账户**B**余额为52 APT。
+- **T<sub>_i_</sub>**：这是在区块链上执行的第\_i\_个交易。在此示例中，它代表Alice向Bob发送10 APT。
+- **Apply()**：这是一个确定性函数，对于特定的初始状态和特定交易，始终返回相同的最终状态。如果区块链的当前状态是**S<sub>_i-1_</sub>**，并且在状态**S<sub>_i-1_</sub>**上执行交易**T<sub>_i_</sub>**，那么区块链的新状态始终是**S<sub>_i_</sub>**。Aptos区块链使用[Move语言](/zh/build/smart-contracts/book/SUMMARY)来实现确定性执行函数**Apply()**。
+- **S<sub>_i_</sub>**：这是区块链的第\_i\_个状态。当交易**T<sub>_i_</sub>**应用于区块链时，它生成新状态**S<sub>_i_</sub>**（将\*\*Apply(S<sub>_i-1_</sub>, T<sub>_i_</sub>)**应用于**S<sub>_i-1_</sub>**和**T<sub>_i_</sub>**的结果）。这导致Alice的账户余额减少10到100 APT，Bob的账户余额增加10到62 APT。新状态**S<sub>_i_</sub>\*\*显示这些更新的余额。
+
+## 大小限制
+
+作为gas计划的一部分，对于[交易本身](https://github.com/aptos-labs/aptos-core/blob/8074588b5c9c4424fa247c2c9ec5572981ee31cd/aptos-move/aptos-gas-schedule/src/gas_schedule/transaction.rs#L71-L81)和[其输出](https://github.com/aptos-labs/aptos-core/blob/8074588b5c9c4424fa247c2c9ec5572981ee31cd/aptos-move/aptos-gas-schedule/src/gas_schedule/transaction.rs#L152-L177)的大小有链上可配置的限制。
+
+| 限制类型               | 当前每笔交易限制 |
+| ---------------------- | --------------- |
+| 交易                   | 64KB            |
+| 治理交易               | 1MB             |
+| 单个写入操作           | 1MB             |
+| 所有写入操作组合       | 10MB            |
+| 写入操作数量           | 8192            |
+| 单个事件               | 1MB             |
+| 所有事件组合           | 10MB            |

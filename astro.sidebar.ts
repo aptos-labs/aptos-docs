@@ -827,14 +827,19 @@ export const sidebar = [
   }),
 
   group("ai", {
+    badge: { text: "NEW", variant: "tip" },
     items: [
-      {
-        label: "Aptos MCP",
-        link: "build/ai/aptos-mcp",
-        badge: { text: "NEW", variant: "tip" },
-      },
-      "build/ai/aptos-mcp/claude",
-      "build/ai/aptos-mcp/cursor",
+      group("ai.group.aptos-mcp", {
+        collapsed: true,
+        items: [
+          {
+            label: "Overview",
+            link: "build/ai/aptos-mcp",
+          },
+          "build/ai/aptos-mcp/claude",
+          "build/ai/aptos-mcp/cursor",
+        ],
+      }),
       {
         label: "LLMs Txt",
         link: "llms-txt",

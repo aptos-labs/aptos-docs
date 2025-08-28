@@ -539,12 +539,18 @@ export const sidebar = [
         collapsed: true,
         items: [
           "build/smart-contracts/move-vscode-extension",
-          "build/smart-contracts/prover",
-          "build/smart-contracts/prover/prover-guide",
-          "build/smart-contracts/prover/spec-lang",
-          "build/smart-contracts/prover/supporting-resources",
           "build/smart-contracts/linter",
           "build/smart-contracts/compiler_v2",
+          {
+            label: "Move Prover",
+            collapsed: true,
+            items: [
+              "build/smart-contracts/prover",
+              "build/smart-contracts/prover/prover-guide",
+              "build/smart-contracts/prover/spec-lang",
+              "build/smart-contracts/prover/supporting-resources",
+            ],
+          },
         ],
       },
 

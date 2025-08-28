@@ -381,23 +381,14 @@ export const sidebar = [
         collapsed: true,
         items: [
           "build/cli",
-          "build/cli/setup-cli",
-          "build/cli/formatting-move-contracts",
-          "build/cli/managing-a-network-node",
-          "build/cli/public-network",
-          "build/cli/replay-past-transactions",
-          "build/cli/running-a-local-network",
-          "build/cli/start-from-template",
-          "build/cli/trying-things-on-chain",
-          "build/cli/working-with-move-contracts",
           {
             label: "Install CLI",
             collapsed: true,
             items: [
-              "build/cli/install-cli/install-cli-linux",
               "build/cli/install-cli/install-cli-mac",
-              "build/cli/install-cli/install-cli-specific-version",
               "build/cli/install-cli/install-cli-windows",
+              "build/cli/install-cli/install-cli-linux",
+              "build/cli/install-cli/install-cli-specific-version",
             ],
           },
           {
@@ -411,8 +402,11 @@ export const sidebar = [
             items: [
               "build/cli/trying-things-on-chain",
               "build/cli/trying-things-on-chain/create-test-accounts",
-              "build/cli/trying-things-on-chain/ledger",
               "build/cli/trying-things-on-chain/looking-up-account-info",
+              "build/cli/trying-things-on-chain/ledger",
+              "build/cli/managing-a-network-node",
+              "build/cli/running-a-local-network",
+              "build/cli/public-network",
             ],
           },
           {
@@ -420,8 +414,11 @@ export const sidebar = [
             collapsed: true,
             items: [
               "build/cli/working-with-move-contracts",
-              "build/cli/working-with-move-contracts/arguments-in-json-tutorial",
+              "build/cli/formatting-move-contracts",
+              "build/cli/start-from-template",
+              "build/cli/replay-past-transactions",
               "build/cli/working-with-move-contracts/local-simulation-benchmarking-and-gas-profiling",
+              "build/cli/working-with-move-contracts/arguments-in-json-tutorial",
               "build/cli/working-with-move-contracts/multi-signature-tutorial",
             ],
           },

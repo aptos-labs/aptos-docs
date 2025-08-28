@@ -3,7 +3,7 @@ import { Copy, ThumbsUp, ThumbsDown } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { vscDarkPlus } from "react-syntax-highlighter/dist/cjs/styles/prism";
+import { oneDark } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import type { Message } from "./types";
 
 interface ChatMessageProps extends ComponentProps<"div"> {
@@ -80,13 +80,12 @@ export function ChatMessage({
                         <Copy className={`code-copy-icon ${isCopied ? "copied" : ""}`} />
                       </button>
                       <SyntaxHighlighter
-                        style={vscDarkPlus}
+                        style={oneDark}
                         language={finalLanguage}
                         PreTag="div"
                         customStyle={{
                           margin: "0",
                           padding: "0.75rem 1rem",
-                          background: "var(--sl-color-gray-6)",
                           borderRadius: "0.5rem",
                           display: "inline-block",
                           minWidth: "100%",

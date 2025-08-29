@@ -111,6 +111,7 @@ export default defineConfig({
         PageSidebar: "./src/starlight-overrides/PageSidebar.astro",
         PageTitle: "./src/starlight-overrides/PageTitle.astro",
         Sidebar: "./src/starlight-overrides/Sidebar.astro",
+        TwoColumnContent: "./src/starlight-overrides/TwoColumnContent.astro",
       },
       plugins: [
         starlightLlmsTxt({

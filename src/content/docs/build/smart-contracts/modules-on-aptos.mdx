@@ -13,13 +13,24 @@ A module contains several structs and functions, much like Rust.
 During package publishing time, a few constraints are maintained:
 
 - Both Structs and public function signatures are published as immutable.
-- Only when a module is being published for the first time, and not during an
-  upgrade, will the VM search for and execute an `init_module(account: &signer)`
-  function. The signer of the account that is publishing the module is passed into
-  the `init_module` function of the contract. **This function must be private and
-  not return any value.**
+- The `init_module` function plays a crucial role in module initialization:
+  - When a module is published for the first time (i.e., the module does not exist on-chain), the VM will search for and execute the `init_module(account: &signer)` function.
+  - When upgrading an existing module that is already on-chain, the `init_module` function will NOT be called.
+  - The signer of the account that is publishing the module is passed into the `init_module` function.
+  - **This function must be private and not return any value.**
+  - The `init_module` function can have at most one parameter, and its type must be `&signer`
+  - The `init_module` function should not have generic parameters
+  - The `init_module` function is commonly used to initialize module-specific data structures or set initial states.
 
 <Aside type="note">
-  `init_module` is optional
-  It is only necessary if you want to initialize data when publishing a module for the first time.
+  `init_module` is optional. You only need to implement it if you want to:
+
+  - Initialize module data when publishing a module for the first time
+  - Set up initial states or configurations
+  - Create resource accounts or other module-specific setup tasks
+</Aside>
+
+<Aside type="tip">
+  Remember: The `init_module` function will only be called once in a module's lifecycle - when it is first published.
+  Subsequent upgrades to the module will not trigger the `init_module` function again.
 </Aside>

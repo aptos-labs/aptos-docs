@@ -4,16 +4,32 @@ title: "Aptos 上的模块"
 
 import { Aside } from '@astrojs/starlight/components';
 
-Aptos 允许在 [package](/zh/build/smart-contracts/book/packages) 中无权限地发布 [module](/zh/build/smart-contracts/book/modules-and-scripts),并且对于设置了合适兼容性策略的模块支持 [升级](/zh/build/smart-contracts/book/package-upgrades).
+Aptos 允许在[包](/build/smart-contracts/book/packages)中进行无需许可的[模块](/build/smart-contracts/book/modules-and-scripts)发布，
+同时也支持对设置了适当兼容性策略的模块进行[升级](/build/smart-contracts/book/package-upgrades)。
 
-一个 module 包含多个 struct 和 function,类似于 Rust.
+模块包含多个结构体和函数，这一点与 Rust 类似。
 
-在 package 发布时,会遵循以下约束:
+在包发布时，需要遵守以下约束：
 
-- Struct 和 public function 的签名在发布后是不可变的.
-- 只有在首次发布 module(而非升级)时,虚拟机会查找并执行 `init_module(account: &signer)` 函数.发布模块的账户 signer 会被传递给合约的 `init_module` 函数.**该函数必须是私有的且不能有返回值.**
+- 结构体和公共函数签名都以不可变的方式发布。
+- `init_module` 函数在模块初始化中扮演着关键角色：
+  - 当首次发布模块时（即该模块在链上不存在），VM 将会查找并执行 `init_module(account: &signer)` 函数。
+  - 当升级已经存在于链上的模块时，`init_module` 函数将不会被调用。
+  - 发布模块的账户的签名者会被传入 `init_module` 函数。
+  - `init_module` 函数的参数有且只能有一个，并且类型必须为 `&signer`。
+  - `init_module` 函数不应该有泛型参数。
+  - **此函数必须是私有的，且不能返回任何值。**
+  - `init_module` 函数通常用于初始化模块特定的数据结构或设置初始状态。
 
 <Aside type="note">
-  `init_module` 是可选的
-  只有在首次发布模块时需要初始化数据时才需要实现该函数.
+  `init_module` 是可选的。只有在以下情况下才需要实现它：
+
+  - 首次发布模块时需要初始化模块数据
+  - 需要设置初始状态或配置
+  - 需要创建资源账户或其他模块特定的设置任务
+</Aside>
+
+<Aside type="tip">
+  请记住：`init_module` 函数在模块的生命周期中只会被调用一次 - 即首次发布时。
+  后续对模块的升级不会再次触发 `init_module` 函数。
 </Aside>

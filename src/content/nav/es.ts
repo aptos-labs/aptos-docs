@@ -55,6 +55,9 @@ const labels = {
   "reference.group.indexerApi": "API del Indexador",
   "reference.group.restApi": "API REST",
 
+  // Sub-Grupos de AI
+  "ai.group.aptos-mcp": "Aptos MCP",
+
   // Sub-Grupos de Contribuir
   "contribute.group.components": "Componentes",
 } as const;

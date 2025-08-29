@@ -1,0 +1,64 @@
+---
+
+---
+
+<style>
+  /* Leave some breathing room when centering */
+  .sidebar-pane [aria-current="page"] {
+    scroll-margin-block: 2rem;
+  }
+</style>
+
+<script>
+  (() => {
+    if (typeof window === "undefined") return;
+
+    const q = (sel: string, root: Document | Element = document): Element | null =>
+      root.querySelector(sel);
+
+    const isScrollable = (el: Element): boolean => {
+      const cs = getComputedStyle(el);
+      const oy = cs.overflowY;
+      return (
+        (oy === "auto" || oy === "scroll" || oy === "overlay") && el.scrollHeight > el.clientHeight
+      );
+    };
+
+    const getScrollParent = (el: Element): Element | null => {
+      for (let p = el.parentElement; p; p = p.parentElement) {
+        if (isScrollable(p)) return p;
+      }
+      return null;
+    };
+
+    const isFullyInView = (el: Element, container: Element): boolean => {
+      const cr = container.getBoundingClientRect();
+      const ir = el.getBoundingClientRect();
+      return ir.top >= cr.top && ir.bottom <= cr.bottom;
+    };
+
+    const centerIfNeeded = (): void => {
+      const current = q('[aria-current="page"]');
+      if (!current || typeof (current as Element).scrollIntoView !== "function") return;
+
+      // Prefer the real scroll parent; fall back to known sidebar container
+      const container = getScrollParent(current) || q(".sidebar-pane");
+      if (!container) return;
+
+      if (!isFullyInView(current, container)) {
+        // Instant scroll on first paint to avoid jank
+        current.scrollIntoView({ behavior: "auto", block: "center" });
+      }
+    };
+
+    const onLoad = (): void => {
+      requestAnimationFrame(centerIfNeeded);
+    };
+
+    if (document.readyState === "complete") {
+      onLoad();
+    } else {
+      window.addEventListener("load", onLoad, { once: true, passive: true });
+    }
+  })();
+</script>

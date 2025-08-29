@@ -1,0 +1,173 @@
+---
+title: "账户"
+description: "了解 Aptos 账户、地址、身份验证方案、密钥轮转、序列号以及它们如何控制链上资产和资源。"
+sidebar:
+  label: "账户"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Aptos区块链上的账户代表对一组资产的访问控制，包括链上货币和NFT。在Aptos中，这些资产由一个称为**资源**的Move语言原语表示，它强调访问控制和稀缺性。
+
+Aptos区块链上的每个账户都由一个32字节的账户地址标识。您可以使用[www.aptosnames.com](https://www.aptosnames.com/)的Aptos名称服务为关键账户获取.apt域名，使其易于记忆和独特。
+
+与其他区块链中账户和地址是隐式的不同，Aptos上的账户是显式的，需要在执行交易之前先创建。账户可以通过转移Aptos代币(APT)来显式或隐式创建。有关更多详细信息，请参阅[创建账户](#creating-an-account)部分。在某种程度上，这类似于其他链，其中地址需要在可以发送交易之前先接收gas费用。
+
+显式账户允许其他网络上不可用的一流功能，例如：
+
+- 轮换认证密钥。账户的认证密钥可以更改为由不同的私钥控制。这类似于在web2世界中更改密码。
+- 原生多重签名支持。Aptos上的账户在构建认证密钥时支持使用Ed25519和Secp256k1 ECDSA签名方案的k-of-n多重签名。
+
+Aptos上有三种类型的账户：
+
+- _标准账户_ - 这是一个典型的账户，对应于具有相应公钥/私钥对的地址。
+- [_资源账户_](/zh/build/smart-contracts/resource-accounts) - 一个没有相应私钥的自主账户，由开发者用于存储资源或在链上发布模块。
+- [_对象_](/zh/build/smart-contracts/objects) - 存储在单个地址内的复杂资源集，代表单个实体。
+
+<Aside type="note">
+  账户地址是32字节。它们通常显示为64个十六进制字符，每个十六进制字符代表一个半字节。
+  有时地址前缀为0x。有关地址如何显示的示例，请参阅[您的第一笔交易](/zh/build/guides/first-transaction)，
+  以下是重现的示例：
+</Aside>
+
+```text
+Alice: 0xeeff357ea5c1a4e7bc11b2b17ff2dc2dcca69750bfef1e1ebcaccf8c8018175b
+Bob: 0x19aadeca9388e009d136245b9a67423f3eee242b03142849eb4f81a4a409e59c
+```
+
+## 账户地址
+
+目前，Aptos仅支持账户的单一统一标识符。Aptos上的账户普遍表示为32字节的十六进制字符串。短于32字节的十六进制字符串也是有效的；在这些情况下，十六进制字符串可以用前导零填充，例如，`0x1` => `0x0000000000000...01`。虽然Aptos标准表明可以从地址中删除前导零，但大多数应用程序试图避免这种遗留行为，仅支持为从`0x0`到`0xa`的特殊地址删除0。
+
+## 创建账户
+
+当用户请求创建账户时，例如通过使用[Aptos SDK](/zh/build/sdks/ts-sdk/account)，将执行以下步骤：
+
+- 选择用于管理用户账户的认证方案，例如Ed25519或Secp256k1 ECDSA。
+- 生成新的私钥、公钥对。
+- 将公钥与公钥的认证方案结合以生成32字节认证密钥和账户地址。
+
+用户应使用私钥对与此账户关联的交易进行签名。
+
+## 账户序列号
+
+账户的序列号表示从该账户提交并在链上提交的交易数量。已提交的交易要么执行并将生成的状态更改提交到区块链，要么中止，其中状态更改被丢弃，只存储交易。
+
+每个提交的交易必须包含给定发送者账户的唯一序列号。当Aptos区块链处理交易时，它查看交易中的序列号并将其与链上账户中的序列号进行比较。仅当序列号等于或大于当前序列号时才处理交易。仅当从当前序列号开始有连续的交易系列时，交易才会转发到其他内存池或执行。执行拒绝无序的序列号，防止重放攻击旧交易并保证未来交易的排序。
+
+## 认证密钥
+
+初始账户地址设置为在账户创建期间派生的认证密钥。但是，认证密钥随后可能会更改，例如，当您生成新的公私钥对、公钥以轮换密钥时。账户地址永不更改。
+
+Aptos区块链支持以下认证方案：
+
+1. [Ed25519](https://ed25519.cr.yp.to/)
+2. [Secp256k1 ECDSA](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-49.md)
+3. [K-of-N多重签名](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-55.md)
+4. 专用的、现在已遗留的MultiEd25519方案
+
+<Aside type="note">
+  Aptos区块链默认使用Ed25519签名交易。
+</Aside>
+
+### Ed25519认证
+
+为Ed25519签名生成认证密钥和账户地址：
+
+1. **生成密钥对**：生成一个新的密钥对(`privkey_A`, `pubkey_A`)。Aptos区块链使用RFC 8032中定义的Ed25519曲线上的PureEdDSA方案。
+2. **派生32字节认证密钥**：从`pubkey_A`派生32字节认证密钥：
+   ```text
+   auth_key = sha3-256(pubkey_A | 0x00)
+   ```
+   其中`|`表示连接。`0x00`是1字节单签名方案标识符。
+3. 使用此初始认证密钥作为永久账户地址。
+
+### MultiEd25519认证
+
+使用K-of-N多重签名认证，账户总共有N个签名者，必须使用其中至少K个签名来认证交易。
+
+生成K-of-N多重签名账户的认证密钥和账户地址：
+
+1. **生成密钥对**：生成`N`个ed25519公钥`p_1`, ..., `p_n`。
+2. 决定`K`的值，即认证交易所需的签名阈值数量。
+3. **派生32字节认证密钥**：如下所述计算认证密钥：
+   ```text
+   auth_key = sha3-256(p_1 | . . . | p_n | K | 0x01)
+   ```
+   `0x01`是1字节多重签名方案标识符。
+4. 使用此初始认证密钥作为永久账户地址。
+
+### 通用认证
+
+通用认证支持Ed25519和Secp256k1 ECDSA。与之前的认证方案一样，这些方案包含方案值，单密钥和多密钥分别为`0x02`和`0x03`，但每个密钥都包含一个前缀值来指示其密钥类型：
+
+| 密钥类型                          | 前缀字节 |
+| --------------------------------- | -------- |
+| Ed25519通用方案                   | `0x00`   |
+| Secp256k1Ecdsa通用方案            | `0x01`   |
+| Secp256r1Ecdsa WebAuthn方案       | `0x02`   |
+| 无密钥                            | `0x03`   |
+
+对于使用公钥`pubkey`的单密钥Secp256k1 ECDSA账户，认证密钥将如下派生：
+
+```text
+auth_key = sha3-256(0x01 | pubkey | 0x02)
+```
+
+其中
+
+- 第一个条目`0x01`代表使用Secp256k1 ECDSA密钥；
+- 最后一个条目`0x02`代表认证方案。
+
+对于包含单个Secp256k1 ECDSA公钥`pubkey_0`和单个Ed25519公钥`pubkey_1`的1-of-2多密钥账户，其中一个签名就足够了，认证密钥将如下派生：
+
+```text
+auth_key = sha3-256(0x02 | 0x01 | pubkey_0 | 0x00 | pubkey_1 | 0x01 | 0x03)
+```
+
+其中
+
+- 第一个条目`0x02`代表作为单字节的密钥总数；
+- 倒数第二个条目`0x01`代表作为单字节的所需签名数量；
+- 最后一个条目`0x03`代表认证方案。
+
+## 轮换密钥
+
+Aptos上的账户具有轮换密钥的能力，这样潜在泄露的密钥就不能用于访问账户。可以通过`account::rotate_authentication_key`函数轮换密钥。
+
+刷新密钥通常被认为是安全领域的良好习惯。但是，这对习惯于使用助记词来表示私钥及其关联账户的系统集成商来说是一个挑战。为了简化系统集成商的工作，Aptos通过aptos account lookup-address提供链上映射。链上数据将由当前助记词定义的有效账户地址映射到实际账户地址。
+
+有关更多信息，请参阅[`account.move`](https://github.com/aptos-labs/aptos-core/blob/a676c1494e246c31c5e96d3363d99e2422e30f49/aptos-move/framework/aptos-framework/sources/account.move#L274)。
+
+## 账户状态
+
+每个账户的状态包括代码(Move模块)和数据(Move资源)。账户可能包含任意数量的Move模块和Move资源：
+
+- **Move模块**：Move模块包含代码，例如类型和过程声明；但它们不包含数据。Move模块编码了更新Aptos区块链全局状态的规则。
+- **Move资源**：Move资源包含数据但不包含代码。每个资源值都有一个在Aptos区块链上发布的模块中声明的类型。
+
+## 使用签名者进行访问控制
+
+交易的发送者由签名者表示。当Move模块中的函数将`signer`作为参数时，Aptos Move VM将签署交易的账户身份转换为Move模块入口点中的签名者。请参阅下面带有`signer`的Move示例代码，在`initialize`和`withdraw`函数中。当函数中未指定`signer`时，例如下面的`deposit`函数，则不会为此函数提供基于签名者的访问控制：
+
+```move filename="coin.move" /account: &signer/
+module Test::Coin {
+  struct Coin has key { amount: u64 }
+
+  public fun initialize(account: &signer) {
+    move_to(account, Coin { amount: 1000 });
+  }
+
+  public fun withdraw(account: &signer, amount: u64): Coin acquires Coin {
+    let balance = &mut borrow_global_mut<Coin>(Signer::address_of(account)).amount;
+    *balance = *balance - amount;
+    Coin { amount }
+  }
+
+  public fun deposit(account: address, coin: Coin) acquires Coin {
+      let balance = &mut borrow_global_mut<Coin>(account).amount;
+      *balance = *balance + coin.amount;
+      Coin { amount: _ } = coin;
+  }
+}
+```

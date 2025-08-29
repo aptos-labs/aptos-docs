@@ -132,6 +132,10 @@ export const sidebar = [
           "build/sdks/ts-sdk/ts-examples",
           "build/sdks/ts-sdk/type-safe-contract",
           {
+            label: "React Hooks",
+            link: "https://js-pro.aptos.dev",
+          },
+          {
             label: "Account",
             collapsed: true,
             items: [
@@ -431,6 +435,10 @@ export const sidebar = [
         items: ["build/create-aptos-dapp", "build/create-aptos-dapp/faq"],
       },
       "network/faucet",
+      {
+        label: "Sign in with Aptos",
+        link: "https://siwa.aptos.dev",
+      },
     ],
   }),
 
@@ -530,12 +538,19 @@ export const sidebar = [
         label: "Tooling",
         collapsed: true,
         items: [
-          "build/smart-contracts/prover",
-          "build/smart-contracts/prover/prover-guide",
-          "build/smart-contracts/prover/spec-lang",
-          "build/smart-contracts/prover/supporting-resources",
+          "build/smart-contracts/move-vscode-extension",
           "build/smart-contracts/linter",
           "build/smart-contracts/compiler_v2",
+          {
+            label: "Move Prover",
+            collapsed: true,
+            items: [
+              "build/smart-contracts/prover",
+              "build/smart-contracts/prover/prover-guide",
+              "build/smart-contracts/prover/spec-lang",
+              "build/smart-contracts/prover/supporting-resources",
+            ],
+          },
         ],
       },
 
@@ -563,17 +578,6 @@ export const sidebar = [
     collapsed: true,
     items: [
       "network/nodes", // Added Nodes Overview/Landing page
-
-      // Localnet
-      {
-        label: "Localnet",
-        collapsed: true,
-        items: [
-          "network/nodes/localnet",
-          "network/nodes/localnet/local-development-network",
-          "network/nodes/localnet/run-a-localnet",
-        ],
-      },
 
       // Validator Node
       {
@@ -736,6 +740,18 @@ export const sidebar = [
           },
         ],
       },
+
+      // Localnet
+      {
+        label: "Local Networks",
+        collapsed: true,
+        items: [
+          "network/nodes/localnet",
+          "network/nodes/localnet/local-development-network",
+          "network/nodes/localnet/run-a-localnet",
+          "network/nodes/localnet/run-a-multinode-localnet",
+        ],
+      },
     ],
   }),
 
@@ -818,13 +834,17 @@ export const sidebar = [
 
   group("ai", {
     items: [
-      {
-        label: "Aptos MCP",
-        link: "build/ai/aptos-mcp",
-        badge: { text: "NEW", variant: "tip" },
-      },
-      "build/ai/aptos-mcp/claude",
-      "build/ai/aptos-mcp/cursor",
+      group("ai.group.aptos-mcp", {
+        collapsed: true,
+        items: [
+          {
+            label: "Overview",
+            link: "build/ai/aptos-mcp",
+          },
+          "build/ai/aptos-mcp/claude",
+          "build/ai/aptos-mcp/cursor",
+        ],
+      }),
       {
         label: "LLMs Txt",
         link: "llms-txt",

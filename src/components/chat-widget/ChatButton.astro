@@ -1,0 +1,139 @@
+---
+import { Image } from "astro:assets";
+import aptosLogoDark from "~/assets/aptos-logomark-dark.svg";
+import aptosLogoLight from "~/assets/aptos-logomark-light.svg";
+
+interface Props {
+  isMobile?: boolean;
+}
+
+const { isMobile = false } = Astro.props;
+---
+
+<button
+  id={isMobile ? "mobile-chat-trigger" : "chat-trigger"}
+  class={isMobile ? "mobile-chat-button" : "desktop-chat-button"}
+  aria-label="Open chat"
+>
+  <div class={`icon-wrapper ${isMobile ? "mobile-icon" : ""}`}>
+    <Image
+      src={aptosLogoLight}
+      class="hidden dark:block w-5 h-5"
+      alt="Aptos Logo"
+      width={20}
+      height={20}
+    />
+    <Image
+      src={aptosLogoDark}
+      class="dark:hidden w-5 h-5"
+      alt="Aptos Logo"
+      width={20}
+      height={20}
+    />
+  </div>
+  <span class="text-sm font-semibold">AskAptos</span>
+</button>
+
+<script>
+  const mobileButton = document.getElementById("mobile-chat-trigger");
+  const desktopButton = document.getElementById("chat-trigger");
+
+  if (mobileButton) {
+    mobileButton.addEventListener("click", () => {
+      window.dispatchEvent(new CustomEvent("toggle-chat"));
+      // Close the mobile menu when opening chat
+      document.body.removeAttribute("data-mobile-menu-expanded");
+      const menuButton = document.querySelector("starlight-menu-button");
+      if (menuButton) {
+        menuButton.setAttribute("aria-expanded", "false");
+      }
+    });
+  }
+
+  if (desktopButton) {
+    desktopButton.addEventListener("click", () => {
+      window.dispatchEvent(new CustomEvent("toggle-chat"));
+    });
+  }
+</script>
+
+<style>
+  /* Desktop styles */
+  .desktop-chat-button {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 1rem;
+    border-radius: 9999px;
+    background-color: var(--sl-color-white);
+    border: 1px solid var(--sl-color-gray-5);
+    color: var(--sl-color-black);
+    cursor: pointer;
+  }
+
+  :global([data-theme="dark"]) .desktop-chat-button {
+    background-color: var(--sl-color-white);
+    border-color: var(--sl-color-gray-5);
+    color: var(--sl-color-black);
+  }
+
+  .desktop-chat-button:hover {
+    background-color: var(--sl-color-gray-2);
+  }
+
+  :global([data-theme="dark"]) .desktop-chat-button:hover {
+    background-color: var(--sl-color-gray-1);
+  }
+
+  /* Mobile styles */
+  .mobile-chat-button {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    width: 100%;
+    padding: 0.75rem var(--sl-sidebar-pad-x);
+    border: none;
+    background: none;
+    cursor: pointer;
+    color: var(--sl-color-text);
+    font-size: var(--sl-text-lg);
+    text-align: left;
+  }
+
+  .mobile-chat-button:hover {
+    color: var(--sl-color-text-accent);
+    background-color: var(--sl-color-gray-6, var(--sl-color-gray-5));
+  }
+
+  /* Common icon styles */
+  .icon-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 9999px;
+    background: linear-gradient(to right, #61dd89, #05eeef);
+    padding: 0.25rem;
+  }
+
+  :global([data-theme="dark"]) .icon-wrapper {
+    background: var(--sl-color-black);
+    box-shadow: 0 0 0 2px #05eeef;
+    padding: 0.25rem;
+  }
+
+  :global([data-theme="dark"]) .icon-wrapper img {
+    filter: brightness(0) invert(1);
+  }
+
+  .mobile-icon {
+    width: 2rem;
+    height: 2rem;
+    padding: 0.375rem;
+  }
+
+  :global([data-theme="dark"]) .mobile-icon {
+    padding: 0.375rem;
+  }
+</style>

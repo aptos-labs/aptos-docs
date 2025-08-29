@@ -284,6 +284,19 @@ Consider the following example expressions that are caught by the lint, and the 
 - `x <= 0`, `0 >= x`, `x >= MAX`, `MAX <= x`, can all be simplified to use `==` instead
 - `x > 0`, `0 < x`, `x < MAX`, `MAX > x`, can all be clarified to use `!=` instead
 
+### `redundant_comparison`
+
+Checks for redundant, contradictory, and tautological numerical comparisons over the same variable in boolean expressions combined with `&&` and `||`. This lint identifies logic errors in conditional statements that can lead to unreachable code or always-true/false conditions.
+
+Examples of patterns caught by this lint:
+
+- **Redundant with `&&`**: `x <= 400 && x < 500` - the second condition is redundant since it's always satisfied when the first is true
+- **Contradictory with `&&`**: `x <= 400 && x > 500` - these conditions can never both be true, making the expression always false
+- **Redundant with `||`**: `x > 10 || x >= 5` - the first condition is redundant since the second covers more cases
+- **Tautology with `||`**: `x < 5 || x >= 5` - this expression is always true for any value of x
+
+The lint only triggers when comparisons are on the same variable and can detect constants on either side of the comparison operator.
+
 ### `while_true`
 
 Checks for `while (true) { .... }` patterns and suggests using the more explicit `loop { .... }` construct instead.

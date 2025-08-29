@@ -28,3 +28,8 @@ declare module "virtual:starlight/components/LanguageSelect" {
   const LanguageSelect: typeof import("@astrojs/starlight/components/LanguageSelect.astro").default;
   export default LanguageSelect;
 }
+
+declare module "virtual:starlight/components/MobileMenuToggle" {
+  const MobileMenuToggle: typeof import("@astrojs/starlight/components/MobileMenuToggle.astro").default;
+  export default MobileMenuToggle;
+}

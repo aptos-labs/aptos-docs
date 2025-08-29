@@ -35,10 +35,10 @@ export const sidebar = [
         collapsed: true,
         items: [
           "build/guides/first-transaction",
-          "build/guides/your-first-nft",
-          "build/guides/first-coin",
-          "build/guides/first-fungible-asset",
           "build/guides/first-move-module",
+          // "build/guides/first-coin",
+          "build/guides/first-fungible-asset",
+          "build/guides/your-first-nft",
           "build/guides/first-multisig",
           {
             label: "Build E2E DApp",
@@ -57,7 +57,11 @@ export const sidebar = [
       group("guides.group.advanced", {
         collapsed: true,
         items: [
+          "build/guides/sponsored-transactions",
+          "build/guides/transaction-management",
+          "build/guides/orderless-transactions",
           "build/guides/multisig-managed-fungible-asset",
+          "build/guides/key-rotation",
           {
             label: "Aptos Keyless",
             collapsed: true,
@@ -82,10 +86,6 @@ export const sidebar = [
               },
             ],
           },
-          "build/guides/sponsored-transactions",
-          "build/guides/transaction-management",
-          "build/guides/key-rotation",
-          "build/guides/orderless-transactions",
         ],
       }),
       {
@@ -117,156 +117,164 @@ export const sidebar = [
       },
 
       // SDKs - Collapsible groups for each SDK/tool
-      "build/sdks",
       {
-        label: "TypeScript SDK",
+        label: "SDKs",
         collapsed: true,
         items: [
-          "build/sdks/ts-sdk",
-          "build/sdks/ts-sdk/account",
-          "build/sdks/ts-sdk/building-transactions",
-          "build/sdks/ts-sdk/confidential-asset",
-          "build/sdks/ts-sdk/fetch-data-via-sdk",
-          "build/sdks/ts-sdk/legacy-ts-sdk",
-          "build/sdks/ts-sdk/quickstart",
-          "build/sdks/ts-sdk/ts-examples",
-          "build/sdks/ts-sdk/type-safe-contract",
+          "build/sdks",
           {
-            label: "React Hooks",
-            link: "https://js-pro.aptos.dev",
-          },
-          {
-            label: "Account",
+            label: "TypeScript SDK",
             collapsed: true,
             items: [
-              "build/sdks/ts-sdk/account",
-              "build/sdks/ts-sdk/account/account-abstraction",
-              "build/sdks/ts-sdk/account/derivable-account-abstraction",
+              "build/sdks/ts-sdk",
+              "build/sdks/ts-sdk/quickstart",
+              "build/sdks/ts-sdk/fetch-data-via-sdk",
+              "build/sdks/ts-sdk/ts-examples",
+              "build/sdks/ts-sdk/type-safe-contract",
+              {
+                label: "React Hooks",
+                link: "https://js-pro.aptos.dev",
+              },
+              "build/sdks/ts-sdk/confidential-asset",
+              {
+                label: "Accounts",
+                collapsed: true,
+                items: [
+                  "build/sdks/ts-sdk/account",
+                  "build/sdks/ts-sdk/account/account-abstraction",
+                  "build/sdks/ts-sdk/account/derivable-account-abstraction",
+                ],
+              },
+              {
+                label: "Building Transactions",
+                collapsed: true,
+                items: [
+                  "build/sdks/ts-sdk/building-transactions",
+                  "build/sdks/ts-sdk/building-transactions/batching-transactions",
+                  "build/sdks/ts-sdk/building-transactions/bcs-format",
+                  "build/sdks/ts-sdk/building-transactions/multi-agent-transactions",
+                  "build/sdks/ts-sdk/building-transactions/orderless-transactions",
+                  "build/sdks/ts-sdk/building-transactions/script-composer",
+                  "build/sdks/ts-sdk/building-transactions/simulating-transactions",
+                  "build/sdks/ts-sdk/building-transactions/sponsoring-transactions",
+                ],
+              },
+              {
+                label: "Legacy TS SDK",
+                collapsed: true,
+                items: [
+                  "build/sdks/ts-sdk/legacy-ts-sdk",
+                  "build/sdks/ts-sdk/legacy-ts-sdk/migration-guide",
+                ],
+              },
             ],
           },
           {
-            label: "Building Transactions",
+            label: "Go SDK",
             collapsed: true,
             items: [
-              "build/sdks/ts-sdk/building-transactions",
-              "build/sdks/ts-sdk/building-transactions/batching-transactions",
-              "build/sdks/ts-sdk/building-transactions/bcs-format",
-              "build/sdks/ts-sdk/building-transactions/multi-agent-transactions",
-              "build/sdks/ts-sdk/building-transactions/orderless-transactions",
-              "build/sdks/ts-sdk/building-transactions/script-composer",
-              "build/sdks/ts-sdk/building-transactions/simulating-transactions",
-              "build/sdks/ts-sdk/building-transactions/sponsoring-transactions",
+              "build/sdks/go-sdk",
+              "build/sdks/go-sdk/account",
+              "build/sdks/go-sdk/fetch-data-via-sdk",
+              "build/sdks/go-sdk/go-examples",
+              {
+                label: "Building Transactions",
+                collapsed: true,
+                items: [
+                  "build/sdks/go-sdk/building-transactions",
+                  "build/sdks/go-sdk/building-transactions/batching-transactions",
+                  "build/sdks/go-sdk/building-transactions/simulating-transactions",
+                  "build/sdks/go-sdk/building-transactions/bcs-format",
+                  "build/sdks/go-sdk/building-transactions/multi-agent-transactions",
+                  "build/sdks/go-sdk/building-transactions/sponsoring-transactions",
+                ],
+              },
             ],
           },
           {
-            label: "Legacy TS SDK",
+            label: ".NET SDK",
             collapsed: true,
             items: [
-              "build/sdks/ts-sdk/legacy-ts-sdk",
-              "build/sdks/ts-sdk/legacy-ts-sdk/migration-guide",
+              "build/sdks/dotnet-sdk",
+              "build/sdks/dotnet-sdk/dotnet-examples",
+              "build/sdks/dotnet-sdk/getting-started",
+              "build/sdks/dotnet-sdk/godot-integration",
+              "build/sdks/dotnet-sdk/unity-integration",
+              {
+                label: "Accounts",
+                collapsed: true,
+                items: [
+                  "build/sdks/dotnet-sdk/accounts/ed25519",
+                  "build/sdks/dotnet-sdk/accounts/keyless",
+                  "build/sdks/dotnet-sdk/accounts/multikey",
+                ],
+              },
+              {
+                label: "Queries",
+                collapsed: true,
+                items: ["build/sdks/dotnet-sdk/queries/view"],
+              },
+              {
+                label: "Transactions",
+                collapsed: true,
+                items: [
+                  "build/sdks/dotnet-sdk/transactions/basic-transactions",
+                  "build/sdks/dotnet-sdk/transactions/sponsored-transactions",
+                ],
+              },
             ],
           },
-        ],
-      },
-      // Python SDK (no subpages found)
-      "build/sdks/python-sdk",
-      {
-        label: "Go SDK",
-        collapsed: true,
-        items: [
-          "build/sdks/go-sdk",
-          "build/sdks/go-sdk/account",
-          "build/sdks/go-sdk/building-transactions",
-          "build/sdks/go-sdk/fetch-data-via-sdk",
-          "build/sdks/go-sdk/go-examples",
+          // Python SDK (no subpages found)
+          "build/sdks/python-sdk",
+          // Unity SDK (no subpages found)
+          "build/sdks/unity-sdk",
+          // C++ SDK (no subpages found)
+          "build/sdks/cpp-sdk",
+          // Rust SDK (no subpages found)
+          "build/sdks/rust-sdk",
           {
-            label: "Building Transactions",
+            label: "Wallet Adapter",
             collapsed: true,
             items: [
-              "build/sdks/go-sdk/building-transactions",
-              "build/sdks/go-sdk/building-transactions/batching-transactions",
-              "build/sdks/go-sdk/building-transactions/simulating-transactions",
-              "build/sdks/go-sdk/building-transactions/bcs-format",
-              "build/sdks/go-sdk/building-transactions/multi-agent-transactions",
-              "build/sdks/go-sdk/building-transactions/sponsoring-transactions",
+              "build/sdks/wallet-adapter",
+              "build/sdks/wallet-adapter/browser-extension-wallets",
+              "build/sdks/wallet-adapter/dapp",
+              "build/sdks/wallet-adapter/wallets",
+              "build/sdks/wallet-adapter/wallet-standards",
+              "build/sdks/wallet-adapter/x-chain-accounts",
             ],
           },
-        ],
-      },
-      // Rust SDK (no subpages found)
-      "build/sdks/rust-sdk",
-      {
-        label: "Dotnet SDK",
-        collapsed: true,
-        items: [
-          "build/sdks/dotnet-sdk",
-          "build/sdks/dotnet-sdk/dotnet-examples",
-          "build/sdks/dotnet-sdk/getting-started",
-          "build/sdks/dotnet-sdk/godot-integration",
-          "build/sdks/dotnet-sdk/unity-integration",
+          // Community SDKs
           {
-            label: "Accounts",
+            label: "Community SDKs",
             collapsed: true,
             items: [
-              "build/sdks/dotnet-sdk/accounts/ed25519",
-              "build/sdks/dotnet-sdk/accounts/keyless",
-              "build/sdks/dotnet-sdk/accounts/multikey",
+              "build/sdks/community-sdks",
+              {
+                label: "Kaptos (Kotlin SDK)",
+                collapsed: true,
+                items: [
+                  "build/sdks/community-sdks/kotlin-sdk",
+                  "build/sdks/community-sdks/kotlin-sdk/quickstart",
+                  "build/sdks/community-sdks/kotlin-sdk/account",
+                  "build/sdks/community-sdks/kotlin-sdk/building-transactions",
+                  "build/sdks/community-sdks/kotlin-sdk/client-configuration",
+                  "build/sdks/community-sdks/kotlin-sdk/fetch-data-via-sdk",
+                  "build/sdks/community-sdks/kotlin-sdk/sponsored-transactions",
+                  {
+                    label: "For iOS Developers",
+                    collapsed: true,
+                    items: [
+                      "build/sdks/community-sdks/kotlin-sdk/for-ios-devs/getting-started",
+                      "build/sdks/community-sdks/kotlin-sdk/for-ios-devs/aptos-kit",
+                    ],
+                  },
+                ],
+              },
+              "build/sdks/community-sdks/swift-sdk",
+              "build/sdks/community-sdks/unity-opendive-sdk",
             ],
           },
-          {
-            label: "Queries",
-            collapsed: true,
-            items: ["build/sdks/dotnet-sdk/queries/view"],
-          },
-          {
-            label: "Transactions",
-            collapsed: true,
-            items: [
-              "build/sdks/dotnet-sdk/transactions/basic-transactions",
-              "build/sdks/dotnet-sdk/transactions/sponsored-transactions",
-            ],
-          },
-        ],
-      },
-      // Unity SDK (no subpages found)
-      "build/sdks/unity-sdk",
-      // C++ SDK (no subpages found)
-      "build/sdks/cpp-sdk",
-      {
-        label: "Wallet Adapter",
-        collapsed: true,
-        items: [
-          "build/sdks/wallet-adapter",
-          "build/sdks/wallet-adapter/browser-extension-wallets",
-          "build/sdks/wallet-adapter/dapp",
-          "build/sdks/wallet-adapter/wallet-standards",
-          "build/sdks/wallet-adapter/wallets",
-          "build/sdks/wallet-adapter/x-chain-accounts",
-        ],
-      },
-      // Community SDKs
-      {
-        label: "Community SDKs",
-        collapsed: true,
-        items: [
-          "build/sdks/community-sdks",
-          "build/sdks/community-sdks/kotlin-sdk",
-          "build/sdks/community-sdks/kotlin-sdk/account",
-          "build/sdks/community-sdks/kotlin-sdk/building-transactions",
-          "build/sdks/community-sdks/kotlin-sdk/client-configuration",
-          "build/sdks/community-sdks/kotlin-sdk/fetch-data-via-sdk",
-          "build/sdks/community-sdks/kotlin-sdk/quickstart",
-          "build/sdks/community-sdks/kotlin-sdk/sponsored-transactions",
-          {
-            label: "For iOS Developers",
-            collapsed: true,
-            items: [
-              "build/sdks/community-sdks/kotlin-sdk/for-ios-devs/aptos-kit",
-              "build/sdks/community-sdks/kotlin-sdk/for-ios-devs/getting-started",
-            ],
-          },
-          "build/sdks/community-sdks/swift-sdk",
-          "build/sdks/community-sdks/unity-opendive-sdk",
         ],
       },
 
@@ -381,23 +389,14 @@ export const sidebar = [
         collapsed: true,
         items: [
           "build/cli",
-          "build/cli/setup-cli",
-          "build/cli/formatting-move-contracts",
-          "build/cli/managing-a-network-node",
-          "build/cli/public-network",
-          "build/cli/replay-past-transactions",
-          "build/cli/running-a-local-network",
-          "build/cli/start-from-template",
-          "build/cli/trying-things-on-chain",
-          "build/cli/working-with-move-contracts",
           {
             label: "Install CLI",
             collapsed: true,
             items: [
-              "build/cli/install-cli/install-cli-linux",
               "build/cli/install-cli/install-cli-mac",
-              "build/cli/install-cli/install-cli-specific-version",
               "build/cli/install-cli/install-cli-windows",
+              "build/cli/install-cli/install-cli-linux",
+              "build/cli/install-cli/install-cli-specific-version",
             ],
           },
           {
@@ -411,8 +410,11 @@ export const sidebar = [
             items: [
               "build/cli/trying-things-on-chain",
               "build/cli/trying-things-on-chain/create-test-accounts",
-              "build/cli/trying-things-on-chain/ledger",
               "build/cli/trying-things-on-chain/looking-up-account-info",
+              "build/cli/trying-things-on-chain/ledger",
+              "build/cli/managing-a-network-node",
+              "build/cli/running-a-local-network",
+              "build/cli/public-network",
             ],
           },
           {
@@ -420,8 +422,11 @@ export const sidebar = [
             collapsed: true,
             items: [
               "build/cli/working-with-move-contracts",
-              "build/cli/working-with-move-contracts/arguments-in-json-tutorial",
+              "build/cli/formatting-move-contracts",
+              "build/cli/start-from-template",
+              "build/cli/replay-past-transactions",
               "build/cli/working-with-move-contracts/local-simulation-benchmarking-and-gas-profiling",
+              "build/cli/working-with-move-contracts/arguments-in-json-tutorial",
               "build/cli/working-with-move-contracts/multi-signature-tutorial",
             ],
           },
@@ -510,26 +515,56 @@ export const sidebar = [
         label: "Aptos Features",
         collapsed: true,
         items: [
-          "build/smart-contracts/objects",
-          "build/smart-contracts/object/creating-objects",
-          "build/smart-contracts/object/using-objects",
-          "build/smart-contracts/aptos-standards",
-          "build/smart-contracts/digital-asset",
-          "build/smart-contracts/fungible-asset",
-          "build/smart-contracts/aptos-coin",
-          "build/smart-contracts/aptos-token",
-          "build/smart-contracts/randomness",
-          "build/smart-contracts/cryptography",
-          "build/smart-contracts/resource-accounts",
+          {
+            label: "Objects",
+            collapsed: true,
+            items: [
+              "build/smart-contracts/objects",
+              "build/smart-contracts/object/creating-objects",
+              "build/smart-contracts/object/using-objects",
+            ],
+          },
+          {
+            label: "Aptos Standards",
+            collapsed: true,
+            items: [
+              "build/smart-contracts/aptos-standards",
+              {
+                label: "Fungible Tokens",
+                collapsed: true,
+                items: [
+                  "build/smart-contracts/fungible-asset",
+                  "build/smart-contracts/aptos-coin",
+                  "build/smart-contracts/confidential-asset",
+                ],
+              },
+              {
+                label: "Non-Fungible Tokens",
+                collapsed: true,
+                items: [
+                  "build/smart-contracts/tokens",
+                  "build/smart-contracts/digital-asset",
+                  "build/smart-contracts/aptos-token",
+                ],
+              },
+            ],
+          },
+          {
+            label: "Data Structures",
+            collapsed: true,
+            items: [
+              "build/smart-contracts/maps",
+              "build/smart-contracts/smart-table",
+              "build/smart-contracts/smart-vector",
+              "build/smart-contracts/table",
+              "build/smart-contracts/vector",
+            ],
+          },
           "build/smart-contracts/bcs",
-          "build/smart-contracts/maps",
-          "build/smart-contracts/smart-table",
-          "build/smart-contracts/smart-vector",
-          "build/smart-contracts/table",
-          "build/smart-contracts/vector",
-          "build/smart-contracts/tokens",
-          "build/smart-contracts/confidential-asset",
           "build/smart-contracts/modules-on-aptos",
+          "build/smart-contracts/resource-accounts",
+          "build/smart-contracts/cryptography",
+          "build/smart-contracts/randomness",
         ],
       },
 
@@ -824,9 +859,8 @@ export const sidebar = [
         collapsed: true,
         items: ["build/aips", "build/aips/aip-88", "build/aips/aip-115"],
       }),
-      "build/indexer/indexer-api",
-      "build/indexer/indexer-api/indexer-reference",
       "network/glossary",
+      "build/indexer/indexer-api/indexer-reference",
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       ...(openAPISidebarGroups as never[]),
     ],

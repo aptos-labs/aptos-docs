@@ -1,0 +1,76 @@
+---
+title: "AIP-88: 区块结尾交易"
+description: "了解 AIP-88 引入的区块结尾交易，为已执行的区块提供信息"
+sidebar:
+  label: "AIP-88"
+---
+
+[AIP-88](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-88.md) 涵盖了区块结尾交易，这是一种新类型的交易，提供区块执行后的相关信息。这些交易只能由共识机制创建，不是用户发起的。它们包含区块中的 gas 使用信息，并将在未来包含更多信息。
+
+它取代了之前的 `StateCheckpoint` 交易类型，该类型用于"有时"标记区块的结束。新的 `BlockEpilogue` 交易现在有时会在区块结束时创建，并且保证是区块中的最后一个交易。唯一不适用的情况是纪元的最后一个区块，它不会有 `BlockEpilogue` 交易。
+
+## 常见问题
+
+### 区块结尾交易中包含什么？
+
+区块结尾交易包含一个 `BlockEndInfo` 枚举。它被特意设计为枚举，以便将来可以在不破坏现有代码的情况下进行扩展。当前版本是 `V0`，包含以下字段：
+
+```move
+module 0x1::epilogue {
+  enum BlockEndInfo {
+    V0 {
+      /// 是否达到区块 gas 限制
+      block_gas_limit_reached: bool,
+      /// 是否达到区块输出限制
+      block_output_limit_reached: bool,
+      /// 区块消耗的总 gas 单位
+      block_effective_block_gas_units: u64,
+      /// 区块产生的总输出大小
+      block_approx_output_size: u64,
+    },
+  }
+}
+```
+
+这些主要包含区块中 gas 使用的调试信息。
+
+JSON 输出将如下所示：
+
+```json
+{
+    "version":"1912",
+    "hash":"0x54a8efc93fc94f5b545dadb63da3d4dc192125c717b336dc446d55a5b553913f",
+    "state_change_hash":"0xafb6e14fe47d850fd0a7395bcfb997ffacf4715e0f895cc162c218e4a7564bc6",
+    "event_root_hash":"0x414343554d554c41544f525f504c414345484f4c4445525f4841534800000000",
+    "state_checkpoint_hash":"0x841a43956ca09a02b1c1cdadc65f24c390170aa666015a2e8f7ec5c9d6a3875f",
+    "gas_used":"0",
+    "success":true,
+    "vm_status":"Executed successfully",
+    "accumulator_root_hash":"0x6561976b4560ff25239dffc6cada70e7008dd42fc4d3df2eca6a86b6d2ec384d",
+    "changes":[],
+    "timestamp":"1719263322836578",
+    "block_end_info": {
+        "block_gas_limit_reached":false,
+        "block_output_limit_reached":false,
+        "block_effective_block_gas_units":0,
+        "block_approx_output_size":1163
+    },
+    "type":"block_epilogue_transaction"
+}
+```
+
+## 兼容性常见问题
+
+### 这对我的 dApp 意味着什么？
+
+如果您在 dApp 中处理交易，并期望区块中的最后一个交易是 `StateCheckpoint`，您需要更新代码以处理 `BlockEpilogue` 交易。
+
+请注意，`BlockEpilogue` 交易保证是区块的最后一个交易，除了纪元的最后一个区块，它不会有 `BlockEpilogue` 交易。
+
+### 哪些应用可能会受到影响？
+
+索引所有交易的应用（如区块浏览器和中心化交易所索引器处理器）可能会受到影响。但是，大多数这些都是信息性的，不会影响 dApp 的核心功能。
+
+### 我可以做什么来处理新的交易类型？
+
+如果您使用 Aptos Go SDK 或 Aptos TypeScript SDK，您可以更新到最新版本，它将自动处理新的交易类型。

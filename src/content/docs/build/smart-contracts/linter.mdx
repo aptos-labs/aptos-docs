@@ -117,6 +117,33 @@ Checks for patterns where references taken are immediately dereferenced, and sug
 - `*&mut x.f` can be simplified to `x.f`
 - `*&mut x.f = 5;` can be simplified to `x.f = 5;`
 
+### `needless_loops`
+
+Checks for loops that always exit on their first iteration, making the loop construct unnecessary. This lint detects loops that immediately return, abort, or break without performing any meaningful iteration.
+
+The linter identifies these patterns:
+
+- Loops where the first instruction is `return`, `abort`, or `break`
+- Loops where the first instruction is a conditional branch where both paths immediately exit the loop
+
+Examples of needless loops:
+
+```move
+// Always returns on first iteration
+loop {
+    return 42;
+}
+
+// Always aborts on first iteration
+loop {
+    abort 1;
+}
+```
+
+These can be simplified by removing the loop construct entirely and using just the exit statement directly.
+
+This lint uses conservative analysis to avoid false positives, only flagging cases where the exit behavior is immediately obvious from the loop's structure.
+
 ### `needless_mutable_reference`
 
 Checks for mutable references or borrows (currently: mutable reference parameters, mutable borrow of locals, `borrow_global_mut`) that are not used mutably, and suggests to use the immutable reference or borrow instead.

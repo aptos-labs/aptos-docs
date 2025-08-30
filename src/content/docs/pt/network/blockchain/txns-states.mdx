@@ -1,0 +1,84 @@
+---
+title: "Transações e Estados"
+---
+
+import { ThemedImage } from '~/components/ThemedImage';
+
+import { Aside } from '@astrojs/starlight/components';
+
+O blockchain Aptos armazena três tipos de dados:
+
+- **Transações**: Transações representam uma operação pretendida sendo realizada por uma conta no blockchain (ex: transferir ativos).
+- **Estados**: O estado (do ledger blockchain) representa o acúmulo da saída da execução de transações, os valores armazenados dentro de todos os [recursos](/pt/network/blockchain/resources).
+- [**Eventos**](/pt/network/blockchain/events): Dados auxiliares publicados pela execução de uma transação.
+
+<Aside type="note">
+  Apenas transações podem alterar o estado do ledger.
+</Aside>
+
+## Transações
+
+Transações Aptos contêm informações como o endereço da conta do remetente, autenticação do remetente, a operação desejada a ser realizada no blockchain Aptos e a quantidade de gas que o remetente está disposto a pagar para executar a transação.
+
+### Estados de transação
+
+Uma transação pode terminar em um dos seguintes estados:
+
+- Confirmada no blockchain e executada. Isso é considerado uma transação bem-sucedida.
+- Confirmada no blockchain e abortada. O código de aborto indica por que a transação falhou ao executar.
+- Descartada durante o envio da transação devido a uma verificação de validação como gas insuficiente, formato de transação inválido ou chave incorreta.
+- Descartada após o envio da transação mas antes da tentativa de execução. Isso pode ser causado por timeouts ou gas insuficiente devido a outras transações afetando a conta.
+
+A conta do remetente será cobrada gas por qualquer transação confirmada.
+
+Durante o envio da transação, o remetente é notificado do envio bem-sucedido ou de uma razão para falha nas validações.
+
+Uma transação que é enviada com sucesso mas finalmente descartada pode não ter estado visível em qualquer nó Aptos acessível ou dentro da rede Aptos. Um usuário pode tentar reenviar a mesma transação para revalidar a transação. Se o nó de envio acredita que esta transação ainda é válida, retornará um erro indicando que uma transação idêntica foi enviada.
+
+O remetente pode tentar aumentar o custo de gas por uma quantidade trivial para ajudar a fazer progresso e ajustar para o que quer que possa ter causado o descarte da transação mais adiante no fluxo.
+
+<Aside type="note">
+  Veja [Mergulho Profundo no Blockchain Aptos](/pt/network/blockchain/blockchain-deep-dive) para uma descrição abrangente do ciclo de vida da transação Aptos.
+</Aside>
+
+### Conteúdo de uma Transação
+
+Uma transação assinada no blockchain contém as seguintes informações:
+
+- **Assinatura**: O remetente usa uma assinatura digital para verificar que eles assinaram a transação (ou seja, autenticação).
+- **Endereço do remetente**: O [endereço da conta](/pt/network/blockchain/accounts#account-address) do remetente.
+- **Chave pública do remetente**: A chave de autenticação pública que corresponde à chave de autenticação privada usada para assinar a transação.
+- **Programa**: Opcionalmente inclui um dos seguintes:
+  - Bytecode Move (para transações peer-to-peer ou para atualizar recursos Move já no blockchain)
+  - Bytecode de módulos Move (no caso de estar sendo publicado pela primeira vez na rede)
+- **Preço do gas**: A quantidade que o remetente está disposto a pagar por unidade de gas (especificado em [Octas](/pt/network/glossary#octa)).
+- **Quantidade máxima de gas**: A quantidade máxima de gas que a transação pode consumir.
+- **Número de sequência**: Um inteiro não assinado correspondente a esta transação.
+- **Tempo de expiração**: O tempo (em segundos desde a época Unix) para o qual esta transação é válida.
+
+## Estado
+
+Conceitualmente, o estado é um mapeamento (chave, valor) onde chaves são endereços e valores são módulos Move e recursos Move:
+
+- **Módulo Move**: Módulos Move contêm bytecode que define tipos de struct e funções que operam nesses tipos. Essas funções definem as regras para atualizar o estado global do blockchain.
+- **Recurso Move**: Recursos Move contêm dados que podem ser acessados de acordo com os procedimentos declarados em um módulo Move. Recursos nunca podem ser copiados ou descartados, apenas movidos entre locais de armazenamento do programa.
+
+### Banco de dados versionado
+
+Todos os dados no blockchain Aptos são armazenados em um **banco de dados versionado**. Um número de versão do banco de dados versionado é um inteiro de 64 bits sem sinal, correspondendo a um estado passado do blockchain.
+
+A versão 0 é o estado inicial, também chamado de gênesis. A versão 1 é o resultado de aplicar a primeira transação pós-gênesis ao estado inicial. E assim por diante.
+
+### Estado do blockchain Aptos
+
+O estado do blockchain Aptos consiste em:
+
+- **Contas**: Cada conta é identificada por um **endereço de conta** e contém **módulos Move** e **recursos Move** nesse endereço.
+- **Estado do ledger**: Representação em árvore Merkle dos dados on-chain.
+
+#### Contas
+
+Uma conta é uma coleção de recursos Move e módulos Move:
+
+- **Módulos Move**: Contêm bytecode Move e definem tipos de struct e funções que operam nesses tipos. Essas funções definem as regras para atualizar o estado global do blockchain.
+- **Recursos Move**: Contêm dados que podem ser acessados de acordo com os procedimentos declarados em um módulo Move. Recursos nunca podem ser copiados ou descartados, apenas movidos entre locais de armazenamento do programa.

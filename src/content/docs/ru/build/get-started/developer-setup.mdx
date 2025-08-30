@@ -1,0 +1,486 @@
+---
+title: "Настройка Среды Разработки"
+---
+
+import { Aside, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
+
+Добро пожаловать в экосистему разработки Aptos! Это руководство поможет вам настроить полную среду разработки для создания dApps на блокчейне Aptos.
+
+## Обзор
+
+К концу этого руководства у вас будет:
+
+- Установлена и настроена Aptos CLI
+- Настроена среда разработки для выбранного SDK
+- Создан и профинансирован тестовый аккаунт
+- Проверена настройка путем выполнения первой транзакции
+
+## Шаг 1: Установка Aptos CLI
+
+Aptos CLI - это ваш главный инструмент для взаимодействия с блокчейном Aptos. Он позволяет управлять аккаунтами, публиковать контракты и выполнять транзакции.
+
+<Tabs>
+  <TabItem label="macOS">
+    ### Homebrew (рекомендуется)
+
+    ```bash filename="Terminal"
+    brew install aptos
+    ```
+
+    ### Скачать бинарный файл
+
+    1. Посетите [страницу релизов Aptos](https://github.com/aptos-labs/aptos-core/releases)
+    2. Скачайте последнюю версию для macOS
+    3. Распакуйте и переместите в ваш PATH
+
+    ```bash filename="Terminal"
+    wget https://github.com/aptos-labs/aptos-core/releases/download/aptos-cli-v4.2.0/aptos-cli-4.2.0-MacOSX-x86_64.zip
+    unzip aptos-cli-4.2.0-MacOSX-x86_64.zip
+    chmod +x aptos
+    mv aptos /usr/local/bin/
+    ```
+  </TabItem>
+
+  <TabItem label="Ubuntu/Debian">
+    ### Скачать бинарный файл
+
+    ```bash filename="Terminal"
+    wget https://github.com/aptos-labs/aptos-core/releases/download/aptos-cli-v4.2.0/aptos-cli-4.2.0-Ubuntu-x86_64.zip
+    unzip aptos-cli-4.2.0-Ubuntu-x86_64.zip
+    chmod +x aptos
+    sudo mv aptos /usr/local/bin/
+    ```
+
+    ### Установка через Cargo
+
+    ```bash filename="Terminal"
+    cargo install --git https://github.com/aptos-labs/aptos-core.git aptos --branch mainnet
+    ```
+  </TabItem>
+
+  <TabItem label="Windows">
+    ### Скачать исполняемый файл
+
+    1. Посетите [страницу релизов Aptos](https://github.com/aptos-labs/aptos-core/releases)
+    2. Скачайте последнюю версию для Windows
+    3. Распакуйте и добавьте в ваш PATH
+
+    ```powershell filename="PowerShell"
+    # Используйте PowerShell в качестве администратора
+    Invoke-WebRequest -Uri "https://github.com/aptos-labs/aptos-core/releases/download/aptos-cli-v4.2.0/aptos-cli-4.2.0-Windows-x86_64.zip" -OutFile "aptos-cli.zip"
+    Expand-Archive -Path "aptos-cli.zip" -DestinationPath "C:\aptos"
+    # Добавьте C:\aptos в переменную среды PATH
+    ```
+
+    ### Установка через Cargo
+
+    ```bash filename="Command Prompt"
+    cargo install --git https://github.com/aptos-labs/aptos-core.git aptos --branch mainnet
+    ```
+  </TabItem>
+</Tabs>
+
+### Проверка установки
+
+Проверьте, что CLI установлен правильно:
+
+```bash filename="Terminal"
+aptos --version
+```
+
+Вы должны увидеть что-то вроде:
+
+```
+aptos 4.2.0
+```
+
+## Шаг 2: Настройка SDK
+
+Выберите SDK в зависимости от вашего предпочитаемого языка программирования:
+
+<Tabs>
+  <TabItem label="TypeScript">
+    ### Установка TypeScript SDK
+
+    ```bash filename="Terminal"
+    npm install @aptos-labs/ts-sdk
+    # или
+    yarn add @aptos-labs/ts-sdk
+    # или
+    pnpm add @aptos-labs/ts-sdk
+    ```
+
+    ### Базовая настройка
+
+    Создайте новый проект:
+
+    ```bash filename="Terminal"
+    mkdir my-aptos-dapp
+    cd my-aptos-dapp
+    npm init -y
+    npm install @aptos-labs/ts-sdk typescript @types/node
+    npx tsc --init
+    ```
+
+    ### Пример базового файла
+
+    Создайте `src/index.ts`:
+
+    ```typescript filename="src/index.ts"
+    import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
+
+    // Подключение к devnet для разработки
+    const config = new AptosConfig({ network: Network.DEVNET });
+    const aptos = new Aptos(config);
+
+    async function main() {
+      console.log("Подключено к Aptos devnet");
+      
+      // Получение информации о сети
+      const chainId = await aptos.getChainId();
+      console.log(`Chain ID: ${chainId}`);
+    }
+
+    main().catch(console.error);
+    ```
+
+    ### Запуск примера
+
+    ```bash filename="Terminal"
+    npx tsx src/index.ts
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    ### Установка Python SDK
+
+    ```bash filename="Terminal"
+    pip install aptos-sdk
+    ```
+
+    ### Базовая настройка
+
+    Создайте новый проект:
+
+    ```bash filename="Terminal"
+    mkdir my-aptos-dapp
+    cd my-aptos-dapp
+    python -m venv venv
+    source venv/bin/activate  # Windows: venv\Scripts\activate
+    pip install aptos-sdk
+    ```
+
+    ### Пример базового файла
+
+    Создайте `main.py`:
+
+    ```python filename="main.py"
+    import asyncio
+    from aptos_sdk.async_client import RestClient
+
+    # Подключение к devnet для разработки
+    NODE_URL = "https://fullnode.devnet.aptoslabs.com/v1"
+
+    async def main():
+        rest_client = RestClient(NODE_URL)
+        
+        print("Подключено к Aptos devnet")
+        
+        # Получение информации о сети
+        chain_id = await rest_client.chain_id()
+        print(f"Chain ID: {chain_id}")
+
+    if __name__ == "__main__":
+        asyncio.run(main())
+    ```
+
+    ### Запуск примера
+
+    ```bash filename="Terminal"
+    python main.py
+    ```
+  </TabItem>
+
+  <TabItem label="Rust">
+    ### Установка Rust SDK
+
+    Добавьте в ваш `Cargo.toml`:
+
+    ```toml filename="Cargo.toml"
+    [dependencies]
+    aptos-sdk = "0.1"
+    tokio = { version = "1.0", features = ["full"] }
+    ```
+
+    ### Базовая настройка
+
+    Создайте новый проект:
+
+    ```bash filename="Terminal"
+    cargo new my-aptos-dapp
+    cd my-aptos-dapp
+    ```
+
+    ### Пример базового файла
+
+    Создайте или обновите `src/main.rs`:
+
+    ```rust filename="src/main.rs"
+    use aptos_sdk::rest_client::RestClient;
+
+    #[tokio::main]
+    async fn main() -> Result<(), Box<dyn std::error::Error>> {
+        // Подключение к devnet для разработки
+        let rest_client = RestClient::new("https://fullnode.devnet.aptoslabs.com".parse()?);
+        
+        println!("Подключено к Aptos devnet");
+        
+        // Получение информации о сети
+        let chain_id = rest_client.get_chain_id().await?;
+        println!("Chain ID: {}", chain_id);
+        
+        Ok(())
+    }
+    ```
+
+    ### Запуск примера
+
+    ```bash filename="Terminal"
+    cargo run
+    ```
+  </TabItem>
+
+  <TabItem label="Go">
+    ### Установка Go SDK
+
+    ```bash filename="Terminal"
+    go mod init my-aptos-dapp
+    go get github.com/aptos-labs/aptos-go-sdk
+    ```
+
+    ### Пример базового файла
+
+    Создайте `main.go`:
+
+    ```go filename="main.go"
+    package main
+
+    import (
+        "fmt"
+        "log"
+        
+        "github.com/aptos-labs/aptos-go-sdk/client"
+    )
+
+    func main() {
+        // Подключение к devnet для разработки
+        nodeURL := "https://fullnode.devnet.aptoslabs.com"
+        aptosClient := client.NewRestClient(nodeURL)
+        
+        fmt.Println("Подключено к Aptos devnet")
+        
+        // Получение информации о сети
+        chainID, err := aptosClient.GetChainID()
+        if err != nil {
+            log.Fatal(err)
+        }
+        
+        fmt.Printf("Chain ID: %d\n", chainID)
+    }
+    ```
+
+    ### Запуск примера
+
+    ```bash filename="Terminal"
+    go run main.go
+    ```
+  </TabItem>
+</Tabs>
+
+## Шаг 3: Создание и Финансирование Аккаунта
+
+Теперь создадим тестовый аккаунт для разработки:
+
+<Steps>
+  1. Инициализация нового аккаунта
+
+     ```bash filename="Terminal"
+     aptos init
+     ```
+
+     Вам будет предложено:
+
+     - **Сеть**: Выберите `devnet` для разработки
+     - **Приватный ключ**: Нажмите Enter для генерации нового ключа
+     - CLI создаст новый аккаунт и сохранит конфигурацию
+
+  2. Проверьте ваш новый аккаунт
+
+     ```bash filename="Terminal"
+     aptos account list
+     ```
+
+     Это покажет адрес вашего аккаунта.
+
+  3. Профинансируйте ваш аккаунт
+
+     ```bash filename="Terminal"
+     aptos account fund-with-faucet --account default
+     ```
+
+     Это добавит тестовые APT на ваш аккаунт для покрытия комиссий за транзакции.
+
+  4. Проверьте баланс
+
+     ```bash filename="Terminal"
+     aptos account balance
+     ```
+
+     Вы должны увидеть что-то вроде:
+
+     ```
+     100000000 APT
+     ```
+</Steps>
+
+## Шаг 4: Проверка Настройки
+
+Давайте выполним простую транзакцию, чтобы убедиться, что все работает:
+
+```bash filename="Terminal"
+aptos account transfer --account 0x1 --amount 100
+```
+
+Эта команда переведет 100 Octas (наименьшая единица APT) на адрес `0x1`. Если транзакция прошла успешно, ваша среда настроена правильно!
+
+## Шаг 5: Настройка IDE
+
+### Visual Studio Code (рекомендуется)
+
+1. Установите [VS Code](https://code.visualstudio.com/)
+
+2. Установите полезные расширения:
+
+   - **Move** - Синтаксис и поддержка языка Move
+   - **REST Client** - Для тестирования API
+   - **GitLens** - Расширенная поддержка Git
+
+3. Настройте пользовательские настройки (`settings.json`):
+
+   ```json filename=".vscode/settings.json"
+   {
+     "move.languageServer.enable": true,
+     "editor.formatOnSave": true,
+     "editor.codeActionsOnSave": {
+       "source.fixAll": true
+     }
+   }
+   ```
+
+## Полезные Ресурсы
+
+### Конечные точки сети
+
+<Tabs>
+  <TabItem label="Devnet">
+    - **REST API**: `https://fullnode.devnet.aptoslabs.com/v1`
+    - **Faucet**: `https://faucet.devnet.aptoslabs.com`
+    - **Explorer**: [https://explorer.aptoslabs.com/?network=devnet](https://explorer.aptoslabs.com/?network=devnet)
+
+    <Aside type="note">
+      Devnet перезапускается еженедельно, все данные будут потеряны. Используйте для разработки и тестирования.
+    </Aside>
+  </TabItem>
+
+  <TabItem label="Testnet">
+    - **REST API**: `https://fullnode.testnet.aptoslabs.com/v1`
+    - **Faucet**: `https://faucet.testnet.aptoslabs.com`
+    - **Explorer**: [https://explorer.aptoslabs.com/?network=testnet](https://explorer.aptoslabs.com/?network=testnet)
+
+    <Aside type="note">
+      Testnet более стабилен чем devnet, но может периодически сбрасываться. Хорош для стадии тестирования.
+    </Aside>
+  </TabItem>
+
+  <TabItem label="Mainnet">
+    - **REST API**: `https://fullnode.mainnet.aptoslabs.com/v1`
+    - **Explorer**: [https://explorer.aptoslabs.com/?network=mainnet](https://explorer.aptoslabs.com/?network=mainnet)
+
+    <Aside type="caution">
+      Mainnet - это производственная сеть с реальными APT. Используйте только для готовых к продакшену dApps.
+    </Aside>
+  </TabItem>
+</Tabs>
+
+### Документация и Поддержка
+
+- [Документация Aptos](/ru/) - Полная документация
+- [SDK TypeScript](/ru/build/sdks/ts-sdk) - TypeScript SDK справочник
+- [SDK Python](/ru/build/sdks/python-sdk) - Python SDK справочник
+- [Move Book](/ru/build/smart-contracts/book) - Изучение языка Move
+- [Discord сообщество](https://discord.gg/aptoslabs) - Поддержка разработчиков
+- [GitHub](https://github.com/aptos-labs) - Исходный код и примеры
+
+## Устранение Неполадок
+
+### Распространенные проблемы
+
+**CLI не найдена**
+
+```bash
+command not found: aptos
+```
+
+- Убедитесь, что CLI добавлена в ваш PATH
+- Перезапустите терминал после установки
+- Проверьте права на выполнение файла (`chmod +x aptos`)
+
+**Ошибки сети**
+
+```bash
+Failed to connect to network
+```
+
+- Проверьте подключение к интернету
+- Убедитесь, что используете правильные URL конечных точек
+- Попробуйте переключиться на другую сеть (devnet/testnet)
+
+**Проблемы с финансированием аккаунта**
+
+```bash
+Faucet request failed
+```
+
+- Убедитесь, что используете devnet или testnet (mainnet не имеет faucet)
+- Подождите несколько минут и повторите попытку
+- Проверьте, что адрес аккаунта корректен
+
+**Ошибки SDK**
+
+```bash
+Module not found / Import errors
+```
+
+- Убедитесь, что установлены все зависимости
+- Проверьте версии пакетов
+- Очистите кэш пакетного менеджера и переустановите
+
+### Получить помощь
+
+Если вы столкнулись с проблемами:
+
+1. Проверьте [FAQ](/ru/network/glossary) для распространенных вопросов
+2. Найдите похожие проблемы в [GitHub Issues](https://github.com/aptos-labs/aptos-core/issues)
+3. Присоединитесь к [Discord сообществу](https://discord.gg/aptoslabs) для поддержки в реальном времени
+4. Создайте новую issue с подробным описанием проблемы
+
+## Следующие Шаги
+
+Теперь, когда ваша среда разработки настроена, вы готовы:
+
+1. **Изучить Move** - [Начать с Move Book](/ru/build/smart-contracts/book)
+2. **Создать первую транзакцию** - [Руководство по первой транзакции](/ru/build/guides/first-transaction)
+3. **Написать смарт-контракт** - [Первый модуль Move](/ru/build/guides/first-move-module)
+4. **Создать dApp** - [Сквозное руководство по dApp](/ru/build/guides/build-e2e-dapp)
+
+Добро пожаловать в экосистему Aptos! 🚀

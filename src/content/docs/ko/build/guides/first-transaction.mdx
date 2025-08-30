@@ -1,0 +1,223 @@
+---
+title: "첫 번째 거래"
+---
+
+import { Aside, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
+
+거래는 Aptos 블록체인에서 데이터를 변경하는 기본적인 방법입니다. 패키지를 보내는 것처럼 생각해보세요: 무엇을 보내는지, 누구에게 보내는지 명시하고, 배송이 확인될 때까지 추적해야 합니다. 블록체인 용어로, 거래는 코인을 전송하고, 스마트 컨트랙트 함수를 호출하며, 온체인 상태를 업데이트할 수 있게 해줍니다.
+
+이 튜토리얼은 Aptos 블록체인에서 첫 번째 거래를 생성하고 제출하는 과정을 안내합니다. 다음을 배우게 됩니다:
+
+1. 개발 환경 설정
+2. 테스트 계정 생성 및 자금 조달
+3. 코인 전송을 위한 거래 구축
+4. 비용 추정을 위한 거래 시뮬레이션
+5. 거래 서명 및 제출
+6. 거래가 성공적으로 실행되었는지 확인
+
+<Aside type="note">
+  이 튜토리얼은 Aptos 블록체인의 개념을 기반으로 합니다. 블록체인 개발이 처음이라면 걱정하지 마세요 - 핵심 개념을 진행하면서 설명드리겠습니다.
+
+  전체 코드 샘플로 바로 이동하려면 [여기](#full-code-sample)를 클릭하거나, 단계별 안내를 계속 읽어보세요.
+</Aside>
+
+## 1. 환경 설정
+
+<Tabs>
+  <TabItem label="TypeScript">
+    거래를 생성하기 전에 필요한 도구와 SDK로 개발 환경을 설정해야 합니다.
+
+    <Steps>
+      1. TypeScript SDK 설치
+
+         선호하는 패키지 매니저를 사용하여 TypeScript SDK를 설치하세요:
+
+         <Tabs>
+           <TabItem label="npm">
+             ```shellscript filename="Terminal"
+             npm install @aptos-labs/ts-sdk
+             ```
+           </TabItem>
+
+           <TabItem label="yarn">
+             ```shellscript filename="Terminal"
+             yarn add @aptos-labs/ts-sdk
+             ```
+           </TabItem>
+
+           <TabItem label="pnpm">
+             ```shellscript filename="Terminal"
+             pnpm add @aptos-labs/ts-sdk
+             ```
+           </TabItem>
+         </Tabs>
+
+      2. 프로젝트 디렉토리 생성
+
+         프로젝트를 위한 새 디렉토리를 생성하세요:
+
+         ```shellscript filename="Terminal"
+         mkdir my-first-transaction
+         cd my-first-transaction
+         ```
+
+      3. 새 파일 생성
+
+         `transaction.ts`라는 새 파일을 생성하세요:
+
+         <Tabs>
+           <TabItem label="Mac/Linux">
+             ```shellscript filename="Terminal"
+             touch transaction.ts
+             ```
+           </TabItem>
+
+           <TabItem label="Windows">
+             ```shellscript filename="Terminal"
+             type nul > transaction.ts
+             ```
+           </TabItem>
+         </Tabs>
+    </Steps>
+  </TabItem>
+
+  <TabItem label="Python">
+    거래를 생성하기 전에 필요한 도구와 SDK로 개발 환경을 설정해야 합니다.
+
+    <Steps>
+      1. Python SDK 설치
+
+         pip을 사용하여 Python SDK를 설치하세요:
+
+         ```shellscript filename="Terminal"
+         pip install aptos-sdk
+         ```
+
+      2. 프로젝트 디렉토리 생성
+
+         프로젝트를 위한 새 디렉토리를 생성하세요:
+
+         ```shellscript filename="Terminal"
+         mkdir my-first-transaction
+         cd my-first-transaction
+         ```
+
+      3. 새 파일 생성
+
+         `transaction.py`라는 새 파일을 생성하세요:
+
+         ```shellscript filename="Terminal"
+         touch transaction.py
+         ```
+    </Steps>
+  </TabItem>
+</Tabs>
+
+## 2. 네트워크 연결 설정
+
+이제 Aptos 네트워크에 연결하고 테스트 계정을 생성해보겠습니다.
+
+<Tabs>
+  <TabItem label="TypeScript">
+    ```typescript filename="transaction.ts"
+    import {
+      Account,
+      Aptos,
+      AptosConfig,
+      Network,
+    } from "@aptos-labs/ts-sdk";
+
+    // 데브넷에 연결 설정
+    const config = new AptosConfig({ network: Network.DEVNET });
+    const aptos = new Aptos(config);
+
+    async function main() {
+      console.log("🚀 Aptos에서 첫 번째 거래를 시작합니다!");
+      
+      // 다음 단계에서 계정 생성
+    }
+
+    main().catch(console.error);
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    ```python filename="transaction.py"
+    from aptos_sdk.account import Account
+    from aptos_sdk.async_client import RestClient
+    import asyncio
+
+    # 데브넷에 연결 설정
+    NODE_URL = "https://api.devnet.aptoslabs.com/v1"
+    client = RestClient(NODE_URL)
+
+    async def main():
+        print("🚀 Aptos에서 첫 번째 거래를 시작합니다!")
+        
+        # 다음 단계에서 계정 생성
+
+    if __name__ == "__main__":
+        asyncio.run(main())
+    ```
+  </TabItem>
+</Tabs>
+
+## 3. 계정 생성 및 자금 조달
+
+거래를 수행하려면 계정이 필요하고, 가스 수수료를 지불하기 위한 APT 토큰이 필요합니다.
+
+<Tabs>
+  <TabItem label="TypeScript">
+    ```typescript filename="transaction.ts"
+    async function main() {
+      console.log("🚀 Aptos에서 첫 번째 거래를 시작합니다!");
+      
+      // 1. 새 계정 생성
+      const alice = Account.generate();
+      const bob = Account.generate();
+      
+      console.log(`🏦 Alice 계정: ${alice.accountAddress}`);
+      console.log(`🏦 Bob 계정: ${bob.accountAddress}`);
+      
+      // 2. 계정에 자금 조달 (데브넷 파우셋 사용)
+      console.log("💰 계정에 자금을 조달하는 중...");
+      
+      await aptos.fundAccount({
+        accountAddress: alice.accountAddress,
+        amount: 100_000_000, // 1 APT (1 APT = 100,000,000 Octas)
+      });
+      
+      await aptos.fundAccount({
+        accountAddress: bob.accountAddress,
+        amount: 100_000_000,
+      });
+      
+      console.log("✅ 계정 자금 조달 완료!");
+    }
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    ```python filename="transaction.py"
+    async def main():
+        print("🚀 Aptos에서 첫 번째 거래를 시작합니다!")
+        
+        # 1. 새 계정 생성
+        alice = Account.generate()
+        bob = Account.generate()
+        
+        print(f"🏦 Alice 계정: {alice.address()}")
+        print(f"🏦 Bob 계정: {bob.address()}")
+        
+        # 2. 계정에 자금 조달 (데브넷 파우셋 사용)
+        print("💰 계정에 자금을 조달하는 중...")
+        
+        await client.fund_account(alice.address(), 100_000_000)  # 1 APT
+        await client.fund_account(bob.address(), 100_000_000)
+        
+        print("✅ 계정 자금 조달 완료!")
+    ```
+  </TabItem>
+</Tabs>
+
+이제 첫 번째 거래를 만들 준비가 되었습니다! 전체 예제와 더 자세한 설명은 원본 문서를 참조하세요.

@@ -6,6 +6,7 @@ import tailwindcss from "@tailwindcss/vite";
 import starlightOpenAPI from "starlight-openapi";
 import starlightDocSearch from "@astrojs/starlight-docsearch";
 
+import { tsImport } from "tsx/esm/api";
 import vercel from "@astrojs/vercel";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
@@ -26,6 +27,15 @@ import { remarkClientOnly } from "./src/plugins";
 import { devServerFileWatcher } from "./src/integrations/dev-server-file-watcher";
 // import { isMoveReferenceEnabled } from "./src/utils/isMoveReferenceEnabled";
 // import { rehypeAddDebug } from "./src/plugins";
+
+const i18nMatcherGenerator = await tsImport(
+  "./integrations/i18n-matcher-generator/index.ts",
+  import.meta.url,
+).then((m) => m.default);
+const vercelMiddlewareIntegration = await tsImport(
+  "./integrations/vercel-middleware/index.ts",
+  import.meta.url,
+).then((m) => m.default);
 
 const ALGOLIA_APP_ID = ENV.ALGOLIA_APP_ID;
 const ALGOLIA_SEARCH_API_KEY = ENV.ALGOLIA_SEARCH_API_KEY;
@@ -196,6 +206,13 @@ export default defineConfig({
           "robot",
         ],
       },
+    }),
+    i18nMatcherGenerator({
+      supportedLanguages: SUPPORTED_LANGUAGES,
+      manualMatchers: ["/en", "/en/:path*"],
+    }),
+    vercelMiddlewareIntegration({
+      exclude: ["\\/(.*)\\.(png|jpg|jpeg|gif|svg|webp|avif|ico|css|js|map|ico|webmanifest)"],
     }),
   ],
   adapter: process.env.VERCEL

@@ -24,6 +24,7 @@ import { SUPPORTED_LANGUAGES, SITE_TITLES } from "./src/config/18n";
 import { firebaseIntegration } from "./src/integrations/firebase";
 import { remarkClientOnly } from "./src/plugins";
 import { devServerFileWatcher } from "./src/integrations/dev-server-file-watcher";
+import onDemandDirective from "./src/integrations/client-on-demand/register.js";
 // import { isMoveReferenceEnabled } from "./src/utils/isMoveReferenceEnabled";
 // import { rehypeAddDebug } from "./src/plugins";
 
@@ -44,6 +45,8 @@ export default defineConfig({
         : "http://localhost:4321",
   trailingSlash: "never",
   integrations: [
+    // Custom client directive for on-demand loading
+    onDemandDirective(),
     // Only include devServerFileWatcher in development mode
     ...(process.env.NODE_ENV === "development" || !process.env.VERCEL
       ? [

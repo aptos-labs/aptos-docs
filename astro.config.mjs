@@ -108,6 +108,7 @@ export default defineConfig({
       components: {
         Head: "./src/starlight-overrides/Head.astro",
         Header: "./src/starlight-overrides/Header.astro",
+        Hero: "./src/starlight-overrides/Hero.astro",
         LanguageSelect: "./src/starlight-overrides/LanguageSelect.astro",
         MobileMenuToggle: "./src/starlight-overrides/MobileMenuToggle.astro",
         PageFrame: "./src/starlight-overrides/PageFrame.astro",

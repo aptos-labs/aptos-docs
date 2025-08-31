@@ -225,23 +225,6 @@ export default defineConfig({
         "~/images": fileURLToPath(new URL("./src/assets/images", import.meta.url)),
       },
     },
-    build: {
-      rollupOptions: {
-        output: {
-          // Split vendor chunks to reduce main bundle size
-          manualChunks: {
-            // React and related libraries
-            "react-vendor": ["react", "react-dom"],
-            // Chat widget as separate chunk since it's lazy loaded
-            "chat-widget": ["@aptos-labs/ai-chatbot-client"],
-            // Large utility libraries
-            utils: ["lodash", "date-fns"],
-          },
-        },
-      },
-      // Enable compression and minification
-      minify: "esbuild",
-    },
   },
   markdown: {
     remarkPlugins: [

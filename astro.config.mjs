@@ -302,19 +302,7 @@ export default defineConfig({
         "style-src-attr 'unsafe-inline'",
       ],
       styleDirective: {
-        resources: ["'self'"],
-        hashes: [
-          "sha256-lYPgVeO0CacLwwUB4DyR9jnHyogvo7NBwUv0zXx/qBY=",
-          "sha256-vGQdhYJbTuF+M8iCn1IZCHpdkiICocWHDq4qnQF4Rjw=",
-          "sha256-nzTgYzXYDNe6BAHiiI7NNlfK8n/auuOAhh2t92YvuXo=",
-          // Vercel Feedback
-          "sha256-idamiEt3txtgBxSf9N8pig9A8G9cYzxuccUgpSLBRFc=",
-          "sha256-4t2hwuCFf/ncOE77y1HXa46OEl+jzS9dH0Gz88/YzbM=",
-          "sha256-V7BPG/aB7ECQCAHzgYic6brfDUlcwDh2G0iCPQGF+9E=",
-          "sha256-y/7CwTPJQbRWG8gKg35rzYn/jkpp5kIr6Q+32kEMKTA=",
-          "sha256-fxkN4c/2nO1SmeNIKDXcFVD1poH21fkzl8F/PSmJ8GE=",
-          "sha256-kKHCBjxiDwiyTsb40WHwPsqjlNuwDdjg1wqb7gIwBVE=",
-        ],
+        resources: ["'self'", "'unsafe-inline'", "https://vercel.live"],
       },
       scriptDirective: {
         resources: [

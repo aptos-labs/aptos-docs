@@ -290,6 +290,31 @@ export default defineConfig({
     validateSecrets: true,
   },
   experimental: {
+    csp: {
+      directives: [
+        "default-src 'self'",
+        "img-src 'self' data:",
+        "font-src 'self' data:",
+        "worker-src 'self'",
+        "connect-src 'self' https://api.mainnet.aptoslabs.com https://api.testnet.staging.aptoslabs.com https://*.algolia.net https://*.algolianet.com https://insights.algolia.io https://identitytoolkit.googleapis.com",
+        "frame-src 'self' https://aptos-api-gateway-prod.firebaseapp.com",
+        "style-src-attr 'unsafe-inline'",
+      ],
+      styleDirective: {
+        resources: ["'self'", "'unsafe-inline'"],
+      },
+      scriptDirective: {
+        resources: ["'self'", "https://cdn.jsdelivr.net", "https://apis.google.com"],
+        hashes: [
+          "sha256-tS7/WqSwEFaHIQmDc9NqlnAXlhA4+mtXnP7s6/KeUO4=",
+          "sha256-VWo5Wp4aqSj6nSgMpeAp9cKieaoIfwFUAunAVugI5gA=",
+          "sha256-GkZBRnvSuhtx/cvzvukVkX2JJZW+DdPlVr7BX8Tefqo=",
+          "sha256-wX2yOADeV+NMngflD5uYi3vl50SHC4sfM1EmylVjlX4=",
+          "sha256-7eCV4jtsr4t4knb3c4FCRPeu7GGZeOUGE3XvWix0XOQ=",
+          "sha256-GkZBRnvSuhtx/cvzvukVkX2JJZW+DdPlVr7BX8Tefqo=",
+        ],
+      },
+    },
     fonts: [
       {
         provider: "local",

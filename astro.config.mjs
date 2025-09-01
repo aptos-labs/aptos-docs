@@ -293,18 +293,37 @@ export default defineConfig({
     csp: {
       directives: [
         "default-src 'self'",
-        "img-src 'self' data:",
+        "img-src 'self' https://*.twimg.com https://*.googletagmanager.com data:",
         "font-src 'self' data:",
         "worker-src 'self'",
-        "connect-src 'self' https://api.mainnet.aptoslabs.com https://api.testnet.staging.aptoslabs.com https://*.algolia.net https://*.algolianet.com https://insights.algolia.io https://identitytoolkit.googleapis.com",
-        "frame-src 'self' https://aptos-api-gateway-prod.firebaseapp.com",
+        "connect-src 'self' https://*.aptoslabs.com https://*.algolia.net https://*.algolianet.com https://*.algolia.io https://*.googleapis.com https://vercel.live https://va.vercel-scripts.com https://*.vercel-insights.com https://*.googletagmanager.com",
+        "frame-src 'self' https://aptos-api-gateway-prod.firebaseapp.com https://vercel.live https://player.vimeo.com https://www.youtube.com",
+        "media-src 'self' https://*.twimg.com",
         "style-src-attr 'unsafe-inline'",
       ],
       styleDirective: {
-        resources: ["'self'", "'unsafe-inline'"],
+        resources: ["'self'"],
+        hashes: [
+          "sha256-lYPgVeO0CacLwwUB4DyR9jnHyogvo7NBwUv0zXx/qBY=",
+          "sha256-vGQdhYJbTuF+M8iCn1IZCHpdkiICocWHDq4qnQF4Rjw=",
+          "sha256-nzTgYzXYDNe6BAHiiI7NNlfK8n/auuOAhh2t92YvuXo=",
+          // Vercel Feedback
+          "sha256-idamiEt3txtgBxSf9N8pig9A8G9cYzxuccUgpSLBRFc=",
+          "sha256-4t2hwuCFf/ncOE77y1HXa46OEl+jzS9dH0Gz88/YzbM=",
+          "sha256-V7BPG/aB7ECQCAHzgYic6brfDUlcwDh2G0iCPQGF+9E=",
+          "sha256-y/7CwTPJQbRWG8gKg35rzYn/jkpp5kIr6Q+32kEMKTA=",
+          "sha256-fxkN4c/2nO1SmeNIKDXcFVD1poH21fkzl8F/PSmJ8GE=",
+          "sha256-kKHCBjxiDwiyTsb40WHwPsqjlNuwDdjg1wqb7gIwBVE=",
+        ],
       },
       scriptDirective: {
-        resources: ["'self'", "https://cdn.jsdelivr.net", "https://apis.google.com"],
+        resources: [
+          "'self'",
+          "https://cdn.jsdelivr.net",
+          "https://apis.google.com",
+          "https://vercel.live",
+          "https://*.googletagmanager.com",
+        ],
         hashes: [
           "sha256-tS7/WqSwEFaHIQmDc9NqlnAXlhA4+mtXnP7s6/KeUO4=",
           "sha256-VWo5Wp4aqSj6nSgMpeAp9cKieaoIfwFUAunAVugI5gA=",

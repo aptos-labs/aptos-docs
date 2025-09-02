@@ -58,6 +58,25 @@ function ChatDialogContainer() {
     };
   }, []);
 
+  // Dispatch chat-closed event when dialog is closed
+  useEffect(() => {
+    if (!isOpen) {
+      window.dispatchEvent(new CustomEvent("chat-closed"));
+    }
+  }, [isOpen]);
+
+  // Dispatch chat-ready event when component is mounted
+  useEffect(() => {
+    // Use requestAnimationFrame to ensure DOM is painted before dispatching
+    const frameId = requestAnimationFrame(() => {
+      window.dispatchEvent(new CustomEvent("chat-ready"));
+    });
+
+    return () => {
+      cancelAnimationFrame(frameId);
+    };
+  }, []);
+
   const handleError = (err: unknown, defaultMessage: string) => {
     let errorMessage = defaultMessage;
     if (err instanceof Error) {

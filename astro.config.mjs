@@ -5,7 +5,6 @@ import starlight from "@astrojs/starlight";
 import tailwindcss from "@tailwindcss/vite";
 import starlightOpenAPI from "starlight-openapi";
 import starlightDocSearch from "@astrojs/starlight-docsearch";
-import mermaid from "astro-mermaid";
 
 import vercel from "@astrojs/vercel";
 import remarkMath from "remark-math";
@@ -48,8 +47,6 @@ export default defineConfig({
   integrations: [
     // Custom client directive for on-demand loading
     onDemandDirective(),
-    // Mermaid diagram support
-    mermaid(),
     // Only include devServerFileWatcher in development mode
     ...(process.env.NODE_ENV === "development" || !process.env.VERCEL
       ? [

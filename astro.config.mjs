@@ -300,6 +300,7 @@ export default defineConfig({
         "frame-src 'self' https://aptos-api-gateway-prod.firebaseapp.com https://vercel.live https://player.vimeo.com https://www.youtube.com",
         "media-src 'self' https://*.twimg.com",
         "style-src-attr 'unsafe-inline'",
+        "style-src-elem 'self' 'unsafe-inline' https://vercel.live",
       ],
       styleDirective: {
         resources: ["'self'", "https://vercel.live", "'unsafe-inline'"],

@@ -293,16 +293,16 @@ export default defineConfig({
     csp: {
       directives: [
         "default-src 'self'",
-        "img-src 'self' https://*.twimg.com https://*.googletagmanager.com data:",
-        "font-src 'self' data:",
+        "img-src 'self' https://*.twimg.com https://*.googletagmanager.com https://vercel.live https://vercel.com data: blob:",
+        "font-src 'self' https://vercel.live https://assets.vercel.com data:",
         "worker-src 'self'",
-        "connect-src 'self' https://*.aptoslabs.com https://*.algolia.net https://*.algolianet.com https://*.algolia.io https://*.googleapis.com https://vercel.live https://va.vercel-scripts.com https://*.vercel-insights.com https://*.googletagmanager.com",
+        "connect-src 'self' https://*.aptoslabs.com https://*.algolia.net https://*.algolianet.com https://*.algolia.io https://*.googleapis.com https://vercel.live wss://ws-us3.pusher.com https://va.vercel-scripts.com https://*.vercel-insights.com https://*.googletagmanager.com",
         "frame-src 'self' https://aptos-api-gateway-prod.firebaseapp.com https://vercel.live https://player.vimeo.com https://www.youtube.com",
         "media-src 'self' https://*.twimg.com",
         "style-src-attr 'unsafe-inline'",
       ],
       styleDirective: {
-        resources: ["'self'", "'unsafe-inline'", "https://vercel.live"],
+        resources: ["'self'", "https://vercel.live", "'unsafe-inline'"],
       },
       scriptDirective: {
         resources: [

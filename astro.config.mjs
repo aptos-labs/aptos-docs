@@ -6,6 +6,7 @@ import tailwindcss from "@tailwindcss/vite";
 import starlightOpenAPI from "starlight-openapi";
 import starlightDocSearch from "@astrojs/starlight-docsearch";
 
+import { tsImport } from "tsx/esm/api";
 import vercel from "@astrojs/vercel";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
@@ -13,6 +14,7 @@ import rehypeRaw from "rehype-raw";
 import sitemap from "@astrojs/sitemap";
 import partytown from "@astrojs/partytown";
 import node from "@astrojs/node";
+import vercelMiddlewareIntegration from "@aptos-foundation/astro-vercel-middleware";
 import react from "@astrojs/react";
 import starlightLlmsTxt from "starlight-llms-txt";
 import favicons from "astro-favicons";
@@ -27,6 +29,11 @@ import { devServerFileWatcher } from "./src/integrations/dev-server-file-watcher
 import onDemandDirective from "./src/integrations/client-on-demand/register.js";
 // import { isMoveReferenceEnabled } from "./src/utils/isMoveReferenceEnabled";
 // import { rehypeAddDebug } from "./src/plugins";
+
+const i18nMatcherGenerator = await tsImport(
+  "./integrations/i18n-matcher-generator/index.ts",
+  import.meta.url,
+).then((m) => m.default);
 
 const ALGOLIA_APP_ID = ENV.ALGOLIA_APP_ID;
 const ALGOLIA_SEARCH_API_KEY = ENV.ALGOLIA_SEARCH_API_KEY;
@@ -201,6 +208,11 @@ export default defineConfig({
         ],
       },
     }),
+    i18nMatcherGenerator({
+      supportedLanguages: SUPPORTED_LANGUAGES,
+      manualMatchers: ["/en", "/en/:path*"],
+    }),
+    vercelMiddlewareIntegration(),
   ],
   adapter: process.env.VERCEL
     ? vercel({

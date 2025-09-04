@@ -1,5 +1,9 @@
 ---
 title: "Aptos Move Lint"
+label: "Linter"
+description: "Learn about linter for Move smart contract development on Aptos blockchain."
+sidebar:
+  label: "Linter"
 ---
 
 The "Aptos Move Lint" tool runs on a Move package to find and warn about common issues in Move programs, helping improve your Move code.
@@ -61,11 +65,24 @@ It is a common Move pattern to provide inline specifications in conditions, espe
 
 Note that an `assert!` is translated to a conditional abort, so blocks in `assert!` condition also are reported by this lint.
 
-# `equal_operands_in_bin_op`
+### `empty_if`
+
+Checks for `if` statements that have no body, which is likely a mistake. For example:
+
+```move
+if (x) {
+} 
+```
+
+### `equal_operands_in_bin_op`
 
 Checks for binary operations where both operands are the same, which is likely a mistake. For example `x % x`, `x ^ x`,  `x > x`, `x >= x`, `x == x`, `x | x`, `x & x`, `x / x`, and `x != x` are all caught by this lint. The lint suggests replacing these with a more appropriate value or expression, such as `0`, `true`, or `false`.
 
 This lint does not catch cases where the operands are vector access.
+
+### `empty_range`
+
+Checks for empty ranges in `for` loops, such as `for i in 0..0 { ... }`, which do not execute the loop body. This can happen when the start of the range is greater than or equal to the end of the range, resulting in an empty iteration.
 
 ### `find_unnecessary_casts`
 
@@ -84,6 +101,10 @@ The above can be simplified to:
 let x: u64 = 42;
 let y = x; // cast removed
 ```
+
+### `infinite_recursion`
+
+Checks for functions or groups of functions that recurse infinitely. Note that the linter cannot detect _conditional_ infinite recursion, only inconditional, so a flag is a definite error in the program.
 
 ### `known_to_abort`
 
@@ -113,6 +134,33 @@ Checks for patterns where references taken are immediately dereferenced, and sug
 - `*&mut x.f` can be simplified to `x.f`
 - `*&mut x.f = 5;` can be simplified to `x.f = 5;`
 
+### `needless_loops`
+
+Checks for loops that always exit on their first iteration, making the loop construct unnecessary. This lint detects loops that immediately return, abort, or break without performing any meaningful iteration.
+
+The linter identifies these patterns:
+
+- Loops where the first instruction is `return`, `abort`, or `break`
+- Loops where the first instruction is a conditional branch where both paths immediately exit the loop
+
+Examples of needless loops:
+
+```move
+// Always returns on first iteration
+loop {
+    return 42;
+}
+
+// Always aborts on first iteration
+loop {
+    abort 1;
+}
+```
+
+These can be simplified by removing the loop construct entirely and using just the exit statement directly.
+
+This lint uses conservative analysis to avoid false positives, only flagging cases where the exit behavior is immediately obvious from the loop's structure.
+
 ### `needless_mutable_reference`
 
 Checks for mutable references or borrows (currently: mutable reference parameters, mutable borrow of locals, `borrow_global_mut`) that are not used mutably, and suggests to use the immutable reference or borrow instead.
@@ -137,6 +185,27 @@ Checks for patterns where there are needless references taken when accessing a f
 
 - `(&s).f` can be simplified to `s.f`
 - `(&mut s).f = 42;` can be simplified to `s.f = 42;`
+
+### `needless_return`
+
+Checks for unnecessary `return` statements in functions that can be simplified. This lint identifies cases where a `return` statement is used to return a value that can be directly returned without the `return` keyword.
+For example, the following function:
+
+```move
+public fun foo(): bool {
+  // ...
+  return true;
+}
+```
+
+This pattern can be simplified to:
+
+```move
+public fun foo(): bool {
+  // ...
+  true
+}
+```
 
 ### `nested_if`
 
@@ -259,6 +328,19 @@ Consider the following example expressions that are caught by the lint, and the 
 - `x <= 0`, `0 >= x`, `x >= MAX`, `MAX <= x`, can all be simplified to use `==` instead
 - `x > 0`, `0 < x`, `x < MAX`, `MAX > x`, can all be clarified to use `!=` instead
 
+### `redundant_comparison`
+
+Checks for redundant, contradictory, and tautological numerical comparisons over the same variable in boolean expressions combined with `&&` and `||`. This lint identifies logic errors in conditional statements that can lead to unreachable code or always-true/false conditions.
+
+Examples of patterns caught by this lint:
+
+- **Redundant with `&&`**: `x <= 400 && x < 500` - the second condition is redundant since it's always satisfied when the first is true
+- **Contradictory with `&&`**: `x <= 400 && x > 500` - these conditions can never both be true, making the expression always false
+- **Redundant with `||`**: `x > 10 || x >= 5` - the first condition is redundant since the second covers more cases
+- **Tautology with `||`**: `x < 5 || x >= 5` - this expression is always true for any value of x
+
+The lint only triggers when comparisons are on the same variable and can detect constants on either side of the comparison operator.
+
 ### `while_true`
 
 Checks for `while (true) { .... }` patterns and suggests using the more explicit `loop { .... }` construct instead.
@@ -275,3 +357,44 @@ fun violation(): bool {
     if (foo()) true else false
 }
 ```
+
+## Security Checks
+
+### `contains_in_table`
+
+Checks for unsafe usage of table operations that could lead to runtime errors. This lint helps prevent common mistakes when working with tables by detecting:
+
+1. **Unsafe `table::borrow` calls**: Borrowing from a table without first checking if the key exists using `table::contains`. This can cause runtime errors if the key doesn't exist.
+
+2. **Unsafe `table::add` calls**: Adding to a table without ensuring the key doesn't already exist. This can cause runtime errors if the key already exists.
+
+The lint analyzes control flow to understand when keys are known to exist or not exist based on `table::contains` checks.
+
+**Examples of patterns caught by this lint:**
+
+```move
+// Unsafe borrow - no contains check
+table::borrow(&table, key); // Error: might fail if key doesn't exist
+
+// Unsafe add - no contains check
+table::add(&mut table, key, value); // Error: might fail if key already exists
+
+// Wrong key check
+if (table::contains(&table, key1)) {
+    table::borrow(&table, key2); // Error: checked key1 but borrowing key2
+}
+
+// Wrong branch usage
+if (!table::contains(&table, key)) {
+    table::borrow(&table, key); // Error: key is known NOT to exist
+}
+```
+
+**Recommended solutions:**
+
+- For `table::borrow`: Use `table::contains` first to check if the key exists
+- For `table::add`: Use `table::upsert` instead, or check with `table::contains` that the key doesn't exist first
+
+### `zero_address`
+
+This security check detects the use of `address` parameters in external functions that are not checked for being zero before being used. This could lead to loss of funds or other security issues.⏎

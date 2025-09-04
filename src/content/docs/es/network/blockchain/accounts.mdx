@@ -1,0 +1,271 @@
+---
+title: "Cuentas"
+description: "Comprende las cuentas de Aptos, sus direcciones, esquemas de autenticación, rotación de claves, números de secuencia y cómo controlan activos y recursos en cadena."
+sidebar:
+  label: "Cuentas"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Una cuenta en la blockchain de Aptos representa el control de acceso sobre un conjunto de activos incluyendo moneda en cadena y NFTs. En Aptos, estos activos están representados por una primitiva del lenguaje Move conocida como **resource** que enfatiza tanto el control de acceso como la escasez.
+
+Cada cuenta en la blockchain de Aptos está identificada por una dirección de cuenta de 32 bytes. Puedes emplear el Servicio de Nombres de Aptos en [www.aptosnames.com](https://www.aptosnames.com/) para asegurar dominios .apt para cuentas clave y hacerlas memorables y únicas.
+
+Diferente de otras blockchains donde las cuentas y direcciones son implícitas, las cuentas en Aptos son explícitas y necesitan ser creadas antes de que puedan ejecutar transacciones. La cuenta puede ser creada explícitamente o implícitamente transfiriendo tokens de Aptos (APT) allí. Ver la sección [Creando una cuenta](#creating-an-account) para más detalles. De cierta manera, esto es similar a otras cadenas donde una dirección necesita recibir fondos para gas antes de que pueda enviar transacciones.
+
+Las cuentas explícitas permiten características de primera clase que no están disponibles en otras redes como:
+
+- Rotar clave de autenticación. La clave de autenticación de la cuenta puede ser cambiada para ser controlada vía una clave privada diferente. Esto es similar a cambiar contraseñas en el mundo web2.
+- Soporte nativo de multisig. Las cuentas en Aptos soportan multisig k-de-n usando tanto esquemas de firma Ed25519 como Secp256k1 ECDSA al construir la clave de autenticación.
+
+Hay tres tipos de cuentas en Aptos:
+
+- _Cuenta estándar_ - Esta es una cuenta típica correspondiente a una dirección con un par correspondiente de claves pública/privada.
+- [_Cuenta de resource_](/es/build/smart-contracts/resource-accounts) - Una cuenta autónoma sin una clave privada correspondiente usada por desarrolladores para almacenar resources o publicar módulos en cadena.
+- [_Objeto_](/es/build/smart-contracts/objects) - Un conjunto complejo de resources almacenados dentro de una sola dirección representando una sola entidad.
+
+<Aside type="note">
+  Las direcciones de cuenta son de 32 bytes. Usualmente se muestran como 64 caracteres hex, con cada carácter hex siendo un nibble.
+  A veces la dirección tiene el prefijo 0x. Ver [Tu Primera Transacción](/es/build/guides/first-transaction) para un ejemplo
+  de cómo aparece una dirección, reproducido abajo:
+</Aside>
+
+```text
+Alice: 0xeeff357ea5c1a4e7bc11b2b17ff2dc2dcca69750bfef1e1ebcaccf8c8018175b
+Bob: 0x19aadeca9388e009d136245b9a67423f3eee242b03142849eb4f81a4a409e59c
+```
+
+## Dirección de cuenta
+
+Actualmente, Aptos soporta solo un identificador único y unificado para una cuenta. Las cuentas en Aptos están universalmente representadas como una cadena hex de 32 bytes. Una cadena hex más corta que 32 bytes también es válida; en esos escenarios, la cadena hex puede ser rellenada con ceros iniciales, por ejemplo, `0x1` => `0x0000000000000...01`. Mientras los estándares de Aptos indican que los ceros iniciales pueden ser removidos de una Dirección, la mayoría de aplicaciones intentan evitar ese comportamiento heredado y solo soportan la remoción de 0s para direcciones especiales que van desde `0x0` hasta `0xa`.
+
+## Creando una cuenta
+
+Cuando un usuario solicita crear una cuenta, por ejemplo usando el [SDK de Aptos](/es/build/sdks/ts-sdk/account), se ejecutan los siguientes pasos:
+
+- Seleccionar el esquema de autenticación para administrar la cuenta del usuario, por ejemplo, Ed25519 o Secp256k1 ECDSA.
+- Generar un nuevo par de clave privada, clave pública.
+- Combinar la clave pública con el esquema de autenticación de la clave pública para generar una clave de autenticación de 32 bytes y la dirección de cuenta.
+
+El usuario debe usar la clave privada para firmar las transacciones asociadas con esta cuenta.
+
+## Número de secuencia de cuenta
+
+El número de secuencia para una cuenta indica el número de transacciones que han sido enviadas y comprometidas en cadena desde esa cuenta. Las transacciones comprometidas ya sea se ejecutan con los cambios de estado resultantes comprometidos a la blockchain o abortan donde los cambios de estado son descartados y solo la transacción es almacenada.
+
+Cada transacción enviada debe contener un número de secuencia único para la cuenta del remitente dado. Cuando la blockchain de Aptos procesa la transacción, mira el número de secuencia en la transacción y lo compara con el número de secuencia en la cuenta en cadena. La transacción es procesada solo si el número de secuencia es igual o mayor que el número de secuencia actual. Las transacciones solo se reenvían a otros mempools o se ejecutan si hay una serie contigua de transacciones desde el número de secuencia actual. La ejecución rechaza números de secuencia fuera de orden previniendo ataques de repetición de transacciones más antiguas y garantiza el ordenamiento de transacciones futuras.
+
+## Clave de autenticación
+
+La dirección de cuenta inicial se establece a la clave de autenticación derivada durante la creación de cuenta. Sin embargo, la clave de autenticación puede cambiar posteriormente, por ejemplo cuando generas un nuevo par de clave pública-privada, claves públicas para rotar las claves. Una dirección de cuenta nunca cambia.
+
+La blockchain de Aptos soporta los siguientes esquemas de autenticación:
+
+1. [Ed25519](https://ed25519.cr.yp.to/)
+2. [Secp256k1 ECDSA](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-49.md)
+3. [Multifirmas K-de-N](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-55.md)
+4. Un esquema dedicado, ahora heredado, MultiEd25519
+
+<Aside type="note">
+  La blockchain de Aptos por defecto usa transacciones de firma Ed25519.
+</Aside>
+
+### Autenticación Ed25519
+
+Para generar una clave de autenticación y la dirección de cuenta para una firma Ed25519:
+
+1. **Generar un par de claves**: Generar un par de claves fresco (`privkey_A`, `pubkey_A`). La blockchain de Aptos usa el esquema PureEdDSA sobre la curva Ed25519, como se define en RFC 8032.
+2. **Derivar una clave de autenticación de 32 bytes**: Derivar una clave de autenticación de 32 bytes desde la `pubkey_A`:
+   ```text
+   auth_key = sha3-256(pubkey_A | 0x00)
+   ```
+   donde `|` denota concatenación. El `0x00` es el identificador de esquema de firma única de 1 byte.
+3. Usar esta clave de autenticación inicial como la dirección de cuenta permanente.
+
+### Autenticación MultiEd25519
+
+Con autenticación multisig K-de-N, hay un total de N firmantes para la cuenta, y al menos K de esas N firmas deben ser usadas para autenticar una transacción.
+
+Para generar una clave de autenticación de cuenta multisig K-de-N y la dirección de cuenta:
+
+1. **Generar pares de claves**: Generar `N` claves públicas ed25519 `p_1`, ..., `p_n`.
+2. Decidir en el valor de `K`, el número umbral de firmas necesarias para autenticar la transacción.
+3. **Derivar una clave de autenticación de 32 bytes**: Calcular la clave de autenticación como se describe abajo:
+   ```text
+   auth_key = sha3-256(p_1 | . . . | p_n | K | 0x01)
+   ```
+   El `0x01` es el identificador de esquema multisig de 1 byte.
+4. Usar esta clave de autenticación inicial como la dirección de cuenta permanente.
+
+### Autenticación generalizada
+
+La autenticación generalizada soporta tanto Ed25519 como Secp256k1 ECDSA. Como los esquemas de autenticación previos, estos esquemas contienen un valor de esquema, `0x02` y `0x03` para clave única y multiclave respectivamente, pero también cada clave contiene un valor de prefijo para indicar su tipo de clave:
+
+| Tipo de clave                         | Byte de prefijo |
+| ------------------------------------- | --------------- |
+| Esquema generalizado Ed25519          | `0x00`          |
+| Esquema generalizado Secp256k1Ecdsa  | `0x01`          |
+| Esquema WebAuthn Secp256r1Ecdsa      | `0x02`          |
+| Keyless                               | `0x03`          |
+
+Para una cuenta Secp256k1 ECDSA de clave única, usando clave pública `pubkey`, la clave de autenticación sería derivada como sigue:
+
+```text
+auth_key = sha3-256(0x01 | pubkey | 0x02)
+```
+
+Donde
+
+- la primera entrada, `0x01`, representa el uso de una clave Secp256k1 ECDSA;
+- la última entrada, `0x02`, representa el esquema de autenticación.
+
+Para una cuenta multi-clave 1-de-2 conteniendo, una sola clave pública Secp256k1 ECDSA, `pubkey_0`, y una sola clave pública Ed25519, `pubkey_1`, donde una firma es suficiente, la clave de autenticación sería derivada como sigue:
+
+```text
+auth_key = sha3-256(0x02 | 0x01 | pubkey_0 | 0x00 | pubkey_1 | 0x01 | 0x03)
+```
+
+Donde
+
+- la primera entrada, `0x02`, representa el número total de claves como un byte único;
+- la penúltima entrada, `0x01`, representa el número requerido de firmas como un byte único;
+- la última entrada, `0x03`, representa el esquema de autenticación.
+
+## Rotando las claves
+
+Una Cuenta en Aptos tiene la habilidad de rotar claves para que claves potencialmente comprometidas no puedan ser usadas para acceder a las cuentas. Las claves pueden ser rotadas vía la función `account::rotate_authentication_key`.
+
+Refrescar las claves es generalmente considerado como buena higiene en el campo de seguridad. Sin embargo, esto presenta un desafío para los integradores de sistema que están acostumbrados a usar un mnemónico para representar tanto una clave privada como su cuenta asociada. Para simplificar esto para los integradores de sistema, Aptos proporciona un mapeo en cadena vía aptos account lookup-address. Los datos en cadena mapean una dirección de cuenta efectiva como se define por el mnemónico actual a la dirección de cuenta actual.
+
+Para más información, ver [`account.move`](https://github.com/aptos-labs/aptos-core/blob/a676c1494e246c31c5e96d3363d99e2422e30f49/aptos-move/framework/aptos-framework/sources/account.move#L274).
+
+## Estado de una cuenta
+
+El estado de cada cuenta comprende tanto el código (módulos Move) como los datos (resources Move). Una cuenta puede contener un número arbitrario de módulos Move y resources Move:
+
+- **Módulos Move**: Los módulos Move contienen código, por ejemplo, declaraciones de tipo y procedimiento; pero no contienen datos. Un módulo Move codifica las reglas para actualizar el estado global de la blockchain de Aptos.
+- **Resources Move**: Los resources Move contienen datos pero no código. Cada valor resource tiene un tipo que está declarado en un módulo publicado en la blockchain de Aptos.
+
+## Control de acceso con signers
+
+El remitente de una transacción está representado por un signer. Cuando una función en un módulo Move toma `signer` como argumento, la VM de Aptos Move traduce la identidad de la cuenta que firmó la transacción en un signer en un punto de entrada de módulo Move. Ver el código Move de ejemplo abajo con `signer` en las funciones `initialize` y `withdraw`. Cuando un `signer` no está especificado en una función, por ejemplo, la función `deposit` abajo, entonces no se proporcionarán controles de acceso basados en signer para esta función:
+
+```move filename="coin.move" /account: &signer/
+module Test::Coin {
+  struct Coin has key { amount: u64 }
+
+  public fun initialize(account: &signer) {
+    move_to(account, Coin { amount: 1000 });
+  }
+
+  public fun withdraw(account: &signer, amount: u64): Coin acquires Coin {
+    let balance = &mut borrow_global_mut<Coin>(Signer::address_of(account)).amount;
+    *balance = *balance - amount;
+    Coin { amount }
+  }
+
+  public fun deposit(account: address, coin: Coin) acquires Coin {
+      let balance = &mut borrow_global_mut<Coin>(account).amount;
+      *balance = *balance + coin.amount;
+      Coin { amount: _ } = coin;
+  }
+}
+```
+
+## Ejemplos Prácticos
+
+### Creación de Cuenta Básica
+
+```move
+use aptos_framework::account;
+use std::signer;
+
+public entry fun create_and_fund_account(
+    funder: &signer,
+    new_account_address: address,
+    initial_amount: u64
+) {
+    // Crear nueva cuenta
+    account::create_account(new_account_address);
+    
+    // Transferir fondos iniciales
+    aptos_account::transfer(funder, new_account_address, initial_amount);
+}
+```
+
+### Multi-Signature Wallet
+
+```move
+module multisig_example {
+    use aptos_framework::multisig_account;
+    use std::vector;
+
+    public entry fun create_multisig_wallet(
+        creator: &signer,
+        owners: vector<address>,
+        num_signatures_required: u64
+    ) {
+        multisig_account::create_with_owners(
+            creator,
+            owners,
+            num_signatures_required,
+            vector::empty(), // metadatos vacíos
+            vector::empty()  // sin fondos iniciales
+        );
+    }
+}
+```
+
+### Rotación de Claves
+
+```move
+use aptos_framework::account;
+
+public entry fun rotate_authentication_key(
+    account: &signer,
+    new_public_key_bytes: vector<u8>,
+    new_signature: vector<u8>
+) {
+    account::rotate_authentication_key(
+        account,
+        0, // esquema de firma única
+        new_public_key_bytes,
+        new_signature
+    );
+}
+```
+
+## Conceptos Clave para Desarrolladores
+
+### 1. Direcciones vs Cuentas
+
+- **Dirección**: Identificador de 32 bytes (inmutable)
+- **Cuenta**: Entidad que contiene código y datos (mutable)
+- La dirección nunca cambia, pero el control de la cuenta puede cambiar
+
+### 2. Esquemas de Autenticación
+
+- **Ed25519**: Esquema por defecto, eficiente y seguro
+- **Secp256k1**: Compatible con Bitcoin/Ethereum
+- **Multisig**: Múltiples firmantes para mayor seguridad
+
+### 3. Tipos de Cuentas
+
+- **Estándar**: Controlada por clave privada
+- **Resource**: Sin clave privada, para contratos
+- **Objeto**: Recursos complejos agrupados
+
+### 4. Consideraciones de Seguridad
+
+- **Rotar claves regularmente** para mayor seguridad
+- **Usar multisig** para cuentas de alto valor
+- **Verificar números de secuencia** para prevenir ataques de repetición
+
+### 5. Mejores Prácticas
+
+- Usar direcciones nombradas (.apt) para cuentas importantes
+- Implementar validación adecuada en funciones públicas
+- Separar autenticación (signer) de autorización (permisos)
+- Documentar esquemas de autenticación utilizados
+
+Esta comprensión fundamental de las cuentas en Aptos es esencial para cualquier desarrollo en la plataforma, ya que afecta todo desde transacciones básicas hasta arquitecturas de dApp complejas.

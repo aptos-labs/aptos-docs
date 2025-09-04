@@ -1,0 +1,199 @@
+---
+// Search fallback for missing translations - suggests content in other languages
+---
+
+<script is:inline>
+  (function () {
+    // Language fallback configuration
+    const LANGUAGE_FALLBACKS = {
+      ar: ["en"], // Arabic falls back to English
+      ha: ["en"], // Hausa falls back to English
+      id: ["en"], // Indonesian falls back to English
+      vi: ["en"], // Vietnamese falls back to English
+      tr: ["en"], // Turkish falls back to English
+      ru: ["en"], // Russian falls back to English
+      it: ["en"], // Italian falls back to English
+      pt: ["en"], // Portuguese falls back to English
+      ko: ["en"], // Korean falls back to English
+      de: ["en"], // German falls back to English
+      fr: ["en"], // French falls back to English
+      zh: ["en"], // Chinese falls back to English
+      ja: ["en"], // Japanese falls back to English
+      es: ["en"], // Spanish falls back to English
+    };
+
+    function enhanceSearchWithFallbacks() {
+      // Override DocSearch transformItems to add fallback suggestions
+      if (window.docsearch) {
+        const originalConfig = window.docsearchConfig || {};
+
+        window.docsearchConfig = {
+          ...originalConfig,
+          transformItems(items) {
+            const currentLang = document.documentElement.lang;
+            const fallbackLangs = LANGUAGE_FALLBACKS[currentLang] || [];
+
+            // If we have very few results and fallbacks are available
+            if (items.length < 3 && fallbackLangs.length > 0) {
+              // Add a suggestion to search in fallback languages
+              const fallbackSuggestion = {
+                objectID: "fallback-suggestion",
+                type: "suggestion",
+                url: "#",
+                hierarchy: {
+                  lvl0: "💡 Suggestion",
+                  lvl1: `Content might be available in ${fallbackLangs
+                    .map((lang) => {
+                      const langNames = {
+                        en: "English",
+                        es: "Español",
+                        zh: "中文",
+                        ja: "日本語",
+                        ko: "한국어",
+                        fr: "Français",
+                        de: "Deutsch",
+                        ru: "Русский",
+                        it: "Italiano",
+                        pt: "Português",
+                        tr: "Türkçe",
+                        ar: "العربية",
+                        ha: "Hausa",
+                        id: "Bahasa Indonesia",
+                        vi: "Tiếng Việt",
+                      };
+                      return langNames[lang] || lang;
+                    })
+                    .join(", ")}`,
+                  lvl2: "Click to search in English",
+                },
+                content: "Try switching to English documentation for more comprehensive results.",
+                anchor: "",
+                url_without_anchor: `/${fallbackLangs[0]}/`,
+                _highlightResult: {
+                  hierarchy: {
+                    lvl0: { value: "💡 Suggestion", matchLevel: "none", matchedWords: [] },
+                    lvl1: {
+                      value: `Content might be available in ${fallbackLangs[0]}`,
+                      matchLevel: "none",
+                      matchedWords: [],
+                    },
+                  },
+                },
+                isFallbackSuggestion: true,
+              };
+
+              items.push(fallbackSuggestion);
+            }
+
+            // Apply original transformItems if it exists
+            if (originalConfig.transformItems) {
+              return originalConfig.transformItems(items);
+            }
+
+            return items;
+          },
+        };
+      }
+    }
+
+    // Add language-specific search improvements
+    function addLanguageSpecificSearchTerms() {
+      const currentLang = document.documentElement.lang;
+
+      // Common technical terms that might be searched in local language
+      const searchTermMappings = {
+        ar: {
+          البداية: "getting started",
+          المعاملة: "transaction",
+          المحفظة: "wallet",
+          "العقد الذكي": "smart contract",
+          "البلوك تشين": "blockchain",
+        },
+        ha: {
+          farawa: "getting started",
+          "ma'amala": "transaction",
+          wallet: "wallet",
+          kwangila: "smart contract",
+        },
+        zh: {
+          开始: "getting started",
+          交易: "transaction",
+          钱包: "wallet",
+          智能合约: "smart contract",
+          区块链: "blockchain",
+        },
+        es: {
+          comenzar: "getting started",
+          transacción: "transaction",
+          billetera: "wallet",
+          "contrato inteligente": "smart contract",
+        },
+        tr: {
+          başlangıç: "getting started",
+          işlem: "transaction",
+          cüzdan: "wallet",
+          "akıllı sözleşme": "smart contract",
+        },
+        id: {
+          memulai: "getting started",
+          transaksi: "transaction",
+          dompet: "wallet",
+          "kontrak pintar": "smart contract",
+        },
+      };
+
+      const mappings = searchTermMappings[currentLang];
+      if (mappings) {
+        window.aptosSearchTermMappings = mappings;
+
+        // Store for potential query enhancement
+        window.enhanceSearchQuery = function (query) {
+          let enhancedQuery = query;
+          Object.entries(mappings).forEach(([local, english]) => {
+            if (query.toLowerCase().includes(local.toLowerCase())) {
+              enhancedQuery += ` ${english}`;
+            }
+          });
+          return enhancedQuery;
+        };
+      }
+    }
+
+    // Initialize enhancements
+    function initSearchFallbacks() {
+      enhanceSearchWithFallbacks();
+      addLanguageSpecificSearchTerms();
+    }
+
+    // Initialize when DOM is ready
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", initSearchFallbacks);
+    } else {
+      initSearchFallbacks();
+    }
+
+    // Re-initialize after a delay to catch late-loading DocSearch
+    setTimeout(initSearchFallbacks, 2000);
+  })();
+</script>
+
+<style>
+  /* Style for fallback suggestions */
+  :global(.DocSearch-Hit[data-suggestion="true"]) {
+    background: var(--sl-color-bg-accent) !important;
+    border-left: 3px solid var(--sl-color-accent) !important;
+  }
+
+  :global(.DocSearch-Hit[data-suggestion="true"] .DocSearch-Hit-title) {
+    color: var(--sl-color-accent) !important;
+    font-weight: 600 !important;
+  }
+
+  /* Better highlighting for search terms */
+  :global(.DocSearch-Hit mark) {
+    background: var(--sl-color-accent-high) !important;
+    color: var(--sl-color-white) !important;
+    padding: 1px 2px !important;
+    border-radius: 2px !important;
+  }
+</style>

@@ -1,0 +1,225 @@
+---
+title: "Keyless Federado"
+description: "Soporte extendido de Keyless para proveedores OIDC adicionales a través de sistemas IAM como Auth0 y AWS Cognito."
+sidebar:
+  label: "Keyless Federado"
+---
+
+## Keyless Federado
+
+[AIP-96](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-96.md): Keyless Federado es una extensión de Aptos Keyless para soportar más proveedores OpenID Connect (OIDC), más allá de aquellos que están en la lista permitida en `0x1::jwks` vía consenso JWK, mientras mantiene su descentralización. Keyless federado agrega soporte para autenticar usuarios vía proveedores de gestión de identidad y acceso (IAM) (ej. Auth0, AWS Cognito) siempre que tu proyecto use un proveedor IAM soportado para autenticación de usuarios.
+
+Para elaborar más, Keyless Federado habilita:
+
+1. Extensión de métodos de autenticación
+   a. Todos los métodos de autenticación soportados por el IAM están disponibles para la dApp incluyendo OTP por email/SMS y su marketplace de integraciones de login social como Discord, Naver, X y más. Marketplace de Auth0 enlazado [aquí](https://marketplace.auth0.com/) como ejemplo.
+
+2. Compatibilidad con sistemas de cuenta existentes
+   a. Dado que los IAMs también soportan autenticación personalizada, permite que una aplicación traiga su propio sistema de usuario/contraseña (documentos de Cognito [aquí](https://docs.aws.amazon.com/cognito/latest/developerguide/amazon-cognito-user-pools-authentication-flow.html), documentos de Auth0 [aquí](https://auth0.com/blog/Custom-Authentication-With-Auth0/)). Una aplicación puede comenzar usando un sistema de cuenta existente ya configurado con un IAM o pueden migrar su sistema de cuenta existente a un IAM para generar JWTs compatibles con Keyless.
+
+- [Consideraciones Clave de Keyless Federado](/es/build/guides/aptos-keyless/federated-keyless/key-considerations)
+- [Guía de Integración de Keyless Federado](/es/build/guides/aptos-keyless/federated-keyless/integration-guide)
+- [FAQs de Keyless Federado](/es/build/guides/aptos-keyless/federated-keyless/other)
+
+## ¿Qué es Keyless Federado?
+
+Keyless Federado revoluciona la experiencia de usuario en Web3 al eliminar las barreras tradicionales de las carteras de criptomonedas. En lugar de requerir que los usuarios gestionen claves privadas complejas o frases semilla, los usuarios pueden acceder a cuentas blockchain completamente funcionales usando sus métodos de autenticación existentes.
+
+### Ventajas Clave
+
+#### 🚀 **Onboarding Sin Fricción**
+
+- Los usuarios se conectan con Google, Apple, Discord, o cualquier proveedor OIDC
+- No hay necesidad de descargar carteras o memorizar frases semilla
+- Experiencia familiar similar a aplicaciones Web2
+
+#### 🔒 **Seguridad Mejorada**
+
+- Sin claves privadas que los usuarios puedan perder
+- Autenticación multifactor incorporada desde proveedores IAM
+- Recuperación de cuenta a través de métodos Web2 familiares
+
+#### 🌍 **Flexibilidad de Integración**
+
+- Soporte para múltiples proveedores de identidad
+- Compatible con sistemas de autenticación existentes
+- Escalable para aplicaciones empresariales
+
+#### 💰 **Eficiencia de Costos**
+
+- Reduce costos de soporte al cliente para recuperación de cuentas
+- Menor abandono de usuarios debido a complejidad de carteras
+- Integración más rápida para desarrolladores
+
+### Casos de Uso Ideales
+
+#### **Aplicaciones de Consumo Masivo**
+
+```typescript
+// Gaming: Los jugadores usan sus cuentas de Steam/Discord existentes
+const gameAccount = await KeylessAccount.create({
+  provider: 'discord',
+  jwt: discordJWT
+});
+
+// Social Media: Usuarios se conectan con redes sociales
+const socialAccount = await KeylessAccount.create({
+  provider: 'google', 
+  jwt: googleJWT
+});
+```
+
+#### **Aplicaciones Empresariales**
+
+```typescript
+// Empleados usan autenticación corporativa (SSO)
+const employeeAccount = await KeylessAccount.create({
+  provider: 'auth0-enterprise',
+  jwt: corporateJWT
+});
+
+// Sistemas existentes migran a blockchain sin cambiar UX
+const migratedAccount = await KeylessAccount.create({
+  provider: 'aws-cognito',
+  jwt: existingSystemJWT  
+});
+```
+
+#### **Aplicaciones DeFi Simplificadas**
+
+```typescript
+// Trading simplificado con autenticación social
+const traderAccount = await KeylessAccount.create({
+  provider: 'apple',
+  jwt: appleJWT
+});
+
+// NFT marketplace sin barreras de entrada
+const nftUser = await KeylessAccount.create({
+  provider: 'twitter',
+  jwt: twitterJWT
+});
+```
+
+### Arquitectura Técnica
+
+#### **Flujo de Autenticación**
+
+1. **Autenticación del Usuario**: Usuario se autentica con proveedor IAM
+2. **Generación de JWT**: IAM genera JWT firmado con claims de usuario
+3. **Derivación de Cuenta**: Aptos deriva dirección determinística desde JWT
+4. **Transacciones**: Usuario firma transacciones usando pruebas zero-knowledge
+
+#### **Componentes Clave**
+
+```move
+// Estructura de cuenta keyless en Move
+struct KeylessAccount has key {
+    jwt_header: vector<u8>,
+    jwt_payload: vector<u8>, 
+    iss: vector<u8>,        // Issuer (proveedor IAM)
+    aud: vector<u8>,        // Audience (tu dApp)
+    nonce: vector<u8>       // Anti-replay protection
+}
+```
+
+### Consideraciones de Implementación
+
+#### **Selección de Proveedor IAM**
+
+- **Auth0**: Ideal para startups y aplicaciones medianas
+- **AWS Cognito**: Perfecto para aplicaciones empresariales en AWS
+- **Azure AD**: Mejor para organizaciones que usan Microsoft
+- **Custom OIDC**: Para control total sobre autenticación
+
+#### **Gestión de Claves**
+
+```typescript
+// Registrar JWK set en blockchain
+await aptos.registerFederatedJWKS({
+  account: jwkOwnerAccount,
+  issuer: 'https://your-auth-provider.com',
+  jwks: await fetchJWKS('https://your-auth-provider.com/.well-known/jwks.json')
+});
+```
+
+#### **Migración de Usuarios Existentes**
+
+```typescript
+// Migrar usuarios existentes a keyless
+async function migrateExistingUsers() {
+  const existingUsers = await getExistingUsers();
+  
+  for (const user of existingUsers) {
+    // Conectar sistema existente con IAM
+    const iamUser = await createIAMUser({
+      email: user.email,
+      metadata: user.profile
+    });
+    
+    // Usuario puede ahora usar keyless con credenciales existentes
+    const keylessAccount = await KeylessAccount.create({
+      provider: 'your-iam',
+      jwt: await generateJWT(iamUser)
+    });
+  }
+}
+```
+
+### Mejores Prácticas
+
+#### **Seguridad**
+
+```typescript
+// Siempre validar JWT antes de usar
+function validateJWT(jwt: string): boolean {
+  return jwt.iss === EXPECTED_ISSUER &&
+         jwt.aud === YOUR_CLIENT_ID &&
+         jwt.exp > Date.now() / 1000;
+}
+
+// Implementar rate limiting
+const rateLimiter = new RateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 100 // límite de requests por ventana
+});
+```
+
+#### **Experiencia de Usuario**
+
+```typescript
+// Manejar errores de autenticación gracefully
+try {
+  const account = await KeylessAccount.create({
+    provider: 'google',
+    jwt: googleJWT
+  });
+} catch (error) {
+  if (error.code === 'INVALID_JWT') {
+    // Guiar usuario para re-autenticarse
+    showReauthenticationPrompt();
+  } else if (error.code === 'PROVIDER_UNAVAILABLE') {
+    // Ofrecer métodos alternativos
+    showAlternativeAuthMethods();
+  }
+}
+```
+
+#### **Monitoreo y Analytics**
+
+```typescript
+// Rastrear métricas de adopción
+analytics.track('keyless_account_created', {
+  provider: 'google',
+  user_region: getUserRegion(),
+  app_version: getAppVersion()
+});
+
+// Monitorear tasa de éxito de autenticación
+analytics.track('auth_success_rate', {
+  provider: 'auth0',
+  success_rate: successfulAuths / totalAttempts
+});
+```
+
+Keyless Federado representa el futuro de la autenticación blockchain, eliminando barreras técnicas mientras mantiene la seguridad y descentralización que son fundamentales para Web3.

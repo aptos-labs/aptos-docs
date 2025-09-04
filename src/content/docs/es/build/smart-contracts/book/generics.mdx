@@ -1,0 +1,755 @@
+---
+title: "Genéricos"
+description: "Guía en español: learn about generics in move programming language for aptos smart contract development."
+sidebar:
+  label: "Generics"
+---
+
+Los genéricos pueden ser usados para definir funciones y structs sobre diferentes tipos de datos de entrada. Esta característica del lenguaje a veces se refiere como _polimorfismo paramétrico_. En Move, a menudo usaremos el término genéricos intercambiablemente con parámetros de tipo y argumentos de tipo.
+
+Los genéricos se usan comúnmente en código de biblioteca, como en vector, para declarar código que funciona sobre cualquier instanciación posible (que satisfaga las restricciones especificadas). En otros frameworks, el código genérico a veces puede ser usado para interactuar con almacenamiento global de muchas maneras diferentes que aún comparten la misma implementación.
+
+## Declarando Parámetros de Tipo
+
+Tanto funciones como structs pueden tomar una lista de parámetros de tipo en sus firmas, encerrados por un par de corchetes angulares `<...>`.
+
+### Funciones Genéricas
+
+Los parámetros de tipo para funciones se colocan después del nombre de la función y antes de la lista de parámetros (de valor). El siguiente código define una función de identidad genérica que toma un valor de cualquier tipo y retorna ese valor sin cambios.
+
+```move
+module 0x42::example {
+  fun id<T>(x: T): T {
+    // esta anotación de tipo es innecesaria pero válida
+    (x: T)
+  }
+}
+```
+
+Una vez definido, el parámetro de tipo `T` puede ser usado en tipos de parámetros, tipos de retorno, y dentro del cuerpo de la función.
+
+### Structs Genéricos
+
+Los parámetros de tipo para structs se colocan después del nombre del struct, y pueden ser usados para nombrar los tipos de los campos.
+
+```move
+module 0x42::example {
+  struct Foo<T> has copy, drop { x: T }
+
+  struct Bar<T1, T2> has copy, drop {
+    x: T1,
+    y: vector<T2>,
+  }
+}
+```
+
+Nota que [los parámetros de tipo no tienen que ser usados](#unused-type-parameters)
+
+## Argumentos de Tipo
+
+### Llamando Funciones Genéricas
+
+Al llamar una función genérica, uno puede especificar los argumentos de tipo para los parámetros de tipo de la función en una lista encerrada por un par de corchetes angulares.
+
+```move
+module 0x42::example {
+  fun foo() {
+    let x = id<bool>(true);
+  }
+}
+```
+
+Si no especificas los argumentos de tipo, la [inferencia de tipos](#type-inference) de Move los proporcionará por ti.
+
+### Usando Structs Genéricos
+
+De manera similar, uno puede adjuntar una lista de argumentos de tipo para los parámetros de tipo del struct al construir o destruir valores de tipos genéricos.
+
+```move
+module 0x42::example {
+  fun foo() {
+    let foo = Foo<bool> { x: true };
+    let Foo<bool> { x } = foo;
+  }
+}
+```
+
+Si no especificas los argumentos de tipo, la [inferencia de tipos](#type-inference) de Move los proporcionará por ti.
+
+### Desajuste de Argumentos de Tipo
+
+Si especificas los argumentos de tipo, y estos entran en conflicto con los valores reales proporcionados, se dará un error:
+
+```move
+module 0x42::example {
+  fun foo() {
+    let x = id<u64>(true); // ¡error! true no es un u64
+  }
+}
+```
+
+y de manera similar:
+
+```move
+module 0x42::example {
+  fun foo() {
+    let foo = Foo<bool> { x: 0 }; // ¡error! 0 no es un bool
+    let Foo<address> { x } = foo; // ¡error! bool es incompatible con address
+  }
+}
+```
+
+## Inferencia de Tipos
+
+En la mayoría de casos, el compilador de Move será capaz de inferir los argumentos de tipo, así que no tienes que escribirlos explícitamente. Aquí está cómo se verían los ejemplos de arriba si omitimos los argumentos de tipo:
+
+```move
+module 0x42::example {
+  fun foo() {
+    let x = id(true);
+    //        ^ <bool> es inferido
+
+    let foo = Foo { x: true };
+    //           ^ <bool> es inferido
+
+    let Foo { x } = foo;
+    //     ^ <bool> es inferido
+  }
+}
+```
+
+Nota: cuando el compilador no puede inferir los tipos, necesitarás anotarlos manualmente. Un escenario común es llamar una función con parámetros de tipo apareciendo solo en posiciones de retorno.
+
+```move
+module 0x2::m {
+  use std::vector;
+
+  fun foo() {
+    // let v = vector::new();
+    //                    ^ El compilador no puede descifrar el tipo de elemento.
+
+    let v = vector::new<u64>();
+    //                 ^~~~~ Debe anotar manualmente.
+  }
+}
+```
+
+Sin embargo, el compilador será capaz de inferir el tipo si ese valor de retorno se usa más tarde en esa función:
+
+```move
+module 0x2::m {
+  use std::vector;
+
+  fun foo() {
+    let v = vector::new();
+    //                 ^ <u64> es inferido
+    vector::push_back(&mut v, 42);
+  }
+}
+```
+
+## Parámetros de Tipo No Usados
+
+Para una definición de struct, un parámetro de tipo no usado es uno que no aparece en ningún campo definido en el struct, pero se verifica estáticamente en tiempo de compilación. Move permite parámetros de tipo no usados así que la siguiente definición de struct es válida:
+
+```move
+module 0x2::m {
+  struct Foo<T> {
+    foo: u64
+  }
+}
+```
+
+Esto puede ser conveniente al modelar ciertos conceptos. Aquí hay un ejemplo:
+
+```move
+module 0x2::m {
+  // Especificadores de Moneda
+  struct Currency1 {}
+  struct Currency2 {}
+
+  // Un tipo de coin genérico que puede ser instanciado usando un tipo
+  // especificador de moneda.
+  //   e.g. Coin<Currency1>, Coin<Currency2> etc.
+  struct Coin<Currency> has store {
+    value: u64
+  }
+
+  // Escribir código genéricamente sobre todas las monedas
+  public fun mint_generic<Currency>(value: u64): Coin<Currency> {
+    Coin { value }
+  }
+
+  // Escribir código concretamente sobre una moneda
+  public fun mint_concrete(value: u64): Coin<Currency1> {
+    Coin { value }
+  }
+}
+```
+
+En este ejemplo, `struct Coin<Currency>` es genérico en el parámetro de tipo `Currency`, que especifica la moneda del coin y permite que el código sea escrito ya sea genéricamente en cualquier moneda o concretamente en una moneda específica. Esta genericidad aplica incluso cuando el parámetro de tipo `Currency` no aparece en ninguno de los campos definidos en `Coin`.
+
+### Parámetros de Tipo Phantom
+
+En el ejemplo arriba, aunque `struct Coin` pide la habilidad `store`, ni `Coin<Currency1>` ni `Coin<Currency2>` tendrán la habilidad `store`. Esto es debido a las reglas para [Habilidades Condicionales y Tipos Genéricos](/es/build/smart-contracts/book/abilities#conditional-abilities-and-generic-types) y el hecho de que `Currency1` y `Currency2` no tienen la habilidad `store`, a pesar del hecho de que ni siquiera se usan en el cuerpo de `struct Coin`. Esto podría causar algunas consecuencias desagradables. Por ejemplo, somos incapaces de poner `Coin<Currency1>` en una wallet en el almacenamiento global.
+
+Una posible solución sería agregar anotaciones de habilidad espurias a `Currency1` y `Currency2` (i.e., `struct Currency1 has store {}`). Pero, esto podría llevar a bugs o vulnerabilidades de seguridad porque debilita los tipos con declaraciones de habilidad innecesarias. Por ejemplo, nunca esperaríamos que un resource en el almacenamiento global tenga un campo en tipo `Currency1`, pero esto sería posible con la habilidad `store` espuria. Además, las anotaciones espurias serían infecciosas, requiriendo que muchas funciones genéricas en el parámetro de tipo no usado también incluyan las restricciones necesarias.
+
+Los parámetros de tipo phantom resuelven este problema. Los parámetros de tipo no usados pueden ser marcados como parámetros de tipo _phantom_, que no participan en la derivación de habilidades para structs. De esta manera, los argumentos a parámetros de tipo phantom no se consideran al derivar las habilidades para tipos genéricos, evitando así la necesidad de anotaciones de habilidad espurias. Para que esta regla relajada sea sólida, el sistema de tipos de Move garantiza que un parámetro declarado como `phantom` sea o no usado en absoluto en la definición del struct, o solo se use como argumento a parámetros de tipo también declarados como `phantom`.
+
+#### Declaración
+
+En una definición de struct, un parámetro de tipo puede ser declarado como phantom agregando la palabra clave `phantom` antes de su declaración. Si un parámetro de tipo es declarado como phantom decimos que es un parámetro de tipo phantom. Al definir un struct, el verificador de tipos de Move asegura que cada parámetro de tipo phantom sea o no usado dentro de la definición del struct o solo se use como argumento a un parámetro de tipo phantom.
+
+Más formalmente, si un tipo se usa como argumento a un parámetro de tipo phantom decimos que el tipo aparece en _posición phantom_. Con esta definición en lugar, la regla para el uso correcto de parámetros phantom puede especificarse como sigue: **Un parámetro de tipo phantom solo puede aparecer en posición phantom**.
+
+Los siguientes dos ejemplos muestran usos válidos de parámetros phantom. En el primero, el parámetro `T1` no se usa en absoluto dentro de la definición del struct. En el segundo, el parámetro `T1` solo se usa como argumento a un parámetro de tipo phantom.
+
+```move
+module 0x2::m {
+  struct S1<phantom T1, T2> { f: u64 }
+  //                ^^
+  //                Ok: T1 no aparece dentro de la definición del struct
+
+
+  struct S2<phantom T1, T2> { f: S1<T1, T2> }
+  //                                ^^
+  //                                Ok: T1 aparece en posición phantom
+}
+```
+
+El siguiente código muestra ejemplos de violaciones de la regla:
+
+```move
+module 0x2::m {
+  struct S1<phantom T> { f: T }
+  //                        ^
+  //                        Error: No es una posición phantom
+
+  struct S2<T> { f: T }
+
+  struct S3<phantom T> { f: S2<T> }
+  //                           ^
+  //                           Error: No es una posición phantom
+}
+```
+
+#### Instanciación
+
+Al instanciar un struct, los argumentos a parámetros phantom se excluyen al derivar las habilidades del struct. Por ejemplo, considera el siguiente código:
+
+```move
+module 0x2::m {
+  struct S<T1, phantom T2> has copy { f: T1 }
+  struct NoCopy {}
+  struct HasCopy has copy {}
+}
+```
+
+Considera ahora el tipo `S<HasCopy, NoCopy>`. Dado que `S` está definido con `copy` y todos los argumentos no-phantom tienen `copy` entonces `S<HasCopy, NoCopy>` también tiene `copy`.
+
+#### Parámetros de Tipo Phantom con Restricciones de Habilidad
+
+Las restricciones de habilidad y los parámetros de tipo phantom son características ortogonales en el sentido de que los parámetros phantom pueden ser declarados con restricciones de habilidad. Al instanciar un parámetro de tipo phantom con una restricción de habilidad, el argumento de tipo tiene que satisfacer esa restricción, incluso aunque el parámetro sea phantom. Por ejemplo, la siguiente definición es perfectamente válida:
+
+```move
+module 0x2::m {
+  struct S<phantom T: copy> {}
+}
+```
+
+Las restricciones usuales aplican y `T` solo puede ser instanciado con argumentos teniendo `copy`.
+
+## Restricciones
+
+En los ejemplos arriba, hemos demostrado cómo uno puede usar parámetros de tipo para definir tipos "desconocidos" que pueden ser conectados por llamadores en un momento posterior. Esto sin embargo significa que el sistema de tipos tiene poca información sobre el tipo y tiene que realizar verificaciones de una manera muy conservadora. En cierto sentido, el sistema de tipos debe asumir el peor escenario para un genérico sin restricciones. Simplemente puesto, por defecto los parámetros de tipo genérico no tienen [habilidades](/es/build/smart-contracts/book/abilities).
+
+Aquí es donde entran las restricciones: ofrecen una manera de especificar qué propiedades tienen estos tipos desconocidos para que el sistema de tipos pueda permitir operaciones que de otra manera serían inseguras.
+
+### Declarando Restricciones
+
+Las restricciones pueden ser impuestas en parámetros de tipo usando la siguiente sintaxis.
+
+```move
+// T es el nombre del parámetro de tipo
+T: <ability> (+ <ability>)*
+```
+
+La `<ability>` puede ser cualquiera de las cuatro [habilidades](/es/build/smart-contracts/book/abilities), y un parámetro de tipo puede ser restringido con múltiples habilidades a la vez. Así que todas las siguientes serían declaraciones de parámetro de tipo válidas:
+
+```move
+T: copy
+T: copy + drop
+T: copy + drop + store + key
+```
+
+### Verificando Restricciones
+
+Las restricciones se verifican en sitios de llamada así que el siguiente código no compilará.
+
+```move
+module 0x2::m {
+  struct Foo<T: key> { x: T }
+
+  struct Bar { x: Foo<u8> }
+  //                  ^ ¡error! u8 no tiene 'key'
+
+  struct Baz<T> { x: Foo<T> }
+  //                     ^ ¡error! T no tiene 'key'
+}
+```
+
+```move
+module 0x2::m {
+  struct R {}
+
+  fun unsafe_consume<T>(x: T) {
+    // ¡error! x no tiene 'drop'
+  }
+
+  fun consume<T: drop>(x: T) {
+    // ¡válido!
+    // x será descartado automáticamente
+  }
+
+  fun foo() {
+    let r = R {};
+    consume<R>(r);
+    //      ^ ¡error! R no tiene 'drop'
+  }
+}
+```
+
+```move
+module 0x2::m {
+  struct R {}
+
+  fun unsafe_double<T>(x: T) {
+    (copy x, x)
+    // ¡error! x no tiene 'copy'
+  }
+
+  fun double<T: copy>(x: T) {
+    (copy x, x) // ¡válido!
+  }
+
+  fun foo(): (R, R) {
+    let r = R {};
+    double<R>(r)
+    //     ^ ¡error! R no tiene 'copy'
+  }
+}
+```
+
+Para más información, ver la sección de habilidades en [habilidades condicionales y tipos genéricos](/es/build/smart-contracts/book/abilities#conditional-abilities-and-generic-types).
+
+## Limitaciones en Recursiones
+
+### Structs Recursivos
+
+Los structs genéricos no pueden contener campos del mismo tipo, ya sea directa o indirectamente, incluso con diferentes argumentos de tipo. Todas las siguientes definiciones de struct son inválidas:
+
+```move
+module 0x2::m {
+  struct Foo<T> {
+    x: Foo<u64> // ¡error! 'Foo' conteniendo 'Foo'
+  }
+
+  struct Bar<T> {
+    x: Bar<T> // ¡error! 'Bar' conteniendo 'Bar'
+  }
+
+  // ¡error! 'A' y 'B' formando un ciclo, lo cual tampoco está permitido.
+  struct A<T> {
+    x: B<T, u64>
+  }
+
+  struct B<T1, T2> {
+    x: A<T1>,
+    y: A<T2>
+  }
+}
+```
+
+### Tema Avanzado: Recursiones a Nivel de Tipo
+
+Move permite que las funciones genéricas sean llamadas recursivamente. Sin embargo, cuando se usa en combinación con structs genéricos, esto podría crear un número infinito de tipos en ciertos casos, y permitir esto significa agregar complejidad innecesaria al compilador, vm y otros componentes del lenguaje. Por lo tanto, tales recursiones están prohibidas.
+
+Permitido:
+
+```move
+module 0x2::m {
+  struct A<T> {}
+
+  // Finitamente muchos tipos -- permitido.
+  // foo1<T> -> foo1<T> -> foo1<T> -> ... es válido
+  fun foo1<T>() {
+    foo1<T>();
+  }
+
+  // Finitamente muchos tipos -- permitido.
+  // foo2<T> -> foo2<A<u64>> -> foo2<A<u64>> -> ... es válido
+  fun foo2<T>() {
+    foo2<A<u64>>();
+  }
+}
+```
+
+No permitido:
+
+```move
+module 0x2::m {
+  struct A<T> {}
+
+  // Infinitamente muchos tipos -- NO permitido.
+  // ¡error!
+  // foo<T> -> foo<A<T>> -> foo<A<A<T>>> -> ...
+  fun foo<T>() {
+    foo<A<T>>();
+  }
+}
+```
+
+```move
+module 0x2::n {
+  struct A<T> {}
+
+  // Infinitamente muchos tipos -- NO permitido.
+  // ¡error!
+  // foo<T1, T2> -> bar<T2, T1> -> foo<T2, A<T1>>
+  //   -> bar<A<T1>, T2> -> foo<A<T1>, A<T2>>
+  //   -> bar<A<T2>, A<T1>> -> foo<A<T2>, A<A<T1>>>
+  //   -> ...
+  fun foo<T1, T2>() {
+    bar<T2, T1>();
+  }
+
+  fun bar<T1, T2>() {
+    foo<T1, A<T2>>();
+  }
+}
+```
+
+Nota, la verificación para recursiones a nivel de tipo está basada en un análisis conservativo en los sitios de llamada y NO toma en cuenta el flujo de control o valores de tiempo de ejecución.
+
+```move
+module 0x2::m {
+  struct A<T> {}
+
+  fun foo<T>(n: u64) {
+    if (n > 0) {
+      foo<A<T>>(n - 1);
+    };
+  }
+}
+```
+
+La función en el ejemplo arriba técnicamente terminará para cualquier entrada dada y por lo tanto solo creando finitamente muchos tipos, pero aún se considera inválida por el sistema de tipos de Move.
+
+## Ejemplos Prácticos de Genéricos
+
+### Container Genérico Básico
+
+```move
+module generic_examples {
+    struct Container<T> has store, drop {
+        value: T
+    }
+
+    public fun create<T>(value: T): Container<T> {
+        Container { value }
+    }
+
+    public fun get_value<T: copy>(container: &Container<T>): T {
+        container.value
+    }
+
+    public fun update<T>(container: &mut Container<T>, new_value: T) {
+        container.value = new_value;
+    }
+}
+```
+
+### Registry Genérico con Restricciones
+
+```move
+module registry_example {
+    use std::vector;
+
+    struct Registry<T: store + drop> has store {
+        items: vector<T>
+    }
+
+    public fun new<T: store + drop>(): Registry<T> {
+        Registry { items: vector::empty() }
+    }
+
+    public fun add<T: store + drop>(registry: &mut Registry<T>, item: T) {
+        vector::push_back(&mut registry.items, item);
+    }
+
+    public fun get<T: store + drop + copy>(
+        registry: &Registry<T>, 
+        index: u64
+    ): T {
+        *vector::borrow(&registry.items, index)
+    }
+
+    public fun remove<T: store + drop>(
+        registry: &mut Registry<T>, 
+        index: u64
+    ): T {
+        vector::remove(&mut registry.items, index)
+    }
+}
+```
+
+### Factory Pattern con Phantom Types
+
+```move
+module factory_example {
+    // Phantom types para diferentes tipos de tokens
+    struct TokenTypeA has drop {}
+    struct TokenTypeB has drop {}
+
+    // Token genérico con phantom type
+    struct Token<phantom TokenType> has store {
+        value: u64,
+        metadata: vector<u8>
+    }
+
+    // Factory para crear tokens específicos
+    public fun create_token_a(value: u64, metadata: vector<u8>): Token<TokenTypeA> {
+        Token { value, metadata }
+    }
+
+    public fun create_token_b(value: u64, metadata: vector<u8>): Token<TokenTypeB> {
+        Token { value, metadata }
+    }
+
+    // Funciones específicas para cada tipo
+    public fun token_a_special_operation(token: &Token<TokenTypeA>): u64 {
+        token.value * 2 // Operación específica para TokenTypeA
+    }
+
+    public fun token_b_special_operation(token: &Token<TokenTypeB>): u64 {
+        token.value + 100 // Operación específica para TokenTypeB
+    }
+}
+```
+
+### Wrapper Genérico con Habilidades Condicionales
+
+```move
+module wrapper_example {
+    struct Wrapper<T> has store {
+        inner: T
+    }
+
+    // Solo funciona si T tiene copy
+    public fun duplicate<T: copy>(wrapper: &Wrapper<T>): (T, T) {
+        (wrapper.inner, wrapper.inner)
+    }
+
+    // Solo funciona si T tiene drop
+    public fun consume<T: drop>(wrapper: Wrapper<T>) {
+        let Wrapper { inner: _ } = wrapper;
+    }
+
+    // Solo funciona si T tiene key
+    public fun store_global<T: key>(account: &signer, resource: T) {
+        move_to(account, Wrapper { inner: resource });
+    }
+}
+```
+
+### Event System Genérico
+
+```move
+module generic_events {
+    use std::event;
+
+    #[event]
+    struct GenericEvent<T> has drop, store {
+        event_type: vector<u8>,
+        data: T,
+        timestamp: u64
+    }
+
+    public fun emit_typed_event<T: drop + store>(
+        event_type: vector<u8>,
+        data: T
+    ) {
+        event::emit(GenericEvent {
+            event_type,
+            data,
+            timestamp: aptos_framework::timestamp::now_seconds()
+        });
+    }
+
+    // Eventos específicos usando el sistema genérico
+    struct UserAction has drop, store {
+        user: address,
+        action: vector<u8>
+    }
+
+    struct TransferData has drop, store {
+        from: address,
+        to: address,
+        amount: u64
+    }
+
+    public fun emit_user_action(user: address, action: vector<u8>) {
+        let data = UserAction { user, action };
+        emit_typed_event(b"user_action", data);
+    }
+
+    public fun emit_transfer(from: address, to: address, amount: u64) {
+        let data = TransferData { from, to, amount };
+        emit_typed_event(b"transfer", data);
+    }
+}
+```
+
+### Collection Utilities Genéricas
+
+```move
+module collection_utils {
+    use std::vector;
+
+    // Función para mapear sobre un vector
+    public fun map<T, U>(
+        input: vector<T>,
+        transform: |T| U
+    ): vector<U> {
+        let result = vector::empty();
+        let i = 0;
+        let len = vector::length(&input);
+        
+        while (i < len) {
+            let item = vector::pop_back(&mut input);
+            let transformed = transform(item);
+            vector::push_back(&mut result, transformed);
+            i = i + 1;
+        };
+        
+        vector::reverse(&mut result);
+        result
+    }
+
+    // Función para filtrar un vector
+    public fun filter<T: drop>(
+        input: vector<T>,
+        predicate: |&T| bool
+    ): vector<T> {
+        let result = vector::empty();
+        let i = 0;
+        let len = vector::length(&input);
+        
+        while (i < len) {
+            let item = vector::borrow(&input, i);
+            if (predicate(item)) {
+                vector::push_back(&mut result, *item);
+            };
+            i = i + 1;
+        };
+        
+        result
+    }
+
+    // Función para reducir un vector
+    public fun reduce<T, Acc>(
+        input: vector<T>,
+        initial: Acc,
+        accumulator: |Acc, T| Acc
+    ): Acc {
+        let result = initial;
+        let i = 0;
+        let len = vector::length(&input);
+        
+        while (i < len) {
+            let item = vector::pop_back(&mut input);
+            result = accumulator(result, item);
+            i = i + 1;
+        };
+        
+        result
+    }
+}
+```
+
+## Mejores Prácticas para Genéricos
+
+### 1. Usar Restricciones Apropiadas
+
+```move
+// ✓ Bueno: restricciones claras y necesarias
+public fun safe_transfer<Token: store + drop>(
+    from: &signer,
+    to: address,
+    token: Token
+) {
+    // Token puede ser almacenado y descartado de manera segura
+}
+
+// ✗ Malo: restricciones innecesariamente restrictivas
+public fun overly_restrictive<T: copy + drop + store + key>(item: T) {
+    // La mayoría de estas habilidades probablemente no son necesarias
+}
+```
+
+### 2. Phantom Types para Seguridad de Tipos
+
+```move
+// ✓ Bueno: phantom types para prevenir mezcla accidental
+struct USD has drop {}
+struct EUR has drop {}
+
+struct Money<phantom Currency> has store {
+    amount: u64
+}
+
+public fun add_same_currency<Currency>(
+    a: Money<Currency>,
+    b: Money<Currency>
+): Money<Currency> {
+    Money { amount: a.amount + b.amount }
+}
+```
+
+### 3. Inferencia de Tipos
+
+```move
+// ✓ Bueno: aprovechar inferencia de tipos
+public fun process_data() {
+    let container = Container { value: 42u64 }; // tipo inferido
+    let result = get_value(&container); // tipo inferido
+}
+
+// ✗ Malo: anotaciones de tipo innecesarias
+public fun verbose_typing() {
+    let container: Container<u64> = Container<u64> { value: 42u64 };
+    let result: u64 = get_value<u64>(&container);
+}
+```
+
+### 4. Documentación Clara
+
+````move
+/// Un contenedor genérico que puede almacenar cualquier tipo T
+/// que tenga las habilidades store y drop.
+/// 
+/// # Parámetros de Tipo
+/// * `T` - El tipo de elemento a almacenar. Debe tener store + drop.
+/// 
+/// # Ejemplos
+/// ```move
+/// let container = Container { value: 42u64 };
+/// let value = get_value(&container);
+/// ```
+struct Container<T: store + drop> has store {
+    value: T
+}
+````
+
+Los genéricos en Move proporcionan un poderoso sistema de tipos que permite escribir código reutilizable y seguro. Al entender conceptos como phantom types, restricciones de habilidades, e inferencia de tipos, los desarrolladores pueden crear abstracciones robustas que mantienen la seguridad de tipos mientras proporcionan flexibilidad.

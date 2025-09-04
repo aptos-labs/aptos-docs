@@ -1,0 +1,269 @@
+---
+// Enhanced search analytics and user experience improvements
+---
+
+<script is:inline>
+  // Enhanced search analytics and improvements
+  (function () {
+    // Track search usage patterns
+    let searchMetrics = {
+      queries: [],
+      noResults: [],
+      clickedResults: [],
+      abandonedSearches: [],
+    };
+
+    function trackSearchEvent(eventType, data) {
+      try {
+        // Store locally for analysis
+        const timestamp = new Date().toISOString();
+        const event = { eventType, data, timestamp };
+
+        searchMetrics[eventType]?.push(event);
+
+        // Limit stored events to prevent memory issues
+        Object.keys(searchMetrics).forEach((key) => {
+          if (searchMetrics[key].length > 100) {
+            searchMetrics[key] = searchMetrics[key].slice(-50);
+          }
+        });
+
+        localStorage.setItem("aptosSearchMetrics", JSON.stringify(searchMetrics));
+      } catch (e) {
+        console.warn("Search analytics tracking failed:", e);
+      }
+    }
+
+    // Enhanced DocSearch integration when it becomes available
+    function enhanceDocSearch() {
+      // Wait for DocSearch to be initialized
+      if (typeof window.docsearch !== "undefined") {
+        console.log("Enhancing DocSearch with analytics...");
+
+        // Override the default search to add analytics
+        const originalSearch = window.docsearch;
+        window.docsearch = function (config) {
+          const enhancedConfig = {
+            ...config,
+            searchParameters: {
+              ...config.searchParameters,
+              analytics: true,
+              enablePersonalization: true,
+              clickAnalytics: true,
+            },
+            navigator: {
+              navigate({ itemUrl }) {
+                trackSearchEvent("clickedResults", { url: itemUrl });
+                window.location.assign(itemUrl);
+              },
+              navigateNewTab({ itemUrl }) {
+                trackSearchEvent("clickedResults", { url: itemUrl, newTab: true });
+                window.open(itemUrl, "_blank");
+              },
+              navigateNewWindow({ itemUrl }) {
+                trackSearchEvent("clickedResults", { url: itemUrl, newWindow: true });
+                window.open(itemUrl, "_blank");
+              },
+            },
+            transformSearchClient(searchClient) {
+              return {
+                ...searchClient,
+                search(requests) {
+                  // Track search queries
+                  requests.forEach((request) => {
+                    if (request.params?.query) {
+                      trackSearchEvent("queries", {
+                        query: request.params.query,
+                        language: document.documentElement.lang,
+                      });
+                    }
+                  });
+
+                  return searchClient.search(requests).then((response) => {
+                    // Track no results
+                    response.results.forEach((result, index) => {
+                      if (result.nbHits === 0 && requests[index]?.params?.query) {
+                        trackSearchEvent("noResults", {
+                          query: requests[index].params.query,
+                          language: document.documentElement.lang,
+                        });
+                      }
+                    });
+                    return response;
+                  });
+                },
+              };
+            },
+          };
+
+          return originalSearch(enhancedConfig);
+        };
+      }
+    }
+
+    // Popular search suggestions based on current page
+    function addSearchSuggestions() {
+      const currentPath = window.location.pathname;
+      let suggestions = [];
+
+      if (currentPath.includes("/build/")) {
+        suggestions = [
+          "getting started",
+          "first transaction",
+          "Move tutorial",
+          "CLI installation",
+          "SDK examples",
+        ];
+      } else if (currentPath.includes("/network/")) {
+        suggestions = ["blockchain concepts", "account model", "gas fees", "validators"];
+      } else {
+        suggestions = ["getting started", "tutorials", "API reference", "Move language"];
+      }
+
+      // Store suggestions for potential use by search UI
+      window.aptosSearchSuggestions = suggestions;
+    }
+
+    // Keyboard shortcuts for better search UX
+    function addSearchShortcuts() {
+      document.addEventListener("keydown", function (e) {
+        // Ctrl/Cmd + K to open search
+        if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+          e.preventDefault();
+          const searchButton = document.querySelector(".DocSearch-Button, .DocSearch-Button-Alt");
+          if (searchButton) {
+            searchButton.click();
+          }
+        }
+
+        // Escape to close search
+        if (e.key === "Escape") {
+          const searchModal = document.querySelector(".DocSearch-Modal");
+          if (searchModal) {
+            const closeButton = searchModal.querySelector(".DocSearch-Cancel");
+            if (closeButton) {
+              closeButton.click();
+            }
+          }
+        }
+      });
+    }
+
+    // Search result preview enhancement
+    function enhanceSearchPreviews() {
+      // Add mutation observer to enhance search results when they appear
+      const observer = new MutationObserver(function (mutations) {
+        mutations.forEach(function (mutation) {
+          mutation.addedNodes.forEach(function (node) {
+            if (node.nodeType === Node.ELEMENT_NODE) {
+              // Look for search results
+              const searchResults = node.querySelectorAll?.(".DocSearch-Hit");
+              searchResults?.forEach((result) => {
+                // Add category badges
+                const link = result.querySelector("a[href]");
+                if (link && !result.querySelector(".search-category-badge")) {
+                  const href = link.getAttribute("href");
+                  let category = "";
+
+                  if (href.includes("/build/guides/")) category = "Tutorial";
+                  else if (href.includes("/build/sdks/")) category = "SDK";
+                  else if (href.includes("/build/cli/")) category = "CLI";
+                  else if (href.includes("/network/")) category = "Concepts";
+                  else if (href.includes("/rest-api/")) category = "API";
+
+                  if (category) {
+                    const badge = document.createElement("span");
+                    badge.className = "search-category-badge";
+                    badge.textContent = category;
+                    badge.style.cssText = `
+                      background: var(--sl-color-accent);
+                      color: white;
+                      font-size: 0.7em;
+                      padding: 2px 6px;
+                      border-radius: 3px;
+                      margin-left: 8px;
+                    `;
+
+                    const title = result.querySelector(".DocSearch-Hit-title, .DocSearch-Hit-Tree");
+                    if (title) {
+                      title.appendChild(badge);
+                    }
+                  }
+                }
+              });
+            }
+          });
+        });
+      });
+
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+      });
+    }
+
+    // Initialize all enhancements
+    function initSearchEnhancements() {
+      addSearchSuggestions();
+      addSearchShortcuts();
+      enhanceSearchPreviews();
+
+      // Try to enhance DocSearch immediately, then try again after a delay
+      enhanceDocSearch();
+      setTimeout(enhanceDocSearch, 1000);
+      setTimeout(enhanceDocSearch, 3000);
+    }
+
+    // Initialize when DOM is ready
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", initSearchEnhancements);
+    } else {
+      initSearchEnhancements();
+    }
+
+    // Expose metrics for debugging
+    window.getSearchMetrics = () => searchMetrics;
+    window.clearSearchMetrics = () => {
+      searchMetrics = { queries: [], noResults: [], clickedResults: [], abandonedSearches: [] };
+      localStorage.removeItem("aptosSearchMetrics");
+    };
+  })();
+</script>
+
+<style>
+  /* Enhanced search result styling */
+  .search-category-badge {
+    font-weight: 500 !important;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  /* Improve search modal appearance */
+  :global(.DocSearch-Modal) {
+    max-width: 90vw !important;
+  }
+
+  :global(.DocSearch-Hit-title) {
+    display: flex !important;
+    align-items: center !important;
+  }
+
+  /* Better mobile search experience */
+  @media (max-width: 768px) {
+    :global(.DocSearch-Modal) {
+      margin: 1rem !important;
+      max-height: calc(100vh - 2rem) !important;
+    }
+  }
+
+  /* Search keyboard shortcut hint */
+  :global(.DocSearch-Button-Keys) {
+    opacity: 0.8;
+  }
+
+  :global(.DocSearch-Button-Keys:after) {
+    content: " or Ctrl+K";
+    font-size: 0.8em;
+    opacity: 0.7;
+  }
+</style>

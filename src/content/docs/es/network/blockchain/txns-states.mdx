@@ -1,0 +1,138 @@
+---
+title: "Transacciones y Estados – Funcionamiento de la Blockchain"
+description: "Aprende cómo las transacciones modifican el estado de la blockchain de Aptos: tipos de transacciones, estados, pruebas criptográficas y límites del sistema."
+sidebar:
+  label: "Transacciones y Estados"
+---
+
+import { ThemedImage } from '~/components/ThemedImage';
+
+import { Aside } from '@astrojs/starlight/components';
+
+La blockchain de Aptos almacena tres tipos de datos:
+
+- **Transacciones**: Las transacciones representan una operación prevista que está siendo realizada por una cuenta en la blockchain (por ejemplo, transferir activos).
+- **Estados**: El estado (del libro mayor de la blockchain) representa la acumulación de la salida de ejecución de las transacciones, los valores almacenados dentro de todos los [recursos](/es/network/blockchain/resources).
+- [**Eventos**](/es/network/blockchain/events): Datos auxiliares publicados por la ejecución de una transacción.
+
+<Aside type="note">
+  Solo las transacciones pueden cambiar el estado del libro mayor.
+</Aside>
+
+## Transacciones
+
+Las transacciones de Aptos contienen información como la dirección de cuenta del remitente, autenticación del remitente, la operación deseada a realizar en la blockchain de Aptos, y la cantidad de gas que el remitente está dispuesto a pagar para ejecutar la transacción.
+
+### Estados de transacción
+
+Una transacción puede terminar en uno de los siguientes estados:
+
+- Confirmada en la blockchain y ejecutada. Esto se considera como una transacción exitosa.
+- Confirmada en la blockchain y abortada. El código de aborto indica por qué la transacción falló al ejecutarse.
+- Descartada durante el envío de la transacción debido a una verificación de validación como gas insuficiente, formato de transacción inválido, o clave incorrecta.
+- Descartada después del envío de la transacción pero antes del intento de ejecución. Esto podría ser causado por tiempos de espera o gas insuficiente debido a otras transacciones que afectan la cuenta.
+
+La cuenta del remitente será cobrada por gas por cualquier transacción confirmada.
+
+Durante el envío de la transacción, el remitente es notificado del envío exitoso o una razón para fallar las validaciones de otra manera.
+
+Una transacción que es enviada exitosamente pero finalmente descartada puede no tener estado visible en ningún nodo Aptos accesible o dentro de la red Aptos. Un usuario puede intentar reenviar la misma transacción para revalidar la transacción. Si el nodo de envío cree que esta transacción sigue siendo válida, retornará un error indicando que una transacción idéntica ha sido enviada.
+
+El remitente puede intentar aumentar el costo de gas por una cantidad trivial para ayudar a hacer progreso y ajustar para lo que haya estado causando el descarte de la transacción más adelante en el flujo.
+
+<Aside type="note">
+  Ve [Análisis Profundo de la Blockchain de Aptos](/es/network/blockchain/blockchain-deep-dive) para una descripción completa del ciclo de vida de las transacciones de Aptos.
+</Aside>
+
+### Contenido de una Transacción
+
+Una transacción firmada en la blockchain contiene la siguiente información:
+
+- **Firma**: El remitente usa una firma digital para verificar que firmó la transacción (es decir, autenticación).
+- **Dirección del remitente**: La [dirección de cuenta](/es/network/blockchain/accounts#account-address) del remitente.
+- **Clave pública del remitente**: La clave pública de autenticación que corresponde a la clave privada de autenticación usada para firmar la transacción.
+- **Carga útil**: Indica una acción o conjunto de acciones en nombre de Alice. En el caso de que esto sea una función Move, llama directamente al bytecode Move en la cadena. Alternativamente, puede ser un [script de transacción](/es/network/glossary#transaction-script) de bytecode Move peer-to-peer. También contiene una lista de entradas a la función o script. Para este ejemplo, es una llamada de función para transferir una cantidad de Monedas Aptos de la cuenta de Alice a la cuenta de Bob, donde la cuenta de Alice está implícita al enviar la transacción y la cuenta de Bob y la cantidad están especificadas como entradas de transacción.
+- [**Precio de unidad de gas**](/es/network/glossary#gas-unit-price): La cantidad que el remitente está dispuesto a pagar por unidad de gas, para ejecutar la transacción. Esto se representa en [Octas](/es/network/glossary#octa).
+- [**Cantidad máxima de gas**](/es/network/glossary#maximum-gas-amount): La [cantidad máxima de gas](/es/network/blockchain/gas-txn-fee#specifying-gas-fees-within-a-transaction) en APT que el remitente está dispuesto a pagar por esta transacción. Los cargos de gas son iguales al costo base de gas cubierto por computación e IO multiplicado por el precio del gas. Los costos de gas también incluyen almacenamiento con un modelo de almacenamiento de precio fijo en APT. Esto se representa como [Octas](/es/network/glossary#octa).
+- **Precio de gas** (en unidades de gas especificadas): Esta es la cantidad que el remitente está dispuesto a pagar por unidad de [gas](/es/network/blockchain/gas-txn-fee) para ejecutar la transacción. [Gas](/es/network/blockchain/gas-txn-fee) es una forma de pagar por computación y almacenamiento. Una unidad de gas es una medida abstracta de computación sin valor inherente en el mundo real.
+- **Número de secuencia**: Este es un entero sin signo que debe ser igual al [número de secuencia](/es/network/blockchain/accounts#account-sequence-number) de la cuenta del remitente al momento de la ejecución.
+- **Tiempo de expiración**: Una marca de tiempo después de la cual la transacción deja de ser válida (es decir, expira).
+
+### Tipos de cargas útiles de transacción
+
+Dentro de una transacción dada, los dos tipos más comunes de cargas útiles incluyen:
+
+- Un punto de entrada
+- [Un script (carga útil)](/es/build/smart-contracts/scripts)
+
+Actualmente, los SDKs [Python](/es/build/sdks/python-sdk) y [Typescript](/es/build/sdks/ts-sdk) soportan ambos. Esta guía señala muchos de esos puntos de entrada, como `coin::transfer` y `aptos_account::create_account`.
+
+Todas las operaciones en la blockchain de Aptos deberían estar disponibles a través de llamadas de punto de entrada. Mientras que uno podría enviar múltiples transacciones llamando puntos de entrada en serie, muchas de esas operaciones pueden beneficiarse de ser llamadas atómicamente desde una sola transacción. Una transacción de carga útil de script puede llamar cualquier punto de entrada o función pública definida dentro de cualquier módulo.
+
+<Aside type="note">
+  Ve el tutorial sobre [Tu Primera Transacción](/es/build/guides/first-transaction) para generar transacciones válidas.
+</Aside>
+
+<Aside type="note">
+  La API REST de Aptos soporta generar transacciones codificadas en BCS desde JSON. Esto es útil para prototipado rápido, pero ten cuidado al usarlo en Mainnet ya que esto pone mucha confianza en el nodo completo que genera la transacción.
+</Aside>
+
+## Estados
+
+El estado del libro mayor de la blockchain de Aptos, o estado global, representa el estado de todas las cuentas en la blockchain de Aptos. Cada nodo validador en la blockchain debe conocer la última versión del estado global para ejecutar cualquier transacción.
+
+Cualquiera puede enviar una transacción a la blockchain de Aptos para modificar el estado del libro mayor. Al ejecutarse una transacción, se genera una salida de transacción. Una salida de transacción contiene cero o más operaciones para manipular el estado del libro mayor llamadas **conjuntos de escritura** emitiendo un vector de eventos resultantes, la cantidad de gas consumido, y el estado de la transacción ejecutada.
+
+### Pruebas
+
+La blockchain de Aptos usa pruebas para verificar la autenticidad y corrección de los datos de la blockchain.
+
+Los datos dentro de la blockchain de Aptos son replicados a través de la red. El [almacenamiento](/es/network/blockchain/validator-nodes#storage) de cada validador y nodo completo es responsable de persistir los bloques acordados de transacciones y sus resultados de ejecución en la base de datos.
+
+La blockchain se representa como un [árbol de Merkle](/es/network/glossary#merkle-trees) en crecimiento constante, donde cada hoja agregada al árbol representa una sola transacción ejecutada por la blockchain.
+
+Todas las operaciones ejecutadas por la blockchain y todos los estados de cuenta pueden ser verificados criptográficamente. Estas pruebas criptográficas aseguran que:
+
+- Los nodos validadores están de acuerdo en el estado.
+- El cliente no necesita confiar en la entidad de la cual está recibiendo datos. Por ejemplo, si un cliente obtiene las últimas **n** transacciones de una cuenta, una prueba puede atestiguar que no se agregaron, omitieron o modificaron transacciones en la respuesta. El cliente también puede consultar el estado de una cuenta, preguntar si una transacción específica fue procesada, y así sucesivamente.
+
+### Base de datos versionada
+
+El estado del libro mayor está versionado usando un entero sin signo de 64 bits correspondiente al número de transacciones que el sistema ha ejecutado. Esta base de datos versionada permite a los nodos validadores:
+
+- Ejecutar una transacción contra el estado del libro mayor en la última versión.
+- Responder consultas de clientes sobre el historial del libro mayor tanto en versiones actuales como anteriores.
+
+## Las transacciones cambian el estado del libro mayor
+
+<ThemedImage
+  alt="Flujo de Transacciones Firmadas"
+  sources={{
+light: '~/images/transactions-and-state.svg',
+dark: '~/images/transactions-and-state-dark.svg',
+}}
+/>
+
+La figura anterior muestra cómo ejecutar la transacción T<sub>_i_</sub> cambia el estado de la blockchain de Aptos de S<sub>_i-1_</sub> a S<sub>_i_</sub>.
+
+En la figura:
+
+- Cuentas **A** y **B**: Representan las cuentas de Alice y Bob en la blockchain de Aptos.
+- **S<sub>_i-1_</sub>** : Representa el (_i-1_)-ésimo estado de la blockchain. En este estado, la cuenta **A** de Alice tiene un saldo de 110 APT (monedas Aptos), y la cuenta **B** de Bob tiene un saldo de 52 APT.
+- **T<sub>_i_</sub>** : Esta es la _i_-ésima transacción ejecutada en la blockchain. En este ejemplo, representa a Alice enviando 10 APT a Bob.
+- **Apply()**: Esta es una función determinística que siempre retorna el mismo estado final para un estado inicial específico y una transacción específica. Si el estado actual de la blockchain es **S<sub>_i-1_</sub>**, y la transacción **T<sub>_i_</sub>** es ejecutada en el estado **S<sub>_i-1_</sub>**, entonces el nuevo estado de la blockchain es siempre **S<sub>_i_</sub>**. La blockchain de Aptos usa el [lenguaje Move](/es/build/smart-contracts/book/SUMMARY) para implementar la función de ejecución determinística **Apply()**.
+- **S<sub>_i_</sub>** : Este es el _i_-ésimo estado de la blockchain. Cuando la transacción **T<sub>_i_</sub>** es aplicada a la blockchain, genera el nuevo estado **S<sub>_i_</sub>** (un resultado de aplicar **Apply(S<sub>_i-1_</sub>, T<sub>_i_</sub>)** a **S<sub>_i-1_</sub>** y **T<sub>_i_</sub>**). Esto causa que el saldo de la cuenta de Alice se reduzca en 10 a 100 APT y el saldo de la cuenta de Bob se incremente en 10 a 62 APT. El nuevo estado **S<sub>_i_</sub>** muestra estos saldos actualizados.
+
+## Límites de tamaño
+
+Como parte del calendario de gas, hay límites configurables en la cadena para los tamaños de [la transacción misma](https://github.com/aptos-labs/aptos-core/blob/8074588b5c9c4424fa247c2c9ec5572981ee31cd/aptos-move/aptos-gas-schedule/src/gas_schedule/transaction.rs#L71-L81) y [sus salidas](https://github.com/aptos-labs/aptos-core/blob/8074588b5c9c4424fa247c2c9ec5572981ee31cd/aptos-move/aptos-gas-schedule/src/gas_schedule/transaction.rs#L152-L177).
+
+| Tipo de Límite                  | Límite Actual Por Transacción |
+| ------------------------------- | ------------------------------ |
+| transacción                     | 64KB                           |
+| transacción de gobernanza       | 1MB                            |
+| una sola operación de escritura | 1MB                            |
+| todas las operaciones de escritura combinadas | 10MB               |
+| número de operaciones de escritura | 8192                        |
+| un solo evento                  | 1MB                            |
+| todos los eventos combinados    | 10MB                           |

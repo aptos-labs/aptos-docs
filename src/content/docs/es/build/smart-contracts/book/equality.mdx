@@ -1,0 +1,694 @@
+---
+title: "Igualdad"
+description: "Guía en español: understand equality operations, comparison semantics, and type checking in move programming language."
+sidebar:
+  label: "Equality"
+---
+
+Move soporta dos operaciones de igualdad `==` e `!=` (igual y no igual). Estas operaciones están disponibles solo para ciertos tipos, y ambos operandos deben ser del mismo tipo (no hay coerción implícita).
+
+## Fondo
+
+Las operaciones de igualdad retornan un valor `bool` y son las siguientes:
+
+| Sintaxis | Operación        | Descripción                                    |
+| -------- | ---------------- | ---------------------------------------------- |
+| `==`     | igual           | Retorna `true` si los dos operandos son iguales |
+| `!=`     | no igual        | Retorna `true` si los dos operandos no son iguales |
+
+### Tipos Soportados
+
+Ambos operadores de igualdad pueden usarse con todos los tipos primitivos: `u8`, `u16`, `u32`, `u64`, `u128`, `u256`, `bool`, y `address`. También están soportados para `vector`, pero el tipo del vector debe a su vez soportar igualdad.
+
+```move
+script {
+  fun example() {
+    // Tipos primitivos
+    assert!(0u8 == 0u8, 0);
+    assert!(1u64 != 2u64, 1);
+    assert!(true == true, 2);
+    assert!(false != true, 3);
+    assert!(@0x1 == @0x1, 4);
+    assert!(@0x1 != @0x2, 5);
+
+    // Vectores
+    assert!(vector<u8>[1, 2, 3] == vector<u8>[1, 2, 3], 6);
+    assert!(vector<u8>[1, 2, 3] != vector<u8>[3, 2, 1], 7);
+    assert!(vector<bool>[true, false] == vector<bool>[true, false], 8);
+  }
+}
+```
+
+### Tipos No Soportados
+
+Los operadores de igualdad **no** están soportados para:
+
+- Structs (incluidos recursos)
+- Referencias
+- Tuplas
+- Funciones
+
+```move
+script {
+  struct S { f: u64 }
+  
+  fun example() {
+    let s1 = S { f: 0 };
+    let s2 = S { f: 0 };
+    
+    // Error: igualdad no soportada para structs
+    // let are_equal = s1 == s2;
+    
+    // Error: igualdad no soportada para referencias  
+    // let ref1 = &s1;
+    // let ref2 = &s2;
+    // let refs_equal = ref1 == ref2;
+  }
+}
+```
+
+## Semántica de Igualdad
+
+### Comparación por Valor
+
+Para tipos primitivos, la igualdad compara los valores directamente:
+
+```move
+script {
+  fun value_comparison() {
+    let a = 42u64;
+    let b = 42u64;
+    let c = 43u64;
+    
+    assert!(a == b, 0); // Mismo valor
+    assert!(a != c, 1); // Valores diferentes
+    
+    // Para direcciones
+    let addr1 = @0x42;
+    let addr2 = @0x42; 
+    let addr3 = @0x43;
+    
+    assert!(addr1 == addr2, 2); // Misma dirección
+    assert!(addr1 != addr3, 3); // Direcciones diferentes
+  }
+}
+```
+
+### Comparación de Vectores
+
+Para vectores, la igualdad compara elemento por elemento:
+
+```move
+script {
+  fun vector_comparison() {
+    let vec1 = vector<u64>[1, 2, 3];
+    let vec2 = vector<u64>[1, 2, 3];
+    let vec3 = vector<u64>[1, 2, 4];
+    let vec4 = vector<u64>[1, 2];
+    
+    assert!(vec1 == vec2, 0); // Mismos elementos en mismo orden
+    assert!(vec1 != vec3, 1); // Diferentes elementos
+    assert!(vec1 != vec4, 2); // Diferentes longitudes
+    
+    // Vector vacío
+    let empty1 = vector<u64>[];
+    let empty2 = vector<u64>[];
+    assert!(empty1 == empty2, 3); // Vectores vacíos son iguales
+  }
+}
+```
+
+### Comparación de Vectores Anidados
+
+```move
+script {
+  fun nested_vector_comparison() {
+    let nested1 = vector<vector<u8>>[
+      vector<u8>[1, 2],
+      vector<u8>[3, 4]
+    ];
+    
+    let nested2 = vector<vector<u8>>[
+      vector<u8>[1, 2],
+      vector<u8>[3, 4]
+    ];
+    
+    let nested3 = vector<vector<u8>>[
+      vector<u8>[1, 2],
+      vector<u8>[3, 5] // Diferente elemento
+    ];
+    
+    assert!(nested1 == nested2, 0); // Misma estructura
+    assert!(nested1 != nested3, 1); // Elementos diferentes
+  }
+}
+```
+
+## Casos de Uso Comunes
+
+### Validación de Entrada
+
+```move
+module 0x42::validation {
+  use std::string::{Self, String};
+  use std::vector;
+  
+  const E_INVALID_INPUT: u64 = 1;
+  const E_EMPTY_STRING: u64 = 2;
+  
+  public fun validate_non_zero(value: u64) {
+    assert!(value != 0, E_INVALID_INPUT);
+  }
+  
+  public fun validate_address(addr: address) {
+    assert!(addr != @0x0, E_INVALID_INPUT);
+  }
+  
+  public fun validate_non_empty_string(s: &String) {
+    let empty = string::utf8(b"");
+    assert!(*s != empty, E_EMPTY_STRING);
+  }
+  
+  public fun validate_expected_value(actual: u64, expected: u64) {
+    assert!(actual == expected, E_INVALID_INPUT);
+  }
+}
+```
+
+### Búsqueda en Vectores
+
+```move
+module 0x42::search {
+  use std::vector;
+  use std::option::{Self, Option};
+  
+  public fun find_index<T>(vec: &vector<T>, target: &T): Option<u64> {
+    let len = vector::length(vec);
+    let mut i = 0;
+    
+    while (i < len) {
+      if (vector::borrow(vec, i) == target) {
+        return option::some(i)
+      };
+      i = i + 1;
+    };
+    
+    option::none()
+  }
+  
+  public fun contains<T>(vec: &vector<T>, target: &T): bool {
+    option::is_some(&find_index(vec, target))
+  }
+  
+  public fun count_occurrences<T>(vec: &vector<T>, target: &T): u64 {
+    let len = vector::length(vec);
+    let mut count = 0;
+    let mut i = 0;
+    
+    while (i < len) {
+      if (vector::borrow(vec, i) == target) {
+        count = count + 1;
+      };
+      i = i + 1;
+    };
+    
+    count
+  }
+}
+```
+
+### Filtrado de Datos
+
+```move
+module 0x42::filtering {
+  use std::vector;
+  
+  public fun filter_equal<T: copy>(vec: &vector<T>, target: &T): vector<T> {
+    let result = vector::empty<T>();
+    let len = vector::length(vec);
+    let mut i = 0;
+    
+    while (i < len) {
+      let element = vector::borrow(vec, i);
+      if (element == target) {
+        vector::push_back(&mut result, *element);
+      };
+      i = i + 1;
+    };
+    
+    result
+  }
+  
+  public fun filter_not_equal<T: copy>(vec: &vector<T>, target: &T): vector<T> {
+    let result = vector::empty<T>();
+    let len = vector::length(vec);
+    let mut i = 0;
+    
+    while (i < len) {
+      let element = vector::borrow(vec, i);
+      if (element != target) {
+        vector::push_back(&mut result, *element);
+      };
+      i = i + 1;
+    };
+    
+    result
+  }
+  
+  public fun remove_duplicates<T: copy>(vec: &vector<T>): vector<T> {
+    let result = vector::empty<T>();
+    let len = vector::length(vec);
+    let mut i = 0;
+    
+    while (i < len) {
+      let element = vector::borrow(vec, i);
+      if (!contains(&result, element)) {
+        vector::push_back(&mut result, *element);
+      };
+      i = i + 1;
+    };
+    
+    result
+  }
+  
+  fun contains<T>(vec: &vector<T>, target: &T): bool {
+    let len = vector::length(vec);
+    let mut i = 0;
+    
+    while (i < len) {
+      if (vector::borrow(vec, i) == target) {
+        return true
+      };
+      i = i + 1;
+    };
+    
+    false
+  }
+}
+```
+
+### Comparación de Estados
+
+```move
+module 0x42::state_machine {
+  const PENDING: u8 = 0;
+  const PROCESSING: u8 = 1;
+  const COMPLETED: u8 = 2;
+  const FAILED: u8 = 3;
+  
+  struct Order has key {
+    id: u64,
+    status: u8,
+    owner: address,
+  }
+  
+  public fun is_pending(order: &Order): bool {
+    order.status == PENDING
+  }
+  
+  public fun is_processing(order: &Order): bool {
+    order.status == PROCESSING
+  }
+  
+  public fun is_completed(order: &Order): bool {
+    order.status == COMPLETED
+  }
+  
+  public fun is_failed(order: &Order): bool {
+    order.status == FAILED
+  }
+  
+  public fun can_process(order: &Order): bool {
+    order.status == PENDING
+  }
+  
+  public fun can_complete(order: &Order): bool {
+    order.status == PROCESSING
+  }
+  
+  public fun is_owned_by(order: &Order, addr: address): bool {
+    order.owner == addr
+  }
+}
+```
+
+## Optimizaciones y Rendimiento
+
+### Comparación Temprana
+
+Para vectores largos, considera salir temprano si es posible:
+
+```move
+module 0x42::optimized_comparison {
+  use std::vector;
+  
+  public fun vectors_equal_optimized<T>(vec1: &vector<T>, vec2: &vector<T>): bool {
+    let len1 = vector::length(vec1);
+    let len2 = vector::length(vec2);
+    
+    // Salida temprana si las longitudes son diferentes
+    if (len1 != len2) {
+      return false
+    };
+    
+    // Si ambos están vacíos, son iguales
+    if (len1 == 0) {
+      return true
+    };
+    
+    // Comparar elemento por elemento
+    let mut i = 0;
+    while (i < len1) {
+      if (vector::borrow(vec1, i) != vector::borrow(vec2, i)) {
+        return false
+      };
+      i = i + 1;
+    };
+    
+    true
+  }
+  
+  public fun find_first_difference<T>(vec1: &vector<T>, vec2: &vector<T>): Option<u64> {
+    let len1 = vector::length(vec1);
+    let len2 = vector::length(vec2);
+    let min_len = if (len1 < len2) len1 else len2;
+    
+    let mut i = 0;
+    while (i < min_len) {
+      if (vector::borrow(vec1, i) != vector::borrow(vec2, i)) {
+        return option::some(i)
+      };
+      i = i + 1;
+    };
+    
+    // Si todas las posiciones comparables son iguales pero las longitudes difieren
+    if (len1 != len2) {
+      option::some(min_len)
+    } else {
+      option::none()
+    }
+  }
+}
+```
+
+### Evitar Comparaciones Innecesarias
+
+```move
+module 0x42::efficient_checks {
+  use std::vector;
+  
+  public fun has_target_at_positions<T>(
+    vec: &vector<T>, 
+    target: &T, 
+    positions: &vector<u64>
+  ): bool {
+    let pos_len = vector::length(positions);
+    let vec_len = vector::length(vec);
+    let mut i = 0;
+    
+    while (i < pos_len) {
+      let pos = *vector::borrow(positions, i);
+      
+      // Verificar límites antes de acceder
+      if (pos >= vec_len) {
+        return false
+      };
+      
+      // Verificar igualdad
+      if (vector::borrow(vec, pos) != target) {
+        return false
+      };
+      
+      i = i + 1;
+    };
+    
+    true
+  }
+}
+```
+
+## Patrones de Comparación para Structs
+
+Aunque los structs no soportan igualdad directa, puedes implementar funciones de comparación personalizadas:
+
+```move
+module 0x42::custom_equality {
+  struct Point {
+    x: u64,
+    y: u64,
+  }
+  
+  struct Person {
+    name: vector<u8>,
+    age: u8,
+    address: address,
+  }
+  
+  public fun points_equal(p1: &Point, p2: &Point): bool {
+    p1.x == p2.x && p1.y == p2.y
+  }
+  
+  public fun persons_equal(p1: &Person, p2: &Person): bool {
+    p1.name == p2.name && p1.age == p2.age && p1.address == p2.address
+  }
+  
+  // Comparación parcial - solo por nombre
+  public fun same_name(p1: &Person, p2: &Person): bool {
+    p1.name == p2.name
+  }
+  
+  // Comparación con tolerancia para puntos
+  public fun points_near(p1: &Point, p2: &Point, tolerance: u64): bool {
+    let x_diff = if (p1.x > p2.x) p1.x - p2.x else p2.x - p1.x;
+    let y_diff = if (p1.y > p2.y) p1.y - p2.y else p2.y - p1.y;
+    
+    x_diff <= tolerance && y_diff <= tolerance
+  }
+}
+```
+
+## Casos Especiales y Gotchas
+
+### Precisión Flotante (No Aplicable a Move)
+
+A diferencia de lenguajes con números de punto flotante, Move solo tiene enteros, por lo que no hay problemas de precisión flotante:
+
+```move
+script {
+  fun integer_equality() {
+    // En Move, esto siempre es seguro
+    let a = 1;
+    let b = 1;
+    assert!(a == b, 0); // Siempre funciona como se espera
+    
+    // No hay problemas de precisión flotante como 0.1 + 0.2 != 0.3
+  }
+}
+```
+
+### Vectores Vacíos
+
+```move
+script {
+  fun empty_vector_equality() {
+    let empty1 = vector<u64>[];
+    let empty2 = vector<bool>[];
+    
+    // Vectores vacíos de diferentes tipos NO son iguales
+    // empty1 == empty2; // Error de tipo
+    
+    let empty3 = vector<u64>[];
+    assert!(empty1 == empty3, 0); // OK - mismo tipo
+  }
+}
+```
+
+### Vectores de Bytes
+
+```move
+script {
+  fun byte_vector_equality() {
+    let bytes1 = b"hello";
+    let bytes2 = vector<u8>[104, 101, 108, 108, 111]; // "hello" en ASCII
+    
+    assert!(bytes1 == bytes2, 0); // Son iguales
+    
+    let bytes3 = b"Hello"; // Diferente capitalización
+    assert!(bytes1 != bytes3, 1); // No son iguales
+  }
+}
+```
+
+## Mejores Prácticas
+
+### 1. Usa Nombres Descriptivos para Comparaciones
+
+```move
+// ✅ Bueno - intención clara
+public fun is_admin(user_role: u8): bool {
+  user_role == ADMIN_ROLE
+}
+
+public fun is_zero_address(addr: address): bool {
+  addr == @0x0
+}
+
+// ❌ Malo - intención poco clara
+public fun check(x: u8): bool {
+  x == 1
+}
+```
+
+### 2. Combina Comparaciones Lógicamente
+
+```move
+// ✅ Bueno - lógica clara
+public fun is_valid_user(age: u8, address: address): bool {
+  age >= 18 && address != @0x0
+}
+
+public fun is_special_case(status: u8, priority: u8): bool {
+  status == URGENT_STATUS || priority == HIGH_PRIORITY
+}
+
+// ❌ Malo - comparaciones complejas anidadas
+public fun complex_check(a: u8, b: u8, c: u8): bool {
+  if (a == 1) {
+    if (b == 2) {
+      c == 3
+    } else {
+      false
+    }
+  } else {
+    false
+  }
+}
+```
+
+### 3. Implementa Funciones de Igualdad para Structs
+
+```move
+module 0x42::best_practices {
+  struct User {
+    id: u64,
+    name: vector<u8>,
+    active: bool,
+  }
+  
+  // ✅ Bueno - función de igualdad clara
+  public fun users_equal(u1: &User, u2: &User): bool {
+    u1.id == u2.id && 
+    u1.name == u2.name && 
+    u1.active == u2.active
+  }
+  
+  // ✅ También bueno - comparaciones específicas
+  public fun same_user_id(u1: &User, u2: &User): bool {
+    u1.id == u2.id
+  }
+  
+  public fun same_user_name(u1: &User, u2: &User): bool {
+    u1.name == u2.name
+  }
+}
+```
+
+### 4. Maneja Casos Edge
+
+```move
+module 0x42::edge_cases {
+  use std::vector;
+  use std::option::{Self, Option};
+  
+  public fun safe_vector_equal<T>(
+    vec1: &Option<vector<T>>, 
+    vec2: &Option<vector<T>>
+  ): bool {
+    if (option::is_none(vec1) && option::is_none(vec2)) {
+      true
+    } else if (option::is_some(vec1) && option::is_some(vec2)) {
+      *option::borrow(vec1) == *option::borrow(vec2)
+    } else {
+      false
+    }
+  }
+  
+  public fun compare_with_default<T: copy>(
+    actual: &Option<T>, 
+    expected: T
+  ): bool {
+    if (option::is_some(actual)) {
+      *option::borrow(actual) == expected
+    } else {
+      false
+    }
+  }
+}
+```
+
+## Errores Comunes
+
+### Intentar Comparar Tipos Incompatibles
+
+```move
+// ❌ Error - tipos diferentes
+script {
+  fun type_mismatch() {
+    let a = 1u64;
+    let b = 1u8;
+    // let result = a == b; // Error: tipos incompatibles
+  }
+}
+
+// ✅ Solución - conversión explícita
+script {
+  fun correct_comparison() {
+    let a = 1u64;
+    let b = 1u8;
+    let result = a == (b as u64); // OK
+  }
+}
+```
+
+### Intentar Comparar Structs Directamente
+
+```move
+// ❌ Error - structs no soportan igualdad
+module 0x42::struct_error {
+  struct Point { x: u64, y: u64 }
+  
+  fun compare_structs() {
+    let p1 = Point { x: 1, y: 2 };
+    let p2 = Point { x: 1, y: 2 };
+    // let equal = p1 == p2; // Error
+  }
+}
+
+// ✅ Solución - función de comparación personalizada
+module 0x42::struct_solution {
+  struct Point { x: u64, y: u64 }
+  
+  public fun points_equal(p1: &Point, p2: &Point): bool {
+    p1.x == p2.x && p1.y == p2.y
+  }
+  
+  fun compare_structs() {
+    let p1 = Point { x: 1, y: 2 };
+    let p2 = Point { x: 1, y: 2 };
+    let equal = points_equal(&p1, &p2); // OK
+  }
+}
+```
+
+## Conclusión
+
+La igualdad en Move es un concepto fundamental pero limitado en comparación con otros lenguajes. Entender qué tipos soportan igualdad y cómo implementar comparaciones personalizadas para tipos que no la soportan es crucial para escribir código Move efectivo.
+
+Puntos clave para recordar:
+
+- Solo tipos primitivos y vectores soportan operadores de igualdad
+- Los structs requieren funciones de comparación personalizadas
+- Las comparaciones de vectores son elemento por elemento
+- Siempre considera casos edge como vectores vacíos
+- Usa nombres descriptivos para funciones de comparación
+- La igualdad en Move es siempre por valor, no por referencia

@@ -58,6 +58,9 @@ export default navDictionary({
   "reference.group.indexerApi": "Indexer API",
   "reference.group.restApi": "REST API",
 
+  // AI Sub-Groups
+  "ai.group.aptos-mcp": "Aptos MCP",
+
   // Contribute Sub-Groups
   "contribute.group.components": "组件", // Components
 });

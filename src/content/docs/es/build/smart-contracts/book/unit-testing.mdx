@@ -1,0 +1,631 @@
+---
+title: "Pruebas Unitarias"
+description: "Guía en español: learn about unit testing in move programming language for aptos smart contract development."
+sidebar:
+  label: "Unit Testing"
+---
+
+Las pruebas unitarias para Move agregan tres nuevas anotaciones al lenguaje fuente de Move:
+
+- `#[test]`
+- `#[test_only]`, y
+- `#[expected_failure]`.
+
+Estas respectivamente marcan una función como una prueba, marcan un módulo o miembro de módulo (`use`, función, o struct) como código a ser incluido solo para pruebas, y marcan que se espera que una prueba falle. Estas anotaciones pueden ser colocadas en una función con cualquier visibilidad. Cuando un módulo o miembro de módulo es anotado como `#[test_only]` o `#[test]`, no será incluido en el bytecode compilado a menos que sea compilado para pruebas.
+
+## Anotaciones de Prueba: Su Significado y Uso
+
+Tanto las anotaciones `#[test]` como `#[expected_failure]` pueden ser usadas ya sea con o sin argumentos.
+
+Sin argumentos, la anotación `#[test]` solo puede ser colocada en una función sin parámetros. Esta anotación simplemente marca esta función como una prueba a ser ejecutada por el framework de pruebas unitarias.
+
+```move
+module 0x42::example {
+  #[test] // OK
+  fun this_is_a_test() { /* ... */ }
+
+  #[test] // Fallará al compilar ya que la prueba toma un argumento
+  fun this_is_not_correct(arg: signer) { /* ... */ }
+}
+```
+
+### Falla Esperada
+
+Una prueba también puede ser anotada como `#[expected_failure]`. Esta anotación marca que se espera que la prueba genere un error.
+
+Puedes asegurar que una prueba está abortando con un `<code>` de abort específico anotándola con `#[expected_failure(abort_code = <code>)]`, correspondiente al parámetro a una declaración `abort` (o macro `assert!` fallando).
+
+En lugar de un `abort_code`, una `expected_failure` puede especificar errores de ejecución del programa, como `arithmetic_error`, `major_status`, `vector_error`, y `out_of_gas`. Para más especificidad, un `minor_status` puede especificarse opcionalmente.
+
+Si se espera el error desde una ubicación específica, eso también puede ser especificado: `#[expected_failure(abort_code = <code>, location = <loc>)]`. Si la prueba entonces falla con el error correcto pero en un módulo diferente, la prueba también fallará. Nota que `<loc>` puede ser `Self` (en el módulo actual) o un nombre calificado, por ejemplo `vector::std`.
+
+Solo las funciones que tienen la anotación `#[test]` también pueden ser anotadas como `#[expected_failure]`.
+
+```move
+module 0x42::example {
+  #[test]
+  #[expected_failure]
+  public fun this_test_will_abort_and_pass() { abort 1 }
+
+  #[test]
+  #[expected_failure]
+  public fun test_will_error_and_pass() { 1/0; }
+
+  #[test]
+  #[expected_failure(abort_code = 0, location = Self)]
+  public fun test_will_error_and_fail() { 1/0; }
+
+  #[test, expected_failure] // Puede tener múltiples en un atributo. Esta prueba pasará.
+  public fun this_other_test_will_abort_and_pass() { abort 1 }
+
+  #[test]
+  #[expected_failure(vector_error, minor_status = 1, location = Self)]
+  fun borrow_out_of_range() { /* ... */ }
+  
+  #[test]
+  #[expected_failure(abort_code = 26113, location = extensions::table)]
+  fun test_destroy_fails() { /* ... */ }
+}
+```
+
+### Parámetros de Prueba
+
+Con argumentos, una anotación de prueba toma la forma `#[test(<param_name_1> = <address>, ..., <param_name_n> = <address>)]`. Si una función es anotada de tal manera, los parámetros de la función deben ser una permutación de los parámetros `<param_name_1>, ..., <param_name_n>`, es decir, el orden de estos parámetros como ocurren en la función y su orden en la anotación de prueba no tienen que ser iguales, pero deben poder ser emparejados entre sí por nombre.
+
+Solo parámetros con un tipo de `signer` son soportados como parámetros de prueba. Si se proporciona un parámetro distinto de `signer`, la prueba resultará en un error al ejecutarse.
+
+```move
+module 0x42::example {
+  #[test(arg = @0xC0FFEE)] // OK
+  fun this_is_correct_now(arg: signer) { /* ... */ }
+
+  #[test(wrong_arg_name = @0xC0FFEE)] // No correcto: el nombre del arg no coincide
+  fun this_is_incorrect(arg: signer) { /* ... */ }
+
+  #[test(a = @0xC0FFEE, b = @0xCAFE)] // OK. Soportamos múltiples argumentos signer, pero siempre debes proporcionar un valor para ese argumento
+  fun this_works(a: signer, b: signer) { /* ... */ }
+
+  // en algún lugar se declara una dirección nombrada
+  #[test_only] // direcciones nombradas solo para pruebas son soportadas
+  address TEST_NAMED_ADDR = @0x1;
+  ...
+  #[test(arg = @TEST_NAMED_ADDR)] // ¡Direcciones nombradas son soportadas!
+  fun this_is_correct_now(arg: signer) { /* ... */ }
+}
+```
+
+### Código Arbitrario para Soportar Pruebas
+
+Un módulo y cualquiera de sus miembros pueden ser declarados como solo para pruebas. En tal caso el elemento solo será incluido en el bytecode Move compilado cuando se compile en modo de prueba. Adicionalmente, cuando se compila fuera del modo de prueba, cualquier `use` no-prueba de un módulo `#[test_only]` generará un error durante la compilación.
+
+```move
+#[test_only] // atributos solo para pruebas pueden ser adjuntados a módulos
+module 0x42::abc { /*... */ }
+
+module 0x42::other {
+  #[test_only] // atributos solo para pruebas pueden ser adjuntados a direcciones nombradas
+  address ADDR = @0x1;
+
+  #[test_only] // .. a uses
+  use 0x1::some_other_module;
+
+  #[test_only] // .. a structs
+  struct SomeStruct { /* ... */ }
+
+  #[test_only] // .. y funciones. Solo puede ser llamada desde código de prueba, pero no es una prueba
+  fun test_only_function(/* ... */) { /* ... */ }
+}
+```
+
+## Ejecutando Pruebas Unitarias
+
+Las pruebas unitarias para un paquete Move pueden ser ejecutadas con el comando `aptos move test`. Ver [package](/es/build/smart-contracts/book/packages) para más información.
+
+Al ejecutar pruebas, cada prueba será `PASS`, `FAIL`, o `TIMEOUT`. Si un caso de prueba falla, la ubicación de la falla junto con el nombre de la función que causó la falla será reportado si es posible. Puedes ver un ejemplo de esto abajo.
+
+Una prueba será marcada como timeout si excede el número máximo de instrucciones que pueden ser ejecutadas para cualquier prueba individual. Este límite puede ser cambiado usando las opciones abajo, y su valor por defecto está establecido en 100000 instrucciones. Adicionalmente, mientras el resultado de una prueba es siempre determinístico, las pruebas se ejecutan en paralelo por defecto, así que el ordenamiento de resultados de prueba en una ejecución de prueba es no-determinístico a menos que se ejecute con solo un hilo (ver `OPTIONS` abajo).
+
+También hay una serie de opciones que pueden ser pasadas al binario de pruebas unitarias para afinar las pruebas y para ayudar a depurar pruebas fallidas. Estas pueden ser encontradas usando la bandera de ayuda:
+
+```shellscript filename="Terminal"
+$ aptos move test -h
+```
+
+## Ejemplo
+
+Un módulo simple usando algunas de las características de pruebas unitarias se muestra en el siguiente ejemplo:
+
+Primero crea un paquete vacío dentro de un directorio vacío:
+
+```shellscript filename="Terminal"
+$ aptos move init --name TestExample
+```
+
+A continuación agrega lo siguiente al `Move.toml`:
+
+```toml
+[dependencies]
+MoveStdlib = { git = "https://github.com/aptos-labs/aptos-framework.git", subdir="aptos-move/framework/move-stdlib", rev = "main", addr_subst = { "std" = "0x1" } }
+```
+
+A continuación agrega el siguiente módulo bajo el directorio `sources`:
+
+```move
+// filename: sources/my_module.move
+module 0x1::my_module {
+
+  struct MyCoin has key { value: u64 }
+
+  public fun make_sure_non_zero_coin(coin: MyCoin): MyCoin {
+    assert!(coin.value > 0, 0);
+    coin
+  }
+
+  public fun has_coin(addr: address): bool {
+    exists<MyCoin>(addr)
+  }
+
+  #[test]
+  fun make_sure_non_zero_coin_passes() {
+    let coin = MyCoin { value: 1 };
+    let MyCoin { value: _ } = make_sure_non_zero_coin(coin);
+  }
+
+  #[test]
+  // O #[expected_failure] si no nos importa el código de abort
+  #[expected_failure(abort_code = 0, location = Self)]
+  fun make_sure_zero_coin_fails() {
+    let coin = MyCoin { value: 0 };
+    let MyCoin { value: _ } = make_sure_non_zero_coin(coin);
+  }
+
+  #[test_only] // función auxiliar solo para pruebas
+  fun publish_coin(account: &signer) {
+    move_to(account, MyCoin { value: 1 })
+  }
+
+  #[test(a = @0x1, b = @0x2)]
+  fun test_has_coin(a: signer, b: signer) {
+    publish_coin(&a);
+    publish_coin(&b);
+    assert!(has_coin(@0x1), 0);
+    assert!(has_coin(@0x2), 1);
+    assert!(!has_coin(@0x3), 1);
+  }
+}
+```
+
+### Ejecutando Pruebas
+
+Luego puedes ejecutar estas pruebas con el comando `aptos move test`:
+
+```shellscript filename="Terminal"
+$ aptos move test
+BUILDING MoveStdlib
+BUILDING TestExample
+Running Move unit tests
+[ PASS    ] 0x1::my_module::make_sure_non_zero_coin_passes
+[ PASS    ] 0x1::my_module::make_sure_zero_coin_fails
+[ PASS    ] 0x1::my_module::test_has_coin
+Test result: OK. Total tests: 3; passed: 3; failed: 0
+```
+
+### Usando Banderas de Prueba
+
+#### `-f <str>` o `--filter <str>`
+
+Esto solo ejecutará pruebas cuyo nombre completamente calificado contenga `<str>`. Por ejemplo si quisiéramos solo ejecutar pruebas con `"zero_coin"` en su nombre:
+
+```shellscript filename="Terminal"
+$ aptos move test -f zero_coin
+CACHED MoveStdlib
+BUILDING TestExample
+Running Move unit tests
+[ PASS    ] 0x1::my_module::make_sure_non_zero_coin_passes
+[ PASS    ] 0x1::my_module::make_sure_zero_coin_fails
+Test result: OK. Total tests: 2; passed: 2; failed: 0
+```
+
+#### `--coverage`
+
+Esto computará el código siendo cubierto por casos de prueba y generará un resumen de cobertura.
+
+```shellscript filename="Terminal"
+$ aptos move test --coverage
+INCLUDING DEPENDENCY AptosFramework
+INCLUDING DEPENDENCY AptosStdlib
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING TestExample
+Running Move unit tests
+[ PASS    ] 0x1::my_module::make_sure_non_zero_coin_passes
+[ PASS    ] 0x1::my_module::make_sure_zero_coin_fails
+[ PASS    ] 0x1::my_module::test_has_coin
+Test result: OK. Total tests: 3; passed: 3; failed: 0
++-------------------------+
+| Move Coverage Summary   |
++-------------------------+
+Module 0000000000000000000000000000000000000000000000000000000000000001::my_module
+>>> % Module coverage: 100.00
++-------------------------+
+| % Move Coverage: 100.00  |
++-------------------------+
+Please use `aptos move coverage -h` for more detailed source or bytecode test coverage of this package
+```
+
+Luego ejecutando `aptos move coverage`, podemos obtener información de cobertura más detallada. Estas pueden ser encontradas usando la bandera de ayuda:
+
+```shellscript filename="Terminal"
+$ aptos move coverage -h
+```
+
+## Ejemplos Avanzados de Pruebas
+
+### Pruebas con Múltiples Signers
+
+```move
+module test_examples::multi_signer {
+    struct UserRegistry has key {
+        users: vector<address>
+    }
+
+    public fun register_user(admin: &signer, user: address) acquires UserRegistry {
+        let registry = borrow_global_mut<UserRegistry>(signer::address_of(admin));
+        vector::push_back(&mut registry.users, user);
+    }
+
+    public fun initialize_registry(admin: &signer) {
+        move_to(admin, UserRegistry { users: vector::empty() });
+    }
+
+    #[test(admin = @0x1, user1 = @0x2, user2 = @0x3)]
+    fun test_multi_user_registration(admin: signer, user1: signer, user2: signer) acquires UserRegistry {
+        // Configurar el registry
+        initialize_registry(&admin);
+        
+        // Registrar usuarios
+        register_user(&admin, signer::address_of(&user1));
+        register_user(&admin, signer::address_of(&user2));
+        
+        // Verificar el estado
+        let registry = borrow_global<UserRegistry>(@0x1);
+        assert!(vector::length(&registry.users) == 2, 1);
+        assert!(vector::contains(&registry.users, &@0x2), 2);
+        assert!(vector::contains(&registry.users, &@0x3), 3);
+    }
+}
+```
+
+### Pruebas de Errores Específicos
+
+```move
+module test_examples::error_handling {
+    const E_INSUFFICIENT_BALANCE: u64 = 1;
+    const E_UNAUTHORIZED: u64 = 2;
+    const E_ALREADY_EXISTS: u64 = 3;
+
+    struct Account has key {
+        balance: u64,
+        owner: address
+    }
+
+    public fun withdraw(account: &signer, amount: u64) acquires Account {
+        let account_addr = signer::address_of(account);
+        let account_data = borrow_global_mut<Account>(account_addr);
+        
+        assert!(account_data.balance >= amount, E_INSUFFICIENT_BALANCE);
+        account_data.balance = account_data.balance - amount;
+    }
+
+    public fun create_account(owner: &signer, initial_balance: u64) {
+        let owner_addr = signer::address_of(owner);
+        assert!(!exists<Account>(owner_addr), E_ALREADY_EXISTS);
+        move_to(owner, Account { balance: initial_balance, owner: owner_addr });
+    }
+
+    #[test(user = @0x1)]
+    fun test_successful_withdrawal(user: signer) acquires Account {
+        create_account(&user, 100);
+        withdraw(&user, 50);
+        
+        let account = borrow_global<Account>(@0x1);
+        assert!(account.balance == 50, 1);
+    }
+
+    #[test(user = @0x1)]
+    #[expected_failure(abort_code = E_INSUFFICIENT_BALANCE, location = Self)]
+    fun test_insufficient_balance(user: signer) acquires Account {
+        create_account(&user, 50);
+        withdraw(&user, 100); // Debería fallar
+    }
+
+    #[test(user = @0x1)]
+    #[expected_failure(abort_code = E_ALREADY_EXISTS, location = Self)]
+    fun test_duplicate_account_creation(user: signer) {
+        create_account(&user, 100);
+        create_account(&user, 200); // Debería fallar
+    }
+}
+```
+
+### Funciones Auxiliares de Prueba
+
+```move
+module test_examples::helpers {
+    use std::vector;
+
+    struct TokenStore has key {
+        tokens: vector<u64>
+    }
+
+    public fun add_token(store: &mut TokenStore, token_id: u64) {
+        vector::push_back(&mut store.tokens, token_id);
+    }
+
+    public fun get_token_count(store: &TokenStore): u64 {
+        vector::length(&store.tokens)
+    }
+
+    #[test_only]
+    fun setup_test_store(account: &signer, initial_tokens: vector<u64>): TokenStore {
+        let store = TokenStore { tokens: initial_tokens };
+        store
+    }
+
+    #[test_only]
+    fun create_test_tokens(count: u64): vector<u64> {
+        let tokens = vector::empty();
+        let i = 0;
+        while (i < count) {
+            vector::push_back(&mut tokens, i + 1);
+            i = i + 1;
+        };
+        tokens
+    }
+
+    #[test(user = @0x1)]
+    fun test_token_management(user: signer) {
+        // Usar funciones auxiliares para configurar el estado
+        let initial_tokens = create_test_tokens(3);
+        let mut store = setup_test_store(&user, initial_tokens);
+        
+        // Verificar estado inicial
+        assert!(get_token_count(&store) == 3, 1);
+        
+        // Agregar más tokens
+        add_token(&mut store, 4);
+        add_token(&mut store, 5);
+        
+        // Verificar estado final
+        assert!(get_token_count(&store) == 5, 2);
+        
+        // Limpiar (store se descarta automáticamente)
+    }
+}
+```
+
+### Pruebas de Eventos
+
+```move
+module test_examples::events {
+    use std::event;
+
+    #[event]
+    struct TransferEvent has drop, store {
+        from: address,
+        to: address,
+        amount: u64
+    }
+
+    public fun transfer(from: address, to: address, amount: u64) {
+        // Lógica de transferencia...
+        
+        // Emitir evento
+        event::emit(TransferEvent { from, to, amount });
+    }
+
+    #[test]
+    fun test_transfer_event_emission() {
+        // Ejecutar transferencia
+        transfer(@0x1, @0x2, 100);
+        
+        // Verificar que el evento fue emitido
+        let events = event::emitted_events<TransferEvent>();
+        assert!(vector::length(&events) == 1, 1);
+        
+        let emitted_event = vector::borrow(&events, 0);
+        assert!(emitted_event.from == @0x1, 2);
+        assert!(emitted_event.to == @0x2, 3);
+        assert!(emitted_event.amount == 100, 4);
+    }
+
+    #[test]
+    fun test_multiple_events() {
+        // Ejecutar múltiples transferencias
+        transfer(@0x1, @0x2, 50);
+        transfer(@0x2, @0x3, 25);
+        transfer(@0x3, @0x1, 75);
+        
+        // Verificar todos los eventos
+        let events = event::emitted_events<TransferEvent>();
+        assert!(vector::length(&events) == 3, 1);
+        
+        // Verificar secuencia de eventos
+        let event1 = vector::borrow(&events, 0);
+        let event2 = vector::borrow(&events, 1);
+        let event3 = vector::borrow(&events, 2);
+        
+        assert!(event1.amount == 50, 2);
+        assert!(event2.amount == 25, 3);
+        assert!(event3.amount == 75, 4);
+    }
+}
+```
+
+### Pruebas de Performance
+
+```move
+module test_examples::performance {
+    use std::vector;
+
+    struct LargeCollection has key {
+        items: vector<u64>
+    }
+
+    public fun batch_insert(collection: &mut LargeCollection, items: vector<u64>) {
+        let i = 0;
+        let len = vector::length(&items);
+        while (i < len) {
+            let item = *vector::borrow(&items, i);
+            vector::push_back(&mut collection.items, item);
+            i = i + 1;
+        };
+    }
+
+    #[test_only]
+    fun create_large_dataset(size: u64): vector<u64> {
+        let items = vector::empty();
+        let i = 0;
+        while (i < size) {
+            vector::push_back(&mut items, i);
+            i = i + 1;
+        };
+        items
+    }
+
+    #[test]
+    fun test_batch_insert_small() {
+        let mut collection = LargeCollection { items: vector::empty() };
+        let test_data = create_large_dataset(100);
+        
+        batch_insert(&mut collection, test_data);
+        
+        assert!(vector::length(&collection.items) == 100, 1);
+    }
+
+    #[test]
+    fun test_batch_insert_medium() {
+        let mut collection = LargeCollection { items: vector::empty() };
+        let test_data = create_large_dataset(1000);
+        
+        batch_insert(&mut collection, test_data);
+        
+        assert!(vector::length(&collection.items) == 1000, 1);
+    }
+
+    // Nota: Para pruebas de datasets realmente grandes, considera el límite de instrucciones
+    #[test]
+    #[timeout(500000)] // Aumentar timeout si es necesario
+    fun test_batch_insert_large() {
+        let mut collection = LargeCollection { items: vector::empty() };
+        let test_data = create_large_dataset(5000);
+        
+        batch_insert(&mut collection, test_data);
+        
+        assert!(vector::length(&collection.items) == 5000, 1);
+    }
+}
+```
+
+## Mejores Prácticas para Pruebas
+
+### 1. Nomenclatura Clara
+
+```move
+// ✓ Bueno: nombres descriptivos
+#[test]
+fun test_transfer_updates_balances_correctly() { /* ... */ }
+
+#[test]
+#[expected_failure(abort_code = E_INSUFFICIENT_FUNDS)]
+fun test_transfer_fails_with_insufficient_funds() { /* ... */ }
+
+// ✗ Malo: nombres vagos
+#[test]
+fun test1() { /* ... */ }
+
+#[test]
+fun test_transfer() { /* ... */ }
+```
+
+### 2. Organización de Pruebas
+
+```move
+module comprehensive_tests {
+    // Agrupar pruebas relacionadas
+    
+    // === Pruebas de Funcionalidad Básica ===
+    #[test] fun test_create_account() { /* ... */ }
+    #[test] fun test_deposit_funds() { /* ... */ }
+    #[test] fun test_withdraw_funds() { /* ... */ }
+    
+    // === Pruebas de Casos Límite ===
+    #[test] fun test_withdraw_exact_balance() { /* ... */ }
+    #[test] fun test_deposit_zero_amount() { /* ... */ }
+    
+    // === Pruebas de Errores ===
+    #[test] #[expected_failure] fun test_withdraw_insufficient_funds() { /* ... */ }
+    #[test] #[expected_failure] fun test_double_account_creation() { /* ... */ }
+    
+    // === Pruebas de Integración ===
+    #[test] fun test_complete_transaction_flow() { /* ... */ }
+}
+```
+
+### 3. Configuración y Limpieza
+
+```move
+#[test_only]
+fun setup_test_environment(admin: &signer): TestEnvironment {
+    // Configuración común para múltiples pruebas
+    TestEnvironment {
+        admin_addr: signer::address_of(admin),
+        initialized: true
+    }
+}
+
+#[test_only]
+fun cleanup_test_data(env: TestEnvironment) {
+    // Limpieza si es necesaria
+    // (Generalmente automática en Move)
+}
+```
+
+### 4. Documentación de Pruebas
+
+```move
+/// Prueba que verifica que las transferencias actualizan los balances correctamente.
+/// 
+/// Configuración:
+/// - Cuenta A con balance 100
+/// - Cuenta B con balance 50
+/// 
+/// Acción:
+/// - Transferir 30 de A a B
+/// 
+/// Verificaciones:
+/// - Balance de A = 70
+/// - Balance de B = 80
+/// - Evento de transferencia emitido
+#[test(account_a = @0x1, account_b = @0x2)]
+fun test_transfer_updates_balances_correctly(
+    account_a: signer, 
+    account_b: signer
+) acquires Account {
+    // Implementación...
+}
+```
+
+### 5. Cobertura de Pruebas
+
+```bash
+# Ejecutar con cobertura
+aptos move test --coverage
+
+# Ver detalles de cobertura
+aptos move coverage source --module my_module
+
+# Ver cobertura de bytecode
+aptos move coverage bytecode --module my_module
+```
+
+Las pruebas unitarias en Move proporcionan un framework robusto para validar la funcionalidad de contratos inteligentes, asegurando que el código se comporte correctamente bajo todas las condiciones esperadas y maneje errores de manera apropiada.

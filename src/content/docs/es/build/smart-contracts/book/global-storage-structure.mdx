@@ -1,0 +1,639 @@
+---
+title: "Almacenamiento Global - Estructura"
+description: "Guía en español: understand global storage organization, resource management, and data access patterns in move smart contracts."
+sidebar:
+  label: "Storage Structure"
+---
+
+El propósito de los programas Move es [leer y escribir](/es/build/smart-contracts/book/global-storage-operators) en el almacenamiento global persistente con forma de árbol. Los programas no pueden acceder al sistema de archivos, la red, o cualquier otro dato fuera de este árbol.
+
+En pseudocódigo, el almacenamiento global se ve algo así:
+
+```move
+module 0x42::example {
+  struct GlobalStorage {
+    resources: Map<(address, ResourceType), ResourceValue>,
+    modules: Map<(address, ModuleName), ModuleBytecode>
+  }
+}
+```
+
+Estructuralmente, el almacenamiento global es un [bosque](https://en.wikipedia.org/wiki/Tree_\(graph_theory\)) que consiste en árboles enraizados en una [`address`](/es/build/smart-contracts/book/address) de cuenta. Cada dirección puede almacenar tanto valores de datos [resource](/es/build/smart-contracts/book/structs-and-resources) como valores de código [module](/es/build/smart-contracts/book/modules-and-scripts). Como indica el pseudocódigo anterior, cada `address` puede almacenar como máximo un valor de recurso de un tipo dado y como máximo un módulo con un nombre dado.
+
+## Arquitectura del Almacenamiento Global
+
+### Estructura Jerárquica
+
+El almacenamiento global de Move tiene una estructura jerárquica que se puede visualizar como:
+
+```
+Almacenamiento Global
+├── Dirección 0x1
+│   ├── Recursos
+│   │   ├── 0x1::coin::CoinStore<AptosCoin>
+│   │   ├── 0x1::account::Account
+│   │   └── 0x1::timestamp::CurrentTimeMicroseconds
+│   └── Módulos
+│       ├── 0x1::coin
+│       ├── 0x1::account
+│       └── 0x1::timestamp
+├── Dirección 0x42
+│   ├── Recursos
+│   │   ├── 0x42::my_token::TokenStore
+│   │   └── 0x42::profile::UserProfile
+│   └── Módulos
+│       ├── 0x42::my_token
+│       └── 0x42::profile
+└── Dirección 0x123...
+    ├── Recursos
+    └── Módulos
+```
+
+### Componentes del Almacenamiento
+
+#### 1. Recursos (Resources)
+
+- **Definición**: Datos estructurados con habilidades `key`
+- **Ubicación**: Almacenados bajo direcciones específicas
+- **Restricción**: Solo un recurso de cada tipo por dirección
+- **Persistencia**: Datos persistentes entre transacciones
+
+```move
+module 0x42::example {
+    // Recurso que se almacena en el almacenamiento global
+    struct UserProfile has key {
+        name: vector<u8>,
+        age: u8,
+        reputation: u64,
+    }
+
+    // Función para almacenar el recurso
+    public fun create_profile(account: &signer, name: vector<u8>, age: u8) {
+        let profile = UserProfile {
+            name,
+            age,
+            reputation: 0,
+        };
+        move_to(account, profile);
+    }
+}
+```
+
+#### 2. Módulos (Modules)
+
+- **Definición**: Código compilado con funciones y tipos
+- **Ubicación**: Almacenados bajo la dirección del publicador
+- **Inmutabilidad**: Una vez publicados, no pueden modificarse (con algunas excepciones)
+- **Acceso**: Funciones públicas accesibles globalmente
+
+```move
+// Este módulo se almacena en 0x42::example
+module 0x42::example {
+    use std::signer;
+
+    struct Data has key {
+        value: u64,
+    }
+
+    public fun store_data(account: &signer, value: u64) {
+        move_to(account, Data { value });
+    }
+
+    public fun read_data(addr: address): u64 acquires Data {
+        borrow_global<Data>(addr).value
+    }
+}
+```
+
+## Operaciones de Almacenamiento
+
+### Operaciones de Recurso
+
+#### `move_to<T>(account: &signer, resource: T)`
+
+- **Propósito**: Almacenar un recurso bajo la dirección del signer
+- **Restricción**: La dirección no debe tener ya un recurso de tipo `T`
+- **Efecto**: El recurso se mueve al almacenamiento global
+
+```move
+module 0x42::storage_example {
+    struct GameScore has key {
+        points: u64,
+        level: u8,
+    }
+
+    public fun save_score(player: &signer, points: u64, level: u8) {
+        let score = GameScore { points, level };
+        move_to(player, score); // Almacenar en el almacenamiento global
+    }
+}
+```
+
+#### `move_from<T>(addr: address): T`
+
+- **Propósito**: Remover y retornar un recurso del almacenamiento
+- **Restricción**: El recurso debe existir en la dirección
+- **Efecto**: El recurso se elimina del almacenamiento global
+
+```move
+module 0x42::storage_example {
+    public fun delete_score(account: &signer): GameScore acquires GameScore {
+        let addr = signer::address_of(account);
+        move_from<GameScore>(addr) // Remover del almacenamiento
+    }
+}
+```
+
+#### `borrow_global<T>(addr: address): &T`
+
+- **Propósito**: Obtener una referencia inmutable al recurso
+- **Restricción**: El recurso debe existir en la dirección
+- **Efecto**: No modifica el almacenamiento
+
+```move
+module 0x42::storage_example {
+    public fun get_points(addr: address): u64 acquires GameScore {
+        let score_ref = borrow_global<GameScore>(addr);
+        score_ref.points
+    }
+}
+```
+
+#### `borrow_global_mut<T>(addr: address): &mut T`
+
+- **Propósito**: Obtener una referencia mutable al recurso
+- **Restricción**: El recurso debe existir en la dirección
+- **Efecto**: Permite modificar el recurso en el almacenamiento
+
+```move
+module 0x42::storage_example {
+    public fun increase_points(addr: address, additional: u64) acquires GameScore {
+        let score_ref = borrow_global_mut<GameScore>(addr);
+        score_ref.points = score_ref.points + additional;
+    }
+}
+```
+
+#### `exists<T>(addr: address): bool`
+
+- **Propósito**: Verificar si un recurso existe en una dirección
+- **Efecto**: No modifica el almacenamiento
+
+```move
+module 0x42::storage_example {
+    public fun has_score(addr: address): bool {
+        exists<GameScore>(addr)
+    }
+}
+```
+
+## Patrones de Almacenamiento
+
+### 1. Patrón Singleton
+
+Un recurso único por dirección:
+
+```move
+module 0x42::singleton_example {
+    struct GlobalConfig has key {
+        admin: address,
+        fee_rate: u64,
+        is_paused: bool,
+    }
+
+    public fun initialize(admin: &signer) {
+        let config = GlobalConfig {
+            admin: signer::address_of(admin),
+            fee_rate: 100, // 1%
+            is_paused: false,
+        };
+        move_to(admin, config);
+    }
+
+    public fun update_fee_rate(admin: &signer, new_rate: u64) acquires GlobalConfig {
+        let admin_addr = signer::address_of(admin);
+        let config = borrow_global_mut<GlobalConfig>(admin_addr);
+        assert!(config.admin == admin_addr, 1);
+        config.fee_rate = new_rate;
+    }
+}
+```
+
+### 2. Patrón Registry
+
+Múltiples registros relacionados:
+
+```move
+module 0x42::registry_example {
+    use std::table::{Self, Table};
+
+    struct UserRegistry has key {
+        users: Table<address, UserInfo>,
+        total_users: u64,
+    }
+
+    struct UserInfo has store {
+        name: vector<u8>,
+        joined_at: u64,
+        is_verified: bool,
+    }
+
+    public fun initialize_registry(admin: &signer) {
+        let registry = UserRegistry {
+            users: table::new(),
+            total_users: 0,
+        };
+        move_to(admin, registry);
+    }
+
+    public fun register_user(
+        registry_addr: address,
+        user_addr: address,
+        name: vector<u8>
+    ) acquires UserRegistry {
+        let registry = borrow_global_mut<UserRegistry>(registry_addr);
+        let user_info = UserInfo {
+            name,
+            joined_at: timestamp::now_seconds(),
+            is_verified: false,
+        };
+        table::add(&mut registry.users, user_addr, user_info);
+        registry.total_users = registry.total_users + 1;
+    }
+}
+```
+
+### 3. Patrón Capability
+
+Control de acceso con capabilities:
+
+```move
+module 0x42::capability_example {
+    struct AdminCapability has key {}
+    struct MinterCapability has key, store {}
+
+    struct TokenInfo has key {
+        total_supply: u64,
+        name: vector<u8>,
+    }
+
+    public fun initialize(admin: &signer) {
+        move_to(admin, AdminCapability {});
+        move_to(admin, TokenInfo {
+            total_supply: 0,
+            name: b"MyToken",
+        });
+    }
+
+    public fun grant_minter_capability(
+        admin: &signer,
+        to: address
+    ) acquires AdminCapability {
+        // Verificar que el llamador tiene AdminCapability
+        let admin_addr = signer::address_of(admin);
+        assert!(exists<AdminCapability>(admin_addr), 1);
+        
+        // Otorgar MinterCapability
+        let minter_cap = MinterCapability {};
+        move_to(&create_signer(to), minter_cap);
+    }
+}
+```
+
+### 4. Patrón Event Store
+
+Almacenar eventos para consulta:
+
+```move
+module 0x42::event_store_example {
+    use std::event;
+
+    struct EventStore has key {
+        event_handle: event::EventHandle<TransferEvent>,
+    }
+
+    struct TransferEvent has drop, store {
+        from: address,
+        to: address,
+        amount: u64,
+        timestamp: u64,
+    }
+
+    public fun initialize_events(account: &signer) {
+        move_to(account, EventStore {
+            event_handle: account::new_event_handle<TransferEvent>(account),
+        });
+    }
+
+    public fun emit_transfer(
+        store_addr: address,
+        from: address,
+        to: address,
+        amount: u64
+    ) acquires EventStore {
+        let store = borrow_global_mut<EventStore>(store_addr);
+        event::emit_event(&mut store.event_handle, TransferEvent {
+            from,
+            to,
+            amount,
+            timestamp: timestamp::now_seconds(),
+        });
+    }
+}
+```
+
+## Limitaciones y Restricciones
+
+### 1. Una Instancia por Tipo por Dirección
+
+```move
+module 0x42::limitation_example {
+    struct Token has key {
+        balance: u64,
+    }
+
+    public fun create_token(account: &signer, balance: u64) {
+        // Solo puede haber un Token por dirección
+        assert!(!exists<Token>(signer::address_of(account)), 1);
+        move_to(account, Token { balance });
+    }
+
+    // No se puede hacer esto:
+    // public fun create_second_token(account: &signer, balance: u64) {
+    //     move_to(account, Token { balance }); // ERROR si ya existe
+    // }
+}
+```
+
+### 2. Propiedad de Recursos
+
+```move
+module 0x42::ownership_example {
+    struct Asset has key {
+        value: u64,
+        owner: address,
+    }
+
+    public fun transfer_asset(
+        from: &signer,
+        to_addr: address
+    ) acquires Asset {
+        let from_addr = signer::address_of(from);
+        
+        // Solo el propietario puede mover su recurso
+        let asset = move_from<Asset>(from_addr);
+        
+        // Verificar propiedad antes de transferir
+        assert!(asset.owner == from_addr, 1);
+        
+        // Actualizar propietario y mover a nueva dirección
+        asset.owner = to_addr;
+        move_to(&create_signer(to_addr), asset);
+    }
+}
+```
+
+### 3. Inmutabilidad de Módulos
+
+```move
+// Una vez publicado, este módulo no puede modificarse
+module 0x42::immutable_example {
+    struct Data has key {
+        value: u64,
+    }
+
+    // Estas funciones no pueden cambiarse después de la publicación
+    public fun store_data(account: &signer, value: u64) {
+        move_to(account, Data { value });
+    }
+
+    public fun get_data(addr: address): u64 acquires Data {
+        borrow_global<Data>(addr).value
+    }
+}
+```
+
+## Optimizaciones de Almacenamiento
+
+### 1. Agrupación Eficiente
+
+```move
+module 0x42::efficient_storage {
+    // Agrupa datos relacionados en una estructura
+    struct UserData has key {
+        profile: UserProfile,
+        settings: UserSettings,
+        stats: UserStats,
+    }
+
+    struct UserProfile has store {
+        name: vector<u8>,
+        email: vector<u8>,
+    }
+
+    struct UserSettings has store {
+        theme: u8,
+        notifications: bool,
+    }
+
+    struct UserStats has store {
+        login_count: u64,
+        last_seen: u64,
+    }
+
+    // Más eficiente que múltiples recursos separados
+    public fun create_user(
+        account: &signer,
+        name: vector<u8>,
+        email: vector<u8>
+    ) {
+        let user_data = UserData {
+            profile: UserProfile { name, email },
+            settings: UserSettings { theme: 0, notifications: true },
+            stats: UserStats { login_count: 0, last_seen: 0 },
+        };
+        move_to(account, user_data);
+    }
+}
+```
+
+### 2. Uso de Tables para Colecciones
+
+```move
+module 0x42::collection_storage {
+    use std::table::{Self, Table};
+
+    struct ItemCollection has key {
+        items: Table<u64, Item>, // Más eficiente que vector para acceso aleatorio
+        next_id: u64,
+    }
+
+    struct Item has store {
+        name: vector<u8>,
+        rarity: u8,
+        power: u64,
+    }
+
+    public fun create_collection(account: &signer) {
+        move_to(account, ItemCollection {
+            items: table::new(),
+            next_id: 1,
+        });
+    }
+
+    public fun add_item(
+        collection_addr: address,
+        name: vector<u8>,
+        rarity: u8,
+        power: u64
+    ) acquires ItemCollection {
+        let collection = borrow_global_mut<ItemCollection>(collection_addr);
+        let item = Item { name, rarity, power };
+        table::add(&mut collection.items, collection.next_id, item);
+        collection.next_id = collection.next_id + 1;
+    }
+}
+```
+
+## Debugging y Monitoreo
+
+### 1. Funciones de Diagnóstico
+
+```move
+module 0x42::diagnostic_example {
+    struct SystemState has key {
+        total_users: u64,
+        total_transactions: u64,
+        last_update: u64,
+    }
+
+    public fun get_system_info(addr: address): (u64, u64, u64) acquires SystemState {
+        if (!exists<SystemState>(addr)) {
+            return (0, 0, 0)
+        };
+        
+        let state = borrow_global<SystemState>(addr);
+        (state.total_users, state.total_transactions, state.last_update)
+    }
+
+    public fun check_resource_exists<T: key>(addr: address): bool {
+        exists<T>(addr)
+    }
+}
+```
+
+### 2. Logging de Estado
+
+```move
+module 0x42::logging_example {
+    use std::event;
+
+    struct StateChangeEvent has drop, store {
+        resource_type: vector<u8>,
+        address: address,
+        operation: vector<u8>, // "create", "update", "delete"
+        timestamp: u64,
+    }
+
+    struct Logger has key {
+        events: event::EventHandle<StateChangeEvent>,
+    }
+
+    public fun log_state_change(
+        logger_addr: address,
+        resource_type: vector<u8>,
+        addr: address,
+        operation: vector<u8>
+    ) acquires Logger {
+        let logger = borrow_global_mut<Logger>(logger_addr);
+        event::emit_event(&mut logger.events, StateChangeEvent {
+            resource_type,
+            address: addr,
+            operation,
+            timestamp: timestamp::now_seconds(),
+        });
+    }
+}
+```
+
+## Mejores Prácticas
+
+### 1. Diseño de Recursos
+
+```move
+// ✅ Bueno - recurso cohesivo
+struct UserAccount has key {
+    balance: u64,
+    nonce: u64,
+    last_activity: u64,
+}
+
+// ❌ Malo - demasiado granular
+struct UserBalance has key { balance: u64 }
+struct UserNonce has key { nonce: u64 }
+struct UserActivity has key { last_activity: u64 }
+```
+
+### 2. Manejo de Errores
+
+```move
+module 0x42::error_handling {
+    const ERESOURCE_NOT_EXISTS: u64 = 1;
+    const ERESOURCE_ALREADY_EXISTS: u64 = 2;
+    const EUNAUTHORIZED: u64 = 3;
+
+    public fun safe_create_resource(account: &signer, value: u64) {
+        let addr = signer::address_of(account);
+        assert!(!exists<MyResource>(addr), ERESOURCE_ALREADY_EXISTS);
+        move_to(account, MyResource { value });
+    }
+
+    public fun safe_read_resource(addr: address): u64 acquires MyResource {
+        assert!(exists<MyResource>(addr), ERESOURCE_NOT_EXISTS);
+        borrow_global<MyResource>(addr).value
+    }
+}
+```
+
+### 3. Versionado de Recursos
+
+```move
+module 0x42::versioning_example {
+    struct UserDataV1 has key {
+        name: vector<u8>,
+        balance: u64,
+    }
+
+    struct UserDataV2 has key {
+        name: vector<u8>,
+        balance: u64,
+        email: vector<u8>, // Nuevo campo
+        version: u8,       // Tracking de versión
+    }
+
+    public fun migrate_to_v2(account: &signer, email: vector<u8>) acquires UserDataV1 {
+        let addr = signer::address_of(account);
+        if (exists<UserDataV1>(addr)) {
+            let UserDataV1 { name, balance } = move_from<UserDataV1>(addr);
+            move_to(account, UserDataV2 {
+                name,
+                balance,
+                email,
+                version: 2,
+            });
+        }
+    }
+}
+```
+
+## Conclusión
+
+El almacenamiento global de Move proporciona un modelo simple pero poderoso para la persistencia de datos. Sus características clave incluyen:
+
+- **Estructura jerárquica** organizada por direcciones
+- **Tipo único por dirección** garantiza consistencia
+- **Operaciones atómicas** para seguridad de datos
+- **Control de acceso** basado en ownership
+- **Inmutabilidad de código** para predictibilidad
+
+Entender esta estructura es fundamental para diseñar aplicaciones Move eficientes y seguras. El modelo de almacenamiento permite patrones sofisticados mientras mantiene la simplicidad y seguridad que caracterizan a Move.

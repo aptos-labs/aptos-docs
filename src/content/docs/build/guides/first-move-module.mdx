@@ -1,5 +1,8 @@
 ---
 title: "Your First Move Module"
+description: "Learn to compile, test, publish, and interact with Move smart contracts on Aptos blockchain from setup to deployment."
+sidebar:
+  label: "Your First Move Module"
 ---
 
 import { Aside, Steps } from '@astrojs/starlight/components';
@@ -290,26 +293,34 @@ Testing and debugging are crucial parts of Move module development. Move has bui
      Create our tests: a new file `sources/message_tests.move` with:
 
      ```move filename="message_tests.move"
-     #[test_only]
-     module my_first_module::message_tests {
+      #[test_only]
+      module my_first_module::message_tests {
          use std::string;
          use std::signer;
-         use aptos_framework::account;
          use my_first_module::message;
 
-         #[test]
-         fun test_set_and_get_message() {
-             // Set up test account
-             let test_account = account::create_account_for_test(@0x1);
+         #[test(sender= @my_first_module)]
+         fun test_set_and_get_message(sender: &signer) {
+            // Test setting a message
+            message::set_message(sender, string::utf8(b"Hello World"));
 
-             // Test setting a message
-             message::set_message(&test_account, string::utf8(b"Hello World"));
-
-             // Verify the message was set correctly
-             let stored_message = message::get_message(signer::address_of(&test_account));
-             assert!(stored_message == string::utf8(b"Hello World"), 0);
+            // Verify the message was set correctly
+            let stored_message = message::get_message(signer::address_of(sender));
+            assert!(stored_message == string::utf8(b"Hello World"), 0)
          }
-     }
+
+         #[test(sender=@my_first_module)]
+         fun test_update_message(sender: &signer) {
+            // Test setting a message
+            message::set_message(sender, string::utf8(b"Hello World"));
+            // Test updating the message
+            message::set_message(sender, string::utf8(b"Hello Aptos"));
+
+            // Verify the message was updated correctly
+            let stored_message = message::get_message(signer::address_of(sender));
+            assert!(stored_message == string::utf8(b"Hello Aptos"), 0)
+         }
+      }
      ```
 
   3. Run the tests
@@ -319,19 +330,25 @@ Testing and debugging are crucial parts of Move module development. Move has bui
      You should see output if the tests pass: (See below for how to handle errors)
 
      ```shellscript filename="Terminal"
-     INCLUDING DEPENDENCY AptosFramework
-     INCLUDING DEPENDENCY AptosStdlib
-     INCLUDING DEPENDENCY MoveStdlib
-     BUILDING my_first_module
-     Running Move unit tests
-     [debug] "Hello World"
-     [debug] "Creating new message"
-     [debug] "Hello World"
-     [ PASS    ] 0x9ec1cfa30b885a5c9d595f32f3381ec16d208734913b587be9e210f60be9f9ba::message_tests::test_set_and_get_message
-     Test result: OK. Total tests: 1; passed: 1; failed: 0
-     {
-       "Result": "Success"
-     }
+      INCLUDING DEPENDENCY AptosFramework
+      INCLUDING DEPENDENCY AptosStdlib
+      INCLUDING DEPENDENCY MoveStdlib
+      BUILDING my_first_module
+      Running Move unit tests
+      [debug] "Hello World"
+      [debug] "Creating new message"
+      [debug] "Hello World"
+      [ PASS    ] 0x852a264419a80b27771f072b5cae8c8b358d4450e135e134e065247376a4357a::message_tests::test_set_and_get_message
+      [debug] "Hello World"
+      [debug] "Creating new message"
+      [debug] "Hello Aptos"
+      [debug] "Updating existing message"
+      [debug] "Hello Aptos"
+      [ PASS    ] 0x852a264419a80b27771f072b5cae8c8b358d4450e135e134e065247376a4357a::message_tests::test_update_message
+      Test result: OK. Total tests: 2; passed: 2; failed: 0
+      {
+      "Result": "Success"
+      }
      ```
 </Steps>
 

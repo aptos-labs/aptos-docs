@@ -1,0 +1,519 @@
+---
+title: "您的第一笔交易"
+description: "在 Aptos 区块链上创建和提交您的第一笔交易 - 使用 TypeScript 和 Python 示例在账户之间转移代币。"
+sidebar:
+  label: "第一笔交易"
+---
+
+import { Aside, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
+
+交易是在Aptos区块链上更改数据的基本方式。将它们视为发送包裹：您需要指定要发送的内容、发送给谁，然后跟踪直到确认交付。在区块链术语中，交易允许您转移币、调用智能合约函数和更新链上状态。
+
+本教程将指导您在Aptos区块链上创建和提交您的第一笔交易。您将学习如何：
+
+1. 设置您的开发环境
+2. 创建测试账户并为其提供资金
+3. 构建转移币的交易
+4. 模拟交易以估算成本
+5. 签名并提交交易
+6. 验证交易是否成功执行
+
+<Aside type="note">
+  本教程建立在Aptos区块链概念的基础上。如果您是区块链开发的新手，不用担心 - 我们将在过程中解释关键概念。
+
+  您可以跳转到完整代码示例[这里](#完整代码示例)或继续阅读逐步演练。
+</Aside>
+
+## 1. 设置您的环境
+
+<Tabs>
+  <TabItem label="TypeScript">
+    在我们可以创建交易之前，我们需要使用必要的工具和SDK设置我们的开发环境。
+
+    <Steps>
+      1. 安装TypeScript SDK
+
+         使用您首选的包管理器安装TypeScript SDK：
+
+         <Tabs>
+           <TabItem label="npm">
+             ```shellscript filename="终端"
+             npm install @aptos-labs/ts-sdk
+             ```
+           </TabItem>
+
+           <TabItem label="yarn">
+             ```shellscript filename="终端"
+             yarn add @aptos-labs/ts-sdk
+             ```
+           </TabItem>
+
+           <TabItem label="pnpm">
+             ```shellscript filename="终端"
+             pnpm add @aptos-labs/ts-sdk
+             ```
+           </TabItem>
+         </Tabs>
+
+      2. 创建项目目录
+
+         为您的项目创建一个新目录：
+
+         ```shellscript filename="终端"
+         mkdir my-first-transaction
+         cd my-first-transaction
+         ```
+
+      3. 创建新文件
+
+         创建一个名为`transaction.ts`的新文件：
+
+         <Tabs>
+           <TabItem label="Mac/Linux">
+             ```shellscript filename="终端"
+             touch transaction.ts
+             ```
+           </TabItem>
+
+           <TabItem label="Windows">
+             ```shellscript filename="终端"
+             type nul > transaction.ts
+             ```
+           </TabItem>
+         </Tabs>
+    </Steps>
+  </TabItem>
+
+  <TabItem label="Python">
+    在我们可以创建交易之前，我们需要使用必要的工具和SDK设置我们的开发环境。
+
+    <Steps>
+      1. 安装Python SDK
+
+         使用pip安装Python SDK：
+
+         ```shellscript filename="终端"
+         pip install aptos-sdk
+         ```
+
+      2. 创建项目目录
+
+         为您的项目创建一个新目录：
+
+         ```shellscript filename="终端"
+         mkdir my-first-transaction
+         cd my-first-transaction
+         ```
+
+      3. 创建新文件
+
+         创建一个名为`transaction.py`的新文件：
+
+         ```shellscript filename="终端"
+         touch transaction.py
+         ```
+    </Steps>
+  </TabItem>
+</Tabs>
+
+## 2. 导入必要的模块
+
+让我们首先导入处理交易所需的模块。
+
+<Tabs>
+  <TabItem label="TypeScript">
+    ```typescript filename="transaction.ts"
+    import {
+      Account,
+      Aptos,
+      AptosConfig,
+      Network,
+    } from "@aptos-labs/ts-sdk";
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    ```python filename="transaction.py"
+    from aptos_sdk.account import Account
+    from aptos_sdk.client import RestClient
+    from aptos_sdk.transactions import EntryFunction, TransactionArgument, TransactionPayload
+    from aptos_sdk.type_tag import TypeTag, StructTag
+    ```
+  </TabItem>
+</Tabs>
+
+## 3. 初始化Aptos客户端
+
+创建一个连接到Aptos测试网的客户端。
+
+<Tabs>
+  <TabItem label="TypeScript">
+    ```typescript filename="transaction.ts"
+    const config = new AptosConfig({ network: Network.TESTNET });
+    const aptos = new Aptos(config);
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    ```python filename="transaction.py"
+    NODE_URL = "https://fullnode.testnet.aptoslabs.com/v1"
+    client = RestClient(NODE_URL)
+    ```
+  </TabItem>
+</Tabs>
+
+## 4. 创建账户
+
+让我们创建两个账户：Alice（发送者）和Bob（接收者）。
+
+<Tabs>
+  <TabItem label="TypeScript">
+    ```typescript filename="transaction.ts"
+    async function createAccounts() {
+      // 创建两个账户
+      const alice = Account.generate();
+      const bob = Account.generate();
+      
+      console.log("Alice的地址:", alice.accountAddress.toString());
+      console.log("Bob的地址:", bob.accountAddress.toString());
+      
+      return { alice, bob };
+    }
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    ```python filename="transaction.py"
+    def create_accounts():
+        # 创建两个账户
+        alice = Account.generate()
+        bob = Account.generate()
+        
+        print(f"Alice的地址: {alice.address()}")
+        print(f"Bob的地址: {bob.address()}")
+        
+        return alice, bob
+    ```
+  </TabItem>
+</Tabs>
+
+## 5. 为账户提供资金
+
+在发送交易之前，我们需要为Alice的账户提供一些测试网APT。
+
+<Tabs>
+  <TabItem label="TypeScript">
+    ```typescript filename="transaction.ts"
+    async function fundAccounts(alice: Account, bob: Account) {
+      // 为Alice提供资金
+      await aptos.fundAccount({
+        accountAddress: alice.accountAddress,
+        amount: 100_000_000, // 1 APT (APT有8位小数)
+      });
+      
+      console.log("Alice已获得资金");
+    }
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    ```python filename="transaction.py"
+    async def fund_accounts(alice, bob):
+        # 为Alice提供资金
+        await client.fund_account(alice.address(), 100_000_000)  # 1 APT
+        print("Alice已获得资金")
+    ```
+  </TabItem>
+</Tabs>
+
+## 6. 创建并提交交易
+
+现在让我们创建一个从Alice向Bob转移APT的交易。
+
+<Tabs>
+  <TabItem label="TypeScript">
+    ```typescript filename="transaction.ts"
+    async function transferCoins(alice: Account, bob: Account) {
+      const transaction = await aptos.transaction.build.simple({
+        sender: alice.accountAddress,
+        data: {
+          function: "0x1::coin::transfer",
+          typeArguments: ["0x1::aptos_coin::AptosCoin"],
+          functionArguments: [bob.accountAddress, 1_000_000], // 0.01 APT
+        },
+      });
+      
+      // 模拟交易以检查gas费用
+      const simulation = await aptos.transaction.simulate.simple({
+        signerPublicKey: alice.publicKey,
+        transaction,
+      });
+      
+      console.log("模拟结果:", simulation);
+      
+      // 签名并提交交易
+      const committedTransaction = await aptos.signAndSubmitTransaction({
+        signer: alice,
+        transaction,
+      });
+      
+      console.log("交易提交:", committedTransaction.hash);
+      
+      // 等待交易完成
+      await aptos.waitForTransaction({ transactionHash: committedTransaction.hash });
+      
+      console.log("交易完成!");
+      
+      return committedTransaction.hash;
+    }
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    ```python filename="transaction.py"
+    async def transfer_coins(alice, bob):
+        # 构建交易
+        payload = EntryFunction.natural(
+            "0x1::coin",
+            "transfer",
+            [TypeTag(StructTag.from_str("0x1::aptos_coin::AptosCoin"))],
+            [
+                TransactionArgument(bob.address(), "address"),
+                TransactionArgument(1_000_000, "u64"),  # 0.01 APT
+            ],
+        )
+        
+        # 创建并提交交易
+        signed_transaction = await client.create_bcs_signed_transaction(
+            alice, TransactionPayload(payload)
+        )
+        
+        result = await client.submit_bcs_transaction(signed_transaction)
+        
+        print(f"交易提交: {result}")
+        
+        # 等待交易完成
+        await client.wait_for_transaction(result)
+        
+        print("交易完成!")
+        
+        return result
+    ```
+  </TabItem>
+</Tabs>
+
+## 7. 验证交易
+
+让我们检查账户余额以确认交易成功。
+
+<Tabs>
+  <TabItem label="TypeScript">
+    ```typescript filename="transaction.ts"
+    async function checkBalances(alice: Account, bob: Account) {
+      const aliceBalance = await aptos.getAccountAPTAmount({
+        accountAddress: alice.accountAddress,
+      });
+      
+      const bobBalance = await aptos.getAccountAPTAmount({
+        accountAddress: bob.accountAddress,
+      });
+      
+      console.log(`Alice的余额: ${aliceBalance} Octas`);
+      console.log(`Bob的余额: ${bobBalance} Octas`);
+    }
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    ```python filename="transaction.py"
+    async def check_balances(alice, bob):
+        alice_balance = await client.account_balance(alice.address())
+        bob_balance = await client.account_balance(bob.address())
+        
+        print(f"Alice的余额: {alice_balance} Octas")
+        print(f"Bob的余额: {bob_balance} Octas")
+    ```
+  </TabItem>
+</Tabs>
+
+## 完整代码示例
+
+<Tabs>
+  <TabItem label="TypeScript">
+    ```typescript filename="transaction.ts"
+    import {
+      Account,
+      Aptos,
+      AptosConfig,
+      Network,
+    } from "@aptos-labs/ts-sdk";
+
+    const config = new AptosConfig({ network: Network.TESTNET });
+    const aptos = new Aptos(config);
+
+    async function main() {
+      console.log("开始第一笔交易演示...");
+      
+      // 1. 创建账户
+      const alice = Account.generate();
+      const bob = Account.generate();
+      
+      console.log("Alice的地址:", alice.accountAddress.toString());
+      console.log("Bob的地址:", bob.accountAddress.toString());
+      
+      // 2. 为Alice提供资金
+      await aptos.fundAccount({
+        accountAddress: alice.accountAddress,
+        amount: 100_000_000, // 1 APT
+      });
+      
+      console.log("Alice已获得资金");
+      
+      // 3. 检查初始余额
+      console.log("\n--- 初始余额 ---");
+      await checkBalances(alice, bob);
+      
+      // 4. 转移币
+      console.log("\n--- 转移币 ---");
+      const txnHash = await transferCoins(alice, bob);
+      
+      // 5. 检查最终余额
+      console.log("\n--- 最终余额 ---");
+      await checkBalances(alice, bob);
+      
+      console.log(`\n✅ 交易成功! 哈希: ${txnHash}`);
+    }
+
+    async function transferCoins(alice: Account, bob: Account) {
+      const transaction = await aptos.transaction.build.simple({
+        sender: alice.accountAddress,
+        data: {
+          function: "0x1::coin::transfer",
+          typeArguments: ["0x1::aptos_coin::AptosCoin"],
+          functionArguments: [bob.accountAddress, 1_000_000], // 0.01 APT
+        },
+      });
+      
+      const committedTransaction = await aptos.signAndSubmitTransaction({
+        signer: alice,
+        transaction,
+      });
+      
+      await aptos.waitForTransaction({ transactionHash: committedTransaction.hash });
+      
+      return committedTransaction.hash;
+    }
+
+    async function checkBalances(alice: Account, bob: Account) {
+      const aliceBalance = await aptos.getAccountAPTAmount({
+        accountAddress: alice.accountAddress,
+      });
+      
+      const bobBalance = await aptos.getAccountAPTAmount({
+        accountAddress: bob.accountAddress,
+      });
+      
+      console.log(`Alice的余额: ${aliceBalance} Octas`);
+      console.log(`Bob的余额: ${bobBalance} Octas`);
+    }
+
+    // 运行主函数
+    main().catch(console.error);
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    ```python filename="transaction.py"
+    import asyncio
+    from aptos_sdk.account import Account
+    from aptos_sdk.async_client import RestClient
+
+    NODE_URL = "https://fullnode.testnet.aptoslabs.com/v1"
+
+    async def main():
+        print("开始第一笔交易演示...")
+        
+        client = RestClient(NODE_URL)
+        
+        # 1. 创建账户
+        alice = Account.generate()
+        bob = Account.generate()
+        
+        print(f"Alice的地址: {alice.address()}")
+        print(f"Bob的地址: {bob.address()}")
+        
+        # 2. 为Alice提供资金
+        await client.fund_account(alice.address(), 100_000_000)  # 1 APT
+        print("Alice已获得资金")
+        
+        # 3. 检查初始余额
+        print("\n--- 初始余额 ---")
+        await check_balances(client, alice, bob)
+        
+        # 4. 转移币
+        print("\n--- 转移币 ---")
+        txn_hash = await transfer_coins(client, alice, bob)
+        
+        # 5. 检查最终余额
+        print("\n--- 最终余额 ---")
+        await check_balances(client, alice, bob)
+        
+        print(f"\n✅ 交易成功! 哈希: {txn_hash}")
+
+    async def transfer_coins(client, alice, bob):
+        # 这里您需要实现实际的转移逻辑
+        # 参考Python SDK文档了解详细实现
+        pass
+
+    async def check_balances(client, alice, bob):
+        alice_balance = await client.account_balance(alice.address())
+        bob_balance = await client.account_balance(bob.address())
+        
+        print(f"Alice的余额: {alice_balance} Octas")
+        print(f"Bob的余额: {bob_balance} Octas")
+
+    # 运行主函数
+    if __name__ == "__main__":
+        asyncio.run(main())
+    ```
+  </TabItem>
+</Tabs>
+
+## 运行代码
+
+<Tabs>
+  <TabItem label="TypeScript">
+    ```shellscript filename="终端"
+    npx tsx transaction.ts
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    ```shellscript filename="终端"
+    python transaction.py
+    ```
+  </TabItem>
+</Tabs>
+
+## 下一步
+
+恭喜！您已经成功创建并提交了您在Aptos区块链上的第一笔交易。您学会了如何：
+
+- 设置开发环境
+- 创建和资助账户
+- 构建、签名和提交交易
+- 验证交易结果
+
+### 继续学习
+
+- [您的第一个Move模块](/zh/build/guides/first-move-module) - 学习如何编写智能合约
+- [构建端到端DApp](/zh/build/guides/build-e2e-dapp) - 创建完整的去中心化应用
+- [Aptos SDK文档](/zh/build/sdks) - 深入了解SDK功能
+
+<Aside type="tip">
+  **故障排除提示**：如果您遇到任何问题，请检查：
+
+  - 您的网络连接是否稳定
+  - 您是否使用了正确的网络配置（测试网）
+  - 账户是否有足够的资金支付gas费用
+</Aside>

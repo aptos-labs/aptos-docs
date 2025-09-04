@@ -1,0 +1,670 @@
+---
+title: "Friends"
+description: "Guía en español: learn about friend functions in move for controlled access to internal module functionality and secure interfaces."
+sidebar:
+  label: "Friends"
+---
+
+La sintaxis `friend` se usa para declarar módulos en los que confía el módulo actual. Un módulo de confianza puede llamar cualquier función definida en el módulo actual que tenga la visibilidad `public(friend)`. Para detalles sobre visibilidades de funciones, por favor refiérete a la sección _Visibilidad_ en [Funciones](/es/build/smart-contracts/book/functions).
+
+## Declaración de Friend
+
+Un módulo puede declarar otros módulos como friends mediante declaraciones friend, en el formato de:
+
+- `friend <address::name>` — declaración friend usando el nombre completamente calificado del módulo como en el ejemplo a continuación, o
+
+  ```move
+  module 0x42::a {
+      friend 0x42::b;
+  }
+  ```
+
+- `friend <module-name-alias>` — declaración friend usando un alias de nombre de módulo, donde el alias del módulo se introduce mediante la declaración `use`.
+
+  ```move
+  module 0x42::a {
+      use 0x42::b;
+      friend b;
+  }
+  ```
+
+Un módulo puede tener múltiples declaraciones friend, y la unión de todos los módulos friend forma la lista de friends. En el ejemplo a continuación, tanto `0x42::B` como `0x42::C` son considerados como friends de `0x42::A`.
+
+```move
+module 0x42::a {
+    friend 0x42::b;
+    friend 0x42::c;
+}
+```
+
+A diferencia de las declaraciones `use`, `friend` solo puede declararse en el ámbito del módulo y no en el ámbito del bloque de expresión. Las declaraciones `friend` pueden ubicarse en cualquier lugar donde se permita una construcción de nivel superior (ej., `use`, `function`, `struct`, etc.). Sin embargo, para legibilidad, se aconseja colocar las declaraciones friend cerca del comienzo de la definición del módulo.
+
+Nota que el concepto de amistad no se aplica a los scripts de Move:
+
+- Un script de Move no puede declarar módulos `friend` ya que hacerlo se considera sin significado: no hay mecanismo para llamar la función definida en un script.
+- Un módulo de Move tampoco puede declarar scripts `friend` porque los scripts son fragmentos de código efímeros que nunca se publican en el almacenamiento global.
+
+### Reglas de declaración Friend
+
+Las declaraciones friend están sujetas a las siguientes reglas:
+
+- Un módulo no puede declararse a sí mismo como friend.
+
+  ```move
+  module 0x42::m {
+    friend Self; // ¡ERROR!
+  //       ^^^^ No puede declarar el módulo en sí mismo como friend
+  }
+
+  module 0x43::m {
+    friend 0x43::M; // ERROR
+  //       ^^^^^^^ No puede declarar el módulo en sí mismo como friend
+  }
+  ```
+
+- Los módulos friend deben ser conocidos por el compilador
+
+  ```move
+  module 0x42::m {
+    friend 0x42::nonexistent; // ¡ERROR!
+    //     ^^^^^^^^^^^^^^^^^ Módulo no vinculado '0x42::nonexistent'
+  }
+  ```
+
+- Los módulos friend deben estar dentro de la misma dirección de cuenta. (Nota: esto no es un requisito técnico sino más bien una decisión de política que _puede_ relajarse más adelante.)
+
+  ```move
+  module 0x42::m {}
+
+  module 0x43::n {
+    friend 0x42::m; // ERROR!
+  //       ^^^^^^^ No se permite amistad entre direcciones de cuenta
+  }
+  ```
+
+- No puede haber dependencias cíclicas de friend.
+
+  ```move
+  module 0x42::a {
+    friend 0x42::b;
+  }
+
+  module 0x42::b {
+    friend 0x42::a; // ERROR!
+  //       ^^^^^^^ Dependencia cíclica de friend entre '0x42::a' y '0x42::b'
+  }
+  ```
+
+## Funciones Friend
+
+Como se menciona en la sección [Funciones](/es/build/smart-contracts/book/functions), una función con visibilidad `public(friend)` puede ser llamada por:
+
+- funciones definidas en el mismo módulo, o
+- funciones definidas en módulos que están en la lista de friends.
+
+### Ejemplo Básico
+
+```move
+module 0x42::a {
+    friend 0x42::b;
+
+    public(friend) fun friend_function(): u64 {
+        42
+    }
+
+    public fun public_function(): u64 {
+        friend_function() // OK - misma módulo
+    }
+}
+
+module 0x42::b {
+    use 0x42::a;
+
+    public fun call_friend(): u64 {
+        a::friend_function() // OK - b es friend de a
+    }
+}
+
+module 0x42::c {
+    use 0x42::a;
+
+    public fun try_call(): u64 {
+        a::friend_function() // ERROR! - c no es friend de a
+    }
+}
+```
+
+### Casos de Uso Comunes
+
+#### 1. Módulos Auxiliares
+
+```move
+module 0x42::core {
+    friend 0x42::helpers;
+
+    struct Data has key {
+        value: u64,
+        owner: address,
+    }
+
+    public(friend) fun create_data(owner: address, value: u64): Data {
+        Data { value, owner }
+    }
+
+    public(friend) fun modify_data(data: &mut Data, new_value: u64) {
+        data.value = new_value;
+    }
+}
+
+module 0x42::helpers {
+    use 0x42::core;
+
+    public fun setup_user_data(user: address): core::Data {
+        core::create_data(user, 0) // OK - helpers es friend de core
+    }
+
+    public fun increment_data(data: &mut core::Data) {
+        let current = core::get_value(data);
+        core::modify_data(data, current + 1) // OK
+    }
+}
+```
+
+#### 2. Patrón de Facade
+
+```move
+// Módulo interno con lógica compleja
+module 0x42::internal_logic {
+    friend 0x42::public_interface;
+
+    public(friend) fun complex_calculation(x: u64, y: u64): u64 {
+        // Lógica compleja aquí
+        x * y + (x / y)
+    }
+
+    public(friend) fun validate_input(input: u64): bool {
+        input > 0 && input < 1000000
+    }
+}
+
+// Interfaz pública simplificada
+module 0x42::public_interface {
+    use 0x42::internal_logic;
+
+    const EINVALID_INPUT: u64 = 1;
+
+    public fun calculate(x: u64, y: u64): u64 {
+        assert!(internal_logic::validate_input(x), EINVALID_INPUT);
+        assert!(internal_logic::validate_input(y), EINVALID_INPUT);
+        
+        internal_logic::complex_calculation(x, y)
+    }
+}
+```
+
+#### 3. Extensiones de Módulo
+
+```move
+module 0x42::token {
+    friend 0x42::token_extensions;
+    friend 0x42::token_utils;
+
+    struct Token has key {
+        balance: u64,
+        metadata: vector<u8>,
+    }
+
+    public(friend) fun mint_token(to: address, amount: u64) acquires Token {
+        // Lógica de acuñación
+    }
+
+    public(friend) fun burn_token(from: address, amount: u64) acquires Token {
+        // Lógica de quema
+    }
+
+    public(friend) fun get_balance(addr: address): u64 acquires Token {
+        borrow_global<Token>(addr).balance
+    }
+}
+
+module 0x42::token_extensions {
+    use 0x42::token;
+
+    public fun batch_mint(recipients: vector<address>, amounts: vector<u64>) {
+        let len = vector::length(&recipients);
+        let mut i = 0;
+        
+        while (i < len) {
+            let recipient = *vector::borrow(&recipients, i);
+            let amount = *vector::borrow(&amounts, i);
+            token::mint_token(recipient, amount); // OK - es friend
+            i = i + 1;
+        };
+    }
+}
+
+module 0x42::token_utils {
+    use 0x42::token;
+
+    public fun transfer_between(from: address, to: address, amount: u64) {
+        let from_balance = token::get_balance(from); // OK - es friend
+        assert!(from_balance >= amount, 1);
+        
+        token::burn_token(from, amount);   // OK
+        token::mint_token(to, amount);     // OK
+    }
+}
+```
+
+#### 4. Testing con Friends
+
+```move
+module 0x42::production_module {
+    #[cfg(test)]
+    friend 0x42::test_helpers;
+
+    struct PrivateData has key {
+        secret: u64,
+    }
+
+    #[cfg(test)]
+    public(friend) fun create_test_data(addr: address, secret: u64) {
+        move_to(&signer::create_signer(addr), PrivateData { secret });
+    }
+
+    #[cfg(test)]
+    public(friend) fun get_secret(addr: address): u64 acquires PrivateData {
+        borrow_global<PrivateData>(addr).secret
+    }
+
+    public fun public_function(): u64 {
+        42
+    }
+}
+
+#[test_only]
+module 0x42::test_helpers {
+    use 0x42::production_module;
+
+    #[test]
+    fun test_internal_logic() {
+        let test_addr = @0x123;
+        
+        // Usar funciones friend para setup de testing
+        production_module::create_test_data(test_addr, 100);
+        
+        let secret = production_module::get_secret(test_addr);
+        assert!(secret == 100, 1);
+    }
+}
+```
+
+## Patrones Avanzados
+
+### 1. Jerarquía de Módulos
+
+```move
+// Módulo base
+module 0x42::base {
+    friend 0x42::derived_a;
+    friend 0x42::derived_b;
+
+    public(friend) fun base_function(): u64 {
+        100
+    }
+}
+
+// Módulos derivados
+module 0x42::derived_a {
+    use 0x42::base;
+    friend 0x42::composite;
+
+    public(friend) fun derived_a_function(): u64 {
+        base::base_function() + 10
+    }
+}
+
+module 0x42::derived_b {
+    use 0x42::base;
+    friend 0x42::composite;
+
+    public(friend) fun derived_b_function(): u64 {
+        base::base_function() + 20
+    }
+}
+
+// Módulo que combina funcionalidad
+module 0x42::composite {
+    use 0x42::derived_a;
+    use 0x42::derived_b;
+
+    public fun combined_function(): u64 {
+        derived_a::derived_a_function() + derived_b::derived_b_function()
+    }
+}
+```
+
+### 2. Patrón Factory
+
+```move
+module 0x42::object_factory {
+    friend 0x42::specific_factories;
+
+    public(friend) fun create_base_object<T: key>(
+        account: &signer,
+        data: T
+    ) {
+        move_to(account, data);
+    }
+
+    public(friend) fun destroy_object<T: key>(
+        addr: address
+    ): T acquires T {
+        move_from<T>(addr)
+    }
+}
+
+module 0x42::specific_factories {
+    use 0x42::object_factory;
+
+    struct UserProfile has key {
+        name: vector<u8>,
+        age: u8,
+    }
+
+    struct GameItem has key {
+        item_id: u64,
+        rarity: u8,
+    }
+
+    public fun create_user_profile(
+        account: &signer,
+        name: vector<u8>,
+        age: u8
+    ) {
+        let profile = UserProfile { name, age };
+        object_factory::create_base_object(account, profile);
+    }
+
+    public fun create_game_item(
+        account: &signer,
+        item_id: u64,
+        rarity: u8
+    ) {
+        let item = GameItem { item_id, rarity };
+        object_factory::create_base_object(account, item);
+    }
+}
+```
+
+### 3. Patrón Plugin
+
+```move
+module 0x42::plugin_system {
+    friend 0x42::auth_plugin;
+    friend 0x42::logging_plugin;
+    friend 0x42::metrics_plugin;
+
+    struct Context {
+        user: address,
+        action: vector<u8>,
+        timestamp: u64,
+    }
+
+    public(friend) fun create_context(
+        user: address,
+        action: vector<u8>
+    ): Context {
+        Context {
+            user,
+            action,
+            timestamp: timestamp::now_seconds(),
+        }
+    }
+
+    public(friend) fun get_user(ctx: &Context): address {
+        ctx.user
+    }
+
+    public(friend) fun get_action(ctx: &Context): &vector<u8> {
+        &ctx.action
+    }
+}
+
+module 0x42::auth_plugin {
+    use 0x42::plugin_system;
+
+    public fun verify_permissions(user: address, action: vector<u8>): bool {
+        let ctx = plugin_system::create_context(user, action);
+        
+        // Verificar permisos usando el contexto
+        let user_addr = plugin_system::get_user(&ctx);
+        let action_name = plugin_system::get_action(&ctx);
+        
+        // Lógica de verificación...
+        true
+    }
+}
+```
+
+## Mejores Prácticas
+
+### 1. Organización Clara
+
+```move
+module 0x42::well_organized {
+    // Friends al principio para claridad
+    friend 0x42::helper_module;
+    friend 0x42::extension_module;
+
+    // Luego uses
+    use std::vector;
+    use std::option;
+
+    // Luego structs y constantes
+    struct MyStruct has key {
+        data: u64,
+    }
+
+    const CONSTANT_VALUE: u64 = 42;
+
+    // Funciones public(friend) agrupadas
+    public(friend) fun friend_function_1(): u64 { 1 }
+    public(friend) fun friend_function_2(): u64 { 2 }
+
+    // Funciones públicas
+    public fun public_function(): u64 { 3 }
+
+    // Funciones privadas al final
+    fun private_function(): u64 { 4 }
+}
+```
+
+### 2. Documentación Clara
+
+```move
+/// Módulo de utilidades core con funciones auxiliares
+/// Solo módulos específicos pueden acceder a funciones internas
+module 0x42::documented_module {
+    /// Módulo auxiliar que proporciona funciones de validación
+    friend 0x42::validation_helpers;
+    
+    /// Módulo de extensiones que agrega funcionalidad extra
+    friend 0x42::extensions;
+
+    /// Crea un nuevo objeto con datos iniciales
+    /// Solo accesible por módulos friend para control de acceso
+    public(friend) fun create_object(data: u64): MyObject {
+        MyObject { data }
+    }
+
+    struct MyObject {
+        data: u64,
+    }
+}
+```
+
+### 3. Principio de Menor Privilegio
+
+```move
+module 0x42::secure_module {
+    // Solo declarar como friends los módulos que realmente necesitan acceso
+    friend 0x42::trusted_helper;
+    // NO agregar friends innecesarios
+
+    // Mantener funciones public(friend) al mínimo
+    public(friend) fun sensitive_operation(): u64 {
+        // Solo operaciones que realmente necesitan ser friend
+        42
+    }
+
+    // Usar funciones públicas normales cuando sea posible
+    public fun safe_operation(): u64 {
+        43
+    }
+}
+```
+
+### 4. Testing Efectivo
+
+```move
+module 0x42::testable_module {
+    #[cfg(test)]
+    friend 0x42::unit_tests;
+
+    struct PrivateData has key {
+        value: u64,
+    }
+
+    // Funciones friend solo para testing
+    #[cfg(test)]
+    public(friend) fun create_test_data(value: u64): PrivateData {
+        PrivateData { value }
+    }
+
+    #[cfg(test)]
+    public(friend) fun extract_value(data: &PrivateData): u64 {
+        data.value
+    }
+
+    // Funciones de producción
+    public fun public_interface(): u64 {
+        // Implementación pública
+        0
+    }
+}
+```
+
+## Limitaciones y Consideraciones
+
+### 1. No Herencia Transitiva
+
+```move
+module 0x42::a {
+    friend 0x42::b;
+    
+    public(friend) fun a_function(): u64 { 1 }
+}
+
+module 0x42::b {
+    friend 0x42::c;
+    use 0x42::a;
+    
+    public(friend) fun b_function(): u64 {
+        a::a_function() // OK - b es friend de a
+    }
+}
+
+module 0x42::c {
+    use 0x42::a;
+    use 0x42::b;
+    
+    public fun c_function(): u64 {
+        b::b_function() +  // OK - c es friend de b
+        a::a_function()    // ERROR! - c no es friend de a
+    }
+}
+```
+
+### 2. Misma Dirección de Cuenta
+
+```move
+// Esto NO está permitido
+module 0x42::module_a {
+    friend 0x43::module_b; // ERROR - diferente dirección
+}
+
+// Esto SÍ está permitido
+module 0x42::module_a {
+    friend 0x42::module_b; // OK - misma dirección
+}
+```
+
+### 3. Sin Dependencias Cíclicas
+
+```move
+// Esto NO está permitido
+module 0x42::a {
+    friend 0x42::b;
+    // ...
+}
+
+module 0x42::b {
+    friend 0x42::a; // ERROR - ciclo
+    // ...
+}
+```
+
+## Casos de Error Comunes
+
+### Error: Auto-declaración como Friend
+
+```move
+module 0x42::bad_module {
+    friend 0x42::bad_module; // ERROR
+    //     ^^^^^^^^^^^^^^^^^ Cannot declare self as friend
+}
+```
+
+### Error: Módulo No Existente
+
+```move
+module 0x42::referencing_module {
+    friend 0x42::nonexistent; // ERROR
+    //     ^^^^^^^^^^^^^^^^^ Module not found
+}
+```
+
+### Error: Acceso No Autorizado
+
+```move
+module 0x42::provider {
+    public(friend) fun restricted(): u64 { 42 }
+}
+
+module 0x42::consumer {
+    use 0x42::provider;
+    
+    public fun try_access(): u64 {
+        provider::restricted() // ERROR - not a friend
+    }
+}
+```
+
+## Conclusión
+
+El sistema de friends en Move proporciona un mecanismo poderoso para el control de acceso a nivel de módulo. Permite:
+
+- **Control granular** sobre qué módulos pueden acceder a funciones sensibles
+- **Encapsulación mejorada** manteniendo interfaces públicas limpias
+- **Arquitecturas modulares** con responsabilidades claras
+- **Testing efectivo** con acceso controlado a funciones internas
+
+Puntos clave para recordar:
+
+- Friends permiten acceso a funciones `public(friend)`
+- Solo módulos en la misma dirección pueden ser friends
+- No hay herencia transitiva de permisos friend
+- Usar el principio de menor privilegio al declarar friends
+- Organizar declaraciones friend al comienzo del módulo
+- Documentar claramente el propósito de las relaciones friend

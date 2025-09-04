@@ -1,0 +1,139 @@
+---
+title: "Actualizar tu PFN"
+description: "Guía paso a paso para actualizar tu public fullnode (PFN) con nuevos lanzamientos de Aptos incluyendo métodos de despliegue de código fuente, Docker, y Terraform."
+sidebar:
+  label: "Actualización"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Este documento describe el proceso para actualizar tu PFN con nuevos lanzamientos de Aptos. Todos los PFNs necesitarán ser actualizados
+cuando nuevos lanzamientos estén disponibles. Para PFNs ejecutándose en `devnet`, se requiere un paso adicional de limpieza de datos ya que `devnet`
+se limpia en cada nuevo lanzamiento.
+
+## Despliegue de código fuente
+
+Si ejecutas tu PFN desde el código fuente [aptos-core][aptos-labs/aptos-core], puedes actualizar tu PFN
+siguiendo estos pasos:
+
+1. Detén tu PFN ejecutando el comando abajo (o matando el proceso `aptos-node` manualmente):
+
+   ```shellscript filename="Terminal"
+   cargo stop aptos-node
+   ```
+
+2. Obtén el último lanzamiento apropiado para tu red, ej., `devnet`, `testnet`, o `mainnet`. Asegúrate de reemplazar
+   `[network_branch]` con el nombre de rama apropiado abajo:
+
+   ```shellscript filename="Terminal"
+   git checkout [network_branch] && git pull
+   ```
+
+3. Reconstruye el binario como hiciste durante la configuración inicial.
+
+4. Si tu PFN está ejecutándose en `devnet`, sigue los pasos adicionales en la sección [Limpieza y Reinicio de Datos](#upgrade-with-data-wipe-devnet-only) abajo.
+
+5. Reinicia tu PFN ejecutando el mismo comando de despliegue que antes. Por ejemplo:
+
+   ```shellscript filename="Terminal"
+   cargo run -p aptos-node --release -- -f ./fullnode.yaml
+   ```
+
+### (Devnet) Limpieza y Reinicio de Datos
+
+<Aside type="caution">
+  **Solo limpieza de devnet**<br />
+  Solo sigue estos pasos adicionales si tu PFN está ejecutándose en `devnet`. Otras redes (ej., `testnet` y `mainnet`)
+  no requieren este paso (¡ya que los datos nunca se limpian)!
+</Aside>
+
+Si tu PFN está ejecutándose en `devnet`, sigue estos pasos adicionales después de detener tu PFN (¡y antes de reiniciarlo!):
+
+1. Elimina la carpeta de datos (la ruta del directorio es lo que especificaste en el archivo de configuración, ej., `fullnode.yaml`).
+
+   - La carpeta de datos por defecto es `/opt/aptos/data`.
+
+2. Elimina el archivo `genesis.blob` y el archivo `waypoint.txt` (dependiendo de cómo lo configuraste, podrías no tener este archivo y en su lugar tener un `waypoint` directamente en tu archivo de configuración).
+
+3. Descarga el nuevo archivo [genesis.blob](/network/nodes/configure/node-files-all-networks/node-files-devnet#genesisblob) y el nuevo [waypoint](/network/nodes/configure/node-files-all-networks/node-files-devnet#waypointtxt).
+
+4. Actualiza el archivo de configuración (ej., `fullnode.yaml`) con los nuevos archivos genesis.blob y waypoint.
+
+5. Reinicia tu PFN ejecutando el mismo comando de despliegue que antes.
+
+## Despliegue Docker
+
+Si ejecutas tu PFN desde una imagen Docker, puedes actualizar tu PFN:
+
+1. Detén tu PFN ejecutando el comando abajo:
+   ```shellscript filename="Terminal"
+   docker compose down --volumes
+   ```
+2. (¡Solo devnet!) Si tu PFN está ejecutándose en `devnet`, elimina todo el directorio que contiene tu configuración PFN y directorio de datos.
+3. Re-instala y configura esos archivos como durante la configuración original.
+4. Reinicia tu PFN ejecutando el mismo comando de despliegue que antes. Por ejemplo:
+   ```shellscript filename="Terminal"
+   docker compose up -d
+   ```
+
+## Despliegue GCP
+
+Si ejecutas tu PFN en GCP, sigue los pasos abajo para actualizar tu PFN. Nota: si tu PFN está
+ejecutándose en `devnet`, se requiere un paso adicional de limpieza de datos.
+
+### Actualización con limpieza de datos (solo devnet)
+
+<Aside type="caution">
+  **Solo limpieza de devnet**<br />
+  Solo sigue estos pasos si tu PFN está ejecutándose en `devnet`. Otras redes no requieren este paso (ya que los datos nunca se limpian)
+  y recomendamos no limpiar tus datos en estas redes.
+</Aside>
+
+Si estás ejecutando un PFN `devnet`, sigue estos pasos para actualizar:
+
+1. Aumenta el número `era` en `main.tf` para activar la creación de un nuevo volumen de datos, que iniciará el PFN en una nueva DB.
+
+2. Actualiza el `image_tag` en `main.tf` para contener la nueva versión de lanzamiento.
+
+3. Actualiza el módulo Terraform para el PFN (ejecuta esto en el mismo directorio de tu archivo `main.tf`):
+
+```shellscript filename="Terminal"
+terraform get -update
+```
+
+4. Aplica los cambios de Terraform:
+
+```shellscript filename="Terminal"
+terraform apply
+```
+
+### Actualización sin limpieza de datos
+
+Si no estás ejecutando un PFN `devnet`, sigue estos pasos para actualizar:
+
+1. Actualiza el `image_tag` en `main.tf`.
+
+2. Actualiza el módulo Terraform para el PFN (ejecuta esto en el mismo directorio de tu archivo `main.tf`):
+
+```shellscript filename="Terminal"
+terraform get -update
+```
+
+3. Aplica los cambios de Terraform:
+
+```shellscript filename="Terminal"
+terraform apply
+
+# Si no actualizaste el tag de imagen, terraform mostrará nada que cambiar, en este caso, fuerza una actualización helm
+terraform apply -var force_helm_update=true
+```
+
+[rest_spec]: https://github.com/aptos-labs/aptos-core/tree/main/api
+
+[devnet_genesis]: https://devnet.aptoslabs.com/genesis.blob
+
+[devnet_waypoint]: https://devnet.aptoslabs.com/waypoint.txt
+
+[aptos-labs/aptos-core]: https://github.com/aptos-labs/aptos-core.git
+
+[status dashboard]: https://status.devnet.aptos.dev

@@ -1,0 +1,57 @@
+---
+title: "Votación para un Pool de Staking"
+description: "Guía para votantes de pool de staking para participar en la gobernanza de Aptos usando tanto la UI de Gobernanza como el CLI de Aptos para votación de propuestas y delegación."
+sidebar:
+  label: "Votación"
+---
+
+Si eres un votante de [pool de staking](/network/blockchain/staking), entonces recomendamos fuertemente que no almacenes tus claves de votante de Aptos con un
+custodio antes de que el custodio soporte esta función. Hasta entonces, sugerimos que almacenes tus claves de votante en una billetera de Aptos
+como [Petra](https://petra.app/).
+
+Este documento describe cómo realizar operaciones de votante de staking mientras estés en la mainnet de Aptos usando una billetera de Aptos.
+
+### Usando la UI de Gobernanza
+
+Para participar como votante en la gobernanza de Aptos, sigue estos pasos:
+
+1. Ve a la [sección de Propuestas](https://governance.aptosfoundation.org/) de la página de Gobernanza de Aptos.
+2. Conecta tu billetera haciendo clic en **CONNECT WALLET** (arriba-derecha).
+3. Asegúrate de que la billetera esté configurada para conectarse a Mainnet.
+4. Ve las propuestas. Cuando estés listo para votar en una propuesta, haz clic en la propuesta y vota.
+5. Verás una barra verde indicando que la transacción de votación fue exitosa.
+
+### Usando el CLI de Aptos
+
+1. Obtén la información de tu pool de stake usando: `aptos node get-stake-pool --owner-address <owner-address> --url <REST API for the network>`.
+2. Para ver la lista de propuestas, ejecuta: `aptos governance list-proposals --url https://api.mainnet.aptoslabs.com`.
+3. Para configurar tu perfil de votante, ejecuta: `aptos init`.
+4. Para votar en una propuesta, ejecuta: `aptos governance vote --proposal-id <PROPOSAL_ID> --pool-address <POOL_ADDRESS> --url <URL> --profile <profile>`.
+
+## Votante del Pool de Delegación
+
+Si hiciste stake a un [pool de delegación](/network/blockchain/delegated-staking), puedes votar proporcional a tu cantidad de stake en el pool de delegación o delegar tus votos a otra dirección de votante.
+
+### Usando la UI de Gobernanza
+
+Para participar como votante, sigue estos pasos:
+
+1. Ve a la [sección de Propuestas](https://govscan.live/aptos-proposals) en Govscan.
+2. Conecta tu billetera haciendo clic en **CONNECT WALLET**
+3. Asegúrate de que la billetera esté configurada para conectarse a Mainnet.
+4. Ve las propuestas. Cuando estés listo para votar en una propuesta, haz clic en la propuesta y vota.
+5. Verás una barra verde indicando que la transacción de votación fue exitosa.
+
+### Usando el CLI de Aptos
+
+1. Obtén la dirección de tu pool de delegación desde la [página del Explorador de Aptos](https://explorer.aptoslabs.com/validators/delegation?network=mainnet).
+2. Para ver la lista de propuestas, ejecuta: `aptos governance list-proposals --url https://api.mainnet.aptoslabs.com`.
+3. Para configurar tu perfil de votante, ejecuta: `aptos init`.
+4. Para votar en una propuesta, ejecuta: `aptos move run --function-id 0x1::delegation_pool::vote --args address:<pool-address> u64:<proposal-id> u64:<voting-power> bool:<true or false>`.
+
+Para delegar tu poder de voto, sigue estos pasos:
+
+1. Obtén la dirección de tu pool de delegación desde la [página del Explorador de Aptos](https://explorer.aptoslabs.com/validators/delegation?network=mainnet).
+2. Para configurar tu perfil de votante, ejecuta: `aptos init`.
+3. Para delegar poder de voto, ejecuta: `aptos move run --function-id 0x1::delegation_pool::delegate_voting_power --args address:<pool-address> address:<delegated-voter-address>`.
+4. El nuevo votante delegado tomará efecto en el siguiente ciclo de lockup después de que termine el ciclo de lockup actual. Para ver el votante delegado, ejecuta `aptos move view --profile delegator --function-id 0x1::delegation_pool::calculate_and_update_delegator_voter --args address:<pool-address> address:<delegator-address>`.

@@ -1,0 +1,273 @@
+---
+title: "Operaciones del Pool de Delegación"
+description: "Guía completa para operaciones del pool de delegación para staking delegado incluyendo inicialización, delegación, gestión de comisiones, y características de lista de permitidos."
+sidebar:
+  label: "Pool de Delegación"
+---
+
+> Beta: Esta documentación está en modo experimental, beta. Proporciona retroalimentación abriendo un [issue de GitHub](https://github.com/aptos-labs/developer-docs/issues/new/choose).
+> Ver también las instrucciones relacionadas de [Operaciones del Pool de Staking](/network/nodes/validator-node/connect-nodes/staking-pool-operations).
+
+Los operadores de validator deberían seguir estas instrucciones para realizar operaciones del pool de delegación para [staking delegado](/network/blockchain/delegated-staking). Puedes delegar tan poco como 10 APT más una pequeña tarifa de agregar stake que será mayormente reembolsada como recompensas al final de la época actual. Podrías notar que algunas UIs podrían usar 11 APT como el mínimo para un número redondo. Nota que tu validator se convertirá en parte del _Conjunto de Validators Activos_ solo cuando el pool de delegación satisfaga el [requisito mínimo acumulativo de staking de 1 millón APT](/network/nodes/validator-node/connect-nodes/staking-pool-operations).
+
+El propietario del pool de delegación debería establecer un operador para el pool vía la función `set_operator` descrita en la sección [Realizar operaciones del propietario del pool](#perform-pool-owner-operations). El operador debería entonces iniciar su propio nodo Aptos, ya que es una mejor práctica tener una cuenta diferente para propietario y operador. Una vez que el pool de delegación alcance 1 millón APT, el operador puede unirse al conjunto de validators.
+
+La dirección del operador recibirá la comisión del pool que fue establecida en la inicialización del pool de delegación, que se distribuye automáticamente como stake en el pool de delegación al final de cada época. El operador actuará como una cuenta normal del Pool de Delegación que puede hacer todas las operaciones descritas en [Realizar operaciones del pool de delegación](#perform-delegation-pool-operations).
+
+## Prerrequisitos
+
+1. [Instalar y configurar](/build/cli) el CLI de Aptos. Si estás buscando desarrollar en la blockchain de Aptos, debuggear apps, o realizar operaciones de nodo, la herramienta Aptos ofrece una interfaz de línea de comandos para estos propósitos.
+2. [Inicializar configuración local y crear una cuenta](/build/cli/setup-cli) en la blockchain de Aptos.
+
+## Inicializar un pool de delegación
+
+Antes de inicializar un pool de delegación, necesitas conocer la dirección del pool de delegación. Puedes usar los siguientes comandos CLI para obtener la dirección del pool de delegación dependiendo de dónde estés en el proceso:
+
+- Antes de crear el pool de delegación:
+  ```shellscript filename="Terminal"
+  aptos account derive-resource-account-address --address <owner_address> --seed "aptos_framework::delegation_pool<SEED>" --seed-encoding utf8
+  ```
+  - El `<SEED>` es un número elegido por ti para crear la dirección de cuenta de recurso para hospedar el recurso del pool de delegación. Una vez que elijas una semilla, deberías usar el mismo valor para todos los usos siguientes.
+- Después de crear el pool de delegación:
+  ```shellscript filename="Terminal"
+  aptos account derive-resource-account-address
+  ```
+
+1. Ejecuta el comando abajo, sustituye el perfil que configuraste previamente durante la inicialización:
+
+   ```shellscript filename="Terminal"
+   aptos move run --profile <your-profile> \
+      --function-id 0x1::delegation_pool::initialize_delegation_pool \
+      --args u64:1000 string:00
+   ```
+
+   Donde `--args`:
+
+   - `u64:1000` representa `operator_commission_percentage` - 1000 es equivalente a 10% y 10000 es 100%.
+   - `string:00` representa `delegation_pool_creation_seed` - un número elegido por ti para crear una cuenta de recurso asociada con tu dirección de propietario; esta cuenta se usa para hospedar el recurso del pool de delegación. Deberías usar el mismo número aquí que el `--seed` que usaste en el paso anterior para crear el pool de delegación.
+
+2. Una vez que este comando se ejecute sin error, se establece una cuenta para recursos usando el firmante `owner` y un `delegation_pool_creation_seed` proporcionado para mantener el `recurso del pool de delegación` y poseer el pool de stake subyacente.
+
+3. Al `owner` se le otorga autoridad sobre asignar los roles `operator` y `voter`, que inicialmente son mantenidos por el `owner`.
+
+4. El pool de delegación ahora puede aceptar una cantidad mínima de 10 APT de cualquier usuario que desee delegar a él.
+
+5. El pool de delegación ahora puede [conectarse a la Red de Aptos](/network/nodes/validator-node/connect-nodes/connect-to-aptos-network).
+
+## Realizar operaciones del pool de delegación
+
+Esta sección describe las operaciones disponibles que pueden realizarse en este pool recientemente creado. Una vez que el pool de delegación haya sido establecido, usa el CLI de Aptos para operar el pool. Las acciones disponibles que pueden realizarse en él incluyen:
+
+- Agregar `amount` de monedas al pool de delegación `pool_address` usando el método de entrada pública `add_stake(delegator: &signer, pool_address: address, amount u64)` y sustituyendo tus valores en el comando abajo antes de ejecutarlo:
+
+  ```shellscript filename="Terminal"
+  aptos move run --profile delegator \
+    --function-id 0x1::delegation_pool::add_stake \
+    --args address:<pool_address> u64:<amount>
+  ```
+
+- Desdelegar (desbloquear) la cantidad de fondos del stake activo y pending active del delegador hasta el límite del stake activo en el pool de stake usando el método de entrada pública `unlock(delegator: &signer, pool_address: address, amount: u64)` y sustituyendo tus valores en el comando abajo antes de ejecutarlo:
+
+  ```shellscript filename="Terminal"
+  aptos move run --profile delegator \
+    --function-id 0x1::delegation_pool::unlock \
+    --args address:<pool_address> u64:<amount>
+  ```
+
+- Cancelar desdelegar (reactivar stake) `amount` de monedas del estado `pending_inactive` al `estado activo` usando el método de entrada pública `reactivate_stake(delegator: &signer, pool_address: address, amount: u64)` con el comando y tus valores:
+
+  ```shellscript filename="Terminal"
+  aptos move run --profile delegator \
+    --function-id 0x1::delegation_pool::reactivate_stake \
+    --args address:<pool_address> u64:<amount>
+  ```
+
+- Retirar `amount` de stake inactivo propio del pool de delegación en `pool_address` usando el método de entrada pública ` withdraw(delegator: &signer, pool_address: address, amount: u64)` y el comando:
+
+  ```shellscript filename="Terminal"
+  aptos move run --profile delegator \
+    --function-id 0x1::delegation_pool::withdraw \
+    --args address:<pool_address> u64:<amount>
+  ```
+
+## Realizar operaciones del propietario del pool
+
+Los propietarios del pool de delegación tienen acceso a métodos específicos diseñados para modificar los roles `operator` y `voter` del pool de delegación. Usa los siguientes comandos CLI de Aptos e incluye las direcciones relevantes:
+
+- Establecer la dirección del operador para el pool de delegación:
+
+  ```shellscript filename="Terminal"
+  aptos move run --profile delegation_pool_owner \
+    --function-id 0x1::delegation_pool::set_operator \
+    --args address:<new_operator_address>
+  ```
+
+Los propietarios del pool de delegación pueden actualizar el porcentaje de comisión para el pool de delegación. El cambio de tasa de comisión puede solicitarse al menos 7.5 días antes de que termine el ciclo de lockup actual. El nuevo porcentaje de comisión toma efecto en cualquier llamada `synchronize_delegation_pool` después del final del ciclo de lockup actual. Se requiere que los propietarios llamen `synchronize_delegation_pool` tan pronto como termine el ciclo de lockup para asegurar que el nuevo porcentaje de comisión tome efecto. De lo contrario, la tasa de comisión antigua continuará siendo usada hasta la siguiente llamada `synchronize_delegation_pool`.
+
+- Actualizar el porcentaje de comisión para el pool de delegación; `<new_commission_percentage>` tiene precisión de dos puntos decimales (ej., 13.25% se representa como 1325):
+
+  ```shellscript filename="Terminal"
+  aptos move run --profile delegation_pool_owner \
+    --function-id 0x1::delegation_pool::update_commission_percentage \
+    --args u64:<new_commission_percentage>
+  ```
+
+## Establecer direcciones beneficiarias para operadores
+
+Los operadores del pool de delegación pueden establecer direcciones beneficiarias para recibir la comisión del operador ganada por el pool de delegación.
+
+- Las direcciones beneficiarias pueden establecerse por el operador usando el siguiente comando:
+
+  ```shellscript filename="Terminal"
+  aptos move run --profile delegation_pool_operator \
+    --function-id 0x1::delegation_pool::set_beneficiary_for_operator \
+    --args address:<new_beneficiary_address>
+  ```
+
+- Para ver la dirección beneficiaria establecida para el operador, usa el siguiente comando:
+  ```shellscript filename="Terminal"
+  aptos move view --url <REST API for the network> \
+    --function-id 0x1::delegation_pool::beneficiary_for_operator \
+    --args address:<operator_address>
+  ```
+
+Cualquier recompensa de comisión no pagada existente será pagada al nuevo beneficiario. Para asegurar el pago al beneficiario actual, uno debería primero llamar `synchronize_delegation_pool` antes de cambiar el beneficiario. En caso de que un operador opere múltiples pools de delegación, el operador solo puede establecer un beneficiario para todos los pools de delegación, no uno separado para cada pool.
+
+Una vez que la dirección beneficiaria esté establecida, la comisión del operador ganada por el pool de delegación será distribuida a la dirección beneficiaria. La cuenta beneficiaria puede realizar las operaciones como `unlock` y `withdraw` para la comisión ganada.
+
+## Verificar información del pool de delegación
+
+Hasta que el pool de delegación haya recibido 1 millón APT y el validator haya sido agregado al conjunto de validators activos, no habrá recompensas que rastrear durante cada ciclo. Para obtener información sobre un pool de delegación, usa la [función View](/build/apis/fullnode-rest-api#reading-state-with-the-view-function) de Aptos
+
+- `get_owned_pool_address(owner: address): address` - Devuelve la dirección del pool de delegación perteneciente al propietario, o produce un error si no hay pool de delegación asociado con el propietario.
+
+- `delegation_pool_exists(addr: address): bool` - Devuelve true si existe un pool de delegación en la dirección proporcionada `addr`.
+
+- `operator_commission_percentage(pool_address: address): u64` - Devuelve el porcentaje de comisión del operador establecido en el pool de delegación en la inicialización.
+
+- `get_stake(pool_address: address, delegator_address: address): (u64, u64, u64)` - Devuelve el stake total propiedad de `delegator_address` dentro del pool de delegación `pool_address` en cada uno de sus estados individuales: (`active`,`inactive`,`pending_inactive`).
+
+- `get_delegation_pool_stake(pool_address: address): (u64, u64, u64, u64)` - Devuelve las cantidades de stake en `pool_address` en los diferentes estados: (`active`,`inactive`,`pending_active`,`pending_inactive`).
+
+- `shareholders_count_active_pool(pool_address: address): u64` - Devuelve el número de delegadores poseyendo un stake activo dentro de `pool_address`.
+
+- `get_pending_withdrawal(pool_address: address, delegator_address: address): (bool, u64)` - Devuelve si el delegador especificado posee algún stake retirable. Sin embargo, si el delegador ha iniciado recientemente una solicitud para liberar algo de su stake y el ciclo de lockup del pool de stake no ha terminado aún, entonces sus fondos pueden no estar aún disponibles para retiro.
+
+- `can_withdraw_pending_inactive(pool_address: address): bool` - Devuelve si el stake `pending_inactive` puede retirarse directamente del pool de delegación, implícitamente su pool de stake, en el caso especial que el validator hubiera estado inactivo antes de que su lockup expirara.
+
+En el [SDK TypeScript de Aptos](/build/sdks/ts-sdk), una solicitud de función View se parecería a:
+
+```typescript filename="view_function.ts"
+import { Aptos, AptosConfig } from "@aptos-labs/ts-sdk";
+
+const NODE_URL = "https://aptos-testnet.public.blastapi.io";
+
+(async () => {
+  const aptosConfig = new AptosConfig({ fullnode: NODE_URL });
+  const aptos = new Aptos(aptosConfig);
+  const payload: InputViewRequestData = {
+    function: "0x1::delagation_pool::get_stake",
+    functionArguments: ["pool_address", "delegator_address"],
+  };
+  console.log(await aptos.view({ payload }));
+})();
+```
+
+Alternativamente, puedes usar el CLI de Aptos para llamar funciones View.
+
+```shellscript filename="Terminal"
+aptos move view [OPTIONS] --function-id <FUNCTION_ID>
+```
+
+Para descubrir las opciones disponibles y el proceso para hacer una llamada `aptos move view`, accede a la información de ayuda con `aptos move view --help`. Esto mostrará los argumentos requeridos para invocar las funciones view.
+
+## Calcular recompensas ganadas del pool de delegación
+
+Usa esta fórmula para calcular _recompensas ganadas_ para staking `active` y `pending_inactive`. Esta fórmula asume que diferentes operaciones de stake como `unlock` y `reactivate` toman los _principales_ primero y luego _recompensas_. Por lo tanto, _recompensas ganadas_ puede variar basado en cómo la fórmula que uses esté construida:
+
+1. Obtén la cantidad de staking `active` y `pending_inactive` de la función view [`get_stake`](https://github.com/aptos-labs/aptos-core/blob/ed63ab756cda61439287304ed89bbb156fcbeaed/aptos-move/framework/aptos-framework/sources/delegation_pool.move#L321).
+
+2. Calcula principal:
+
+   - "principal activo" = **AddStakeEvent** - **UnlockStakeEvent** + **ReactivateStakeEvent**. Si en cualquier punto durante la iteración, "principal activo" \< 0, reinicia a 0. Principal negativo podría ocurrir cuando la cantidad que usuarios `unlock` incluye recompensas ganadas del staking.
+   - "principal inactivo pendiente" = **UnlockStakeEvent** - **ReactivateStakeEvent**. Si en cualquier punto durante la iteración, "principal inactivo pendiente" \< 0, reinicia a 0. Principal negativo podría ocurrir cuando la cantidad que usuarios `reactivate` incluye recompensas ganadas del staking.
+
+3. Calcula recompensas ganadas:
+   - recompensas activas = `active` - principal activo.
+   - recompensas\_inactivas\_pendientes = `pending_inactive` - "principal inactivo pendiente".
+
+## Lista de permitidos para pools de delegación
+
+Los propietarios del pool de delegación pueden establecer una lista de permitidos para su pool de delegación. Pueden agregar o remover direcciones de la lista de permitidos y desalojar delegadores que no estén en la lista de permitidos. Aquí está el flujo:
+
+1. Por defecto, un pool de delegación es sin permisos y no tiene una lista de permitidos. El propietario del pool puede establecer una lista de permitidos, transicionando el pool a un estado con permisos.
+2. Cuando una lista de permitidos se establece por primera vez en un pool de delegación, comienza vacía. Esta lista de permitidos vacía inicial no impacta stakes existentes en el pool. Sin embargo, el pool no aceptará ningún stake nuevo o reactivación de stakes pending-inactive de ningún staker porque nadie está en la lista de permitidos inicialmente.
+3. El propietario del pool puede agregar direcciones de billeteras de stakers a la lista de permitidos. Una vez que una dirección es agregada, el staker puede agregar nuevos stakes o reactivar stakes existentes en el pool. Nota que esta característica no facilita un mecanismo para que stakers soliciten ser agregados a la lista de permitidos; tales solicitudes deben gestionarse off-chain (ej., a través de comunicación privada entre el operador y staker, o soluciones basadas en UI).
+4. Si un delegador es removido de la lista de permitidos, ya no puede agregar o reactivar stakes. Sin embargo, retienen la capacidad de desbloquear y retirar sus stakes existentes.
+5. El propietario del pool puede desalojar a un delegador que no está incluido en la lista de permitidos. Esta acción desbloqueará todo el stake del delegador, transicionando todos sus stakes activos a un estado inactivo pendiente. Como el delegador desalojado no está en la lista de permitidos, no pueden reactivar su stake. Nota que estos tokens permanecerán bloqueados hasta el final del período de lockup, y el stake existente también continuará ganando recompensas hasta entonces. Cuando el período de lockup termine, los fondos serán unstaked (inactivos), pero permanecerán en el pool hasta que el delegador inicie un retiro.
+6. Si el stake de un delegador entra al estado inactivo pendiente debido a desalojo, el propietario del pool puede subsecuentemente agregar al delegador de vuelta a la lista de permitidos. Sin embargo, esta acción no reactivará automáticamente el stake. La reactivación automática no se proporciona para prevenir posible mal uso por un propietario de pool malicioso que podría repetidamente desalojar y re-permitir a un delegador para prevenir que dejen el pool. Una vez que un delegador está de vuelta en la lista de permitidos, el delegador debe llamar manualmente la función reactivate\_stake para reactivar su stake.
+7. Los pools de delegación que han habilitado listas de permitidos pueden deshabilitarla. Cuando se deshabilita, el pool de delegación se convierte en sin permisos, permitiendo que cualquier staker haga stake al pool.
+
+- El propietario del pool de delegación puede habilitar listas de permitidos y crear una lista de permitidos vacía usando el siguiente comando:
+
+  ```shellscript filename="Terminal"
+  aptos move run --profile delegation_pool_owner \
+    --function-id 0x1::delegation_pool::enable_delegators_allowlisting
+  ```
+
+- El propietario del pool de delegación puede deshabilitar listas de permitidos y eliminar la lista de permitidos existente usando el siguiente comando:
+
+  ```shellscript filename="Terminal"
+  aptos move run --profile delegation_pool_owner \
+    --function-id 0x1::delegation_pool::disable_delegators_allowlisting
+  ```
+
+- El propietario del pool de delegación puede agregar una dirección a la lista de permitidos usando el siguiente comando:
+
+  ```shellscript filename="Terminal"
+  aptos move run --profile delegation_pool_owner \
+    --function-id 0x1::delegation_pool::allowlist_delegator \
+    --args address:<delegator_address>
+  ```
+
+- El propietario del pool de delegación puede remover una dirección de la lista de permitidos usando el siguiente comando:
+
+  ```shellscript filename="Terminal"
+  aptos move run --profile delegation_pool_owner \
+    --function-id 0x1::delegation_pool::remove_delegator_from_allowlist \
+    --args address:<delegator_address>
+  ```
+
+- El propietario del pool de delegación puede desalojar a un delegador del pool desbloqueando todo su stake usando el siguiente comando:
+
+  ```shellscript filename="Terminal"
+  aptos move run --profile delegation_pool_owner \
+    --function-id 0x1::delegation_pool::evict_delegator \
+    --args address:<delegator_address>
+  ```
+
+También hay funciones view disponibles para verificar el estado de la lista de permitidos y las direcciones en la lista de permitidos:
+
+- La siguiente función view devuelve si `pool` tiene listas de permitidos habilitadas:
+
+  ```shellscript filename="Terminal"
+  aptos move view --url <REST API for the network> \
+    --function-id 0x1::delegation_pool::allowlisting_enabled \
+    --args address:<pool>
+  ```
+
+- La siguiente función view devuelve si `delegator` está en la lista de permitidos de `pool`:
+
+  ```shellscript filename="Terminal"
+  aptos move view --url <REST API for the network> \
+    --function-id 0x1::delegation_pool::delegator_allowlisted \
+    --args address:<pool> address:<delegator>
+  ```
+
+- La siguiente función view devuelve la lista de permitidos definida en pool:
+
+  ```shellscript filename="Terminal"
+  aptos move view --url <REST API for the network> \
+    --function-id 0x1::delegation_pool::get_delegators_allowlist \
+    --args address:<pool>
+  ```

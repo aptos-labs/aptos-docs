@@ -21,7 +21,6 @@ import icon from "astro-icon";
 import { sidebar } from "./astro.sidebar.ts";
 import { ENV } from "./src/lib/env";
 import { ogImagesIntegration } from "./src/integrations/ogImages";
-import { globalCspIntegration } from "./src/integrations/global-csp";
 import { SUPPORTED_LANGUAGES, SITE_TITLES } from "./src/config/18n";
 import { firebaseIntegration } from "./src/integrations/firebase";
 import { remarkClientOnly } from "./src/plugins";
@@ -67,8 +66,6 @@ export default defineConfig({
       : []),
     ogImagesIntegration(),
     firebaseIntegration(),
-    // Consolidate Vercel headers
-    globalCspIntegration(),
     starlight({
       title: SITE_TITLES,
       logo: {
@@ -214,7 +211,9 @@ export default defineConfig({
   ],
   adapter: process.env.VERCEL
     ? vercel({
-        experimentalStaticHeaders: true,
+        experimentalStaticHeaders: {
+          cspMode: "global",
+        },
         edgeMiddleware: false,
         imageService: true,
         imagesConfig: {

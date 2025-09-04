@@ -21,7 +21,7 @@ const allLanguages = {
 // Build for two languages only to speed up Astro's smoke tests
 const twoLanguages = {
   en: "English",
-  ja: "日本語",
+  es: "Español",
 } as const;
 
 /**

@@ -1,0 +1,135 @@
+---
+title: "Ejecutar una Red Pública (Avanzado)"
+description: "Guía avanzada para arrancar y ejecutar una red pública de Aptos usando ceremonias de génesis, configuraciones de validadores e inicialización de blockchain."
+sidebar:
+  label: "Ejecutar una Red Pública (Avanzado)"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="caution">
+  Si solo quieres ejecutar tu propia red local para pruebas, puedes aprender cómo hacerlo [aquí](/build/cli/running-a-local-network).
+</Aside>
+
+## Ceremonias de génesis
+
+La herramienta `aptos` soporta el arranque de nuevas blockchains a través de lo que se conoce como una ceremonia de génesis. La salida de la ceremonia de génesis es la salida de instrucciones de move que preparan una blockchain para operación en línea. La entrada consiste en:
+
+- Un conjunto de validadores y su configuración
+- El conjunto inicial de módulos Move, conocido como un framework
+- Un `ChainId` único (u8) que distingue esto de otras redes
+- Para cadenas de prueba, también existe una cuenta que gestiona la acuñación de AptosCoin
+
+## Generar génesis
+
+- El organizador de génesis construye un `Layout` y lo distribuye.
+- El organizador de génesis prepara el bytecode del framework de Aptos y lo distribuye.
+- Cada participante genera su `ValidatorConfiguration` y la distribuye.
+- Cada participante genera un `genesis.blob` de las contribuciones resultantes.
+- El organizador de génesis ejecuta el `genesis.blob` para derivar el waypoint inicial y lo distribuye.
+- Cada participante comienza su `aptos-node`. El `aptos-node` verifica al inicio que el `genesis.blob` con el waypoint proporcionado por el organizador de génesis.
+- La blockchain comenzará el consenso después de que un quórum de stake esté disponible.
+
+### Preparar aptos-core
+
+Las siguientes secciones dependen de herramientas del código fuente de Aptos. Ver [Construir Aptos Desde el Código Fuente](/network/nodes/building-from-source) para la configuración.
+
+### El archivo `layout`
+
+El archivo layout contiene:
+
+- `root_key`: una clave pública Ed25519 para la gestión de AptosCoin.
+- `users`: el conjunto de participantes
+- `chain_id`: el `ChainId` o un entero único que distingue este despliegue de otras redes de Aptos
+
+Un ejemplo:
+
+```yaml
+root_key: "0xca3579457555c80fc7bb39964eb298c414fd60f81a2f8eedb0244ec07a26e575"
+users:
+  - alice
+  - bob
+chain_id: 8
+```
+
+### Construir el Framework de Aptos
+
+Desde tu repositorio de Aptos-core, construye el framework y empaquétalo:
+
+```shellscript filename="Terminal"
+cargo run --package framework
+mkdir aptos-framework-release
+cp aptos-framework/releases/artifacts/current/build/**/bytecode_modules/* aptos-framework-release
+```
+
+El framework se almacenará dentro del directorio `aptos-framework-release`.
+
+### El archivo `ValidatorConfiguration`
+
+El archivo `ValidatorConfiguration` contiene:
+
+- `account_address`: La cuenta que gestiona este validador. Esto debe derivarse de la `account_key` proporcionada dentro del archivo `ValidatorConfiguration`.
+- `consensus_key`: La clave pública para autenticar mensajes de consenso del validador
+- `account_key`: La clave pública para la cuenta que gestiona este validador. Esto se usa para derivar la `account_address`.
+- `network_key`: La clave pública para autenticación y cifrado de red tanto del validador como del fullnode.
+- `validator_host`: La dirección de red donde reside el validador. Esto contiene un campo `host` y `port`. El `host` debe ser un nombre DNS o una dirección IP. Actualmente solo se soporta IPv4.
+- `full_node_host`: Una dirección de red opcional donde reside el fullnode. Esto contiene un campo `host` y `port`. El `host` debe ser un nombre DNS o una dirección IP. Actualmente solo se soporta IPv4.
+- `stake_amount`: El número de monedas siendo apostadas por este nodo. Se espera que esto sea `1`, si es diferente la configuración se considerará inválida.
+
+Un ejemplo:
+
+```yaml
+account_address: ccd49f3ea764365ac21e99f029ca63a9b0fbfab1c8d8d5482900e4fa32c5448a
+consensus_key: "0xa05b8f41057ac72f9ca99f5e3b1b787930f03ba5e448661f2a1fac98371775ee"
+account_key: "0x3d15ab64c8b14c9aab95287fd0eb894aad0b4bd929a5581bcc8225b5688f053b"
+network_key: "0x43ce1a4ac031b98bb1ee4a5cd72a4cca0fd72933d64b22cef4f1a61895c2e544"
+validator_host:
+  host: bobs_host
+  port: 6180
+full_node_host:
+  host: bobs_host
+  port: 6182
+stake_amount: 1
+```
+
+Para generar esto usando el CLI de `aptos`:
+
+1. Genera las claves de tu validador:
+
+```shellscript filename="Terminal"
+cargo run --package aptos -- genesis generate-keys --output-dir bobs
+```
+
+2. Genera tu `ValidatorConfiguration`:
+
+```shellscript filename="Terminal"
+cargo run --package aptos -- \\
+    genesis set-validator-configuration \\
+    --keys-dir bobs \\
+    --username bob \\
+    --validator-host bobs_host:6180 \\
+    --full-node-host bobs_host:6180 \\
+    --local-repository-dir .
+```
+
+3. El último comando producirá un archivo `bob.yaml` que debe distribuirse a otros participantes para la generación de `genesis.blob`.
+
+### Generar un génesis y waypoint
+
+`genesis.blob` y el waypoint pueden generarse después de obtener el archivo `layout`, cada uno de los archivos `ValidatorConfiguration` individuales, y el lanzamiento del framework. Es importante validar que la `ValidatorConfiguration` proporcionada en la etapa anterior sea la misma que en la distribución para generar el `genesis.blob`. Si hay una discrepancia, informa a todos los participantes.
+
+Para generar el `genesis.blob` y waypoint:
+
+- Coloca el archivo `layout` en un directorio, ej., `genesis`.
+- Coloca todos los archivos `ValidatorConfiguration` en el directorio `genesis`.
+- Asegúrate de que los archivos `ValidatorConfiguration` estén listados bajo el conjunto de `users` dentro del archivo `layout`.
+- Crea un directorio `framework` dentro del directorio `genesis` y coloca los archivos `.mv` del lanzamiento del framework en el directorio `framework`.
+- Usa el CLI de `aptos` para generar génesis y waypoint:
+
+```shellscript filename="Terminal"
+cargo run --package aptos -- genesis generate-genesis --local-repository-dir genesis
+```
+
+### Iniciar un `aptos-node`
+
+Al generar el `genesis.blob` y waypoint, colócalos en el directorio de configuración de tu validador y fullnode y comienza tu validador y fullnode.

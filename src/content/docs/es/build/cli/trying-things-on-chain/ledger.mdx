@@ -1,0 +1,107 @@
+---
+title: "Usar Hardware Ledger via el CLI de Aptos"
+description: "Aprende cómo interactuar de forma segura con la blockchain de Aptos usando dispositivos Ledger de hardware, incluyendo configuración, rotación de claves y firma de transacciones."
+sidebar:
+  label: "Usar un Ledger"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+Usar una billetera de hardware como Ledger es la forma más segura de firmar transacciones en `mainnet` ya que tu clave privada nunca sale de tu dispositivo.
+
+<Aside type="caution">
+  El `Ledger Nano S` tiene memoria limitada y puede no ser capaz de firmar muchas transacciones en Aptos. Si estás tratando de firmar una transacción que es demasiado grande para que tu dispositivo la maneje, obtendrás el error `Wrong raw transaction length`.
+</Aside>
+
+## Configuración Inicial
+
+Necesitarás hacer algunos pasos de configuración para el CLI de Aptos y tu dispositivo Ledger para firmar transacciones.
+
+<Steps>
+  1. Asegúrate de tener el CLI de Aptos instalado.
+
+     Puedes instalar el CLI de Aptos siguiendo [estos pasos](/build/cli) si no lo has hecho ya.
+
+  2. Asegúrate de haber hecho la configuración básica para tu dispositivo Ledger.
+
+     Puedes encontrar esos pasos en [el sitio web de Ledger](https://www.ledger.com/). Por ejemplo, aquí están las instrucciones de configuración para el [Ledger Nano X](https://support.ledger.com/article/360018784134-zd).
+
+  3. Conecta tu dispositivo Ledger a tu computadora.
+
+  4. Instala la App de Aptos en tu dispositivo Ledger siguiendo las instrucciones de Ledger.
+
+  5. Desbloquea tu dispositivo Ledger y abre la app de Aptos.
+
+     <Aside type="note" emoji="ℹ️">
+       Siempre que quieras firmar usando tu Ledger necesitarás conectarlo, desbloquearlo y abrir la app de Aptos antes de ejecutar cualquier comando del CLI.
+     </Aside>
+
+  6. Crea un nuevo perfil Ledger en el CLI de Aptos
+
+     ```shellscript filename="Terminal"
+     aptos init --profile <tu-perfil> --ledger
+     ```
+
+     Luego sigue las indicaciones de la terminal:
+
+     ```text filename="Terminal"
+     Configuring for profile <tu-perfil>
+     Choose network from [devnet, testnet, mainnet, local, custom | defaults to devnet]
+
+     No network given, using devnet...
+     Please choose an index from the following 5 ledger accounts, or choose an arbitrary index that you want to use:
+     [0] Derivation path: m/44'/637'/0'/0'/0' (Address: 59836ba1dd0c845713bdab34346688d6f1dba290dbf677929f2fc20593ba0cfb)
+     [1] Derivation path: m/44'/637'/1'/0'/0' (Address: 21563230cf6d69ee72a51d21920430d844ee48235e708edbafbc69708075a86e)
+     [2] Derivation path: m/44'/637'/2'/0'/0' (Address: 667446181b3b980ef29f5145a7a2cc34d433fc3ee8c97fc044fd978435f2cb8d)
+     [3] Derivation path: m/44'/637'/3'/0'/0' (Address: 2dcf037a9f31d93e202c074229a1b69ea8ee4d2f2d63323476001c65b0ec4f31)
+     [4] Derivation path: m/44'/637'/4'/0'/0' (Address: 23c579a9bdde1a59f1c9d36d8d379aeefe7a5997b5b58bd5a5b0c12a4f170431)
+
+     0
+     Account 59836ba1dd0c845713bdab34346688d6f1dba290dbf677929f2fc20593ba0cfb has been already found on-chain
+
+     ---
+     Aptos CLI is now set up for account 59836ba1dd0c845713bdab34346688d6f1dba290dbf677929f2fc20593ba0cfb as profile <tu-perfil>!  Run `aptos --help` for more information about commands
+     {
+       "Result": "Success"
+     }
+     ```
+
+     **Errores comunes:**
+
+     1. Si ves el error `Device Not Found`, asegúrate de desbloquear tu Ledger luego intenta este paso nuevamente.
+     2. Si ves el error `Aptos ledger app is not opened`, asegúrate de abrir la app de Aptos en tu Ledger, luego intenta este paso nuevamente.
+
+  7. Finalmente, necesitarás habilitar la firma ciega en tu dispositivo Ledger siguiendo las instrucciones de Ledger.
+
+     1. La firma ciega te permite confirmar una interacción de contrato inteligente que no puedes verificar a través de un lenguaje legible por humanos.
+     2. Esto es necesario para ejecutar transacciones sin limitación ya que algunos payloads son demasiado grandes para mostrar.
+</Steps>
+
+## Firmar Usando Ledger
+
+Después de hacer la configuración inicial, puedes firmar transacciones siguiendo estos pasos:
+
+1. Conecta tu ledger.
+2. Desbloquearlo.
+3. Abre la app de Aptos.
+4. Ejecuta el comando del CLI de Aptos que requiere una firma.
+
+<Aside type="note" emoji="ℹ️">
+  Este proceso funciona para cualquier comando que requiera una firma, ya sea para transferir monedas, publicar un contrato Move, interactuar con un contrato, etc.
+</Aside>
+
+Por ejemplo, si quisieras publicar un paquete Move como el contrato demo [`hello_blockchain`](https://github.com/aptos-labs/aptos-core/tree/main/aptos-move/move-examples/hello_blockchain) podrías seguir los pasos anteriores y luego ejecutar:
+
+```shellscript filename="Terminal"
+aptos move publish --profile <nombre-de-tu-perfil-ledger> --named-addresses hello_blockchain=<nombre-de-tu-perfil-ledger>
+```
+
+Después de que hayas aprobado publicar este paquete serás solicitado a firmar la transacción en tu dispositivo Ledger. Una vez firmado, ¡el paquete será publicado a la red!
+
+Un error que podrías encontrar es `Error: Wrong raw transaction length`. Esto significa que el tamaño de la transacción o paquete era demasiado grande para que tu dispositivo lo firme. Actualmente la app Ledger de Aptos solo puede soportar transacciones que sean menores a 20kb.
+
+## Rotación de clave de autenticación
+
+Si tienes una cuenta activa que no está asegurada usando una billetera de hardware, entonces es posible que desees rotar la clave de autenticación de la cuenta para que corresponda a una clave privada de índice de cuenta BIP44 mantenida en tu Ledger.
+
+Para más detalles sobre la rotación de claves de autenticación con Ledger, consulta la [guía de rotación de claves](/build/guides/key-rotation).

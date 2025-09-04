@@ -1,0 +1,298 @@
+---
+title: "Staking"
+description: "Comprende el staking en la blockchain de Aptos, incluyendo operaciones de validator, recompensas, períodos de bloqueo, y el modelo owner-operator-voter para participación en la red."
+sidebar:
+  label: "Staking"
+---
+
+import { ThemedImage } from '~/components/ThemedImage';
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="note">
+  Recomendamos encarecidamente que leas la sección de consenso de [Inmersión Profunda en la Blockchain de Aptos](/network/blockchain/blockchain-deep-dive#consensus) antes de continuar.
+</Aside>
+
+En un sistema distribuido como blockchain, ejecutar una transacción es distinto de actualizar el estado del ledger y persistir los resultados en almacenamiento. Un acuerdo, es decir, consenso, debe ser alcanzado por un quórum de validators sobre el ordenamiento de transacciones y sus resultados de ejecución antes de que estos resultados se persistan en almacenamiento y el estado del ledger se actualice.
+
+Cualquiera puede participar en el proceso de consenso de Aptos, si hace stake de suficiente moneda utilitaria, es decir, coloca su moneda utilitaria en custodia. Para alentar a los validators a participar en el proceso de consenso, el peso de voto de cada validator es proporcional a la cantidad de stake del validator. A cambio, el validator es recompensado proporcionalmente a la cantidad en stake. Por lo tanto, el rendimiento de la blockchain está alineado con el interés del validator, es decir, recompensas.
+
+<Aside type="note">
+  Actualmente, el slashing no está implementado.
+</Aside>
+
+Los datos actuales on-chain se pueden encontrar en [`staking_config::StakingConfig`](https://api.mainnet.aptoslabs.com/v1/accounts/0x1/resource/0x1::staking_config::StakingConfig). El conjunto de configuración se define en [`staking_config.move`](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/configs/staking_config.move).
+
+El resto de este documento presenta cómo funciona el staking en la blockchain de Aptos. Ver [Documentación de apoyo](#supporting-documentation) al final para recursos relacionados.
+
+## Staking en la blockchain de Aptos
+
+Abajo hay un diagrama de flujo resumen de cómo funciona el staking en la blockchain de Aptos. Las secciones siguientes al resumen lo describen en detalle.
+
+<ThemedImage
+  alt="Flujo de Staking"
+  sources={{
+light: '~/images/staking-light.svg',
+dark: '~/images/staking-dark.svg',
+}}
+/>
+
+El módulo de staking de Aptos define una capacidad que representa propiedad.
+
+<Aside type="note">
+  Ver el `OwnerCapability` definido en [stake.move](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/stake.move).
+</Aside>
+
+El recurso `OwnerCapability` puede usarse para controlar el pool de stake. Se soportan tres personas:
+
+- Owner (Propietario)
+- Operator (Operador)
+- Voter (Votante)
+
+Usando este modelo owner-operator-voter, un custodio puede asumir la persona del propietario y hacer stake en la blockchain de Aptos y participar en la gobernanza de Aptos. Este modelo permite que se construyan delegaciones y servicios de staking ya que separa la cuenta que está en control de los fondos de las otras cuentas (operador, votante), por lo tanto permite delegaciones seguras de responsabilidades.
+
+Esta sección describe cómo funciona esto, usando Bob y Alice en el ejemplo.
+
+### Owner (Propietario)
+
+El propietario es el dueño de los fondos. Por ejemplo, Bob crea una cuenta en la blockchain de Aptos. Ahora Bob tiene el recurso `OwnerCapability`. Bob puede asignar la dirección de operador de su cuenta a la cuenta de Alice, un operador de nodo confiable, para nombrar a Alice como validator.
+
+Como propietario:
+
+- Bob posee los fondos que se usarán para staking.
+- Solo Bob puede agregar, desbloquear o retirar fondos.
+- Solo Bob puede extender el período de bloqueo.
+- Bob puede cambiar el operador de nodo Alice a algún otro operador de nodo cuando Bob desee hacerlo.
+- Bob puede establecer el porcentaje de comisión del operador.
+- La recompensa se depositará en la cuenta de Bob (propietario).
+
+### Operator (Operador)
+
+Un operador de nodo es asignado por el propietario de fondos para ejecutar el nodo validator y recibe comisión como la establece el propietario. Las dos personas, el propietario y el operador, pueden ser dos entidades separadas o la misma. Por ejemplo, Alice (operador) ejecuta el nodo validator, operando a instancias de Bob, el propietario de fondos.
+
+Como operador:
+
+- Alice tiene permisos solo para unirse o dejar el conjunto de validators.
+- Como validator, Alice realizará la función de validación.
+- Alice tiene los permisos para cambiar la clave de consenso y direcciones de red. La clave de consenso es usada por Alice para participar en el proceso de consenso del validator, es decir, para votar y proponer un bloque. Alice puede cambiar ("rotar") esta clave en caso de que esta clave esté comprometida.
+- Sin embargo, Alice no puede mover fondos (a menos que Alice sea el propietario, es decir, Alice tenga el recurso `OwnerCapability`).
+- La comisión del operador se deduce de las recompensas del staker (propietario) y se deposita en la cuenta del operador.
+
+### Voter (Votante)
+
+Un propietario puede designar un votante. Esto permite al votante participar en gobernanza. El votante usará la clave de votante para firmar los votos de gobernanza en las transacciones.
+
+<Aside type="note">
+  Este documento describe staking. Ver [Gobernanza](/network/blockchain/governance) para cómo participar en la gobernanza on-chain de Aptos usando el modelo owner-voter.
+</Aside>
+
+## Validación en la blockchain de Aptos
+
+Durante la duración de una época, el siguiente flujo de eventos ocurre varias veces (miles de veces):
+
+- Un líder validator es seleccionado por una fórmula determinística basada en la reputación del validator determinada por el rendimiento del validator (incluyendo si el validator ha votado en el pasado o no) y stake. **Esta selección de líder no se hace por votación.**
+- El líder seleccionado envía una propuesta conteniendo los votos de quórum recolectados de la propuesta anterior y el orden propuesto del líder de transacciones para el nuevo bloque.
+- Todos los validators del conjunto de validators votarán sobre la propuesta del líder para el nuevo bloque. Una vez que se alcance consenso, el bloque puede finalizarse. Por lo tanto, la lista real de votos para lograr consenso es un subconjunto de todos los validators en el conjunto de validators. Este validator líder es recompensado. **Las recompensas se dan solo al validator líder, no a los validators votantes.**
+- El flujo anterior se repite con la selección de otro validator líder y repitiendo los pasos para el siguiente nuevo bloque. Las recompensas se dan al final de la época.
+
+## Estado del validator y estado del stake
+
+Se definen estados para un validator y el stake.
+
+- **Estado del validator:** Un validator puede estar en cualquiera de estos cuatro estados. Además, el validator puede ir del estado inactivo (no rastreado en el conjunto de validators en ningún lugar) a cualquiera de los otros tres estados:
+  - inactive (inactivo)
+  - pending\_active (pendiente activo).
+  - active (activo).
+  - pending\_inactive (pendiente inactivo).
+- **Estado del stake:** Un validator en estado pending\_inactive o active, puede tener su stake en cualquiera de estos cuatro estados:
+
+  - inactive (inactivo).
+  - pending\_active (pendiente activo).
+  - active (activo).
+  - pending\_inactive (pendiente inactivo).
+
+  Estos estados de stake son aplicables para los validators existentes en el conjunto de validators agregando o removiendo su stake.
+
+### Estados del validator
+
+<ThemedImage
+  alt="Flujo de Transacción Firmada"
+  sources={{
+light: '~/images/validator-state.svg',
+dark: '~/images/validator-state-dark.svg',
+}}
+/>
+
+Hay dos casos extremos a destacar:
+
+1. Si el stake de un validator cae por debajo del [mínimo](#minimum-and-maximum-stake) requerido, ese validator se moverá del estado activo directamente al estado inactivo durante un cambio de época. Esto ocurre solo durante un cambio de época.
+2. La gobernanza de Aptos también puede remover directamente validators del conjunto activo. **Nota que las propuestas de gobernanza siempre activarán un cambio de época.**
+
+### Estado del stake
+
+El estado del stake tiene más granularidad que el del validator; stake adicional puede agregarse y una porción de stake removida de un validator activo.
+
+<ThemedImage
+  alt="Flujo de Transacción Firmada"
+  sources={{
+light: '~/images/stake-state.svg',
+dark: '~/images/stake-state-dark.svg',
+}}
+/>
+
+### Reglas del validator
+
+Las siguientes reglas son aplicables durante los cambios de estado:
+
+- El poder de voto puede cambiar (aumentar o disminuir) solo en el límite de época.
+- La clave de consenso de un validator y las direcciones de red del validator y fullnode validator pueden cambiar solo en el límite de época.
+- El stake pendiente inactivo no puede moverse a inactivo (y así retirable) hasta antes de que expire el bloqueo.
+- Ningún validator en el conjunto de validators activos puede tener su stake por debajo del stake mínimo requerido.
+
+## Flujo del validator
+
+<Aside type="note">
+  Ver [Operaciones de pool de staking](/network/nodes/validator-node/connect-nodes/staking-pool-operations) para la secuencia correcta de comandos a ejecutar para el flujo siguiente.
+</Aside>
+
+1. El propietario inicializa el pool de stake con `aptos stake create-staking-contract`.
+2. Cuando el propietario está listo para depositar el stake (o tener fondos asignados por un servicio de staking a cambio de capacidad de propiedad), el propietario llama `aptos stake add-stake`.
+3. Cuando el nodo validator está listo, el operador puede llamar `aptos node join-validator-set` para unirse al conjunto de validators activos. Los cambios serán efectivos en la siguiente época.
+4. El validator valida (propone bloques como validator líder) y gana recompensas. El stake se bloqueará automáticamente por una duración fija (establecida por la gobernanza) y se renovará automáticamente al expirar.
+5. En cualquier punto, si el operador quiere actualizar la clave de consenso o direcciones de red del validator, puede llamar `aptos node update-consensus-key` o `aptos node update-validator-network-addresses`. Similar a los cambios en stake, los cambios a la clave de consenso o direcciones de red del validator solo son efectivos en la siguiente época.
+6. El validator puede solicitar desbloquear su stake en cualquier momento. Sin embargo, su stake solo se volverá retirable cuando su bloqueo actual expire. Esto puede ser como máximo tan largo como la duración de bloqueo fija.
+7. Después de salir, el validator puede explícitamente dejar el conjunto de validators llamando `aptos node leave-validator-set` o si su stake cae por debajo del mínimo requerido, serían removidos al final de la época.
+8. El validator siempre puede volver a unirse al conjunto de validators pasando por los pasos 2-3 otra vez.
+9. Un propietario siempre puede cambiar operadores llamando `aptos stake set-operator`.
+10. Un propietario siempre puede cambiar el votante designado llamando `aptos stake set-delegated-voter`.
+
+## Unirse al conjunto de validators
+
+Participar como nodo validator en la red de Aptos funciona así:
+
+1. El operador ejecuta un nodo validator y configura las direcciones de red del validator on-chain y rota la clave de consenso.
+2. El propietario deposita sus fondos de monedas Aptos como stake, o tiene fondos asignados por un servicio de staking. El stake debe ser al menos la cantidad mínima requerida.
+3. **El nodo validator no puede sincronizar hasta que el pool de stake se vuelva activo.**
+4. El operador valida y gana recompensas.
+5. El pool en stake se bloqueará automáticamente por una duración fija (establecida por la gobernanza de Aptos) y se renovará automáticamente al expirar. No puedes retirar nada de tu cantidad en stake hasta que tu período de bloqueo expire. Ver [stake.move#L728](https://github.com/aptos-labs/aptos-core/blob/00a234cc233b01f1a7e1680f81b72214a7af91a9/aptos-move/framework/aptos-framework/sources/stake.move#L728).
+6. El operador debe esperar hasta que comience la nueva época antes de que su validator se vuelva activo.
+
+<Aside type="note">
+  Para instrucciones paso a paso sobre cómo unirse al conjunto de validators, ver: [Unirse al Conjunto de Validators](/network/nodes/validator-node/connect-nodes/connect-to-aptos-network#join-the-validator-set).
+</Aside>
+
+### Stake mínimo y máximo
+
+Debes hacer stake de la cantidad mínima requerida para unirte al conjunto de validators. Además, solo puedes hacer stake hasta la cantidad máxima de stake. El mínimo requerido actual para staking es 1M tokens APT y el máximo es 50M tokens APT.
+
+Si en cualquier momento después de unirte al conjunto de validators, tu cantidad actual en stake excede el stake máximo permitido (por ejemplo cuando las recompensas se agregan a tu cantidad en stake), entonces tu poder de voto y las recompensas se calcularán solo usando la cantidad máxima de stake permitida, y no tu cantidad actual en stake.
+
+El propietario puede retirar parte del stake y dejar su balance por debajo del mínimo requerido. En tal caso, su pool de stake será removido del conjunto de validators cuando comience la siguiente época.
+
+### Duración de bloqueo automático
+
+Cuando te unes al conjunto de validators, tu stake se bloqueará automáticamente por una duración fija establecida por la gobernanza de Aptos.
+
+### Renovación automática de bloqueo
+
+Cuando tu período de bloqueo expire, se renovará automáticamente, para que puedas continuar validando y recibiendo las recompensas.
+
+### Desbloqueando tu stake
+
+Puedes solicitar desbloquear tu stake en cualquier momento. Sin embargo, tu stake solo se volverá retirable cuando tu bloqueo actual expire. Esto puede ser como máximo tan largo como la duración de bloqueo fija. Continuarás ganando recompensas en tu stake hasta que se vuelva retirable.
+
+La cantidad principal se actualiza cuando ocurre cualquiera de las siguientes acciones:
+
+1. El operador [solicita desbloqueo de comisión](/network/nodes/validator-node/connect-nodes/staking-pool-operations#requesting-commission)
+2. El staker (propietario) retira fondos
+3. El staker (propietario) cambia operadores
+
+Cuando el staker desbloquea stake, esto también activa un desbloqueo de comisión. La cantidad completa de comisión para cualquier recompensa de staking ganada se desbloquea. Esto no es proporcional a la cantidad de stake desbloqueada. La comisión se distribuye al operador después de que termine el bloqueo cuando se llama `request commission` una segunda vez o cuando el staker retira (distribuye) el stake desbloqueado.
+
+### Reiniciando el bloqueo
+
+Cuando el período de bloqueo expira, se renueva automáticamente por la red. Sin embargo, el propietario puede reiniciar explícitamente el bloqueo.
+
+<Aside type="note">
+  La duración del bloqueo es decidida por la gobernanza de Aptos, es decir, por los convenios que los miembros de la comunidad de Aptos votan, y no por ninguna entidad especial como Aptos Labs.
+</Aside>
+
+## Época
+
+Una época en la blockchain de Aptos se define como una duración de tiempo, en segundos, durante la cual un número de bloques son votados por los validators, el conjunto de validators se actualiza, y las recompensas se distribuyen a los validators.
+
+<Aside type="note">
+  La época de mainnet de Aptos se establece como 7200 segundos (dos horas).
+</Aside>
+
+### Activadores al inicio de época
+
+<Aside type="note">
+  Ver la [sección Activadores en límite de época de `stake.move`](https://github.com/aptos-labs/aptos-core/blob/256618470f2ad7d89757263fbdbae38ac7085317/aptos-move/framework/aptos-framework/sources/stake.move#L1036) para el código completo.
+</Aside>
+
+Al inicio de cada época, se activan los siguientes eventos clave:
+
+- Actualizar el conjunto de validators agregando los validators pendientes activos al conjunto de validators activos y removiendo los validators pendientes inactivos del conjunto de validators activos.
+- Mover cualquier stake pendiente activo a stake activo, y cualquier stake pendiente inactivo a stake inactivo.
+- El poder de voto del pool de staking en esta nueva época se actualiza al total de stake activo.
+- Renovar automáticamente el bloqueo de un validator para los validators que aún estarán en el conjunto de validators en la siguiente época.
+- El poder de voto de cada validator en el conjunto de validators se actualiza para ser el poder de voto del pool de staking correspondiente.
+- Las recompensas se distribuyen a los validators que participaron en la época anterior.
+
+## Recompensas
+
+Las recompensas por staking se calculan usando:
+
+1. La `rewards_rate`, un rendimiento porcentual anual (APY), es decir, las recompensas se acumulan como interés compuesto en tu cantidad actual en stake.
+2. Tu cantidad en stake.
+3. Tu rendimiento como proponente en la gobernanza de Aptos.
+
+<Aside type="note">
+  La `rewards_rate` es establecida por la gobernanza de Aptos. También ver [Validación en la blockchain de Aptos](#validation-on-the-aptos-blockchain).
+</Aside>
+
+### Fórmula de recompensas
+
+Ver abajo la fórmula usada para calcular recompensas al validator:
+
+```text filename="Fórmula de Recompensas de Staking"
+Recompensa = cantidad_en_stake * rewards_rate por época * (Número de propuestas exitosas por el validator / Número total de propuestas hechas por el validator)
+```
+
+### Recompensas pagadas cada época
+
+Las recompensas se pagan cada época. Cualquier recompensa que hayas (es decir, validator) ganado al final de la época actual se agrega a tu cantidad en stake. La recompensa al final de la siguiente época se calcula basada en tu cantidad en stake aumentada (es decir, cantidad original en stake más la recompensa agregada), y así sucesivamente.
+
+### Recompensas basadas en el rendimiento del proponente
+
+El cálculo de recompensas del validator usa el rendimiento como proponente del validator. Una vez que estés en el conjunto de validators, puedes proponer en cada época. Mientras más exitosamente propongas, es decir, tus propuestas pasen, más recompensas recibirás.
+
+Nota que las recompensas se dan solo a los **validators líderes**, es decir, validators que proponen el nuevo bloque, y no a los **validators votantes** que votan sobre la propuesta del líder para el nuevo bloque. Ver [Validación en la blockchain de Aptos](#validation-on-the-aptos-blockchain).
+
+<Aside type="note">
+  Todas las recompensas de validator también están sujetas al período de bloqueo ya que se agregan a la cantidad original en stake.
+</Aside>
+
+## Dejando el conjunto de validators
+
+<Aside type="note">
+  Ver el módulo Aptos Stake en el lenguaje Move en [stake.move](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/stake.move).
+</Aside>
+
+- En cualquier momento puedes llamar la siguiente secuencia de funciones para dejar el conjunto de validators:
+  - Llamar `Stake::unlock` para desbloquear tu cantidad de stake, y
+  - Ya sea llamar `Stake::withdraw` para retirar tu cantidad en stake en la siguiente época, o llamar `Stake::leave_validator_set`.
+
+## Volviendo a unirse al conjunto de validators
+
+Cuando dejas un conjunto de validators, puedes volver a unirte depositando la cantidad mínima de stake requerida.
+
+## Documentación de apoyo
+
+- [Datos actuales on-chain](https://api.mainnet.aptoslabs.com/v1/accounts/0x1/resource/0x1::staking_config::StakingConfig)
+- [Operaciones de Pool de Staking](/network/nodes/validator-node/connect-nodes/staking-pool-operations)
+- [Operaciones de Pool de Delegación](/network/nodes/validator-node/connect-nodes/delegation-pool-operations)
+- [Archivo de configuración `staking_config.move`](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/configs/staking_config.move)
+- [Archivo de contrato `staking_contract.move`](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/staking_contract.move) cubriendo solicitar comisiones
+- [Todos los archivos relacionados con staking \`.move](https://github.com/aptos-labs/aptos-core/tree/main/aptos-move/framework/aptos-framework/sources)

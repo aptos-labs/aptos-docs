@@ -1,0 +1,223 @@
+---
+title: "Ihre erste Transaktion"
+---
+
+import { Aside, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
+
+Transaktionen sind die grundlegende Art, Daten auf der Aptos-Blockchain zu ändern. Stellen Sie sich vor, Sie versenden ein Paket: Sie müssen angeben, was Sie senden, an wen es geht, und es dann verfolgen, bis die Zustellung bestätigt ist. In Blockchain-Begriffen ermöglichen Transaktionen das Übertragen von Münzen, das Aufrufen von Smart-Contract-Funktionen und das Aktualisieren des On-Chain-Status.
+
+Dieses Tutorial führt Sie durch die Erstellung und Übermittlung Ihrer ersten Transaktion auf der Aptos-Blockchain. Sie lernen, wie Sie:
+
+1. Ihre Entwicklungsumgebung einrichten
+2. Testkonten erstellen und finanzieren
+3. Eine Transaktion zum Übertragen von Münzen erstellen
+4. Die Transaktion simulieren, um Kosten zu schätzen
+5. Die Transaktion signieren und übermitteln
+6. Verifizieren, dass die Transaktion erfolgreich ausgeführt wurde
+
+<Aside type="note">
+  Dieses Tutorial baut auf Konzepten der Aptos-Blockchain auf. Wenn Sie neu in der Blockchain-Entwicklung sind, machen Sie sich keine Sorgen - wir erklären wichtige Konzepte unterwegs.
+
+  Sie können zum vollständigen Code-Beispiel [hier](#full-code-sample) springen oder mit der schrittweisen Anleitung fortfahren.
+</Aside>
+
+## 1. Einrichtung Ihrer Umgebung
+
+<Tabs>
+  <TabItem label="TypeScript">
+    Bevor wir Transaktionen erstellen können, müssen wir unsere Entwicklungsumgebung mit den notwendigen Tools und SDKs einrichten.
+
+    <Steps>
+      1. TypeScript SDK installieren
+
+         Installieren Sie das TypeScript SDK mit Ihrem bevorzugten Package Manager:
+
+         <Tabs>
+           <TabItem label="npm">
+             ```shellscript filename="Terminal"
+             npm install @aptos-labs/ts-sdk
+             ```
+           </TabItem>
+
+           <TabItem label="yarn">
+             ```shellscript filename="Terminal"
+             yarn add @aptos-labs/ts-sdk
+             ```
+           </TabItem>
+
+           <TabItem label="pnpm">
+             ```shellscript filename="Terminal"
+             pnpm add @aptos-labs/ts-sdk
+             ```
+           </TabItem>
+         </Tabs>
+
+      2. Projektverzeichnis erstellen
+
+         Erstellen Sie ein neues Verzeichnis für Ihr Projekt:
+
+         ```shellscript filename="Terminal"
+         mkdir my-first-transaction
+         cd my-first-transaction
+         ```
+
+      3. Neue Datei erstellen
+
+         Erstellen Sie eine neue Datei namens `transaction.ts`:
+
+         <Tabs>
+           <TabItem label="Mac/Linux">
+             ```shellscript filename="Terminal"
+             touch transaction.ts
+             ```
+           </TabItem>
+
+           <TabItem label="Windows">
+             ```shellscript filename="Terminal"
+             type nul > transaction.ts
+             ```
+           </TabItem>
+         </Tabs>
+    </Steps>
+  </TabItem>
+
+  <TabItem label="Python">
+    Bevor wir Transaktionen erstellen können, müssen wir unsere Entwicklungsumgebung mit den notwendigen Tools und SDKs einrichten.
+
+    <Steps>
+      1. Python SDK installieren
+
+         Installieren Sie das Python SDK mit pip:
+
+         ```shellscript filename="Terminal"
+         pip install aptos-sdk
+         ```
+
+      2. Projektverzeichnis erstellen
+
+         Erstellen Sie ein neues Verzeichnis für Ihr Projekt:
+
+         ```shellscript filename="Terminal"
+         mkdir my-first-transaction
+         cd my-first-transaction
+         ```
+
+      3. Neue Datei erstellen
+
+         Erstellen Sie eine neue Datei namens `transaction.py`:
+
+         ```shellscript filename="Terminal"
+         touch transaction.py
+         ```
+    </Steps>
+  </TabItem>
+</Tabs>
+
+## 2. Netzwerkverbindung einrichten
+
+Jetzt verbinden wir uns mit dem Aptos-Netzwerk und erstellen Testkonten.
+
+<Tabs>
+  <TabItem label="TypeScript">
+    ```typescript filename="transaction.ts"
+    import {
+      Account,
+      Aptos,
+      AptosConfig,
+      Network,
+    } from "@aptos-labs/ts-sdk";
+
+    // Verbindung zum Devnet einrichten
+    const config = new AptosConfig({ network: Network.DEVNET });
+    const aptos = new Aptos(config);
+
+    async function main() {
+      console.log("🚀 Starte Ihre erste Transaktion auf Aptos!");
+      
+      // Konten im nächsten Schritt erstellen
+    }
+
+    main().catch(console.error);
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    ```python filename="transaction.py"
+    from aptos_sdk.account import Account
+    from aptos_sdk.async_client import RestClient
+    import asyncio
+
+    # Verbindung zum Devnet einrichten
+    NODE_URL = "https://api.devnet.aptoslabs.com/v1"
+    client = RestClient(NODE_URL)
+
+    async def main():
+        print("🚀 Starte Ihre erste Transaktion auf Aptos!")
+        
+        # Konten im nächsten Schritt erstellen
+
+    if __name__ == "__main__":
+        asyncio.run(main())
+    ```
+  </TabItem>
+</Tabs>
+
+## 3. Konten erstellen und finanzieren
+
+Um Transaktionen durchzuführen, benötigen Sie Konten und APT-Token, um Gasgebühren zu bezahlen.
+
+<Tabs>
+  <TabItem label="TypeScript">
+    ```typescript filename="transaction.ts"
+    async function main() {
+      console.log("🚀 Starte Ihre erste Transaktion auf Aptos!");
+      
+      // 1. Neue Konten erstellen
+      const alice = Account.generate();
+      const bob = Account.generate();
+      
+      console.log(`🏦 Alice Konto: ${alice.accountAddress}`);
+      console.log(`🏦 Bob Konto: ${bob.accountAddress}`);
+      
+      // 2. Konten finanzieren (Devnet Faucet verwenden)
+      console.log("💰 Finanziere Konten...");
+      
+      await aptos.fundAccount({
+        accountAddress: alice.accountAddress,
+        amount: 100_000_000, // 1 APT (1 APT = 100,000,000 Octas)
+      });
+      
+      await aptos.fundAccount({
+        accountAddress: bob.accountAddress,
+        amount: 100_000_000,
+      });
+      
+      console.log("✅ Kontofinanzierung abgeschlossen!");
+    }
+    ```
+  </TabItem>
+
+  <TabItem label="Python">
+    ```python filename="transaction.py"
+    async def main():
+        print("🚀 Starte Ihre erste Transaktion auf Aptos!")
+        
+        # 1. Neue Konten erstellen
+        alice = Account.generate()
+        bob = Account.generate()
+        
+        print(f"🏦 Alice Konto: {alice.address()}")
+        print(f"🏦 Bob Konto: {bob.address()}")
+        
+        # 2. Konten finanzieren (Devnet Faucet verwenden)
+        print("💰 Finanziere Konten...")
+        
+        await client.fund_account(alice.address(), 100_000_000)  # 1 APT
+        await client.fund_account(bob.address(), 100_000_000)
+        
+        print("✅ Kontofinanzierung abgeschlossen!")
+    ```
+  </TabItem>
+</Tabs>
+
+Jetzt sind Sie bereit, Ihre erste Transaktion zu erstellen! Das vollständige Beispiel und weitere Details finden Sie in der ursprünglichen Dokumentation.

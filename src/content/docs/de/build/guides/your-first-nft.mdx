@@ -1,0 +1,386 @@
+---
+title: "Ihr erstes NFT"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+Dieses Tutorial führt Sie durch den Prozess der Verwendung des Aptos TypeScript SDK (`@aptos-labs/ts-sdk`) zur Erstellung eines neuen digitalen Assets (oft als NFT bezeichnet) auf Aptos. Am Ende dieses Tutorials werden Sie wissen, wie Sie:
+
+1. Eine Sammlung digitaler Assets (NFTs) erstellen.
+2. Ein neues digitales Asset (NFT) innerhalb dieser Sammlung prägen.
+3. Das digitale Asset (NFT) zwischen Konten übertragen.
+4. Die Bewegung des digitalen Assets (NFT) durch Überprüfung der aktualisierten Salden verifizieren.
+
+<Aside type="note">
+  Dieses Tutorial setzt voraus, dass Sie mit der Verwendung der [Aptos CLI](/de/build/cli) vertraut sind, Node.js und npm installiert haben und grundlegende JavaScript/TypeScript-Konzepte verstehen. Wenn Sie weitere Informationen benötigen, schauen Sie sich die [Node.js-Einführung](https://nodejs.org/en/learn/getting-started/introduction-to-nodejs) oder die [Aptos TypeScript SDK](/de/build/sdks/ts-sdk) Dokumentation an.
+</Aside>
+
+## Durchgehen des Codes
+
+Unten finden Sie die schrittweise Erklärung, wie man ein digitales Asset on-chain erstellt, überträgt und damit interagiert. Wir gehen durch, wie der Beispielcode (am Ende vollständig gezeigt) es macht. Um direkt zum Ausführen des Codes zu springen, siehe [**Ein Beispiel ausführen**](#running-an-example).
+
+### Code-Walkthrough
+
+<Steps>
+  1. Den Client einrichten
+
+     Wir importieren und konfigurieren den `Aptos`-Client aus dem SDK, um sich mit dem angegebenen Netzwerk zu verbinden:
+
+     ```tsx filename="index.ts"
+     const APTOS_NETWORK = NetworkToNetworkName[process.env.APTOS_NETWORK] || Network.DEVNET;
+     const config = new AptosConfig({ network: APTOS_NETWORK });
+     const aptos = new Aptos(config);
+     ```
+
+     Dieses `aptos`-Objekt ermöglicht es uns, mit der Aptos-Blockchain zu interagieren (Konten finanzieren, Assets erstellen, Transaktionen senden usw.).
+
+  2. Konten erstellen und finanzieren
+
+     Wir generieren zwei Konten, Alice und Bob. Auf devnet können wir sie einfach mit Test-APT finanzieren.
+
+     ```tsx filename="index.ts"
+     const alice = Account.generate();
+     const bob = Account.generate();
+
+     await aptos.fundAccount({ accountAddress: alice.accountAddress, amount: INITIAL_BALANCE });
+     await aptos.fundAccount({ accountAddress: bob.accountAddress, amount: INITIAL_BALANCE });
+     ```
+
+  3. Eine Sammlung erstellen
+
+     Wir erstellen eine Sammlung in Alices Konto. Eine Sammlung fungiert wie ein "Ordner" oder eine "Kategorie" für digitale Assets. In diesem Fall erstellen wir `"Example Collection"`.
+
+     ```tsx filename="index.ts"
+     const createCollectionTransaction = await aptos.createCollectionTransaction({
+       creator: alice,
+       description: "This is an example collection.",
+       name: "Example Collection",
+       uri: "aptos.dev",
+     });
+
+     const committedTxn = await aptos.signAndSubmitTransaction({
+       signer: alice,
+       transaction: createCollectionTransaction,
+     });
+     await aptos.waitForTransaction({ transactionHash: committedTxn.hash });
+     ```
+
+     <Aside type="note">
+       Warten Sie immer mit `waitForTransaction` auf den Abschluss der Transaktion, bevor Sie fortfahren. Dies stellt sicher, dass die Sammlung bereit ist, bevor Sie versuchen zu prägen.
+     </Aside>
+
+  4. Ein digitales Asset prägen
+
+     Mit der erstellten Sammlung können wir nun ein digitales Asset (ein NFT) für die Sammlung prägen. Dies beinhaltet die Bereitstellung von Details wie Name, Beschreibung und einer URI (oft verlinkt zu Metadaten wie Bildern).
+
+     ```tsx filename="index.ts"
+     const mintTokenTransaction = await aptos.mintDigitalAssetTransaction({
+       creator: alice,
+       collection: "Example Collection",
+       description: "This is an example digital asset.",
+       name: "Example Asset",
+       uri: "https://aptos.dev/asset.png",
+     });
+
+     const mintTxn = await aptos.signAndSubmitTransaction({
+       signer: alice,
+       transaction: mintTokenTransaction,
+     });
+     await aptos.waitForTransaction({ transactionHash: mintTxn.hash });
+     ```
+
+     <Aside type="note">
+       Sie können diese Werte ändern, um Ihr digitales Asset on-chain anzupassen.
+     </Aside>
+
+  5. Das digitale Asset übertragen
+
+     Einmal geprägt, gehört das Asset Alice. Wir können dies überprüfen, indem wir Alices digitale Assets abrufen. Dann erstellen und senden wir eine Transaktion, um dieses Asset an Bob zu übertragen.
+
+     ```tsx filename="index.ts"
+     const aliceDigitalAssets = await aptos.getOwnedDigitalAssets({ ownerAddress: alice.accountAddress });
+     const digitalAssetAddress = aliceDigitalAssets[0].token_data_id;
+
+     const transferTransaction = await aptos.transferDigitalAssetTransaction({
+       sender: alice,
+       digitalAssetAddress,
+       recipient: bob.accountAddress,
+     });
+
+     const transferTxn = await aptos.signAndSubmitTransaction({
+       signer: alice,
+       transaction: transferTransaction,
+     });
+     await aptos.waitForTransaction({ transactionHash: transferTxn.hash });
+     ```
+
+     Nach Abschluss sollte das Asset nun in Bobs Konto erscheinen.
+
+  6. Die Salden verifizieren
+
+     Schließlich überprüfen wir sowohl Alices als auch Bobs Konten, um sicherzustellen, dass Alice das Asset nicht mehr hat und Bob es jetzt hat.
+
+     ```tsx filename="index.ts"
+     const aliceDigitalAssetsAfter = await aptos.getOwnedDigitalAssets({ ownerAddress: alice.accountAddress });
+     const bobDigitalAssetsAfter = await aptos.getOwnedDigitalAssets({ ownerAddress: bob.accountAddress });
+
+     console.log(`Alice's digital asset balance: ${aliceDigitalAssetsAfter.length}`);
+     console.log(`Bob's digital asset balance: ${bobDigitalAssetsAfter.length}`);
+     ```
+</Steps>
+
+## Ein Beispiel ausführen
+
+### Erste Schritte
+
+<Steps>
+  1. Ihr Projekt einrichten
+
+     Erstellen Sie ein neues Verzeichnis für Ihr Projekt und initialisieren Sie ein Node.js-Projekt:
+
+     ```shellscript filename="Terminal"
+     mkdir aptos-digital-asset-tutorial
+     cd aptos-digital-asset-tutorial
+     npm init -y
+     ```
+
+     Dies erstellt eine `package.json`-Datei, die es Ihnen ermöglicht, Abhängigkeiten zu installieren und Skripte auszuführen.
+
+  2. Abhängigkeiten installieren
+
+     Sie benötigen das Aptos TypeScript SDK und `dotenv` zur Verwaltung von Umgebungsvariablen:
+
+     ```shellscript filename="Terminal"
+     npm install @aptos-labs/ts-sdk dotenv
+     npm install --save-dev @types/node
+     ```
+
+  3. tsconfig.json erstellen
+
+     Erstellen Sie eine `tsconfig.json`-Datei mit folgendem Inhalt:
+
+     ```json filename="tsconfig.json"
+     {
+       "compilerOptions": {
+         "target": "es2020",
+         "module": "commonjs",
+         "esModuleInterop": true,
+         "forceConsistentCasingInFileNames": true,
+         "strict": true,
+         "skipLibCheck": true,
+         "types": ["node"],
+         "lib": ["es2020"]
+       }
+     }
+     ```
+
+     Diese Konfiguration stellt sicher, dass TypeScript Node.js-Typen ordnungsgemäß erkennt und angemessene Typprüfung bereitstellt.
+
+  4. Umgebungsvariablen konfigurieren
+
+     Erstellen Sie eine `.env`-Datei mit folgendem Inhalt:
+
+     ```shellscript filename="Terminal"
+     APTOS_NETWORK=devnet
+     ```
+
+     <Aside type="note">
+       Standardmäßig verwenden wir `devnet`, aber Sie können auch `testnet` oder `mainnet` je nach Ihren Bedürfnissen wählen.
+     </Aside>
+
+  5. index.ts hinzufügen
+
+     Erstellen Sie eine `index.ts`-Datei mit folgendem Inhalt:
+
+     ```tsx filename="index.ts"
+     // Aktualisieren Sie die TODOs unten, um dieses digitale Asset an Ihre Bedürfnisse anzupassen.
+     // Sie werden die Collection-Werte und individuellen Digital Asset-Werte anpassen wollen.
+     // Dieses Beispiel demonstriert das Erstellen einer Sammlung, das Befüllen mit digitalen Assets und deren Übertragung.
+
+     import "dotenv/config";
+     import {
+         Account,
+         Aptos,
+         AptosConfig,
+         Network,
+         NetworkToNetworkName,
+     } from "@aptos-labs/ts-sdk";
+
+     // Überprüfen, ob Umgebungsvariablen geladen sind
+     console.log("Environment variables loaded:", {
+         APTOS_NETWORK: process.env.APTOS_NETWORK || "not set"
+     });
+
+     const INITIAL_BALANCE = 100_000_000;
+
+     console.log("Schritt 1: Einen Client zur Verbindung mit Aptos einrichten");
+     const APTOS_NETWORK = NetworkToNetworkName[process.env.APTOS_NETWORK!] || Network.DEVNET;
+     const config = new AptosConfig({ network: APTOS_NETWORK });
+     const aptos = new Aptos(config);
+
+     async function example() {
+         console.log("\n=== Schritt 2: Konten erstellen und finanzieren ===\n");
+         const alice = Account.generate();
+         const bob = Account.generate();
+
+         console.log(`Alices Adresse: ${alice.accountAddress}`);
+         console.log(`Bobs Adresse: ${bob.accountAddress}`);
+
+         console.log("Alices Konto finanzieren...");
+         await aptos.fundAccount({ accountAddress: alice.accountAddress, amount: INITIAL_BALANCE });
+         console.log("Alices Konto finanziert!");
+
+         console.log("Bobs Konto finanzieren...");
+         await aptos.fundAccount({ accountAddress: bob.accountAddress, amount: INITIAL_BALANCE });
+         console.log("Bobs Konto finanziert!");
+
+         console.log("\n=== Schritt 3: Eine Sammlung erstellen ===\n");
+         // TODO: Aktualisieren Sie diese Werte, um Ihr digitales Asset anzupassen!
+         const collectionName = "Example Collection";
+         const collectionDescription = "This is an example collection.";
+         const collectionURI = "aptos.dev";
+
+         console.log("Die Sammlungserstellungstransaktion erstellen...");
+         const createCollectionTransaction = await aptos.createCollectionTransaction({
+             creator: alice,
+             description: collectionDescription,
+             name: collectionName,
+             uri: collectionURI,
+         });
+
+         console.log("Die Sammlungserstellungstransaktion senden...");
+         const committedTxn = await aptos.signAndSubmitTransaction({
+             signer: alice,
+             transaction: createCollectionTransaction,
+         });
+
+         console.log("Auf den Abschluss der Sammlungserstellungstransaktion warten...");
+         await aptos.waitForTransaction({ transactionHash: committedTxn.hash });
+         console.log("Sammlung erfolgreich erstellt!");
+
+         console.log("\n=== Schritt 4: Ein digitales Asset prägen ===\n");
+         // TODO: Aktualisieren Sie die Werte der digitalen Assets, die Sie prägen!
+         const tokenName = "Example Asset";
+         const tokenDescription = "This is an example digital asset.";
+         const tokenURI = "aptos.dev/asset";
+
+         console.log("Die Prägetransaktion erstellen...");
+         const mintTokenTransaction = await aptos.mintDigitalAssetTransaction({
+             creator: alice,
+             collection: collectionName,
+             description: tokenDescription,
+             name: tokenName,
+             uri: tokenURI,
+         });
+         console.log(mintTokenTransaction)
+
+         console.log("Die Prägetransaktion senden...");
+         const mintTxn = await aptos.signAndSubmitTransaction({
+             signer: alice,
+             transaction: mintTokenTransaction,
+         });
+         console.log(mintTxn)
+
+         console.log("Auf den Abschluss der Prägetransaktion warten...");
+         await aptos.waitForTransaction({ transactionHash: mintTxn.hash });
+         console.log("Digitales Asset erfolgreich geprägt!");
+
+         console.log("\n=== Schritt 5: Das digitale Asset übertragen ===\n");
+
+         // Auf die Aktualisierung des Indexers mit den neuesten Daten von on-chain warten
+         await new Promise((resolve) => setTimeout(resolve, 5000));
+
+         const aliceDigitalAssets = await aptos.getOwnedDigitalAssets({
+             ownerAddress: alice.accountAddress,
+         });
+
+         // Überprüfen, ob Alice digitale Assets hat, bevor darauf zugegriffen wird
+         if (aliceDigitalAssets.length === 0) {
+             console.error("Keine digitalen Assets für Alice gefunden. Stellen Sie sicher, dass das Prägen erfolgreich war.");
+             return;
+         }
+
+         const digitalAssetAddress = aliceDigitalAssets[0].token_data_id;
+
+         console.log("Die Übertragungstransaktion erstellen...");
+         const transferTransaction = await aptos.transferDigitalAssetTransaction({
+             sender: alice,
+             digitalAssetAddress,
+             recipient: bob.accountAddress,
+         });
+
+         console.log("Die Übertragungstransaktion senden...");
+         const transferTxn = await aptos.signAndSubmitTransaction({
+             signer: alice,
+             transaction: transferTransaction,
+         });
+
+         console.log("Auf den Abschluss der Übertragungstransaktion warten...");
+         await aptos.waitForTransaction({ transactionHash: transferTxn.hash });
+         console.log("Digitales Asset erfolgreich übertragen!");
+
+         console.log("\n=== Schritt 6: Digitale Asset-Salden verifizieren ===\n");
+         const aliceDigitalAssetsAfter = await aptos.getOwnedDigitalAssets({
+             ownerAddress: alice.accountAddress,
+         });
+         const bobDigitalAssetsAfter = await aptos.getOwnedDigitalAssets({
+             ownerAddress: bob.accountAddress,
+         });
+
+         console.log(`Alices digitaler Asset-Saldo: ${aliceDigitalAssetsAfter.length}`);
+         console.log(`Bobs digitaler Asset-Saldo: ${bobDigitalAssetsAfter.length}`);
+
+         console.log("\n=== Schritt 7: Transaktionshashes für Explorer ===\n");
+         console.log(`Sammlungserstellungstransaktion: ${committedTxn.hash}`);
+         console.log(`Prägetransaktion: ${mintTxn.hash}`);
+         console.log(`Übertragungstransaktion: ${transferTxn.hash}`);
+         console.log("\nSie können diese Transaktionen im Aptos Explorer anzeigen:");
+         console.log("https://explorer.aptoslabs.com/?network=devnet");
+     }
+
+     example();
+     ```
+
+  6. Den Code ausführen
+
+     ```shellscript filename="Terminal"
+     npx ts-node index.ts
+     ```
+
+     Wenn alles korrekt eingerichtet ist, sehen Sie Ausgabelogs, die jeden Schritt, Transaktionshashes und finale Salden detailliert beschreiben.
+
+  7. Ihre Transaktionen im Explorer anzeigen
+
+     Nach dem Ausführen des Codes sehen Sie Transaktionshashes in der Konsolenausgabe, insbesondere in Schritt 7, der alle Transaktionshashes zur einfachen Referenz anzeigt:
+
+     ```shellscript filename="Terminal"
+     === Schritt 7: Transaktionshashes für Explorer ===
+
+     Sammlungserstellungstransaktion: 0x8c5d2a4ce32d76349bfb4f3830740c1c103399e8cbc31d6e2c7a871c88e6ad48
+     Prägetransaktion: 0x673d2cbb9fef468fe41f271c0fcf20872e9fa79afb6a2000368394000071b02e
+     Übertragungstransaktion: 0x3a1e99d6fd3f8e7e962c311f3dfd92c11e468da5b6084123b8f7e0248a37ffa7
+
+     Sie können diese Transaktionen im Aptos Explorer anzeigen:
+     https://explorer.aptoslabs.com/?network=devnet
+     ```
+
+     Sie können diese Transaktionen im Aptos Explorer anzeigen:
+
+     1. Kopieren Sie den Transaktionshash aus Ihrer Konsole
+     2. Besuchen Sie [Aptos Explorer](https://explorer.aptoslabs.com/?network=devnet)
+     3. Stellen Sie sicher, dass Sie im richtigen Netzwerk sind (Devnet)
+     4. Fügen Sie den Transaktionshash in die Suchleiste ein
+     5. Sehen Sie sich die Details Ihrer Transaktion an, einschließlich:
+        - Den Sender- und Empfängeradressen
+        - Der genauen Zeit, zu der die Transaktion verarbeitet wurde
+        - Gezahlte Gasgebühren
+        - Das digitale Asset, das übertragen wurde
+
+     Dies ist ein großartiger Weg, um Ihre Transaktionen zu verifizieren und zu verstehen, wie sie auf der Blockchain aufgezeichnet werden.
+</Steps>
+
+### Weiterführende Literatur & Ressourcen
+
+- [aptos ts-sdk docs](/de/build/sdks/ts-sdk)
+- [Konto-Grundlagen](/de/network/blockchain/accounts)
+- [REST API-Spezifikation](/de/network/nodes/aptos-api-spec)

@@ -1,0 +1,370 @@
+---
+title: "Votre Première Pièce"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+Ce tutoriel présente comment compiler, déployer et minter votre propre pièce sur Aptos. En plus de cela, vous apprendrez comment enregistrer et transférer des pièces.
+
+<Aside type="note">
+  Les **Pièces** et les **Actifs Fongibles** sont deux standards de jeton différents sur Aptos. Ce tutoriel vous apprend à utiliser le [standard Coin](/build/smart-contracts/digital-asset#coin-standard). Si vous recherchez l'implémentation plus récente et plus flexible, consultez [Votre Premier Actif Fongible](/fr/build/guides/first-fungible-asset).
+</Aside>
+
+## Étape 1 : Sélectionner un réseau
+
+Le réseau Aptos par défaut pour ces exemples de tutoriel est [devnet](https://aptos.dev/network/glossary#devnet), mais ces instructions fonctionneront aussi sur [testnet](https://aptos.dev/network/glossary#testnet). Cependant, notez que devnet pourrait redémarrer et effacer l'état, mais testnet est permanent.
+
+Voir [Aptos Blockchain Networks](/network/nodes/networks) pour déterminer quel réseau est meilleur pour vos cas d'usage.
+
+## Étape 2 : Installer la CLI
+
+[Installez la CLI Aptos](/fr/build/cli).
+
+## Étape 3 : Créer un compte et le financer
+
+Initialisez un nouveau compte local et financez-le. Ouvrez votre terminal et exécutez la commande suivante :
+
+```bash filename="Terminal"
+aptos init
+```
+
+Vous devriez voir le résultat suivant :
+
+```bash
+Configuring for profile default
+Choisir le réseau parmi [devnet, testnet, mainnet, local, custom | defaults to devnet]
+
+Aucune entrée fournie. Utilisation du réseau par défaut...
+Veuillez entrer votre clé privée comme chaîne hexadécimale, ou appuyez sur entrée pour générer une nouvelle clé privée :
+
+Aucune clé privée fournie, génération d'une nouvelle clé privée...
+Adresse du compte : 0x5ac985f1fe40c5121eb33699952ce8503974292e0c65947df13807ac8d81de22
+Clé privée : 0xfdb8e6851ba0556069d8488acd9f0000a8570c0c70b596e434d20f02dd1a69f6
+Clé publique : 0x9c9b28085b6bd0b711014c801edd3956b82e3b5d23db53ba75fb63e32c13ee74
+---
+Aptos CLI est maintenant configuré pour le compte 0x5ac985f1fe40c5121eb33699952ce8503974292e0c65947df13807ac8d81de22 en tant que profil par défaut !
+{
+  "Result": "Success"
+}
+```
+
+Maintenant, financez ce compte en allant au [Aptos Faucet](https://www.aptosfaucet.com/) et en collant l'adresse de votre compte. Ou via la CLI, exécutez cette commande :
+
+```bash filename="Terminal"
+aptos account fund-with-faucet --account default
+```
+
+Vous devriez voir une sortie similaire à :
+
+```bash
+{
+  "Result": "Added 100000000 Octas to account 5ac985f1fe40c5121eb33699952ce8503974292e0c65947df13807ac8d81de22"
+}
+```
+
+## Étape 4 : Créer un nouveau package Move
+
+Créez un nouveau répertoire pour votre package Move et naviguez vers celui-ci. Par exemple :
+
+```bash filename="Terminal"
+mkdir hello_coin && cd hello_coin
+```
+
+Maintenant, dans le répertoire `hello_coin`, créez un nouveau package Move nommé `hello_coin` :
+
+```bash filename="Terminal"
+aptos move init --name hello_coin
+```
+
+Vous devriez maintenant avoir une structure de répertoires qui ressemble à :
+
+```
+hello_coin
+├── Move.toml
+└── sources
+```
+
+## Étape 5 : Ajouter le code sources
+
+### Créer le module de pièce
+
+Créez le fichier `sources/hello_coin.move` et ajoutez le code suivant à celui-ci :
+
+```move filename="sources/hello_coin.move"
+/// Ce module définit une pièce minimale pour le didacticiel de déploiement.
+module hello_coin::hello_coin {
+    use aptos_framework::coin;
+
+    /// Capacité de type pour la pièce. Le paramètre `phantom` CoinType permet de définir
+    /// ce type comme étant "phantom" car il n'apparaît en tant que paramètre de type que pour d'autres,
+    /// il n'est jamais stocké ou supprimé.
+    struct HelloCoin has key {}
+
+    /// Initialise la nouvelle pièce.
+    fun init_module(sender: &signer) {
+        // Initialise la nouvelle pièce avec les métadonnées appropriées et la renvoie à l'appelant
+        let (burn_cap, freeze_cap, mint_cap) = coin::initialize<HelloCoin>(
+            sender,
+            string::utf8(b"Hello Coin"),
+            string::utf8(b"HELLO"),
+            8, /* decimals */
+            false, /* monitor_supply */
+        );
+
+        // Enregistre l'expéditeur en tant que destinataire de la pièce
+        coin::register<HelloCoin>(sender);
+
+        // Stocke les capacités de menthe et de burn avec l'expéditeur
+        move_to(sender, mint_cap);
+        move_to(sender, burn_cap);
+
+        // Gèle le freeze cap pour empêcher tout gel/dégel futur de comptes de cette pièce.
+        // Vous pourriez vouloir conserver cette capacité pour une utilisation future au lieu de la détruire.
+        coin::destroy_freeze_cap(freeze_cap);
+    }
+
+    #[view]
+    /// Renvoie le solde de `owner` pour cette pièce.
+    public fun balance<CoinType>(owner: address): u64 {
+        coin::balance<HelloCoin>(owner)
+    }
+}
+```
+
+<Aside type="note">
+  Notez l'utilisation du `phantom` dans `struct HelloCoin has key {}`. Le mot-clé `phantom` dans Move est utilisé quand un paramètre de type n'est pas utilisé dans la définition de la structure mais doit encore être inclus pour la sécurité de type.
+</Aside>
+
+## Étape 6 : Compiler le package
+
+Vous pouvez maintenant compiler le package en utilisant la CLI Aptos :
+
+```bash filename="Terminal"
+aptos move compile
+```
+
+Vous devriez voir une sortie similaire à :
+
+```bash
+Compiling, cela peut prendre un moment pour télécharger les dépendances git...
+UPDATING GIT DEPENDENCY https://github.com/aptos-labs/aptos-core.git
+INCLUDING DEPENDENCY AptosFramework
+INCLUDING DEPENDENCY AptosStdlib
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING hello_coin
+{
+  "Result": "Success"
+}
+```
+
+## Étape 7 : Publier le package
+
+Maintenant que le package compile avec succès, vous pouvez le publier sur la blockchain avec votre compte :
+
+```bash filename="Terminal"
+aptos move publish
+```
+
+Vous devriez voir une sortie similaire à :
+
+```bash
+Compiling, cela peut prendre un moment pour télécharger les dépendances git...
+UPDATING GIT DEPENDENCY https://github.com/aptos-labs/aptos-core.git
+INCLUDING DEPENDENCY AptosFramework
+INCLUDING DEPENDENCY AptosStdlib
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING hello_coin
+taille du package 1755 bytes
+Voulez-vous soumettre une transaction pour une plage de [194800 - 292200] Octas au prix unitaire de gaz de 100 Octas ? [yes/no] >
+```
+
+Tapez `yes` et appuyez sur Entrée. Vous devriez alors voir :
+
+```bash
+{
+  "Result": {
+    "transaction_hash": "0x1d7b074dd95724c5459a1c30d796572e8a0e7f6e56d70d0e64a0e9d5a7a4e2e7",
+    "gas_used": 1946,
+    "gas_unit_price": 100,
+    "sender": "5ac985f1fe40c5121eb33699952ce8503974292e0c65947df13807ac8d81de22",
+    "sequence_number": 0,
+    "success": true,
+    "timestamp_us": 1661320216062611,
+    "version": 3977,
+    "vm_status": "Executed successfully"
+  }
+}
+```
+
+Maintenant votre pièce est disponible à l'adresse de votre compte.
+
+## Étape 8 : Enregistrer, minter et transférer
+
+### Enregistrer la pièce
+
+Maintenant nous devons enregistrer la pièce avec un autre compte, alors créons d'abord un autre compte :
+
+```bash filename="Terminal"
+aptos init --profile test-account
+```
+
+Et financez-le :
+
+```bash filename="Terminal"
+aptos account fund-with-faucet --account test-account
+```
+
+Maintenant nous pouvons enregistrer `test-account` pour recevoir la `HelloCoin`. Dans ce contexte, "register" signifie créer un `CoinStore<HelloCoin>` ressource sous l'adresse de `test-account` :
+
+```bash filename="Terminal"
+aptos move run \
+  --function-id 'default::hello_coin::register' \
+  --profile test-account
+```
+
+Vous devriez voir :
+
+```bash
+{
+  "Result": {
+    "transaction_hash": "0x64c5b6c0a9d453c0146219428e1d2b1f47b91966c7c4ad68437649e0f563f7d9",
+    "gas_used": 1294,
+    "gas_unit_price": 100,
+    "sender": "8d3c0beef1b3b8a36e81e5ffc4082af880e87062ca75e0b6e8103a635c242e92",
+    "sequence_number": 0,
+    "success": true,
+    "timestamp_us": 1661320878825763,
+    "version": 4156,
+    "vm_status": "Executed successfully"
+  }
+}
+```
+
+### Minter la pièce
+
+Maintenant que nous avons créé le compte `test-account`, nous pouvons minter des pièces vers celui-ci. Utilisez cette commande pour minter `1000` pièces vers le compte `test-account` :
+
+```bash filename="Terminal"
+aptos move run \
+  --function-id 'default::hello_coin::mint' \
+  --args address:test-account u64:1000
+```
+
+Vous devriez voir :
+
+```bash
+{
+  "Result": {
+    "transaction_hash": "0x06a9f6c142dccf28aaaab1e2bb5fa2f71c40e8de87f5f7eb0f5c3f1e8b74eb67",
+    "gas_used": 1221,
+    "gas_unit_price": 100,
+    "sender": "5ac985f1fe40c5121eb33699952ce8503974292e0c65947df13807ac8d81de22",
+    "sequence_number": 1,
+    "success": true,
+    "timestamp_us": 1661320931620934,
+    "version": 4178,
+    "vm_status": "Executed successfully"
+  }
+}
+```
+
+### Vérifier le solde
+
+Vérifiez le solde de `test-account` :
+
+```bash filename="Terminal"
+aptos move view --function-id 'default::hello_coin::balance' \
+  --args address:test-account
+```
+
+Vous devriez voir :
+
+```bash
+{
+  "Result": [
+    "1000"
+  ]
+}
+```
+
+### Transférer la pièce
+
+Maintenant testons le transfert en transférant `100` pièces de `test-account` vers l'adresse de compte par défaut :
+
+```bash filename="Terminal"
+aptos move run \
+  --function-id '0x1::coin::transfer' \
+  --type-args 'default::hello_coin::HelloCoin' \
+  --args address:default u64:100 \
+  --profile test-account
+```
+
+Vous devriez voir :
+
+```bash
+{
+  "Result": {
+    "transaction_hash": "0x7203a36ca3d48508bd7a0a4156eb1a7e2dbbaa5dd40c24993d5f9e61e0815961",
+    "gas_used": 1373,
+    "gas_unit_price": 100,
+    "sender": "8d3c0beef1b3b8a36e81e5ffc4082af880e87062ca75e0b6e8103a635c242e92",
+    "sequence_number": 1,
+    "success": true,
+    "timestamp_us": 1661321001749133,
+    "version": 4187,
+    "vm_status": "Executed successfully"
+  }
+}
+```
+
+Vérifiez maintenant les soldes :
+
+```bash filename="Terminal"
+aptos move view --function-id 'default::hello_coin::balance' \
+  --args address:test-account
+```
+
+Vous devriez voir `900` pour `test-account` :
+
+```bash
+{
+  "Result": [
+    "900"
+  ]
+}
+```
+
+Et `100` pour le compte par défaut :
+
+```bash filename="Terminal"
+aptos move view --function-id 'default::hello_coin::balance' \
+  --args address:default
+```
+
+```bash
+{
+  "Result": [
+    "100"
+  ]
+}
+```
+
+## Félicitations !
+
+Vous avez maintenant appris les bases de l'utilisation du standard Coin d'Aptos. Vous pouvez maintenant :
+
+- Créer votre propre pièce personnalisée
+- Publier la pièce sur la blockchain
+- Enregistrer des comptes pour recevoir la pièce
+- Minter des pièces vers des comptes
+- Transférer des pièces entre comptes
+- Vérifier les soldes de pièces
+
+## Prochaines étapes
+
+Maintenant que vous connaissez les bases, voici quelques prochaines étapes possibles :
+
+- Explorez le [Standard Actif Fongible](/fr/build/smart-contracts/digital-asset#fungible-asset-standard) plus récent et plus flexible
+- Apprenez sur les [NFT](/fr/build/guides/your-first-nft) et les actifs numériques
+- Créez des [contrats intelligents plus avancés](/fr/build/smart-contracts)
+- Intégrez votre pièce dans une [application front-end](/fr/build/guides/build-e2e-dapp)

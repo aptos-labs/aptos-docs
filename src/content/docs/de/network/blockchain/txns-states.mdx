@@ -1,0 +1,268 @@
+---
+title: "Transaktionen und Zustände"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Die Aptos-Blockchain ist um ein einzigartiges Datenmodell herum entworfen, das Code von Daten trennt und Move-Ressourcen zur Verwaltung von Assets und Zuständen verwendet. Das Verständnis dafür, wie Transaktionen den Zustand ändern, ist entscheidend für die effiziente Entwicklung auf Aptos.
+
+## Transaktionsübersicht
+
+Eine Transaktion auf Aptos ist eine atomare Ausführungseinheit, die folgendes kann:
+
+- Assets zwischen Konten übertragen
+- Neue Code-Module veröffentlichen
+- Funktionen in bestehenden Smart Contracts aufrufen
+- Kontostatus aktualisieren
+
+Jede Transaktion wird entweder vollständig erfolgreich ausgeführt oder schlägt vollständig fehl - es gibt keine partielle Ausführung.
+
+## Transaktionsstruktur
+
+### Transaktionsdaten
+
+Jede Transaktion enthält:
+
+```rust
+pub struct RawTransaction {
+    /// Adresse des Senders.
+    sender: AccountAddress,
+    /// Sequenznummer dieser Transaktion.
+    sequence_number: u64,
+    /// Die Payload der Transaktion.
+    payload: TransactionPayload,
+    /// Maximaler Gaspreis in Einheiten pro Octa Gas.
+    max_gas_amount: u64,
+    /// Maximaler Gaspreis in Octgas pro Gaseinheit.
+    gas_unit_price: u64,
+    /// Ablaufzeit für diese Transaktion.
+    expiration_timestamp_secs: u64,
+    /// Chain-ID zur Unterscheidung zwischen verschiedenen Chains.
+    chain_id: ChainId,
+}
+```
+
+### Payload-Typen
+
+Aptos unterstützt mehrere Typen von Transaktions-Payloads:
+
+1. **Script Function**: Ruft eine öffentliche Funktion in einem veröffentlichten Modul auf
+2. **Package Publication**: Veröffentlicht neue Move-Module
+3. **Script**: Führt ein eigenständiges Move-Skript aus (veraltet)
+
+## Zustandsmodell
+
+### Kontostatus-Struktur
+
+Der Zustand eines Kontos auf Aptos besteht aus:
+
+```move
+struct Account {
+    authentication_key: vector<u8>,
+    sequence_number: u64,
+    guid_creation_num: u64,
+}
+```
+
+Zusätzlich zu dieser zentralen Struktur können Konten enthalten:
+
+- **Module**: Von dem Konto veröffentlichter Move-Code
+- **Ressourcen**: Strukturierte Daten, die unter dem Konto gespeichert sind
+
+### Ressourcen
+
+Ressourcen sind Schlüsseldatenstrukturen in Move, die:
+
+- Nicht implizit kopiert oder gelöscht werden können
+- Explizit verschoben werden müssen
+- Knappheit und Eigentum von Assets garantieren
+
+```move
+struct Coin<phantom CoinType> has store {
+    value: u64,
+}
+```
+
+### Globaler Speicher
+
+Aptos verwendet ein globales Speichermodell, bei dem:
+
+- Jedes Konto seinen eigenen Adressraum besitzt
+- Ressourcen nach Typ und Adresse indiziert werden
+- Code über globale Funktionen auf Ressourcen zugreifen kann
+
+```move
+// Eine Ressource lesen
+acquires<T>(addr: address): &T
+// Eine veränderbare Ressource ausleihen
+acquires<T>(addr: address): &mut T
+// Eine Ressource aus dem globalen Speicher verschieben
+move_from<T>(addr: address): T
+// Eine Ressource in den globalen Speicher verschieben
+move_to<T>(account: &signer, resource: T)
+```
+
+## Transaktionsausführung
+
+### Ausführungspipeline
+
+1. **Validierung**: Signatur und grundlegende Gültigkeit prüfen
+2. **Prolog**: Sequenznummer prüfen und Gebühren abziehen
+3. **Ausführung**: Transaktions-Payload ausführen
+4. **Epilog**: Zustandsänderungen und Gebühren finalisieren
+
+### Atomarität
+
+Aptos garantiert Transaktionsatomarität durch:
+
+- **Transaktionales Speichermodell**: Alle Änderungen werden gepuffert
+- **Commit-Validierung**: Konflikte führen zur Transaktion-Abbruch
+- **Automatisches Rollback**: Fehlgeschlagene Transaktionen hinterlassen keine Änderungen
+
+### Parallele Ausführung
+
+Aptos kann Transaktionen parallel ausführen, indem es:
+
+- Datenabhängigkeiten zur Laufzeit erkennt
+- Transaktionen bei Konflikten neu startet
+- Serielle Reihenfolge für Konsistenz beibehält
+
+<Aside type="note">
+  Parallele Ausführung verbessert den Durchsatz erheblich, ohne die Konsistenz zu beeinträchtigen oder zu erfordern, dass Entwickler explizit Abhängigkeiten spezifizieren.
+</Aside>
+
+## Transaktionszustände
+
+### Mögliche Zustände
+
+Eine Transaktion kann sich in einem der folgenden Zustände befinden:
+
+- **Pending**: Übermittelt, aber noch nicht verarbeitet
+- **Executed**: Erfolgreich ausgeführt und in einen Block aufgenommen
+- **Failed**: Ausführung fehlgeschlagen, aber in einen Block aufgenommen
+- **Expired**: Abgelaufen, bevor sie in einen Block aufgenommen wurde
+
+### Finalität
+
+Auf Aptos:
+
+- Transaktionen sind **final**, sobald sie in einen Block aufgenommen sind
+- Probabilistische Finalität beginnt nach 1 Bestätigung
+- Praktische Finalität wird nach wenigen Sekunden erreicht
+
+## Zustandsberechnung
+
+### Merkle Tree
+
+Der Zustand von Aptos ist als spärlicher Merkle Tree organisiert:
+
+- **Authentifizierung**: Jedes Zustandselement hat einen kryptographischen Beweis
+- **Effizienz**: Nur geänderte Zweige müssen aktualisiert werden
+- **Verifizierbarkeit**: Clients können den Zustand ohne Vertrauen verifizieren
+
+### Zustandshash
+
+Jede Version des Blockchain-Zustands hat einen eindeutigen Hash:
+
+```rust
+pub struct StateCheckpoint {
+    /// Zustandsversion
+    version: Version,
+    /// Root-Hash des Zustandsbaums
+    root_hash: HashValue,
+    /// Zeitstempel des letzten Blocks
+    timestamp_usecs: u64,
+}
+```
+
+## Gas und Gebühren
+
+### Gaseinheiten
+
+Gas auf Aptos deckt ab:
+
+- **Berechnung**: Ausgeführte CPU-Anweisungen
+- **Speicher**: On-chain geschriebene Daten
+- **I/O**: Zugriff auf bestehende Daten
+
+### Optimierungen
+
+Um die Gasnutzung zu optimieren:
+
+1. **Speicherzuweisung minimieren**: Bestehende Ressourcen wiederverwenden
+2. **Effiziente Datennutzung**: Nur notwendige Daten zugreifen
+3. **Vereinfachte Logik**: Rechenkomplexität reduzieren
+
+```move
+// Effizient: In-Place-Änderung
+fun update_balance(account: &signer, new_amount: u64) acquires Balance {
+    let balance = borrow_global_mut<Balance>(signer::address_of(account));
+    balance.value = new_amount;
+}
+
+// Ineffizient: Ressourcen-Neuerstellung
+fun update_balance_inefficient(account: &signer, new_amount: u64) acquires Balance {
+    let old_balance = move_from<Balance>(signer::address_of(account));
+    let new_balance = Balance { value: new_amount };
+    move_to(account, new_balance);
+}
+```
+
+## Beobachtbare Zustandsänderungen
+
+### Events
+
+Transaktionen können Events für beobachtbare Änderungen emittieren:
+
+```move
+#[event]
+struct TransferEvent has store, drop {
+    from: address,
+    to: address,
+    amount: u64,
+}
+
+fun transfer_with_event(from: &signer, to: address, amount: u64) {
+    // Übertragungslogik...
+    
+    event::emit(TransferEvent {
+        from: signer::address_of(from),
+        to,
+        amount,
+    });
+}
+```
+
+### Ressourcenänderungen
+
+Anwendungen können überwachen:
+
+- **Ressourcenerstellung**: Neue Ressourcen zu Konten hinzugefügt
+- **Ressourcenänderung**: Änderungen an bestehenden Ressourcen
+- **Ressourcenlöschung**: Ressourcen von Konten entfernt
+
+<Aside type="tip">
+  Verwenden Sie den Aptos Indexer, um historische Zustandsänderungen und Events effizient über GraphQL-Abfragen abzufragen.
+</Aside>
+
+## Best Practices
+
+### Transaktionsdesign
+
+1. **Idempotenz**: Transaktionen entwerfen, die sicher wiederholt werden können
+2. **Eingabevalidierung**: Alle Eingabeparameter validieren
+3. **Fehlerbehandlung**: Fehlerbedingungen graceful handhaben
+
+### Zustandsverwaltung
+
+1. **Trennung der Anliegen**: Geschäftslogik von Speicher trennen
+2. **Zugriffskontrolle**: Angemessene Berechtigungen implementieren
+3. **Upgradefähigkeit**: Für zukünftige Contract-Upgrades entwerfen
+
+### Leistungsoptimierung
+
+1. **Minimaler Datenzugriff**: Nur notwendige Daten lesen
+2. **Batch-Operationen**: Verwandte Operationen gruppieren
+3. **Engpässe vermeiden**: Für gleichzeitigen Zugriff entwerfen
+
+Durch das Verständnis der Beziehung zwischen Transaktionen und Zustand auf Aptos können Sie effiziente und robuste Anwendungen erstellen, die die einzigartigen Fähigkeiten der Blockchain nutzen.

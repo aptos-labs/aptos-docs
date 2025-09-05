@@ -36,6 +36,11 @@ export function ChatMessage({
                 strong: ({ children }) => (
                   <strong className="chat-message-strong">{children}</strong>
                 ),
+                a: ({ href, children }) => (
+                  <a href={href} target="_blank" rel="noopener noreferrer">
+                    {children}
+                  </a>
+                ),
                 code: ({ className, children }) => {
                   // Check if code is inline by seeing if it's a single line
                   const isInline = !className;

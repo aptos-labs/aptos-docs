@@ -1,0 +1,130 @@
+---
+title: "3. Obtener Datos de la Cadena"
+description: "Aprende a recuperar datos en cadena verificando recursos TodoList e implementando lógica de interfaz de usuario condicional."
+sidebar:
+  label: "3. Obtener Datos"
+---
+
+En el tercer capítulo del tutorial sobre [construir una dapp de extremo a extremo en Aptos](/build/guides/build-e2e-dapp), aprenderás a obtener datos de la cadena.
+
+Nuestra lógica de interfaz de usuario depende de si la cuenta conectada ha creado una lista de tareas. Si la cuenta ha creado una lista de tareas, nuestra aplicación debería mostrar esa lista; si no, la aplicación debería mostrar un botón ofreciendo la opción de crear una nueva lista.
+
+Para eso, primero necesitamos verificar si la cuenta conectada tiene un recurso `TodoList`. En nuestro contrato inteligente, cada vez que alguien crea una lista de tareas creamos y asignamos un recurso `TodoList` a su cuenta.
+
+Para obtener datos de la cadena, podemos usar el [SDK de TypeScript de Aptos](/build/sdks/ts-sdk). El SDK proporciona clases y funciones para que podamos interactuar y consultar fácilmente la cadena de Aptos.
+
+Para comenzar:
+
+1. Detén el servidor local si está ejecutándose.
+2. Importa wallet del proveedor React del adaptador de billetera:
+
+```tsx filename="App.tsx"
+import { useWallet } from "@aptos-labs/wallet-adapter-react";
+```
+
+2. Extrae el objeto account del adaptador de billetera:
+
+```tsx filename="App.tsx"
+function App() {
+	const { account } = useWallet();
+}
+```
+
+El objeto `account` es `null` si no hay una cuenta conectada; cuando una cuenta está conectada, el objeto `account` contiene la información de la cuenta, incluyendo la dirección de la cuenta.
+
+3. A continuación, queremos obtener el recurso TodoList de la cuenta.
+   Comienza importando `useEffect` usando `import { useEffect } from "react";`
+   Agreguemos un hook `useEffect` a nuestro archivo que llamaría a una función para obtener el recurso cada vez que cambie nuestra dirección de cuenta:
+
+```tsx filename="App.tsx"
+function App() {
+  import { useEffect } from "react"
+  ...
+  useEffect(() => {
+    fetchList();
+  }, [account?.address]);
+  ...
+}
+```
+
+4. Antes de crear nuestra función `fetchList`, también creemos un estado local para almacenar si la cuenta tiene una lista:
+
+```tsx filename="App.tsx"
+function App() {
+  ...
+  const [accountHasList, setAccountHasList] = useState<boolean>(false);
+  ...
+}
+```
+
+también importa `useState` usando
+`import { useState, useEffect } from "react";`
+
+5. Importa la variable `MODULE_ADDRESS` usando `import { MODULE_ADDRESS } from "./constants";`. Esta es la dirección del módulo que publicamos en el capítulo anterior.
+6. Importa `aptosClient` usando `import { aptosClient } from "./utils/aptosClient";`. Este es un cliente que `create-aptos-dapp` creó para nosotros para interactuar con la cadena.
+7. Nuestro hook `useEffect` está llamando a una función `fetchList`; vamos a crearla:
+
+```tsx filename="App.tsx"
+const fetchList = async () => {
+  if (!account) return [];
+  const moduleAddress = MODULE_ADDRESS;
+  try {
+    const todoListResource = await aptosClient().getAccountResource(
+      {
+        accountAddress:account?.address,
+        resourceType:`${moduleAddress}::todolist::TodoList`
+      }
+    );
+    setAccountHasList(true);
+  } catch (e: any) {
+    setAccountHasList(false);
+  }
+};
+```
+
+**Repasemos el código de la función `fetchList`.**
+
+Primero, usamos la propiedad `account` de nuestro proveedor de billetera para asegurarnos de que hay una cuenta conectada a nuestra aplicación.
+
+Luego, usamos el método `getAccountResource` de `aptosClient` para obtener el recurso de la cuenta. Esta función toma la dirección de la cuenta y el tipo de recurso que queremos obtener.
+
+Si la función se ejecuta exitosamente, significa que la cuenta tiene un recurso `TodoList`, así que establecemos `accountHasList` a `true`.
+
+Si la función falla (i.e., arroja un error), significa que la cuenta no tiene un recurso `TodoList`, así que establecemos `accountHasList` a `false`.
+
+8. Ahora, actualicemos nuestra interfaz de usuario para mostrar contenido diferente basado en el estado `accountHasList`:
+
+```tsx filename="App.tsx"
+function App() {
+  ...
+  return (
+    <>
+      <TopBanner />
+      <Header />
+      <div className="flex items-center justify-center flex-col">
+        {!accountHasList ? (
+          <div>
+            <h2>Crear una nueva lista</h2>
+            <Button>Agregar nueva lista</Button>
+          </div>
+        ) : (
+          <div>
+            <h2>Mi Lista de Tareas</h2>
+            <p>Aquí estarán tus tareas...</p>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+```
+
+9. No olvides importar el componente `Button`. Agrégalo a tus importaciones:
+
+```tsx filename="App.tsx"
+import { Button } from "@/components/ui/button";
+```
+
+¡Excelente! Ahora nuestra aplicación puede verificar si una cuenta conectada tiene una lista de tareas y mostrar contenido diferente basado en eso.
+
+En el siguiente capítulo, aprenderemos cómo enviar datos a la cadena para crear una nueva lista de tareas.

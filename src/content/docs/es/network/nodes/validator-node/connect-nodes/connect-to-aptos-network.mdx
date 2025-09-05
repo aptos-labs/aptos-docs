@@ -1,0 +1,273 @@
+---
+title: "Conectar a una Red"
+description: "Guía paso a paso para conectar tu validator y VFN a una red de Aptos incluyendo inicialización de pool de stake, actualizaciones de identidad, y unirse al conjunto de validators."
+sidebar:
+  label: "Conectando"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+Este documento describe cómo conectar tu validator y validator fullnode (VFN) a una red de Aptos.
+
+<Aside type="caution">
+  **REQUISITOS MÍNIMOS DE STAKING**<br />
+  Solo deberías seguir estas instrucciones si tu validator puede cumplir los
+  [requisitos mínimos de staking](/network/blockchain/staking#minimum-and-maximum-stake) para la
+  red. El requisito mínimo actual de staking requerido es 1 Millón de tokens APT.
+</Aside>
+
+A alto nivel, hay cuatro pasos requeridos para conectar tus nodos a una red de Aptos:
+
+<Steps>
+  1. Inicializar pool de stake
+
+     Primero, necesitarás inicializar el pool de stake.
+
+  2. Actualizar identidades
+
+     Segundo, necesitarás actualizar las configuraciones de identidad de tu nodo para coincidir con la dirección del pool.
+
+  3. Unirse al conjunto de validators
+
+     Tercero, necesitarás unirte al conjunto de validators.
+
+  4. Inicializar tus nodos
+
+     Finalmente, necesitarás inicializar tus nodos, para que puedan conectarse a la red y comenzar a sincronizar.
+</Steps>
+
+Pasaremos por cada uno de estos pasos en detalle abajo.
+
+## Inicializar el pool de stake
+
+Para comenzar, necesitarás inicializar el pool de staking para tus nodos. Hay dos tipos de pools que
+puedes inicializar, un pool de staking o un pool de delegación. Puedes leer más sobre las diferencias entre estos
+pools en las secciones [Staking](/network/blockchain/staking) y [Staking Delegado](/network/blockchain/delegated-staking).
+
+Para inicializar un pool de staking, sigue las instrucciones en
+[operaciones de pool de staking](/network/nodes/validator-node/connect-nodes/staking-pool-operations#initialize-a-staking-pool). De lo contrario,
+para inicializar un pool de delegación, sigue las instrucciones en
+[operaciones de pool de delegación](/network/nodes/validator-node/connect-nodes/delegation-pool-operations#initialize-a-delegation-pool).
+
+## Actualizar identidades
+
+Antes de unirte al conjunto de validators, necesitarás actualizar los archivos de configuración de identidad de tu nodo para coincidir con la dirección del pool.
+Esto es requerido para asegurar que tus nodos puedan conectarse a otros pares en la red.
+
+<Aside type="caution">
+  **ACTUALIZANDO LA DIRECCIÓN DEL POOL**<br />
+  Es un error común olvidar actualizar la dirección del pool en las configuraciones de identidad del nodo. Si no
+  actualizas la dirección del pool para **tanto tu validator como los archivos de identidad VFN**, tus nodos no podrán conectarse a
+  otros pares en la red.
+</Aside>
+
+Sigue los pasos abajo para actualizar las configuraciones de identidad de tu nodo, dependiendo del método de despliegue que usaste.
+
+### Usando Código Fuente
+
+Si usaste el código fuente para desplegar tus nodos, sigue estos pasos:
+
+1. Detén tu validator y VFN y remueve el directorio de datos de ambos nodos. Asegúrate de remover el
+   archivo `secure-data.json` en el validator, también. Puedes ver la ubicación del archivo `secure-data.json` en el
+   archivo de configuración de tu validator.
+2. Actualiza tu `account_address` en los archivos `validator-identity.yaml` y `validator-fullnode-identity.yaml` a tu **dirección del pool**. No cambies nada más.
+3. Reinicia el validator y VFN.
+
+### Usando Docker
+
+Si usaste Docker para desplegar tus nodos, sigue estos pasos:
+
+1. Detén tu nodo y remueve los volúmenes de datos: `docker compose down --volumes`. Asegúrate de remover el
+   archivo `secure-data.json` en el validator, también. Puedes ver la ubicación del archivo `secure-data.json` en el
+   archivo de configuración de tu validator.
+2. Actualiza tu `account_address` en los archivos `validator-identity.yaml` y `validator-fullnode-identity.yaml` a tu **dirección del pool**.
+   No cambies nada más.
+3. Reinicia los nodos con: `docker compose up`
+
+### Usando Terraform
+
+Si usaste Terraform para desplegar tus nodos (ej., para AWS, Azure o GCP), sigue estos pasos:
+
+1. Incrementa el número `era` en tu configuración de Terraform. Cuando esta configuración se aplique, limpiará los datos.
+
+2. Establece la variable `enable_monitoring` en tu módulo terraform. Por ejemplo:
+
+   ```terraform filename="config.tf"
+   module "aptos-node" {
+     ...
+     enable_monitoring           = true
+     utility_instance_num        = 3  # esto agregará una instancia utilitaria más para ejecutar el componente de monitoreo
+   }
+   ```
+
+3. Aplica los cambios con: `terraform apply` Verás un nuevo pod siendo creado. Ejecuta `kubectl get pods` para verificar.
+
+4. Encuentra la IP/DNS para el balanceador de carga de monitoreo, usando:
+
+   ```shellscript filename="Terminal"
+   kubectl get svc ${WORKSPACE}-mon-aptos-monitoring --output jsonpath='{.status.loadBalancer.ingress[0]}'
+   ```
+
+   Podrás acceder al dashboard de Terraform en `http://<ip/DNS>`.
+
+5. Obtén lo último del módulo terraform `terraform get -update`, y luego aplica el Terraform: `terraform apply`.
+
+6. Descarga los archivos `genesis.blob` y `waypoint.txt` para tu red. Ver [Archivos de Nodo](/network/nodes/configure/node-files-all-networks) para ubicaciones y comandos para descargar estos archivos.
+
+7. Actualiza tu `account_address` en los archivos `validator-identity.yaml` y `validator-fullnode-identity.yaml` a tu **dirección del pool**. No cambies nada más.
+
+8. Recrea los secretos. Asegúrate de que el nombre del secreto coincida con tu número `era`, ej. si tienes `era = 3`, entonces deberías reemplazar el nombre del secreto para que sea:
+
+```shellscript filename="Terminal"
+${WORKSPACE}-aptos-node-0-genesis-e3
+```
+
+```shellscript filename="Terminal"
+export WORKSPACE=<tu nombre de workspace>
+
+kubectl create secret generic ${WORKSPACE}-aptos-node-0-genesis-e2 \
+    --from-file=genesis.blob=genesis.blob \
+    --from-file=waypoint.txt=waypoint.txt \
+    --from-file=validator-identity.yaml=keys/validator-identity.yaml \
+    --from-file=validator-full-node-identity.yaml=keys/validator-full-node-identity.yaml
+```
+
+## Unirse al conjunto de validators
+
+Siguiente, necesitarás unirte al conjunto de validators. Sigue los pasos abajo:
+
+<Aside type="caution">
+  **MAINNET VS TESTNET**<br />
+  Los comandos mostrados abajo son para la mainnet de Aptos. Si te estás conectando a una
+  red diferente, necesitarás cambiar el valor `--network` en los comandos en consecuencia. Puedes ver los
+  valores en [Redes Blockchain de Aptos](/network/nodes/networks) para ver cómo los perfiles pueden configurarse basados en la red.
+</Aside>
+
+### 1. Inicializar el CLI de Aptos
+
+Primero, inicializa el CLI de Aptos con tu clave privada de cuenta de operador. Esta se puede encontrar en tu archivo `private-keys.yaml`
+bajo la entrada `account_private_key`.
+
+Reemplaza `<operator_account_private_key>` con el valor del archivo en el comando abajo:
+
+```shellscript filename="Terminal"
+aptos init --profile mainnet-operator \
+   --network mainnet \
+   --private-key <operator_account_private_key> \
+   --skip-faucet
+```
+
+### 2. Verificar el balance de tu cuenta
+
+Siguiente, asegúrate de tener suficientes fondos para pagar por gas de transacción en la red. Puedes verificar esto usando el CLI, ejecutando
+el comando abajo:
+
+```shellscript filename="Terminal"
+aptos account list --profile mainnet-operator
+```
+
+Esto te mostrará el balance de monedas que tienes en la cuenta validator. Verás una salida como abajo:
+
+```json filename="Terminal"
+"coin": {
+   "value": "5000"
+}
+```
+
+### 3. Actualizar direcciones de red on-chain
+
+Siguiente, necesitarás actualizar las direcciones de red para tu validator y VFN. Esto es requerido para asegurar que tus nodos
+puedan conectarse a otros pares en la red. Primero, obtén la dirección del pool para tus nodos, ejecutando el comando abajo.
+Nota: la dirección del propietario es la dirección de la cuenta que posee el pool de stake, y se usó para inicializar el pool de stake.
+
+```shellscript filename="Terminal"
+aptos node get-stake-pool --owner-address <owner_address>
+```
+
+Usando la dirección del pool del comando anterior, necesitarás actualizar las direcciones de red para tus nodos. Puedes
+hacer esto ejecutando el comando abajo. Nota que requiere el archivo `operator.yaml`, que se creó cuando primero
+desplegaste tus nodos.
+
+```shellscript filename="Terminal"
+aptos node update-validator-network-addresses  \
+   --pool-address <pool-address> \
+   --operator-config-file ~/$WORKSPACE/$USERNAME/operator.yaml \
+   --profile mainnet-operator
+```
+
+<Aside type="note">
+  **ACTUALIZANDO LAS DIRECCIONES DE RED**<br />
+  Actualizar tus direcciones de red on-chain requiere esperar a que comience la siguiente época. Esto es porque las direcciones de red
+  se actualizan al final de la época actual. Antes de la siguiente época, tus nodos no podrán conectarse
+  a otros pares en la red.
+</Aside>
+
+### 4. Actualizar clave de consenso on-chain
+
+Siguiente, necesitarás actualizar la clave de consenso para tus nodos. Esto es requerido para asegurar que tus nodos puedan
+participar en consenso. Puedes hacer esto ejecutando el comando abajo. Nota que requiere la dirección del pool y
+el archivo `operator.yaml` (similar a arriba).
+
+```shellscript filename="Terminal"
+aptos node update-consensus-key  \
+   --pool-address <pool-address> \
+   --operator-config-file ~/$WORKSPACE/$USERNAME/operator.yaml \
+   --profile mainnet-operator
+```
+
+<Aside type="note">
+  **ACTUALIZANDO LA CLAVE DE CONSENSO**<br />
+  Actualizar tu clave de consenso on-chain requiere esperar a que comience la siguiente época. Esto es porque la clave de consenso
+  se actualiza al final de la época actual. Antes de la siguiente época, tus nodos no podrán participar en consenso.
+</Aside>
+
+### 5. Unirse al conjunto de validators
+
+Finalmente, necesitarás unirte al conjunto de validators. Puedes hacer esto ejecutando el comando abajo:
+
+```shellscript filename="Terminal"
+aptos node join-validator-set \
+   --pool-address <pool-address> \
+   --profile mainnet-operator
+```
+
+El conjunto de validators se actualiza al final de cada época. Necesitarás esperar a que comience la siguiente época antes de que tu
+nodo validator pueda unirse al conjunto de validators.
+
+<Aside type="note">
+  **IDENTIFICANDO LA SIGUIENTE ÉPOCA**<br />
+  Puedes identificar la siguiente época verificando el [Explorador de Aptos](https://explorer.aptoslabs.com/validators/all?network=mainnet) o ejecutando el comando `aptos node get-stake-pool`.
+</Aside>
+
+### 6. Verificar el conjunto de validators
+
+Cuando ejecutes el comando para unirte al conjunto de validators, tu validator estará en un estado "Pending Active" hasta que
+ocurra la siguiente época. Puedes ejecutar el comando abajo para buscar tu validator en la lista `pending_active`.
+
+```shellscript filename="Terminal"
+aptos node show-validator-set --profile mainnet-operator | jq -r '.Result.pending_active' | grep <pool_address>
+```
+
+Cuando ocurra la siguiente época, el nodo se moverá a la lista `active_validators`. Ejecuta el comando
+abajo para ver tu validator en la lista "active\_validators":
+
+```shellscript filename="Terminal"
+aptos node show-validator-set --profile mainnet-operator | jq -r '.Result.active_validators' | grep <pool_address>
+```
+
+## Inicializar tus nodos
+
+Después de unirte al conjunto de validators y actualizar las configuraciones de identidad de tu nodo para coincidir con la dirección del pool,
+necesitarás inicializar tus nodos para conectarse a la red. Para hacer esto, sigue los pasos abajo:
+
+1. Inicia el VFN. El VFN se conectará a la red y comenzará a sincronizar. Ver [Sincronización de Estado](/network/nodes/configure/state-sync) para más información.
+2. Una vez que el VFN esté sincronizado, reinicia el validator. Se sincronizará desde el VFN y luego se conectará a otros validators
+   en la red y comenzará a participar en consenso.
+
+Una vez que ambos pasos estén completos, tus nodos estarán conectados a la red y participando en consenso.
+
+## Siguientes pasos
+
+¡Felicitaciones! Has conectado exitosamente tus nodos a la red de Aptos. Para verificar que tus nodos estén ejecutándose
+correctamente, visita el documento [Salud del Nodo](/network/nodes/validator-node/verify-nodes/node-liveness-criteria). Este documento describe cómo puedes verificar y
+monitorear la salud de tu validator y VFN, incluyendo una sección de verificación inicial del nodo.

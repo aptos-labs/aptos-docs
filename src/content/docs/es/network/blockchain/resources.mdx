@@ -1,0 +1,64 @@
+---
+title: "Recursos Move"
+description: "Aprende sobre Recursos en Move en Aptos, cómo difieren de instancias, sus modelos de permisos, y mecanismos de almacenamiento para gestionar estado on-chain."
+sidebar:
+  label: "Recursos"
+---
+
+En Aptos, el estado on-chain está organizado en recursos y módulos. Estos luego se almacenan dentro de las cuentas individuales. Esto es diferente de otras blockchains, como Ethereum, donde cada contrato inteligente mantiene su propio espacio de almacenamiento. Ver [Cuentas](/network/blockchain/accounts) para más detalles sobre cuentas.
+
+## Recursos vs Instancias
+
+Los módulos Move definen definiciones de struct. Las definiciones de struct pueden incluir habilidades como `key` o `store`. Los recursos son instancias de struct con la habilidad `key` que se almacenan en almacenamiento global o directamente en una cuenta. La habilidad `store` permite que instancias de struct se almacenen dentro de recursos. Un ejemplo aquí es cómo se almacena la moneda APT: CoinStore es el recurso que contiene la moneda APT, mientras que la Coin en sí es una instancia:
+
+```move
+/// Un contenedor de un tipo de moneda específico y manejadores de eventos asociados.
+/// Estos se mantienen en un solo recurso para asegurar localidad de datos.
+struct CoinStore<phantom CoinType> has key {
+    coin: Coin<CoinType>,
+}
+
+/// Estructura principal que representa una moneda/token en custodia de una cuenta.
+struct Coin<phantom CoinType> has store {
+    /// Cantidad de moneda que tiene esta dirección.
+    value: u64,
+}
+```
+
+La instancia Coin puede sacarse del CoinStore con el permiso de la cuenta propietaria y transferirse fácilmente a otro recurso CoinStore. También puede mantenerse en cualquier otro recurso personalizado, si la definición lo permite, por ejemplo:
+
+```move
+struct CustomCoinBox<phantom CoinType> has key {
+    coin: Coin<CoinType>,
+}
+```
+
+## Definir recursos y objetos
+
+Todas las instancias y recursos se definen dentro de un módulo que se almacena en una dirección. Por ejemplo `0x1234::coin::CoinStore<0x1234::coin::SomeCoin>` se representaría como:
+
+```move
+module 0x1234::coin {
+    struct CoinStore<phantom CoinType> has key {
+        coin: Coin<CoinType>,
+    }
+
+    struct SomeCoin { }
+}
+```
+
+En este ejemplo, `0x1234` es la dirección, `coin` es el módulo, `CoinStore` es un struct que puede almacenarse como recurso, y `SomeCoin` es un struct que es poco probable que se represente como instancia. El uso del tipo phantom permite que existan muchos tipos distintos de recursos `CoinStore` con diferentes parámetros `CoinType`.
+
+## Permisos de Instancias incluyendo Recursos
+
+Los permisos de recursos y otras instancias están dictados por el módulo donde se define el struct. Por ejemplo, una instancia dentro de un recurso puede accederse e incluso removerse del recurso, pero el estado interno no puede cambiarse sin permiso del módulo donde se define el struct de la instancia.
+
+La propiedad, por otro lado, se significa almacenando un recurso bajo una cuenta o por lógica dentro del módulo que define el struct.
+
+## Ver un recurso
+
+Los recursos se almacenan dentro de cuentas. Los recursos pueden localizarse buscando dentro de la cuenta del propietario el recurso en su ruta de consulta completa incluyendo la cuenta donde se almacena así como su dirección y módulo. Los recursos pueden verse en el [Explorador de Aptos](https://explorer.aptoslabs.com/) buscando la cuenta propietaria o obtenidos directamente de la API de un fullnode.
+
+## Cómo se almacenan los recursos
+
+El módulo que define un struct especifica cómo pueden almacenarse las instancias. Por ejemplo, los eventos para depositar un token pueden almacenarse en la cuenta receptora donde ocurre el depósito o en la cuenta donde se despliega el módulo del token. En general, almacenar datos en cuentas de usuario individuales permite un mayor nivel de eficiencia de ejecución ya que no habría conflictos de lectura/escritura de estado entre transacciones de diferentes cuentas, permitiendo ejecución paralela sin problemas.

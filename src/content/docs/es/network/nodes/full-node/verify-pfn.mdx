@@ -1,0 +1,105 @@
+---
+title: "Verificar un PFN"
+description: "Monitorea y verifica la operación de tu public fullnode (PFN) verificando el estado de sincronización, conexiones de red, y métricas de almacenamiento."
+sidebar:
+  label: "Verificar PFN"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Después de desplegar tu PFN, puedes verificar que esté operando correctamente verificando varias de las métricas del PFN.
+Este documento describe los tipos comunes de verificaciones que podrías desear realizar.
+
+<Aside type="note">
+  Puedes aprender más sobre las métricas de Aptos en los documentos del [Servicio de Inspección de Nodos](/network/nodes/measure/node-inspection-service).
+</Aside>
+
+### Verificar sincronización
+
+Durante la sincronización inicial de tu PFN, puede haber mucha data para transferir (lee más sobre cómo funciona la sincronización de estado
+en la guía de [sincronización de estado](/network/nodes/configure/state-sync)). Puedes monitorear el progreso de sincronización de estado
+consultando el puerto de métricas para ver a qué versión tu nodo está actualmente sincronizado. Ejecuta el siguiente comando de ejemplo
+para ver la versión actualmente sincronizada de tu nodo:
+
+```shellscript filename="Terminal"
+curl 127.0.0.1:9101/metrics 2> /dev/null | grep "aptos_state_sync_version{.*\"synced\"}" | awk '{print $2}'
+```
+
+El comando mostrará la versión sincronizada actual de tu nodo. Por ejemplo:
+
+```shellscript filename="Terminal"
+71000
+```
+
+Compara la versión sincronizada devuelta por este comando (ej., `71000`) con la versión más alta mostrada en la
+[página del explorador de Aptos](https://explorer.aptoslabs.com/?network=mainnet). Si tu nodo se está poniendo al día con la versión más alta,
+está sincronizando correctamente. Está bien si la página del explorador difiere por unas pocas versiones, ya que los nodos del explorador
+pueden sincronizar con alguna varianza.
+
+<Aside type="caution">
+  **¿Usando sincronización rápida?**<br />
+  Si tu nodo está sincronizando rápido, el comando puede mostrar `0` hasta que finalmente se ponga al día. Para verificar que el nodo está
+  sincronizando rápido, ejecuta el siguiente comando:
+
+  ```shellscript filename="Terminal"
+  curl 127.0.0.1:9101/metrics 2> /dev/null | grep "aptos_state_sync_version{.*\"synced_states\"}" | awk '{print $2}'
+  ```
+
+  Esto debería mostrar un número creciente de estados sincronizados. Puede tomar varias horas para que tu nodo sincronice rápido a la
+  última versión. Eventualmente, una vez que la sincronización rápida esté completa, el comando `aptos_state_sync_version{.*"synced"}`
+  devolverá la versión sincronizada actual de tu nodo.
+
+  Puedes leer más sobre sincronización rápida aquí: [Inicialización de sincronización de estado](/network/nodes/configure/state-sync#bootstrapping-phase).
+</Aside>
+
+### (Opcional) Verificar conexiones de red salientes
+
+Si deseas, también puedes verificar las conexiones de red salientes para tu PFN. El número de conexiones de red salientes
+debería ser más de `0` para PFNs saludables. Ejecuta el siguiente comando:
+
+```shellscript filename="Terminal"
+curl 127.0.0.1:9101/metrics 2> /dev/null | grep "aptos_connections{direction=\"outbound\""
+```
+
+El comando anterior mostrará el número de conexiones de red salientes para tu nodo. Por ejemplo:
+
+```shellscript filename="Terminal"
+curl 127.0.0.1:9101/metrics 2> /dev/null | grep "aptos_connections{direction=\"outbound\""
+aptos_connections{direction="outbound",network_id="Public",peer_id="aabd651f",role_type="full_node"} 3
+```
+
+Si el número de conexiones salientes devueltas es `0`, entonces significa que tu nodo no puede conectarse a la blockchain de Aptos. Si esto te sucede, sigue estos pasos para resolver el problema:
+
+1. Actualiza tu nodo a la última versión siguiendo [Actualizar tu Nodo](/network/nodes/full-node/modify/update-fullnode-with-new-releases).
+2. Remueve cualquier par `seed` que puedas haber agregado a tu archivo de configuración. Las semillas pueden estar impidiendo que te
+   conectes a la red. Los pares semilla se discuten en la sección [Conectar tu PFN a pares semilla](/network/nodes/full-node/modify/fullnode-network-connections#connecting-to-seed-peers).
+3. Asegúrate de que hayas usado los archivos correctos `genesis.blob` y `waypoint.txt` para tu red. Este es un error común.
+
+### (Opcional) Examinar tamaño del ledger de Docker
+
+Si estás ejecutando tu PFN usando Docker, puedes monitorear el tamaño del ledger de blockchain entrando al contenedor Docker
+y verificando el tamaño. Esto te permitirá ver cuánto almacenamiento está consumiendo actualmente el ledger de blockchain.
+
+- Primero, ejecuta `docker container ls` en tu terminal y copia la salida del campo NAME. Esta será una cadena similar a `public_full_node_fullnode_1`.
+- Siguiente, ejecuta estos comandos para verificar el tamaño de almacenamiento consumido por el ledger, usando el campo NAME que copiaste en lugar de `public_full_node_fullnode_1`:
+
+```shellscript filename="Terminal"
+# Obtener el ID del contenedor:
+id=$(docker container ls | grep public_full_node_fullnode_1 | grep -oE "^[0-9a-zA-Z]+")
+
+# Entrar al contenedor:
+docker exec -it $id /bin/bash
+
+# Observar el tamaño del volumen (ledger):
+du -cs -BM /opt/aptos/data
+```
+
+[rest_spec]: https://github.com/aptos-labs/aptos-core/tree/main/api
+
+[devnet_genesis]: https://devnet.aptoslabs.com/genesis.blob
+
+[devnet_waypoint]: https://devnet.aptoslabs.com/waypoint.txt
+
+[aptos-labs/aptos-core]: https://github.com/aptos-labs/aptos-core.git
+
+[status dashboard]: https://status.devnet.aptos.dev

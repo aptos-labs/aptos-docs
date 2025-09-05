@@ -1,0 +1,129 @@
+---
+title: "Ejecutar un Fullnode Indexer"
+description: "Documentación de configuración de fullnode indexer legacy - deprecado en favor de la arquitectura moderna de Transaction Stream Service"
+sidebar:
+  label: "Fullnode Indexer (Legacy)"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="caution">
+  Esta es documentación para el indexer legacy. Para aprender cómo ejecutar la infraestructura subyacente para la pila de indexer más reciente, ver [Transaction Stream Service](/build/indexer/txn-stream).
+</Aside>
+
+<Aside type="caution">
+  Los pasos de instalación abajo están verificados solo en macOS con Apple Silicon. Podrían requerir ajustes menores al ejecutar en otras builds.
+</Aside>
+
+## Resumen
+
+Para ejecutar un fullnode indexer, estos son los pasos en resumen:
+
+1. Asegurar que tienes todas las herramientas y paquetes requeridos descritos abajo en este documento.
+2. Seguir las instrucciones para [configurar un fullnode público](/network/nodes/full-node/verify-pfn) pero no iniciar el fullnode aún.
+3. Editar el `fullnode.yaml` como se describe abajo en este documento.
+4. Ejecutar el fullnode indexer según las instrucciones abajo.
+
+## Prerrequisitos
+
+Instala los paquetes abajo. Nota, puedes haber instalado ya muchos de estos mientras [preparabas tu entorno de desarrollo](/network/nodes/building-from-source). Puedes confirmar ejecutando `which command-name` y asegurando que el paquete aparezca en la salida (aunque `libpq` no será devuelto incluso cuando esté instalado).
+
+> Importante: Si estás en macOS, necesitarás [instalar Docker siguiendo la guía oficial](https://docs.docker.com/desktop/install/mac-install/) en lugar de `brew`.
+
+Para un fullnode indexer de Aptos, instala estos paquetes:
+
+- [`brew`](https://brew.sh/) - `/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"` Ejecuta los comandos emitidos en la salida para agregar el comando a tu path e instalar cualquier dependencia
+- [`cargo` Rust package manager](https://www.rust-lang.org/tools/install) - `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
+- [`docker`](https://docs.docker.com/get-docker/) - `brew install docker`
+- [libpq Postgres C API library containing the `pg_ctl` command](https://formulae.brew.sh/formula/libpq) - `brew install libpq`
+  Asegurar de realizar todos los comandos export después de la instalación.
+- [`postgres` PostgreSQL server](https://www.postgresql.org/) - `brew install postgresql`
+- [`diesel`](https://diesel.rs/) - `brew install diesel`
+
+## Configurar la base de datos
+
+1. Iniciar el servidor PostgreSQL:
+   `brew services start postgresql`
+2. Asegurar que puedas ejecutar `psql postgres` y luego salir del prompt ingresando: `\q`
+3. Crear un usuario PostgreSQL `postgres` con el comando `createuser` (encuéntralo con `which`):
+   ```shellscript filename="Terminal"
+   /path/to/createuser -s postgres
+   ```
+4. Clonar el repositorio `aptos-core` si no lo has hecho ya:
+   ```shellscript filename="Terminal"
+   git clone https://github.com/aptos-labs/aptos-core.git
+   ```
+5. Navegar (o `cd`) al directorio `aptos-core/crates/indexer`.
+6. Crear el esquema de base de datos:
+   ```shellscript filename="Terminal"
+   diesel migration run --database-url postgresql://localhost/postgres
+   ```
+   Esto creará un esquema de base de datos con el subdirectorio `migrations` ubicado en este directorio `aptos-core/crates/indexer`. Si por alguna razón esta base de datos ya está en uso, prueba una base de datos diferente. Por ejemplo: `DATABASE_URL=postgres://postgres@localhost:5432/indexer_v2 diesel database reset`
+
+## Iniciar el fullnode indexer
+
+1. Seguir las instrucciones para configurar un [fullnode público](/network/nodes/full-node/verify-pfn) y preparar la configuración, pero **no** iniciar aún el indexer (con `cargo run` o `docker run`).
+2. Obtener la imagen Docker del indexer más reciente con:
+   ```shellscript filename="Terminal"
+   docker pull aptoslabs/validator:nightly_indexer
+   ```
+3. Editar el `./fullnode.yaml` y agregar la siguiente configuración:
+
+   ```yaml filename="fullnode.yaml"
+   storage:
+     enable_indexer: true
+     # Esto es para evitar que el nodo sea podado
+     storage_pruner_config:
+       ledger_pruner_config:
+         enable: false
+
+   indexer:
+     enabled: true
+     postgres_uri: "postgres://postgres@localhost:5432/postgres"
+     processor: "default_processor"
+     check_chain_id: true
+     emit_every: 500
+   ```
+
+<Aside type="note">
+  Bootstrapping el fullnode
+
+  En lugar de sincronizar tu fullnode indexer desde génesis, lo que puede tomar un largo período de tiempo, puedes elegir bootstrapear tu fullnode usando datos de respaldo antes de iniciarlo. Para hacerlo, sigue las instrucciones para [restaurar desde un respaldo](/network/nodes/bootstrap-fullnode/aptos-db-restore).
+
+  Nota: los indexers no pueden ser bootstrapeados usando [un snapshot](/network/nodes/bootstrap-fullnode) o [fast sync](/network/nodes/configure/state-sync#fast-syncing).
+</Aside>
+
+1. Ejecutar el fullnode indexer con ya sea `cargo run` o `docker run` dependiendo de tu configuración. Recuerda suministrar los argumentos que necesitas para tu nodo específico:
+   ```shellscript filename="Terminal"
+   docker run -p 8080:8080 \
+     -p 9101:9101 -p 6180:6180 \
+     -v $(pwd):/opt/aptos/etc -v $(pwd)/data:/opt/aptos/data \
+     --workdir /opt/aptos/etc \
+     --name=aptos-fullnode aptoslabs/validator:nightly_indexer aptos-node \
+     -f /opt/aptos/etc/fullnode.yaml
+   ```
+   o:
+   ```shellscript filename="Terminal"
+   cargo run -p aptos-node --features "indexer" --release -- -f ./fullnode.yaml
+   ```
+
+## Reiniciar el indexer
+
+Para reiniciar el servidor PostgreSQL:
+
+1. [Apagar el servidor](https://www.postgresql.org/docs/8.1/postmaster-shutdown.html) buscando el proceso `postmaster` y matándolo:
+
+   ```shellscript filename="Terminal"
+   ps -ef | grep -i postmaster
+   ```
+
+2. Copiar el ID de proceso (PID) para el proceso y pasarlo al siguiente comando para apagarlo:
+
+   ```shellscript filename="Terminal"
+   kill -INT PID
+   ```
+
+3. Reiniciar el servidor PostgreSQL con:
+   ```shellscript filename="Terminal"
+   brew services restart postgresql@14
+   ```

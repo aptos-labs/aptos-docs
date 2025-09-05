@@ -1,0 +1,163 @@
+---
+title: "Personalizar Redes PFN"
+description: "Opciones avanzadas de configuración de red para public fullnodes (PFN) incluyendo pares semilla, identidades estáticas, y configuraciones de red privada."
+sidebar:
+  label: "Configuración de Red"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="caution">
+  **Personalización avanzada**<br />
+  La mayoría de operadores PFN no necesitarán personalizar las conexiones de red de su PFN. Esto solo es requerido
+  para casos de uso avanzados, como conectarse a pares específicos, o configurar un PFN privado. Si no
+  tienes un caso de uso relevante, deberías evitar hacer cambios a las conexiones de red de tu PFN.
+</Aside>
+
+Cuando ejecutes un PFN, puedes configurar las conexiones de red de tu nodo para varios propósitos diferentes.
+Por ejemplo, puedes agregar un par semilla a la configuración de tu nodo para conectar tu nodo a un par específico
+de tu elección. O puedes aprovechar una identidad de red estática para tu PFN para permitir que otros nodos
+se conecten a ti, como se describe en [Generar una Identidad PFN](/network/nodes/full-node/modify/network-identity-fullnode).
+
+Este documento describe cómo configurar la red de tu PFN para diferentes casos de uso, incluyendo:
+
+- Permitir que nodos se conecten a tu PFN.
+- Conectar tu PFN a pares semilla.
+- Configurar acceso prioritario para otros PFNs.
+- Configurar tu PFN como un PFN privado.
+
+## Permitir conexiones PFN
+
+<Aside type="note">
+  **Generar una identidad estática**<br />
+  Antes de permitir que otros nodos se conecten a tu PFN, necesitarás crear una identidad estática. Ver [Generar una Identidad PFN](/network/nodes/full-node/modify/network-identity-fullnode).
+</Aside>
+
+Una vez que inicies tu PFN con una identidad estática puedes permitir que otros se conecten a tu PFN:
+
+<Aside type="note">
+  **Configuraciones de puerto por defecto**<br />
+  En los pasos abajo, los números de puerto usados son solo para ilustración. Puedes usar tu elección de números de puerto.
+  Ver [Requisitos PFN](/network/nodes/full-node/pfn-requirements) para más información sobre configuraciones de puerto.
+</Aside>
+
+- Asegúrate de abrir el puerto TCP de la red en la que deseas permitir conexiones externas (ej., `6180` o `6182`).
+  Esto es requerido para permitir que otros nodos se conecten a tu PFN.
+- Si estás usando Docker, simplemente agrega `- "6180:6180"` o `- "6182:6182"` bajo puertos en tu archivo `docker-compose.yaml`.
+- Comparte tu identidad de red estática PFN con otros. Entonces pueden usarla en la clave `seeds` del archivo de
+  configuración de su nodo para conectarse a tu PFN. Ver la sección abajo.
+- Asegúrate de que el número de puerto que pongas en las `addresses` coincida con el que tienes en el archivo de configuración PFN
+  (por ejemplo, `6180` o `6182`).
+
+<Aside type="note">
+  Puedes compartir la identidad de red de tu PFN en nuestro Discord para anunciar tu nodo para que otros se conecten. Nota:
+  esto es opcional (¡y no requerido!).
+</Aside>
+
+Los fragmentos abajo muestran las entradas y formato del archivo de configuración para permitir que otros nodos se conecten a tu PFN.
+El formato de cada entrada de par semilla debería tener un `peer_id` único, lista de `addresses`, y un `role`:
+
+```yaml filename="docker-compose.yaml"
+<Peer_ID>:
+  addresses:
+  # con DNS
+  - "/dns4/<DNS_Name>/tcp/<Port_Number>/noise-ik/<Public_Key>/handshake/0"
+  role: Upstream
+<Peer_ID>:
+  addresses:
+  # con IP
+  - "/ip4/<IP_Address>/tcp/<Port_Number>/noise-ik/<Public_Key>/handshake/0"
+  role: Upstream
+```
+
+Por ejemplo:
+
+```yaml filename="docker-compose.yaml"
+B881EA2C174D8211C123E5A91D86227DB116A44BB345A6E66874F83D8993F813:
+  addresses:
+  - "/dns4/pfn0.node.devnet.aptoslabs.com/tcp/6182/noise-ik/B881EA2C174D8211C123E5A91D86227DB116A44BB345A6E66874F83D8993F813/handshake/0"
+  role: "Upstream"
+B881EA2C174D8211C123E5A91D86227DB116A44BB345A6E66874F83D8993F813:
+  addresses:
+  - "/ip4/100.20.221.187/tcp/6182/noise-ik/B881EA2C174D8211C123E5A91D86227DB116A44BB345A6E66874F83D8993F813/handshake/0"
+  role: "Upstream"
+```
+
+## Conectarse a pares semilla
+
+<Aside type="caution">
+  **Las semillas no son requeridas**<br />
+  Los pares semilla usualmente no son requeridos para que tu PFN se conecte a cualquier red de Aptos. Todas las redes de Aptos son automáticamente
+  descubribles. Agregar pares semilla solo debería hacerse si deseas conectarte a un par específico o conjunto de pares (ej.,
+  si deseas sincronizar datos históricos que no están disponibles a través de pares regulares).
+</Aside>
+
+Para agregar pares semilla a tu PFN, las direcciones de los pares semilla deberían agregarse a tu archivo de configuración PFN, bajo
+la clave `seeds` en la configuración de red pública. Cada entrada de par semilla debería tener un `peer_id` único, lista de
+`addresses`, y un `role` (ej., `Upstream`). El fragmento abajo muestra un ejemplo
+de un archivo de configuración con pares semilla agregados manualmente:
+
+```yaml
+full_node_networks:
+  - discovery_method: "onchain"
+    listen_address: ...
+    seeds: # Todas las semillas se declaran abajo
+      bb14af025d226288a3488b4433cf5cb54d6a710365a2d95ac6ffbd9b9198a86a:
+        addresses:
+          - "/dns4/pfn0.node.devnet.aptoslabs.com/tcp/6182/noise-ik/bb14af025d226288a3488b4433cf5cb54d6a710365a2d95ac6ffbd9b9198a86a/handshake/0"
+        role: "Upstream"
+      7fe8523388084607cdf78ff40e3e717652173b436ae1809df4a5fcfc67f8fc61:
+        addresses:
+          - "/dns4/pfn1.node.devnet.aptoslabs.com/tcp/6182/noise-ik/7fe8523388084607cdf78ff40e3e717652173b436ae1809df4a5fcfc67f8fc61/handshake/0"
+        role: "Upstream"
+      f6b135a59591677afc98168791551a0a476222516fdc55869d2b649c614d965b:
+        addresses:
+          - "/dns4/pfn2.node.devnet.aptoslabs.com/tcp/6182/noise-ik/f6b135a59591677afc98168791551a0a476222516fdc55869d2b649c614d965b/handshake/0"
+        role: "Upstream"
+```
+
+## Configurar acceso prioritario
+
+Para configurar tu PFN para permitir que otros nodos se conecten a él incluso cuando tu PFN haya alcanzado el número máximo
+de conexiones de red disponibles, sigue este método:
+
+En el archivo de configuración para tu PFN agrega el otro nodo como un par semilla con el rol `Downstream`.
+Esto permitirá al otro nodo conectarse directamente a ti con acceso prioritario. Por ejemplo:
+
+```yaml
+seeds:
+  <peer id del otro nodo>
+    addresses:
+    - <dirección del otro nodo>
+    role: Downstream # Permite al nodo conectarse a nosotros
+```
+
+Similarmente, para hacer que el otro nodo marque a tu PFN, agrega lo siguiente al archivo de configuración del otro nodo:
+
+```yaml
+seeds:
+  <peer id de tu nodo>
+    addresses:
+    - <dirección de tu nodo>
+    role: PreferredUpstream # Permite al nodo conectarse al par semilla
+```
+
+## Configurar PFNs privados
+
+También puedes configurar tu PFN como un PFN privado si lo deseas. Lo que esto significa es que tu PFN
+no permitirá conexiones no autenticadas, específicamente, cualquier nodo que no sea un validator, VFN o par semilla
+no podrá conectarse a tu PFN.
+
+Para configurar tu PFN como un PFN privado, agrega lo siguiente a tu archivo de configuración PFN. Nota, deberías
+agregar esto a la entrada de red pública en la configuración `full_node_networks`:
+
+```yaml
+...
+full_node_networks:
+  - discovery_method: "onchain"
+    listen_address: ...
+    max_inbound_connections: 0  # Previene cualquier conexión entrante no autenticada
+    mutual_authentication: true  # Requiere conexiones autenticadas
+    ...
+...
+```

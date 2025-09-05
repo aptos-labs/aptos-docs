@@ -1,0 +1,187 @@
+---
+title: "Construir y Enviar Transacciones"
+description: "Construye y envía transacciones en Aptos usando la API expresiva y type-safe estilo DSL de Kaptos"
+sidebar:
+  label: "Construir Transacciones"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+Kaptos cuenta con una API expresiva y type-safe estilo DSL para construir y enviar
+transacciones en cadena. Esta guía te llevará a través del proceso de construir
+y enviar transacciones usando Kaptos.
+
+El flujo típico para enviar una transacción es el siguiente:
+
+1. Crear una cuenta (si no tienes una ya).
+2. Construir la transacción.
+3. Firmar la transacción.
+4. Enviar la transacción.
+
+<Steps>
+  1) Crear una Cuenta
+
+     Para crear una nueva cuenta, primero generas nuevas credenciales luego financias la
+     cuenta. En devnet, puedes financiar una cuenta programáticamente pidiendo
+     a un "faucet".
+
+     ```kotlin
+     val aliceAccount = Account.generate()
+     val bobAccount = Account.generate()
+     ```
+
+     O
+
+     Si tienes una clave privada, puedes usarla para crear un objeto `Account` para gestionar
+     esas credenciales.
+
+     ```kotlin
+     val privateKey = Ed25519PrivateKey("myEd25519privatekeystring")
+     val account = Account.fromPrivateKey(privateKey)
+     ```
+
+     En testnet puedes acuñar en la [página de acuñar](/network/faucet).
+
+  2) Construir la Transacción
+
+     Kaptos proporciona un método `buildTransaction.simple` para construir una transacción. Puedes especificar
+     el remitente, datos de función de entrada como el nombre de función, argumentos de tipo, y argumentos de función.
+     También puedes configurar la transacción con el precio de gas y cantidad máxima de gas. Sin embargo, valores predeterminados
+     razonables se proporcionan para estos valores en caso de que no los especifiques.
+
+     ```kotlin
+     val txn = aptos.buildTransaction.simple(
+         sender = aliceAccount.accountAddress,
+         data = entryFunctionData {
+             function = "0x1::coin::transfer"
+             typeArguments = typeArguments {
+                 +TypeTagStruct("0x1::aptos_coin::AptosCoin")
+             }
+             functionArguments = functionArguments {
+                 +bobAccount.accountAddress
+                 +U64(SEND_AMOUNT)
+             }
+         },
+     )
+     ```
+
+  3) Firmar la Transacción
+
+     Una vez que hayas construido una transacción, puedes firmarla usando el método `sign`.
+
+     ```kotlin
+       val aliceAuthenticator = aptos.sign(
+           sender = aliceAccount,
+           transaction = txn,
+       )
+     ```
+
+  4) Enviar la Transacción
+
+     Finalmente, puedes enviar la transacción a la red usando el método `submit`.
+
+     ```kotlin
+     val committedTransaction = aptos.submitTransaction.simple(
+         transaction = signedTransaction,
+         senderAuthenticator = aliceAuthenticator,
+     )
+     ```
+
+     <Aside type="note" emoji="ℹ️">
+       Puedes colapsar los pasos de firmado y envío en uno usando el método `signAndSubmitTransaction`.
+
+       ```kotlin
+       val executedTransaction = aptos.signAndSubmitTransaction(
+           signer = aliceAccount,
+           transaction = signedTransaction,
+       )
+       ```
+     </Aside>
+
+  5) Esperar a que la Transacción se Ejecute
+
+     Luego puedes esperar a que la transacción sea ejecutada usando el método `waitForTransaction`.
+
+     ```kotlin
+     val executedTransaction = aptos.waitForTransaction(HexInput.fromString(committedTransaction.expect("Transaction failed").hash))
+     ```
+</Steps>
+
+### Ejemplo Completo de Kotlin
+
+Lo siguiente es un ejemplo completo de cómo construir y enviar una transacción para transferir APT:
+
+```kotlin filename="transaction.kt"
+
+const val FUNDING_AMOUNT = 100_000_000L
+const val SEND_AMOUNT_APT = 0.5f
+const val UNIT_CONVERSION = 100_000_000
+const val SEND_AMOUNT_UNITS = (SEND_AMOUNT_APT * UNIT_CONVERSION)
+const val SEND_AMOUNT = 1_000_000UL
+
+/**
+ * Este ejemplo demuestra cómo transferir APT de una cuenta a otra.
+ *
+ * Cada ejecución genera y crea nuevas cuentas en cadena usando financiamiento de faucet. Después del financiamiento, el
+ * balance APT de cada cuenta se imprime; si el financiamiento falla, se arroja un error.
+ *
+ * A continuación, se construye una transacción para enviar 0.5 APT de Alice a Bob. La transacción se
+ * firma y envía usando el método de un paso `signAndSubmitTransaction`. Esperamos a que la
+ * transacción se complete e imprimimos los balances actualizados de Alice y Bob. Si la transacción
+ * falla, se arroja un error.
+ */
+fun main() = runBlocking {
+  val aptos = Aptos(AptosConfig(AptosSettings(network = Network.DEVNET)))
+
+  println("Generando las cuentas de Alice y Bob")
+
+  val alice = Account.generate()
+  val bob = Account.generate()
+
+  aptos.fundAccount(alice.accountAddress, FUNDING_AMOUNT).expect("Failed to fund Alice's account")
+  aptos.fundAccount(bob.accountAddress, FUNDING_AMOUNT).expect("Failed to fund Bob's account")
+
+  println("Cuentas creadas en cadena")
+  println("Balance de Alice: ${aptos.getAccountAPTAmount(alice.accountAddress)}")
+  println("Balance de Bob: ${aptos.getAccountAPTAmount(bob.accountAddress)}")
+  println("=============================================")
+  println(
+    "Construyendo transacción para enviar ${SEND_AMOUNT / 100_000_000u} APT a Bob: ${bob.accountAddress}"
+  )
+
+  val txn =
+    aptos.buildTransaction.simple(
+      sender = alice.accountAddress,
+      data =
+        entryFunctionData {
+          function = "0x1::coin::transfer"
+          typeArguments = typeArguments { +TypeTagStruct("0x1::aptos_coin::AptosCoin") }
+          functionArguments = functionArguments {
+            +bob.accountAddress
+            +U64(SEND_AMOUNT_UNITS.toULong())
+          }
+        },
+    )
+
+  // Firmar y enviar la transacción
+  val committedTransaction = aptos.signAndSubmitTransaction(alice, txn)
+
+  val executedTransaction =
+    aptos.waitForTransaction(
+      HexInput.fromString(committedTransaction.expect("Transaction failed").hash)
+    )
+
+  println(
+    "Respuesta de espera de transacción: $executedTransaction\n============================================="
+  )
+
+  val aliceNewBalance =
+    aptos.getAccountAPTAmount(alice.accountAddress).expect("Alice's account does not exist")
+  val bobNewBalance =
+    aptos.getAccountAPTAmount(bob.accountAddress).expect("Bob's account does not exist")
+
+  println("Nuevo balance de Alice: $aliceNewBalance")
+  println("Nuevo balance de Bob: $bobNewBalance")
+}
+
+```

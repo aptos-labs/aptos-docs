@@ -1,0 +1,137 @@
+---
+title: "Tutorial de Scripts de Move"
+description: "Tutorial paso a paso para crear y desplegar scripts de Move con ejemplos prácticos y mejores prácticas."
+sidebar:
+  label: "Tutorial de Scripts"
+---
+
+import { FileTree } from '@astrojs/starlight/components';
+
+Este tutorial explica cómo escribir y ejecutar un [script de Move](/build/smart-contracts/book/modules-and-scripts). Puedes usar scripts de Move para ejecutar una serie de comandos a través de interfaces de módulos Move publicados.
+
+Para más información sobre scripts, ver la [documentación de scripts de Move](/build/smart-contracts/scripts)
+
+## Caso de uso de ejemplo
+
+El siguiente ejemplo llama funciones en el módulo [aptos\_coin.move](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/aptos_coin.move) para confirmar que el balance de la cuenta de destino es menor que `desired_balance`, y si es así, la completa hasta `desired_balance`.
+
+```move
+script {
+    use std::signer;
+    use aptos_framework::aptos_account;
+    use aptos_framework::aptos_coin;
+    use aptos_framework::coin;
+
+    fun main(src: &signer, dest: address, desired_balance: u64) {
+        let src_addr = signer::address_of(src);
+
+        addr::my_module::do_nothing();
+
+        let balance = coin::balance<aptos_coin::AptosCoin>(src_addr);
+        if (balance < desired_balance) {
+            aptos_account::transfer(src, dest, desired_balance - balance);
+        };
+    }
+}
+```
+
+## Ejecución
+
+Ahora que sabes lo que te gustaría lograr, necesitas determinar:
+
+- ¿Dónde pongo estos archivos?
+- ¿Cómo los nombro?
+- ¿Necesito un `Move.toml`?
+- ¿Cómo ejecuto mi script con el CLI?
+
+Repasemos cómo ejecutar un script de Move con un ejemplo paso a paso usando el [CLI de Aptos](/build/cli/working-with-move-contracts).
+
+1. Crea un nuevo directorio para tu trabajo:
+
+   ```shellscript filename="Terminal"
+   mkdir testing
+   cd testing
+   ```
+
+2. Configura el CLI de Aptos y [crea una cuenta](/build/cli/setup-cli):
+
+   ```shellscript filename="Terminal"
+   aptos init --network devnet
+   ```
+
+   Puedes reutilizar una clave privada existente (que se ve así: `0xbd944102bf5b5dfafa7fe865d8fa719da6a1f0eafa3cd600f93385482d2c37a4`), o puede generar una nueva para ti, como parte de configurar tu cuenta. Digamos que tu cuenta se ve como el ejemplo abajo:
+
+   ```shellscript filename="Terminal"
+   ---
+   profiles:
+     default:
+       private_key: "0xbd944102bf5b5dfafa7fe865d8fa719da6a1f0eafa3cd600f93385482d2c37a4"
+       public_key: "0x47673ec83bb254cc9a8bfdb31846daacd0c96fe41f81855462f5fc5306312b1b"
+       account: cb265645385819f3dbe71aac266e319e7f77aed252cacf2930b68102828bf615
+       rest_url: "https://api.devnet.aptoslabs.com"
+       faucet_url: "https://faucet.devnet.aptoslabs.com"
+   ```
+
+3. Desde este mismo directorio, inicializa un nuevo proyecto Move:
+
+   ```shellscript filename="Terminal"
+   aptos move init --name run_script
+   ```
+
+4. Crea un archivo `my_script.move` que contenga el script de ejemplo anterior en un subdirectorio `sources/` de tu directorio `testing/`. También, crea un archivo `my_module.move` como se ve en el ejemplo abajo:
+
+   ```move
+   module addr::my_module {
+       public entry fun do_nothing() { }
+   }
+   ```
+
+   Esto resulta en la siguiente estructura de archivos:
+
+<FileTree>
+  - testing/
+    - Move.toml
+    - sources/
+      - my\_script.move
+      - my\_module.move
+</FileTree>
+
+5. Compila el script:
+
+   ```shellscript filename="Terminal"
+   aptos move compile --named-addresses addr=default
+   ```
+
+   Esto producirá salida como:
+
+   ```shellscript filename="Terminal"
+   {
+     "Result": [
+       "cb265645385819f3dbe71aac266e319e7f77aed252cacf2930b68102828bf615::my_module"
+     ]
+   }
+   ```
+
+6. Ahora puedes ejecutar tu script:
+
+   ```shellscript filename="Terminal"
+   aptos move run-script --compiled-script-path build/run_script/bytecode_scripts/my_script.mv --named-addresses addr=default
+   ```
+
+   Esto ejecutará tu script en la red devnet usando tu cuenta configurada.
+
+## Mejores prácticas
+
+Al escribir scripts de Move, considera las siguientes mejores prácticas:
+
+1. **Mantén los scripts simples**: Los scripts deben orquestar llamadas a módulos existentes en lugar de contener lógica compleja.
+
+2. **Usa argumentos de tipo apropiados**: Asegúrate de que los tipos de argumentos coincidan con lo que esperan las funciones del módulo.
+
+3. **Maneja errores apropiadamente**: Los scripts pueden abortar si las condiciones no se cumplen, así que planifica para esos casos.
+
+4. **Prueba en devnet primero**: Siempre prueba tus scripts en devnet antes de ejecutarlos en testnet o mainnet.
+
+5. **Documenta tu script**: Agrega comentarios para explicar qué hace tu script y por qué.
+
+Los scripts de Move proporcionan una forma poderosa de componer operaciones a través de múltiples módulos en una sola transacción, haciéndolos útiles para operaciones complejas que requieren múltiples pasos.

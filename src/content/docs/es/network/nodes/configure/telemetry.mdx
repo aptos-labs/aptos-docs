@@ -1,0 +1,106 @@
+---
+title: "Telemetría"
+description: "Comprende y configura la recolección de datos de telemetría de nodos Aptos incluyendo qué información se envía y cómo deshabilitarla si es necesario."
+sidebar:
+  label: "Telemetría"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Cuando ejecutas un nodo en una red de Aptos, tu nodo enviará datos de telemetría a Aptos Labs. Todos los tipos de nodos
+(ej., validators, VFNs y PFNs) envían datos de telemetría. Esto también ocurre para otros binarios (ej., el CLI de Aptos).
+Si prefieres no enviar telemetría, puedes deshabilitar la telemetría usando las instrucciones abajo.
+
+<Aside type="tip">
+  **No se recolecta información personal**<br />
+  La telemetría de Aptos **no** recolecta información personal, como nombres de usuario o direcciones de email.
+  Solo recolecta telemetría de software relevante, como versión de software, métricas de nodo, información del sistema operativo
+  y la dirección IP de tu nodo. Estos datos se usan para mejorar la descentralización y rendimiento de la red.
+</Aside>
+
+## Telemetría de nodo
+
+Las categorías de información recolectadas por la telemetría de nodo Aptos, para el binario `aptos-node`, se listan abajo:
+
+- **Métricas centrales:** Las métricas centrales son aquellas emitidas por los componentes centrales del binario `aptos-node`. Estas incluyen,
+  sincronización de estado, consenso, mempool y almacenamiento. Puedes ver la lista completa de métricas centrales,
+  [aquí](https://github.com/aptos-labs/aptos-core/blob/main/crates/aptos-telemetry/src/core_metrics.rs#L14-L29).
+
+- **Información de construcción**: Información de construcción de Rust, incluyendo las versiones de Rust, cargo, la arquitectura objetivo y
+  la etiqueta de construcción también se recolectan. Puedes ver la lista completa de información de construcción, [aquí](https://github.com/aptos-labs/aptos-core/blob/main/crates/aptos-build-info/src/lib.rs#L8-L20).
+
+- **Información del sistema**: La información del sistema también es recolectada por la telemetría del nodo. Esto incluye información de recursos
+  (ej., especificaciones de CPU, RAM, disco y red) así como información del sistema operativo. Puedes ver la lista completa de
+  información del sistema, [aquí](https://github.com/aptos-labs/aptos-core/blob/main/crates/aptos-telemetry/src/system_information.rs#L14-L32).
+
+- **Métricas de red:** Las métricas de red también son recolectadas por la telemetría del nodo. Estas incluyen información de red como
+  el número de pares conectados, el número de mensajes entrantes y salientes, y el tamaño de mensajes enviados y recibidos.
+  Puedes ver la lista completa de métricas de red, [aquí](https://github.com/aptos-labs/aptos-core/blob/main/crates/aptos-telemetry/src/network_metrics.rs#L12-L17).
+
+- **Métricas de Prometheus**: Las métricas de Prometheus también son recolectadas por la telemetría del nodo. Estas incluyen métricas de tiempo de ejecución
+  para todos los componentes del binario `aptos-node`. Puedes ver la lista completa de métricas de Prometheus visitando el
+  endpoint de métricas en tu nodo usando el [servicio de inspección de nodos](/network/nodes/measure/node-inspection-service).
+
+- **Logs del nodo**: Los logs de nivel warn y superior también son recolectados por la telemetría del nodo. Estos se usan para monitorear la
+  salud de la red. Puedes identificar estos logs filtrando los logs para el binario `aptos-node`, localmente.
+
+## Telemetría del CLI
+
+Las categorías de información recolectadas por la telemetría del CLI de Aptos, para el CLI `aptos`, se listan abajo:
+
+- **Métricas de comandos**: Las métricas de comandos son aquellas emitidas por el CLI cuando se ejecuta un comando. Estas
+  incluyen el comando mismo, la latencia del comando, y el éxito o falla del comando. Puedes ver
+  la lista completa de métricas del CLI,
+  [aquí](https://github.com/aptos-labs/aptos-core/blob/main/crates/aptos-telemetry/src/cli_metrics.rs#L12-L15).
+
+- **Información de construcción**: Información de construcción de Rust, incluyendo las versiones de Rust, cargo, la arquitectura objetivo y
+  la etiqueta de construcción también se recolectan para el CLI. Puedes ver la lista completa de información de construcción, [aquí](https://github.com/aptos-labs/aptos-core/blob/main/crates/aptos-build-info/src/lib.rs#L8-L20).
+
+## Deshabilitar telemetría
+
+<Aside type="danger">
+  **¿Deshabilitar telemetría?**<br />
+  No se recomienda deshabilitar la telemetría, ya que ayuda al equipo de Aptos Labs a mejorar el rendimiento y confiabilidad
+  del software de Aptos. Si eliges deshabilitar la telemetría, será mucho más difícil para el equipo identificar y
+  debuggear cualquier problema que puedas estar enfrentando.
+
+  Si hay requisitos específicos de privacidad o cumplimiento que te impiden enviar telemetría, o si tienes
+  preocupaciones con ciertos tipos de información siendo enviada, por favor contacta al equipo de Aptos Labs para ver cómo pueden
+  ayudar.
+</Aside>
+
+En macOS y Linux, puedes establecer la variable de entorno `APTOS_DISABLE_TELEMETRY` para deshabilitar las métricas enviadas por
+tanto el nodo Aptos como la herramienta CLI de Aptos. Para deshabilitar toda la telemetría, establece el entorno `APTOS_DISABLE_TELEMETRY` a `true`:
+
+```shellscript filename="Terminal"
+export APTOS_DISABLE_TELEMETRY=true
+```
+
+El comando anterior solo deshabilita la telemetría para una sola sesión en la terminal actual donde ejecutas el comando.
+Para deshabilitarla permanentemente a través de todas las terminales e invocaciones de binarios Aptos, inclúyela en tu perfil de inicio.
+Por ejemplo:
+
+```shellscript filename="Terminal"
+echo "export APTOS_DISABLE_TELEMETRY=true" >> ~/.profile
+source ~/.profile
+```
+
+## Configurar telemetría
+
+<Aside type="tip">
+  **¿Configurar telemetría?**<br />
+  Si encuentras que necesitas deshabilitar métricas específicas de telemetría o recolecciones, considera contactar al
+  equipo de Aptos Labs primero, para hacerles saber. Aptos Labs considera activamente hacer cambios a la telemetría basados
+  en retroalimentación del usuario.
+</Aside>
+
+También puedes configurar la telemetría para deshabilitar métricas específicas de telemetría y recolecciones. La lista de variables de entorno
+abajo muestra las variables que puedes establecer para configurar telemetría para nodos Aptos y el CLI:
+
+- `APTOS_DISABLE_TELEMETRY`: Esto deshabilita toda la emisión de telemetría, incluyendo enviar telemetría al servicio Google Analytics (GA4).
+- `APTOS_FORCE_ENABLE_TELEMETRY`: Esto anula la verificación de ID de cadena y fuerza al nodo Aptos a enviar telemetría independientemente de si el servicio remoto la acepta o no.
+- `APTOS_DISABLE_TELEMETRY_PUSH_METRICS`: Esto deshabilita enviar métricas de [Prometheus](https://prometheus.io/).
+- `APTOS_DISABLE_TELEMETRY_PUSH_LOGS`: Esto deshabilita enviar logs.
+- `APTOS_DISABLE_TELEMETRY_PUSH_EVENTS`: Esto deshabilita enviar eventos personalizados.
+- `APTOS_DISABLE_LOG_ENV_POLLING`: Esto deshabilita la capacidad dinámica de enviar logs verbosos.
+- `APTOS_DISABLE_PROMETHEUS_NODE_METRICS`: Esto deshabilita enviar las métricas de recursos del nodo Aptos como CPU del sistema, memoria, etc.

@@ -1,0 +1,111 @@
+---
+title: "Simulación Local, Benchmarking y Perfilado de Gas"
+description: "Aprende cómo simular, hacer benchmark y perfilar el uso de gas de transacciones Move localmente usando el CLI de Aptos para optimización de rendimiento y depuración."
+sidebar:
+  label: "Simulación Local"
+---
+
+import { Aside, FileTree } from '@astrojs/starlight/components';
+
+## Resumen
+
+El tutorial anterior demuestra cómo puedes desplegar e interactuar con contratos Move usando varios comandos del CLI.
+
+Por defecto, esos comandos envían una transacción al fullnode remoto para simulación y ejecución.
+Puedes anular este comportamiento y simular la transacción localmente, agregando una de las siguientes opciones de línea de comandos de tu preferencia:
+
+- `--local`: Simular la transacción localmente sin realizar más mediciones o análisis.
+- `--benchmark`: Hacer benchmark de la transacción y reportar el(los) tiempo(s) de ejecución.
+- `--profile-gas`: Perfilar la transacción para uso detallado de gas.
+
+Estas opciones adicionales pueden usarse en combinación con los siguientes comandos del CLI:
+
+- `aptos move run`
+- `aptos move run-script`
+- `aptos move publish`
+
+Alternativamente, si estás interesado en reproducir una transacción pasada, revisa [este tutorial](/build/cli/replay-past-transactions).
+
+<Aside type="note" emoji="ℹ️">
+  Las simulaciones locales no resultan en ningún cambio al estado en cadena.
+</Aside>
+
+## Desplegando el Contrato de Ejemplo
+
+Para propósitos de demostración, continuaremos usando el paquete [`hello_blockchain`](https://github.com/aptos-labs/aptos-core/tree/main/aptos-move/move-examples/hello_blockchain) como ejemplo.
+
+Primero, publica el paquete en devnet o testnet (si no lo has hecho ya).
+
+Cambia al directorio del paquete.
+
+```shellscript filename="Terminal"
+cd aptos-move/move-examples/hello_blockchain
+```
+
+Luego publica el paquete usando el siguiente comando.
+
+```shellscript filename="Terminal"
+aptos move publish --named-addresses hello_blockchain=default --assume-yes
+```
+
+## Simulación Local
+
+Para simular localmente una transacción, simplemente agrega la bandera `--local` a tu comando:
+
+```shellscript filename="Terminal"
+aptos move run --function-id default::message::set_message --args string:"hello, blockchain" --local
+```
+
+Esto ejecutará la transacción localmente sin enviarla a la red.
+
+## Benchmarking
+
+Para hacer benchmark de una transacción, usa la bandera `--benchmark`:
+
+```shellscript filename="Terminal"
+aptos move run --function-id default::message::set_message --args string:"hello, blockchain" --benchmark
+```
+
+Esto reportará los tiempos de ejecución tanto para caché de código frío como caliente.
+
+<Aside type="note" emoji="ℹ️">
+  Los tiempos de benchmark son solo para referencia informativa y pueden variar basado en tu máquina local.
+</Aside>
+
+## Perfilado de Gas
+
+El Perfilador de Gas de Aptos es una herramienta poderosa para entender el uso de gas de las transacciones. Para usar el perfilador de gas:
+
+```shellscript filename="Terminal"
+aptos move run --function-id default::message::set_message --args string:"hello, blockchain" --profile-gas
+```
+
+Esto generará un reporte detallado de gas en formato web que incluye:
+
+- Desglose detallado del uso de gas por operación
+- Trace de ejecución completo
+- Información de depuración
+
+El reporte se guarda en el directorio `gas-profiling`:
+
+<FileTree>
+  - gas-profiling/
+    - txn-\[hash]-\[module]-\[function]/
+      - assets/
+      - index.html
+</FileTree>
+
+## Entendiendo el Reporte de Gas
+
+El reporte de gas generado proporciona información valiosa sobre:
+
+1. **Uso total de gas** - La cantidad total de unidades de gas consumidas
+2. **Desglose por categoría** - Gas usado para diferentes tipos de operaciones
+3. **Trace de ejecución** - Secuencia paso a paso de operaciones
+4. **Puntos de acceso** - Operaciones que consumen más gas
+
+Esta información es crucial para optimizar tus contratos inteligentes Move y reducir costos de transacción.
+
+<Aside type="note" emoji="ℹ️">
+  Para optimización efectiva, enfócate en los resultados del perfilado de gas en lugar de los tiempos de benchmark, ya que el gas es la métrica real de costo en la blockchain.
+</Aside>

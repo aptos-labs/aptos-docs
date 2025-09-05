@@ -1,0 +1,201 @@
+---
+title: "Transacciones Patrocinadas"
+description: "Aprende cómo implementar transacciones patrocinadas donde una cuenta paga las tarifas de gas para otra cuenta usando el SDK .NET de Aptos"
+sidebar:
+  label: "Transacciones Patrocinadas"
+---
+
+import { Aside, LinkCard, Steps } from '@astrojs/starlight/components';
+
+<Aside type="caution" emoji="❗">
+  Este SDK está actualmente en beta. Por favor reporta cualquier problema que encuentres
+  creando un issue en el repositorio
+  [aptos-labs/aptos-dotnet-sdk](https://github.com/aptos-labs/aptos-dotnet-sdk).
+</Aside>
+
+Esta sección cubre cómo hacer transacciones patrocinadas con el SDK .NET de Aptos.
+
+**Es importante que entiendas los conceptos básicos de construir transacciones. Si no, consulta la guía abajo para más información.**
+
+<br />
+
+<LinkCard href="/build/sdks/dotnet-sdk/transactions/basic-transactions" title="Transacciones Básicas" description="Aprende cómo construir transacciones básicas con el SDK .NET de Aptos." />
+
+## Crear una Transacción Patrocinada
+
+<Steps>
+  1. Configurar tu AptosClient
+
+     Configura tu cliente Aptos agregando el namespace `Aptos` e instanciando un `AptosClient`. Puedes usar una
+     configuración predefinida de `Networks` o configurar la tuya propia.
+
+     ```csharp filename="Program.cs"  {1-1, 7-8}
+     using Aptos;
+
+     class Program
+     {
+         static void Main(string[] args)
+         {
+             var config = new AptosConfig(Aptos.Networks.Mainnet);
+             var client = new AptosClient(config);
+         }
+     }
+     ```
+
+  2. Configurar las Cuentas
+
+     Para crear una transacción patrocinada, es importante que haya un patrocinador y un usuario. En este ejemplo:
+
+     - **El usuario:** Será la cuenta que está enviando APT al destinatario.
+     - **El patrocinador:** Será la cuenta que paga las **tarifas de gas** de la transacción.
+
+     ```csharp filename="Program.cs" {10-16}
+     using Aptos;
+
+     class Program
+     {
+         static void Main(string[] args)
+         {
+             var config = new AptosConfig(Aptos.Networks.Devnet);
+             var client = new AptosClient(config);
+
+             // 1. Crear cuentas y financiarlas.
+             var user = Account.Generate();
+             var recipient = Account.Generate();
+             var sponsor = Account.Generate();
+
+             await client.Faucet.FundAccount(user.Address, 100_000_000);
+             await client.Faucet.FundAccount(sponsor.Address, 100_000_000);
+         }
+     }
+     ```
+
+  3. Construir la Transacción
+
+     Ahora puedes construir la transacción usando el `AptosClient`. En la transacción, es importante que
+     habilites la bandera `withFeePayer` para habilitar las transacciones patrocinadas.
+
+     ```csharp filename="Program.cs" {9-19}
+     using Aptos;
+
+     class Program
+     {
+         static void Main(string[] args)
+         {
+             ...
+
+             // 2. Construir la transacción
+             var transaction = await client.Transaction.Build(
+                 sender: account,
+                 data: new GenerateEntryFunctionPayloadData(
+                     function: "0x1::aptos_account::transfer_coins",
+                     typeArguments: ["0x1::aptos_coin::AptosCoin"],
+                     functionArguments: [account.Address, "100000"]
+                 ),
+                 // Es importante establecer esta bandera a true para habilitar transacciones patrocinadas
+                 withFeePayer: true
+             );
+         }
+     }
+     ```
+
+  4. Firmar la Transacción usando ambas cuentas
+
+     Haz que tanto el usuario como el patrocinador firmen la transacción. Esto asegura que el patrocinador ha acordado
+     pagar por la transacción y el usuario ha acordado ejecutar la transacción. Al firmar con
+     el patrocinador, se usa el método `SignAsFeePayer` en su lugar.
+
+     ```csharp filename="Program.cs" {9-13}
+     using Aptos;
+
+     class Program
+     {
+         static void Main(string[] args)
+         {
+             ...
+
+             // 3. Firmar la transacción con el usuario
+             var userSignature = client.Transaction.SignTransaction(transaction);
+
+             // 4. Firmar la transacción con el patrocinador
+             var feePayerSignature = client.Transaction.SignAsFeePayer(feePayer, transaction);
+         }
+     }
+     ```
+
+  5. Enviar la Transacción
+
+     Una vez que la transacción está firmada por tanto el usuario como el patrocinador, puede enviarse a la blockchain. El `AptosClient` puede
+     usarse para enviar la transacción.
+
+     ```csharp filename="Program.cs" {9-11}
+     using Aptos;
+
+     class Program
+     {
+         static void Main(string[] args)
+         {
+             ...
+
+             // 5. Enviar la transacción
+             var submitTransactionData = new SubmitTransactionData(transaction, userSignature, feePayerSignature);
+             var submittedTransaction = await client.Transaction.SubmitTransaction(submitTransactionData);
+         }
+     }
+     ```
+
+  6. Esperar a que la Transacción se Ejecute
+
+     Después de que la transacción ha sido enviada, tendrá que procesarse antes de que se confirme en la blockchain. El `AptosClient` puede
+     usarse para esperar a que la transacción sea procesada y ejecutada.
+
+     ```csharp filename="Program.cs" {8-9}
+     using Aptos;
+
+     class Program
+     {
+         static void Main(string[] args)
+         {
+             ...
+
+             // 6. Esperar a que la transacción sea procesada
+             var transactionResult = await client.Transaction.WaitForTransaction(submittedTransaction.Hash);
+         }
+     }
+     ```
+
+  7. Imprimir Balances
+
+     Después de que la transacción se ha confirmado en la blockchain, puedes imprimir los balances del usuario y el destinatario.
+
+     ```csharp filename="Program.cs" {9-15}
+     using Aptos;
+
+     class Program
+     {
+         static void Main(string[] args)
+         {
+             ...
+
+             // 7. Imprimir balances
+             var userBalance = await client.Account.GetCoinBalance(user.Address);
+             var feePayerBalance = await client.Account.GetCoinBalance(feePayer.Address);
+             var recipientBalance = await client.Account.GetCoinBalance(recipient.Address);
+             Console.WriteLine($"Usuario {user.Address} tiene {userBalance?.Amount ?? 0} APT");
+             Console.WriteLine($"Pagador de Tarifas {feePayer.Address} tiene {feePayerBalance?.Amount ?? 0} APT");
+             Console.WriteLine($"Destinatario {recipient.Address} tiene {recipientBalance?.Amount ?? 0} APT");
+         }
+     }
+     ```
+
+     El resultado debería verse así:
+
+     ```shellscript
+     Usuario 0xffd89f1e2fef8c67cfb1b99d58ea799281f1d1a0a178db49c3eacab2fe7c0735 tiene 99900000 APT
+     Pagador de Tarifas 0x842ca7d995255ee73186a6793d6bde7c983c528be7b1a25e1614f4eddb744d4c tiene 99900100 APT
+     Destinatario 0x823010a52a589ef528d14ebee4a4af56a00f0ae8afba135c9268581a960e21d7 tiene 100000 APT
+     ```
+
+     El usuario envió 0.001 APT al destinatario dejando al usuario con 0.999 APT. El patrocinador pagó
+     por las tarifas de gas de la transacción dejando al patrocinador con 0.999001 APT.
+</Steps>

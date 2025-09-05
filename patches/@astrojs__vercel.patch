@@ -1,0 +1,91 @@
+diff --git a/dist/index.d.ts b/dist/index.d.ts
+index 2f2ec366c9816a861d1ee145923a32f46070af32..1e3c569cacaa8b345c7d27358d80859d6f3da5dd 100644
+--- a/dist/index.d.ts
++++ b/dist/index.d.ts	
+@@ -44,7 +44,14 @@ export interface VercelServerlessConfig {
+      * Here the list of the headers that are added:
+      * - The CSP header of the static pages is added when CSP support is enabled.
+      */
+-    experimentalStaticHeaders?: boolean;
++    experimentalStaticHeaders?: boolean | {
++        /**
++         * How to emit CSP for prerendered/static pages when Astro experimental CSP is enabled.
++         * - 'per-route' (default): current behavior — one `routes` entry per path with a CSP header
++         * - 'global': collapse to a single catch-all `/(.*)`  route with the CSP header
++         */
++        cspMode?: 'per-route' | 'global';
++    };
+ }
+ interface VercelISRConfig {
+     /**
+diff --git a/dist/index.js b/dist/index.js
+index f3fb62cd0a9be9314860e540ad7cdbc9b057af59..fa7fb11271cc18cf9a68cc2032672bb27fea4505 100644
+--- a/dist/index.js
++++ b/dist/index.js	
+@@ -410,8 +410,20 @@ function vercelAdapter({
+           if (!normalized.routes) {
+             normalized.routes = [];
+           }
+-          if (experimentalStaticHeaders) {
+-            const routesWithConfigHeaders = createRoutesWithStaticHeaders(_routeToHeaders, _config);
++          // Normalize `experimentalStaticHeaders` into flags we can use.
++          const _staticHeadersEnabled =
++            experimentalStaticHeaders === true || typeof experimentalStaticHeaders === 'object';
++          const _cspMode =
++            typeof experimentalStaticHeaders === 'object' && experimentalStaticHeaders?.cspMode
++              ? experimentalStaticHeaders.cspMode
++              : 'per-route';
++
++          if (_staticHeadersEnabled) {
++            const routesWithConfigHeaders = createRoutesWithStaticHeaders(
++              _routeToHeaders,
++              _config,
++              _cspMode
++            );
+             const fileSystemRouteIndex = normalized.routes.findIndex(
+               (r) => "handle" in r && r.handle === "filesystem"
+             );
+@@ -555,20 +567,31 @@ function getRuntime(process2, logger) {
+   }
+   return "nodejs22.x";
+ }
+-function createRoutesWithStaticHeaders(staticHeaders, config) {
++function createRoutesWithStaticHeaders(staticHeaders, config, cspMode = 'per-route') {
+   const vercelHeaders = [];
++  if (!config.experimental.csp) return vercelHeaders;
++
++  // GLOBAL MODE — collapse to a single catch-all CSP header
++  if (cspMode === 'global') {
++    let csp;
++    for (const { headers } of staticHeaders.values()) {
++      const v = headers.get('Content-Security-Policy');
++      if (v) { csp = v; break; }
++    }
++    if (csp) {
++      vercelHeaders.push({ src: '/(.*)', headers: { 'content-security-policy': csp } });
++    }
++    return vercelHeaders;
++  }
++
++  // PER-ROUTE MODE — existing behavior
+   for (const [pathname, { headers }] of staticHeaders.entries()) {
+-    if (config.experimental.csp) {
+-      const csp = headers.get("Content-Security-Policy");
+-      if (csp) {
+-        const _headers = {
+-          "content-security-policy": csp
+-        };
+-        vercelHeaders.push({
+-          src: pathname,
+-          headers: _headers
+-        });
+-      }
++    const csp = headers.get("Content-Security-Policy");
++    if (csp) {
++      vercelHeaders.push({
++        src: pathname,
++        headers: { "content-security-policy": csp }
++      });
+     }
+   }
+   return vercelHeaders;

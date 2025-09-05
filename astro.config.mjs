@@ -26,6 +26,7 @@ import { firebaseIntegration } from "./src/integrations/firebase";
 import { remarkClientOnly } from "./src/plugins";
 import { devServerFileWatcher } from "./src/integrations/dev-server-file-watcher";
 import onDemandDirective from "./src/integrations/client-on-demand/register.js";
+import { cspConfig } from "./src/config/csp";
 // import { isMoveReferenceEnabled } from "./src/utils/isMoveReferenceEnabled";
 // import { rehypeAddDebug } from "./src/plugins";
 
@@ -38,6 +39,9 @@ const enableApiReference = true;
 
 // https://astro.build/config
 export default defineConfig({
+  build: {
+    inlineStylesheets: "never",
+  },
   site:
     ENV.VERCEL_ENV === "production"
       ? "https://aptos.dev"
@@ -207,6 +211,9 @@ export default defineConfig({
   ],
   adapter: process.env.VERCEL
     ? vercel({
+        experimentalStaticHeaders: {
+          cspMode: "global",
+        },
         edgeMiddleware: false,
         imageService: true,
         imagesConfig: {
@@ -217,6 +224,7 @@ export default defineConfig({
       })
     : node({
         mode: "standalone",
+        experimentalStaticHeaders: true,
       }),
   vite: {
     plugins: [tailwindcss()],
@@ -288,6 +296,7 @@ export default defineConfig({
     validateSecrets: true,
   },
   experimental: {
+    csp: cspConfig,
     fonts: [
       {
         provider: "local",

@@ -2,7 +2,7 @@ const allLanguages = {
   en: "English",
   // de: 'Deutsch',
   es: "Español",
-  pt: "Português",
+  "pt-BR": "Português (Brasil)",
   fr: "Français",
   tr: "Türkçe",
   ru: "Русский",

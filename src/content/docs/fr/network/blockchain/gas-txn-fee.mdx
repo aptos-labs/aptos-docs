@@ -1,0 +1,198 @@
+---
+title: "Gaz et Frais de Stockage"
+description: "Apprenez les frais de gaz et coûts de stockage sur Aptos, incluant les coûts d'exécution, frais de stockage, tarification du gaz, et stratégies d'optimisation pour des transactions efficaces."
+sidebar:
+  label: "Gaz & Frais de Stockage"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Toute exécution de transaction sur la blockchain Aptos nécessite des frais de traitement. À ce jour, ces frais comprennent deux composants :
+
+1. Coûts d'exécution & IO
+
+- Cela couvre votre utilisation des ressources de calcul transitoires, telles que le traitement de vos transactions et la propagation de l'enregistrement validé à travers le réseau distribué du mainnet.
+- Il est mesuré en Unités de Gaz dont le prix peut fluctuer selon la charge du réseau. Cela permet aux coûts d'exécution et IO d'être bas lorsque le réseau est moins occupé.
+- Cette portion de gaz est brûlée définitivement lors de l'exécution d'une transaction.
+
+2. Frais de stockage
+
+- Cela couvre le coût pour stocker de manière persistante l'enregistrement validé dans le stockage distribué de la blockchain.
+- Il est mesuré en prix APT fixes, donc le coût de stockage permanent reste stable même lorsque le prix unitaire du gaz fluctue avec la charge transitoire du réseau.
+- Les frais de stockage peuvent être remboursés lorsque l'emplacement de stockage alloué est supprimé. Actuellement, le réseau est configuré pour rembourser la totalité des frais de stockage payés sur la durée de vie d'un emplacement de stockage d'état.
+- Pour garder l'implémentation système simple, cette portion de gaz est brûlée et frappée à nouveau lors du remboursement.
+
+<Aside type="note">
+  Conceptuellement, ces frais peuvent être pensés comme assez similaires à comment nous payons pour nos services domestiques d'électricité ou d'eau.
+</Aside>
+
+## Unité de gaz
+
+Les transactions peuvent aller du simple et peu coûteux au compliqué selon ce qu'elles font. Dans la blockchain Aptos, une **unité de gaz** représente une unité de base de consommation pour les ressources transitoires, telles que faire du calcul ou accéder au stockage. Ce dernier ne devrait pas être confondu avec l'aspect de stockage à long terme de telles opérations, car cela est couvert par les frais de stockage séparément.
+
+Voir [Comment le Gaz de Base Fonctionne](/network/blockchain/base-gas) pour une description détaillée des types de frais de gaz et optimisations disponibles.
+
+<Aside type="note">
+  👉 Une **unité de gaz** est un nombre sans dimension ou une unité qui n'est pas associée à un élément tel qu'une pièce, exprimée comme un entier. Les unités de gaz totales consommées par votre transaction dépendent de la complexité de votre transaction. Le **prix du gaz**, d'autre part, est exprimé en termes de pièce native de la blockchain Aptos [APT](/network/glossary#apt) et sa sous-unité [Octas](/network/glossary#octa). Voir aussi [Transactions et États](/network/blockchain/txns-states) pour l'apparence d'une transaction soumise à la blockchain Aptos.
+</Aside>
+
+## Le Relevé de Frais
+
+Depuis la version 1.7 d'Aptos Framework, la répartition des frais chargés et remboursements est émise comme un événement de module représenté par la struct `0x1::transaction_fee::FeeStatement`.
+
+```move filename="transaction_fee.move"
+#[event]
+/// Répartition des frais chargés et remboursements pour une transaction.
+/// La structure est :
+///
+/// - Charge nette ou remboursement (pas dans le relevé)
+///    - charge totale : total_charge_gas_units, correspond à `gas_used` dans le on-chain `TransactionInfo`.
+///      Ceci est la somme des sous-éléments ci-dessous. Notez qu'il y a une perte potentielle de précision quand
+///      la conversion entre unités de gaz internes et externes et entre unités de gaz et pièces natives,
+///      donc il est possible que les nombres ne s'ajoutent pas exactement. -- Ce nombre est la charge finale,
+///      tandis que la répartition est seulement informative.
+///        - frais de gaz pour exécution (temps CPU) : `execution_gas_units`
+///        - frais de gaz pour IO (accès aléatoire au stockage) : `io_gas_units`
+///        - frais de stockage chargés (espace de stockage) : `storage_fee_octas`, à inclure dans
+///          `total_charge_gas_unit`, ce nombre est converti en unités de gaz selon le
+///          `gas_unit_price` spécifié par l'utilisateur sur la transaction.
+///    - remboursement de suppression de stockage : `storage_fee_refund_octas`, ceci n'est pas inclus dans `gas_used` ou
+///      `total_charge_gas_units`, la charge nette / remboursement est calculée par
+///      `total_charge_gas_units` * `gas_unit_price` - `storage_fee_refund_octas`.
+///
+/// Ceci est destiné à être émis comme un événement de module.
+struct FeeStatement has drop, store {
+    /// Charge totale de gaz.
+    total_charge_gas_units: u64,
+    /// Charge de gaz d'exécution.
+    execution_gas_units: u64,
+    /// Charge de gaz IO.
+    io_gas_units: u64,
+    /// Frais de stockage chargés.
+    storage_fee_octas: u64,
+    /// Remboursement des frais de stockage.
+    storage_fee_refund_octas: u64,
+}
+```
+
+## Prix du gaz et priorisation des transactions
+
+Dans le réseau Aptos, la gouvernance Aptos définit le prix unitaire minimum absolu du gaz. Cependant, le marché détermine la rapidité avec laquelle une transaction avec un prix unitaire particulier de gaz est traitée. Voir [Ethereum Gas Tracker](https://etherscan.io/gastracker), par exemple, qui montre les mouvements de prix du marché du prix du gaz Ethereum.
+
+En spécifiant un prix unitaire de gaz plus élevé que le prix actuel du marché, vous pouvez **augmenter** le niveau de priorité pour votre transaction sur la blockchain en payant des frais de traitement plus importants. Dans le cadre du consensus, lorsque le leader sélectionne des transactions de son mempool pour proposer dans le prochain bloc, il priorisera la sélection des transactions avec un prix unitaire de gaz plus élevé. Veuillez noter que des frais de gaz plus élevés ne priorisent que la sélection de transaction pour le prochain bloc.
+
+Cependant, dans un bloc, l'ordre d'exécution des transactions est déterminé par le système. Cet ordre est basé sur [le brassage de transactions](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-27.md), ce qui rend l'exécution parallèle plus efficace en considérant les patterns de conflit. Bien que dans la plupart des cas cela soit inutile, si le réseau est sous charge cette mesure peut assurer que votre transaction est traitée plus rapidement. Voir l'entrée `gas_unit_price` sous [Estimation des unités de gaz via simulation](#estimation-des-unités-de-gaz-via-simulation) pour les détails.
+
+<Aside type="caution">
+  👉 Si vous augmentez le prix unitaire du gaz, mais avez des transactions en vol (non validées) pour le même compte, vous devriez ressoumettre toutes ces transactions avec le prix unitaire de gaz plus élevé. Ceci parce que les transactions dans le même compte doivent toujours respecter le numéro de séquence, donc effectivement la transaction avec prix unitaire de gaz plus élevé n'augmentera la priorité qu'après que les transactions en vol soient incluses dans un bloc.
+</Aside>
+
+## Spécification des frais de gaz dans une transaction
+
+Lorsqu'une transaction est soumise à la blockchain Aptos, la transaction doit contenir les champs de gaz obligatoires suivants :
+
+- `max_gas_amount` : Le nombre maximum d'unités de gaz que l'expéditeur de transaction est prêt à dépenser pour exécuter la transaction. Ceci détermine les ressources computationnelles et de stockage maximum qui peuvent être consommées par la transaction.
+- `gas_price` : Le prix par unité de gaz que l'expéditeur de transaction est prêt à payer. Il est exprimé en [Octas](/network/glossary#octa).
+
+  Pendant l'exécution de la transaction, le montant total de gaz, exprimé comme :
+
+  ```text
+  (unités de gaz d'exécution totales consommées) + (unités de gaz de stockage totales consommées)
+  ```
+
+  ne doit pas dépasser `max_gas_amount`, sinon la transaction avortera l'exécution.
+
+Les frais de transaction facturés au client seront au plus `gas_price * max_gas_amount`.
+
+## Paramètres de gaz définis par la gouvernance
+
+Les paramètres de gaz suivants sont définis par la gouvernance Aptos.
+
+<Aside type="note">
+  Ces paramètres de gaz on-chain sont publiés sur la blockchain Aptos à `0x1::gas_schedule::GasScheduleV2`.
+</Aside>
+
+- `txn.maximum_number_of_gas_units` : Nombre maximum d'unités de gaz qui peuvent être dépensées (c'est la valeur maximum autorisée pour le paramètre de gaz `max_gas_amount` dans la transaction). Ceci est pour assurer que les ajustements de tarification dynamique n'excèdent pas ce que vous êtes prêt à payer au total.
+- `txn.min_transaction_gas_units` : Nombre minimum d'unités de gaz qui peuvent être dépensées. La valeur `max_gas_amount` dans la transaction doit être définie à plus que la valeur de ce paramètre.
+
+Il existe aussi quelques limites globales par catégorie :
+
+- `txn.max_execution_gas` : Le nombre maximum d'unités de gaz qu'une transaction peut dépenser sur l'exécution.
+- `txn.max_io_gas` : Le nombre maximum d'unités de gaz qu'une transaction peut dépenser sur IO.
+- `txn.max_storage_fee` : Le montant maximum d'APT qu'une transaction peut dépenser sur le stockage persistant.
+  Ces limites aident à découpler une catégorie d'une autre, nous permettant de définir `txn.maximum_number_of_gas_units` généreusement sans avoir à nous inquiéter des abus.
+
+## Calcul des Frais de Stockage
+
+Les frais de stockage pour une transaction sont facturés selon le nombre de nouveaux emplacements alloués dans l'état global et l'augmentation de taille dans les emplacements existants.
+
+Il y a quelques nuances concernant le changement de prix et les emplacements hérités qui n'ont pas payé pour la taille de l'emplacement en dessous d'un "quota gratuit" historique. Référez-vous à [AIP-65](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-65.md#specification) pour plus de détails.
+
+Il devrait aussi être noté que pour des raisons de compatibilité arrière, les frais de stockage total d'une transaction sont actuellement présentés au client comme faisant partie du total `gas_used`. Cela signifie, ce montant pourrait varier basé sur le prix unitaire du gaz même pour la même transaction.
+
+Voici un exemple. Supposez que nous avons une transaction qui coûte `100` unités de gaz en exécution & IO, et `5000` [Octas](/network/glossary#octa) en frais de stockage. Le réseau montrera que vous avez utilisé
+
+- `100 + 5000 / 100 = 150` unités de gaz si le prix unitaire du gaz est `100`, ou
+- `100 + 5000 / 200 = 125` unités de gaz si le prix unitaire est `200`.
+
+Nous sommes conscients de la confusion que cela pourrait créer, et prévoyons de présenter ceux-ci comme des éléments séparés dans le futur. Cependant, cela nécessitera quelques changements au format de sortie de transaction et aux clients en aval, donc veuillez être patient pendant que nous travaillons dur pour faire cela arriver.
+
+## Calcul du Remboursement de Suppression de Stockage
+
+Si une transaction supprime des éléments d'état, un remboursement est émis au payeur de transaction pour les emplacements de stockage libérés. Actuellement, un remboursement complet est émis -- c'est-à-dire, tous les frais de stockage payés pour l'emplacement et octets de l'élément sur la durée de vie de celui-ci.
+
+Le montant du remboursement est dénommé en APT et n'est pas converti en unités de gaz ou inclus dans le total `gas_used`. Au lieu de cela, ce montant de remboursement est spécifiquement détaillé dans le champ `storage_fee_refund_octas` du [`FeeStatement`](#le-relevé-de-frais). En conséquence, l'effet net de la transaction sur le solde APT du payeur est déterminé par `gas_used * gas_unit_price - storage_refund`. Si le résultat est positif, il y a une déduction du solde du compte ; si négatif, il y a un dépôt.
+
+## Exemples
+
+### Exemple 1 : Solde du compte vs frais de transaction
+
+**Le compte de l'expéditeur doit avoir des fonds suffisants pour payer les frais de transaction.**
+
+Si, disons, vous transférez tout l'argent de votre compte pour qu'il ne vous reste aucun solde pour payer les frais de transaction. Dans un tel cas la blockchain Aptos vous ferait savoir que la transaction échouerait, et votre transfert ne réussirait pas non plus.
+
+### Exemple 2 : Montants de transaction vs frais de transaction
+
+**Les frais de transaction sont indépendants des montants de transfert dans la transaction.**
+
+Dans une transaction, par exemple, transaction A, vous transférez 1000 pièces d'un compte à un autre compte. Dans une deuxième transaction B, avec les mêmes valeurs de champ de gaz de la transaction A, vous transférez maintenant 100,000 pièces d'un compte à un autre compte. En supposant que les deux transactions A et B sont envoyées approximativement au même moment, alors les coûts de gaz pour les transactions A et B seraient près d'identiques.
+
+## Estimation de la consommation de gaz via simulation
+
+Le gaz utilisé pour une transaction peut être estimé en simulant la transaction on-chain comme décrit ici ou localement via la fonctionnalité de profilage de gaz de l'APT CLI. Les résultats de la transaction simulée représentent le montant **exact** qui est nécessaire à l'**état exact** de la blockchain au moment de la simulation. Ces unités de gaz utilisées peuvent changer basé sur l'état de la chaîne. Pour cette raison, tout montant venant de la simulation n'est qu'une estimation, et quand définir le montant maximum de gaz, il devrait inclure un montant approprié d'espace basé sur votre niveau de confort et comportements historiques. Définir le montant maximum de gaz trop bas résultera en l'avortement de la transaction et le compte étant facturé pour quel que soit le gaz qui a été consommé.
+
+Pour simuler les transactions on-chain, utilisez l'API [`SimulateTransaction`](https://api.devnet.aptoslabs.com/v1/spec#/operations/simulate_transaction). Cette API exécutera la transaction exacte que vous prévoyez d'exécuter.
+
+Pour simuler la transaction localement, utilisez le profileur de gaz, qui est intégré dans l'APT CLI.
+Ceci générera un rapport basé sur le web pour vous aider à comprendre l'usage précis du gaz de votre transaction.
+Voir [Profilage de Gaz](/build/cli/working-with-move-contracts/local-simulation-benchmarking-and-gas-profiling#gas-profiling) pour plus de détails.
+
+<Aside type="note">
+  Notez que la `Signature` fournie sur la transaction doit être tous des zéros. Ceci est pour empêcher quelqu'un d'utiliser la signature valide.
+</Aside>
+
+Pour simuler la transaction, il y a deux flags :
+
+1. `estimate_gas_unit_price` : Ce flag estimera le prix unitaire du gaz dans la transaction utilisant le même algorithme que l'API [`estimate_gas_price`](https://api.devnet.aptoslabs.com/v1/spec#/operations/estimate_gas_price).
+2. `estimate_max_gas_amount` : Ce flag trouvera le gaz maximum possible que vous pouvez utiliser, et il simulera la transaction pour vous dire le `gas_used` réel.
+
+### Étapes de simulation
+
+Les étapes de simulation pour trouver le montant correct de gaz pour une transaction sont comme suit :
+
+1. Estimez le gaz via simulation avec à la fois `estimate_gas_unit_price` et `estimate_max_gas_amount` définis à `true`.
+2. Utilisez le `gas_unit_price` dans la transaction retournée comme votre nouveau `gas_unit_price` de transaction.
+3. Voyez les valeurs `gas_used * gas_unit_price` dans la transaction retournée comme la **borne inférieure** pour le coût de la transaction.
+4. Pour calculer la borne supérieure du coût, prenez le **minimum** du `max_gas_amount` dans la transaction retournée, et du `gas_used * facteur de sécurité`. Dans la CLI une valeur de `1.5` est utilisée pour `facteur de sécurité`. Utilisez cette valeur comme `max_gas_amount` pour la transaction que vous voulez soumettre. Notez que la **borne supérieure** pour le coût de la transaction est `max_gas_amount * gas_unit_price`, i.e., c'est le plus que l'expéditeur de la transaction est facturé.
+5. À ce point vous avez maintenant votre `gas_unit_price` et `max_gas_amount` pour soumettre votre transaction comme suit :
+   1. `gas_unit_price` de la transaction simulée retournée.
+   2. `max_gas_amount` comme le minimum du `gas_used` \* `un facteur de sécurité` ou du `max_gas_amount` de la transaction.
+6. Si vous sentez le besoin de prioriser ou déprioriser votre transaction, ajustez le `gas_unit_price` de la transaction. Augmentez la valeur pour une priorité plus élevée, et diminuez la valeur pour une priorité plus basse.
+
+<Aside type="note">
+  La priorisation est basée sur des compartiments de `gas_unit_price`. Les compartiments sont définis dans [`mempool_config.rs`](https://github.com/aptos-labs/aptos-core/blob/30b385bf38d3dc8c4e8ee0ff045bc5d0d2f67a85/config/src/config/mempool_config.rs#L8). Les compartiments actuels sont `[0, 150, 300, 500, 1000, 3000, 5000, 10000, 100000, 1000000]`. Par conséquent, un `gas_unit_price` de 150 et 299 serait priorisé presque le même.
+</Aside>
+
+<Aside type="note">
+  Notez que le `facteur de sécurité` ne prend en considération que les changements liés à l'exécution et IO. La création inattendue d'emplacements de stockage peut ne pas être suffisamment couverte.
+</Aside>

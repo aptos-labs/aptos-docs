@@ -1,0 +1,138 @@
+---
+title: "Transactions et États"
+description: "Comprenez comment les transactions modifient l'état de la blockchain sur Aptos, incluant les types de transactions, états d'exécution, et le modèle de base de données versionnée."
+sidebar:
+  label: "Transactions & États"
+---
+
+import { ThemedImage } from '~/components/ThemedImage';
+
+import { Aside } from '@astrojs/starlight/components';
+
+La blockchain Aptos stocke trois types de données :
+
+- **Transactions** : Les transactions représentent une opération prévue effectuée par un compte sur la blockchain (par exemple, transférer des actifs).
+- **États** : L'état du registre (blockchain ledger) représente l'accumulation de la sortie de l'exécution des transactions, les valeurs stockées dans toutes les [ressources](/network/blockchain/resources).
+- [**Événements**](/network/blockchain/events) : Données auxiliaires publiées par l'exécution d'une transaction.
+
+<Aside type="note">
+  Seules les transactions peuvent changer l'état du registre.
+</Aside>
+
+## Transactions
+
+Les transactions Aptos contiennent des informations telles que l'adresse du compte de l'expéditeur, l'authentification de l'expéditeur, l'opération souhaitée à effectuer sur la blockchain Aptos, et la quantité de gaz que l'expéditeur est prêt à payer pour exécuter la transaction.
+
+### États des transactions
+
+Une transaction peut se terminer dans l'un des états suivants :
+
+- Validée sur la blockchain et exécutée. Ceci est considéré comme une transaction réussie.
+- Validée sur la blockchain et avortée. Le code d'avortement indique pourquoi la transaction n'a pas pu s'exécuter.
+- Rejetée pendant la soumission de transaction en raison d'une vérification de validation telle qu'un gaz insuffisant, un format de transaction invalide, ou une clé incorrecte.
+- Rejetée après la soumission de transaction mais avant l'exécution tentée. Cela pourrait être causé par des timeouts ou un gaz insuffisant dû à d'autres transactions affectant le compte.
+
+Le compte de l'expéditeur sera facturé du gaz pour toute transaction validée.
+
+Pendant la soumission de transaction, le soumissionnaire est notifié de la soumission réussie ou d'une raison d'échec des validations autrement.
+
+Une transaction qui est soumise avec succès mais finalement rejetée peut n'avoir aucun état visible dans tout nœud Aptos accessible ou dans le réseau Aptos. Un utilisateur peut tenter de ressoumettre la même transaction pour re-valider la transaction. Si le nœud soumissionnaire croit que cette transaction est encore valide, il retournera une erreur indiquant qu'une transaction identique a été soumise.
+
+Le soumissionnaire peut essayer d'augmenter le coût du gaz d'un montant trivial pour aider à progresser et s'ajuster à ce qui pourrait avoir causé le rejet de la transaction plus en aval.
+
+<Aside type="note">
+  Voir [Plongée Profonde dans la Blockchain Aptos](/network/blockchain/blockchain-deep-dive) pour une description complète du cycle de vie des transactions Aptos.
+</Aside>
+
+### Contenu d'une Transaction
+
+Une transaction signée sur la blockchain contient les informations suivantes :
+
+- **Signature** : L'expéditeur utilise une signature digitale pour vérifier qu'il a signé la transaction (c'est-à-dire l'authentification).
+- **Adresse de l'expéditeur** : L'adresse du compte de l'expéditeur.
+- **Clé publique de l'expéditeur** : La clé d'authentification publique qui correspond à la clé d'authentification privée utilisée pour signer la transaction.
+- **Charge utile** : Indique une action ou un ensemble d'actions au nom d'Alice. Dans le cas où il s'agit d'une fonction Move, elle appelle directement dans le bytecode Move sur la chaîne. Alternativement, il peut s'agir de bytecode Move peer-to-peer [script de transaction](/network/glossary#transaction-script). Il contient également une liste d'entrées vers la fonction ou le script. Pour cet exemple, il s'agit d'un appel de fonction pour transférer un montant de pièces Aptos du compte d'Alice vers le compte de Bob, où le compte d'Alice est impliqué par l'envoi de la transaction et le compte de Bob et le montant sont spécifiés comme entrées de transaction.
+- [**Prix unitaire du gaz**](/network/glossary#gas-unit-price) : Le montant que l'expéditeur est prêt à payer par unité de gaz, pour exécuter la transaction. Ceci est représenté en [Octas](/network/glossary#octa).
+- [**Montant maximum de gaz**](/network/glossary#maximum-gas-amount) : Le [montant maximum de gaz](/network/blockchain/gas-txn-fee#specifying-gas-fees-within-a-transaction) en APT que l'expéditeur est prêt à payer pour cette transaction. Les frais de gaz sont égaux au coût de base du gaz couvert par le calcul et IO multiplié par le prix du gaz. Les coûts de gaz incluent également le stockage avec un modèle de stockage à prix fixe APT. Ceci est représenté en [Octas](/network/glossary#octa).
+- **Prix du gaz** (en unités de gaz spécifiées) : Ceci est le montant que l'expéditeur est prêt à payer par unité de [gaz](/network/blockchain/gas-txn-fee) pour exécuter la transaction. Le [gaz](/network/blockchain/gas-txn-fee) est une façon de payer pour le calcul et le stockage. Une unité de gaz est une mesure abstraite de calcul sans valeur inhérente réelle.
+- **Numéro de séquence** : Ceci est un entier non signé qui doit être égal au [numéro de séquence](/network/blockchain/accounts#account-sequence-number) du compte de l'expéditeur au moment de l'exécution.
+- **Heure d'expiration** : Un timestamp après lequel la transaction cesse d'être valide (c'est-à-dire expire).
+
+### Types de charges utiles de transaction
+
+Dans une transaction donnée, les deux types les plus courants de charges utiles incluent :
+
+- Un point d'entrée
+- [Un script (charge utile)](/build/smart-contracts/scripts)
+
+Actuellement, les SDKs [Python](/build/sdks/python-sdk) et [Typescript](/build/sdks/ts-sdk) supportent les deux. Ce guide pointe vers beaucoup de ces points d'entrée, tels que `coin::transfer` et `aptos_account::create_account`.
+
+Toutes les opérations sur la blockchain Aptos devraient être disponibles via des appels de point d'entrée. Bien qu'on puisse soumettre plusieurs transactions appelant des points d'entrée en série, beaucoup de telles opérations peuvent bénéficier d'être appelées atomiquement depuis une seule transaction. Une transaction de charge utile de script peut appeler tout point d'entrée ou fonction publique défini dans tout module.
+
+<Aside type="note">
+  Voir le tutoriel sur [Votre Première Transaction](/build/guides/first-transaction) pour générer des transactions valides.
+</Aside>
+
+<Aside type="note">
+  L'API REST Aptos supporte la génération de transactions encodées BCS depuis JSON. Ceci est utile pour le prototypage rapide, mais soyez prudent en l'utilisant dans Mainnet car cela place beaucoup de confiance sur le fullnode générant la transaction.
+</Aside>
+
+## États
+
+L'état du registre de la blockchain Aptos, ou état global, représente l'état de tous les comptes dans la blockchain Aptos. Chaque nœud validateur dans la blockchain doit connaître la dernière version de l'état global pour exécuter toute transaction.
+
+N'importe qui peut soumettre une transaction à la blockchain Aptos pour modifier l'état du registre. Lors de l'exécution d'une transaction, une sortie de transaction est générée. Une sortie de transaction contient zéro ou plus d'opérations pour manipuler l'état du registre appelées **ensembles d'écriture** émettant un vecteur d'événements résultants, la quantité de gaz consommé, et le statut de la transaction exécutée.
+
+### Preuves
+
+La blockchain Aptos utilise des preuves pour vérifier l'authenticité et la correction des données de la blockchain.
+
+Les données dans la blockchain Aptos sont répliquées à travers le réseau. Le [stockage](/network/blockchain/validator-nodes#storage) de chaque validateur et fullnode est responsable de persister les blocs convenus de transactions et leurs résultats d'exécution dans la base de données.
+
+La blockchain est représentée comme un [arbre de Merkle](/network/glossary#merkle-trees) en croissance constante, où chaque feuille ajoutée à l'arbre représente une seule transaction exécutée par la blockchain.
+
+Toutes les opérations exécutées par la blockchain et tous les états de compte peuvent être vérifiés cryptographiquement. Ces preuves cryptographiques garantissent que :
+
+- Les nœuds validateurs sont d'accord sur l'état.
+- Le client n'a pas besoin de faire confiance à l'entité depuis laquelle il reçoit des données. Par exemple, si un client récupère les dernières **n** transactions d'un compte, une preuve peut attester qu'aucune transaction n'a été ajoutée, omise ou modifiée dans la réponse. Le client peut également interroger l'état d'un compte, demander si une transaction spécifique a été traitée, et ainsi de suite.
+
+### Base de données versionnée
+
+L'état du registre est versionné en utilisant un entier non signé de 64 bits correspondant au nombre de transactions que le système a exécutées. Cette base de données versionnée permet aux nœuds validateurs de :
+
+- Exécuter une transaction contre l'état du registre à la dernière version.
+- Répondre aux requêtes des clients sur l'historique du registre aux versions actuelles et précédentes.
+
+## Les transactions changent l'état du registre
+
+<ThemedImage
+  alt="Flux de Transaction Signée"
+  sources={{
+light: '~/images/transactions-and-state.svg',
+dark: '~/images/transactions-and-state-dark.svg',
+}}
+/>
+
+La figure ci-dessus montre comment l'exécution de la transaction T<sub>_i_</sub> change l'état de la blockchain Aptos de S<sub>_i-1_</sub> à S<sub>_i_</sub>.
+
+Dans la figure :
+
+- Comptes **A** et **B** : Représentent les comptes d'Alice et Bob sur la blockchain Aptos.
+- **S<sub>_i-1_</sub>** : Représente l'état (_i-1_) de la blockchain. Dans cet état, le compte d'Alice **A** a un solde de 110 APT (pièces Aptos), et le compte de Bob **B** a un solde de 52 APT.
+- **T<sub>_i_</sub>** : Ceci est la _i_-ème transaction exécutée sur la blockchain. Dans cet exemple, elle représente Alice envoyant 10 APT à Bob.
+- **Apply()** : Ceci est une fonction déterministe qui retourne toujours le même état final pour un état initial spécifique et une transaction spécifique. Si l'état actuel de la blockchain est **S<sub>_i-1_</sub>**, et que la transaction **T<sub>_i_</sub>** est exécutée sur l'état **S<sub>_i-1_</sub>**, alors le nouvel état de la blockchain est toujours **S<sub>_i_</sub>**. La blockchain Aptos utilise le [langage Move](/build/smart-contracts/book/SUMMARY) pour implémenter la fonction d'exécution déterministe **Apply()**.
+- **S<sub>_i_</sub>** : Ceci est l'état _i_ de la blockchain. Lorsque la transaction **T<sub>_i_</sub>** est appliquée à la blockchain, elle génère le nouvel état **S<sub>_i_</sub>** (un résultat de l'application d'**Apply(S<sub>_i-1_</sub>, T<sub>_i_</sub>)** à **S<sub>_i-1_</sub>** et **T<sub>_i_</sub>**). Cela cause la réduction du solde du compte d'Alice de 10 à 100 APT et l'augmentation du solde du compte de Bob de 10 à 62 APT. Le nouvel état **S<sub>_i_</sub>** montre ces soldes mis à jour.
+
+## Limites de taille
+
+Dans le cadre du calendrier de gaz, il y a des limites configurables on-chain pour les tailles [de la transaction elle-même](https://github.com/aptos-labs/aptos-core/blob/8074588b5c9c4424fa247c2c9ec5572981ee31cd/aptos-move/aptos-gas-schedule/src/gas_schedule/transaction.rs#L71-L81) et [de ses sorties](https://github.com/aptos-labs/aptos-core/blob/8074588b5c9c4424fa247c2c9ec5572981ee31cd/aptos-move/aptos-gas-schedule/src/gas_schedule/transaction.rs#L152-L177).
+
+| Type de Limite        | Limite Actuelle Par Transaction |
+| --------------------- | ------------------------------- |
+| transaction           | 64KB                            |
+| transaction de gouvernance | 1MB                       |
+| une seule opération d'écriture | 1MB                      |
+| toutes les opérations d'écriture combinées | 10MB            |
+| nombre d'opérations d'écriture | 8192                     |
+| un seul événement     | 1MB                             |
+| tous les événements combinés | 10MB                        |

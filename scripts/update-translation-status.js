@@ -9,7 +9,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const LANGUAGES = [
   { code: "fr", name: "French", nativeName: "Français" },
-  { code: "pt", name: "Portuguese", nativeName: "Português" },
+  { code: "pt-BR", name: "Brazilian Portuguese", nativeName: "Português (Brasil)" },
   { code: "ko", name: "Korean", nativeName: "한국어" },
   { code: "ja", name: "Japanese", nativeName: "日本語" },
   { code: "ar", name: "Arabic", nativeName: "العربية" },

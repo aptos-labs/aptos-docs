@@ -1,0 +1,173 @@
+---
+title: "Comptes"
+description: "Comprenez les comptes Aptos, leurs adresses, schémas d'authentification, rotation des clés, numéros de séquence, et comment ils contrôlent les actifs et ressources on-chain."
+sidebar:
+  label: "Comptes"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Un compte sur la blockchain Aptos représente le contrôle d'accès sur un ensemble d'actifs incluant la monnaie on-chain et les NFTs. Dans Aptos, ces actifs sont représentés par une primitive du langage Move connue sous le nom de **ressource** qui met l'accent à la fois sur le contrôle d'accès et la rareté.
+
+Chaque compte sur la blockchain Aptos est identifié par une adresse de compte de 32 octets. Vous pouvez utiliser le service Aptos Name Service sur [www.aptosnames.com](https://www.aptosnames.com/) pour sécuriser des domaines .apt pour les comptes clés afin de les rendre mémorables et uniques.
+
+Contrairement à d'autres blockchains où les comptes et adresses sont implicites, les comptes sur Aptos sont explicites et doivent être créés avant de pouvoir exécuter des transactions. Le compte peut être créé explicitement ou implicitement en transférant des jetons Aptos (APT) vers celui-ci. Voir la section [Création d'un compte](#création-dun-compte) pour plus de détails. D'une certaine manière, cela est similaire aux autres chaînes où une adresse doit recevoir des fonds pour le gaz avant de pouvoir envoyer des transactions.
+
+Les comptes explicites permettent des fonctionnalités de première classe qui ne sont pas disponibles sur d'autres réseaux telles que :
+
+- Rotation de la clé d'authentification. La clé d'authentification du compte peut être changée pour être contrôlée via une clé privée différente. Cela est similaire au changement de mot de passe dans le monde web2.
+- Support natif multisig. Les comptes sur Aptos supportent k-sur-n multisig utilisant à la fois les schémas de signature Ed25519 et Secp256k1 ECDSA lors de la construction de la clé d'authentification.
+
+Il y a trois types de comptes sur Aptos :
+
+- _Compte standard_ - Il s'agit d'un compte typique correspondant à une adresse avec une paire correspondante de clés publiques/privées.
+- [_Compte ressource_](/build/smart-contracts/resource-accounts) - Un compte autonome sans clé privée correspondante utilisé par les développeurs pour stocker des ressources ou publier des modules on-chain.
+- [_Objet_](/build/smart-contracts/objects) - Un ensemble complexe de ressources stockées dans une seule adresse représentant une seule entité.
+
+<Aside type="note">
+  Les adresses de compte sont de 32 octets. Elles sont généralement affichées sous forme de 64 caractères hexadécimaux, chaque caractère hexadécimal étant un nibble.
+  Parfois l'adresse est préfixée par un 0x. Voir [Votre Première Transaction](/build/guides/first-transaction) pour un exemple
+  de l'apparence d'une adresse, reproduit ci-dessous :
+</Aside>
+
+```text
+Alice: 0xeeff357ea5c1a4e7bc11b2b17ff2dc2dcca69750bfef1e1ebcaccf8c8018175b
+Bob: 0x19aadeca9388e009d136245b9a67423f3eee242b03142849eb4f81a4a409e59c
+```
+
+## Adresse du compte
+
+Actuellement, Aptos supporte seulement un identifiant unifié unique pour un compte. Les comptes sur Aptos sont universellement représentés sous forme de chaîne hexadécimale de 32 octets. Une chaîne hexadécimale plus courte que 32 octets est également valide ; dans ces scénarios, la chaîne hexadécimale peut être complétée avec des zéros en tête, par exemple `0x1` => `0x0000000000000...01`. Bien que les standards Aptos indiquent que les zéros en tête peuvent être supprimés d'une adresse, la plupart des applications tentent d'éviter ce comportement hérité et ne supportent la suppression des 0s que pour les adresses spéciales allant de `0x0` à `0xa`.
+
+## Création d'un compte
+
+Lorsqu'un utilisateur demande de créer un compte, par exemple en utilisant le [SDK Aptos](/build/sdks/ts-sdk/account), les étapes suivantes sont exécutées :
+
+- Sélectionner le schéma d'authentification pour gérer le compte de l'utilisateur, par exemple Ed25519 ou Secp256k1 ECDSA.
+- Générer une nouvelle paire de clés privée/publique.
+- Combiner la clé publique avec le schéma d'authentification de la clé publique pour générer une clé d'authentification de 32 octets et l'adresse du compte.
+
+L'utilisateur devrait utiliser la clé privée pour signer les transactions associées à ce compte.
+
+## Numéro de séquence du compte
+
+Le numéro de séquence d'un compte indique le nombre de transactions qui ont été soumises et validées on-chain depuis ce compte. Les transactions validées soit s'exécutent avec les changements d'état résultants validés sur la blockchain, soit avortent où les changements d'état sont rejetés et seulement la transaction est stockée.
+
+Chaque transaction soumise doit contenir un numéro de séquence unique pour le compte de l'expéditeur donné. Lorsque la blockchain Aptos traite la transaction, elle regarde le numéro de séquence dans la transaction et le compare avec le numéro de séquence dans le compte on-chain. La transaction n'est traitée que si le numéro de séquence est égal ou supérieur au numéro de séquence actuel. Les transactions ne sont transmises aux autres mempools ou exécutées que s'il y a une série contiguë de transactions depuis le numéro de séquence actuel. L'exécution rejette les numéros de séquence hors d'ordre, empêchant les attaques de rejeu des anciennes transactions et garantissant l'ordonnancement des futures transactions.
+
+## Clé d'authentification
+
+L'adresse de compte initiale est définie sur la clé d'authentification dérivée lors de la création du compte. Cependant, la clé d'authentification peut changer par la suite, par exemple lorsque vous générez une nouvelle paire de clés publique-privée, clés publiques pour faire tourner les clés. Une adresse de compte ne change jamais.
+
+La blockchain Aptos supporte les schémas d'authentification suivants :
+
+1. [Ed25519](https://ed25519.cr.yp.to/)
+2. [Secp256k1 ECDSA](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-49.md)
+3. [Signatures multi K-sur-N](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-55.md)
+4. Un schéma MultiEd25519 dédié, maintenant hérité
+
+<Aside type="note">
+  La blockchain Aptos utilise par défaut les transactions de signature Ed25519.
+</Aside>
+
+### Authentification Ed25519
+
+Pour générer une clé d'authentification et l'adresse du compte pour une signature Ed25519 :
+
+1. **Générer une paire de clés** : Générer une nouvelle paire de clés (`privkey_A`, `pubkey_A`). La blockchain Aptos utilise le schéma PureEdDSA sur la courbe Ed25519, tel que défini dans RFC 8032.
+2. **Dériver une clé d'authentification de 32 octets** : Dériver une clé d'authentification de 32 octets de `pubkey_A` :
+   ```text
+   auth_key = sha3-256(pubkey_A | 0x00)
+   ```
+   où `|` dénote la concaténation. Le `0x00` est l'identifiant du schéma de signature unique de 1 octet.
+3. Utiliser cette clé d'authentification initiale comme adresse de compte permanente.
+
+### Authentification MultiEd25519
+
+Avec l'authentification multisig K-sur-N, il y a un total de N signataires pour le compte, et au moins K de ces N signatures doivent être utilisées pour authentifier une transaction.
+
+Pour générer la clé d'authentification et l'adresse du compte d'un compte multisig K-sur-N :
+
+1. **Générer des paires de clés** : Générer `N` clés publiques ed25519 `p_1`, ..., `p_n`.
+2. Décider de la valeur de `K`, le nombre seuil de signatures nécessaires pour authentifier la transaction.
+3. **Dériver une clé d'authentification de 32 octets** : Calculer la clé d'authentification comme décrit ci-dessous :
+   ```text
+   auth_key = sha3-256(p_1 | . . . | p_n | K | 0x01)
+   ```
+   Le `0x01` est l'identifiant du schéma multisig de 1 octet.
+4. Utiliser cette clé d'authentification initiale comme adresse de compte permanente.
+
+### Authentification généralisée
+
+L'authentification généralisée supporte à la fois Ed25519 et Secp256k1 ECDSA. Comme les schémas d'authentification précédents, ces schémas contiennent une valeur de schéma, `0x02` et `0x03` pour mono et multiclé respectivement, mais chaque clé contient également une valeur de préfixe pour indiquer son type de clé :
+
+| Type de clé                         | Octet de préfixe |
+| ----------------------------------- | ---------------- |
+| Schéma généralisé Ed25519          | `0x00`          |
+| Schéma généralisé Secp256k1Ecdsa   | `0x01`          |
+| Schéma WebAuthn Secp256r1Ecdsa     | `0x02`          |
+| Keyless                            | `0x03`          |
+
+Pour un compte mono-clé Secp256k1 ECDSA, utilisant la clé publique `pubkey`, la clé d'authentification serait dérivée comme suit :
+
+```text
+auth_key = sha3-256(0x01 | pubkey | 0x02)
+```
+
+Où
+
+- la première entrée, `0x01`, représente l'utilisation d'une clé Secp256k1 ECDSA ;
+- la dernière entrée, `0x02`, représente le schéma d'authentification.
+
+Pour un compte multiclé 1-sur-2 contenant une clé publique Secp256k1 ECDSA unique, `pubkey_0`, et une clé publique Ed25519 unique, `pubkey_1`, où une signature suffit, la clé d'authentification serait dérivée comme suit :
+
+```text
+auth_key = sha3-256(0x02 | 0x01 | pubkey_0 | 0x00 | pubkey_1 | 0x01 | 0x03)
+```
+
+Où
+
+- la première entrée, `0x02`, représente le nombre total de clés en tant qu'octet unique ;
+- l'avant-dernière entrée, `0x01`, représente le nombre requis de signatures en tant qu'octet unique ;
+- la dernière entrée, `0x03`, représente le schéma d'authentification.
+
+## Rotation des clés
+
+Un compte sur Aptos a la capacité de faire tourner les clés afin que les clés potentiellement compromises ne puissent pas être utilisées pour accéder aux comptes. Les clés peuvent être tournées via la fonction `account::rotate_authentication_key`.
+
+Rafraîchir les clés est généralement considéré comme une bonne hygiène dans le domaine de la sécurité. Cependant, cela présente un défi pour les intégrateurs système qui sont habitués à utiliser un mnémonique pour représenter à la fois une clé privée et son compte associé. Pour simplifier cela pour les intégrateurs système, Aptos fournit un mapping on-chain via aptos account lookup-address. Les données on-chain mappent une adresse de compte effective telle que définie par le mnémonique actuel à l'adresse de compte réelle.
+
+Pour plus d'informations, voir [`account.move`](https://github.com/aptos-labs/aptos-core/blob/a676c1494e246c31c5e96d3363d99e2422e30f49/aptos-move/framework/aptos-framework/sources/account.move#L274).
+
+## État d'un compte
+
+L'état de chaque compte comprend à la fois le code (modules Move) et les données (ressources Move). Un compte peut contenir un nombre arbitraire de modules Move et de ressources Move :
+
+- **Modules Move** : Les modules Move contiennent du code, par exemple, déclarations de type et de procédure ; mais ils ne contiennent pas de données. Un module Move encode les règles pour mettre à jour l'état global de la blockchain Aptos.
+- **Ressources Move** : Les ressources Move contiennent des données mais pas de code. Chaque valeur de ressource a un type qui est déclaré dans un module publié sur la blockchain Aptos.
+
+## Contrôle d'accès avec les signataires
+
+L'expéditeur d'une transaction est représenté par un signataire. Lorsqu'une fonction dans un module Move prend `signer` comme argument, la VM Aptos Move traduit l'identité du compte qui a signé la transaction en un signataire dans un point d'entrée de module Move. Voir l'exemple de code Move ci-dessous avec `signer` dans les fonctions `initialize` et `withdraw`. Lorsqu'un `signer` n'est pas spécifié dans une fonction, par exemple, la fonction `deposit` ci-dessous, alors aucun contrôle d'accès basé sur le signataire ne sera fourni pour cette fonction :
+
+```move filename="coin.move" /account: &signer/
+module Test::Coin {
+  struct Coin has key { amount: u64 }
+
+  public fun initialize(account: &signer) {
+    move_to(account, Coin { amount: 1000 });
+  }
+
+  public fun withdraw(account: &signer, amount: u64): Coin acquires Coin {
+    let balance = &mut borrow_global_mut<Coin>(Signer::address_of(account)).amount;
+    *balance = *balance - amount;
+    Coin { amount }
+  }
+
+  public fun deposit(account: address, coin: Coin) acquires Coin {
+      let balance = &mut borrow_global_mut<Coin>(account).amount;
+      *balance = *balance + coin.amount;
+      Coin { amount: _ } = coin;
+  }
+}
+```

@@ -1,0 +1,60 @@
+---
+title: "Ethereum'dan Aptos'a Geçiş Kılavuzu"
+description: "Aptos blok zinciri geliştirmeye geçiş yapan Ethereum geliştiricileri için kapsamlı karşılaştırma ve geçiş kılavuzu"
+sidebar:
+  label: "Ethereum → Aptos"
+---
+
+Farklılıklar ve benzerlikler hakkında daha fazla bilgi için [Aptos Learn](https://learn.aptoslabs.com/en/tutorials/ethereum-to-aptos-guide/cheat-sheet?workshop=eth-to-aptos)'e bakın
+
+### Yüksek Düzey Genel Bakış
+
+| Özellik                       | Ethereum                                                                                                                       | Aptos                                                                 |
+|-------------------------------|-------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------|
+| **Akıllı Sözleşmeler**        | Solidity, EVM                                                                                                                  | Move, MoveVM                                                          |
+| **Avantajlar**                | Olgun, geniş kabul                                                                                                            | Ölçeklenebilirlik, düşük gecikme, öngörülebilir ücretler              |
+| **İşlem Ücretleri**           | Değişken, yüksek olabilir                                                                                                     | Daha düşük ve daha öngörülebilir                                      |
+| **Hesap Adresleri**           | 160 bit                                                                                                                        | 256 bit                                                               |
+| **Hesap Yapısı**              | Tek alanda bakiye, nonce kullanır                                                                                              | Modüller ve kaynaklar, sequence number kullanır                       |
+| **Veri Depolama**             | Patricia Merkle ağaçları                                                                                                      | Kaynaklar ve modüllerle küresel depolama                              |
+| **Depolama Zihniyeti**        | Sözleşme tabanlı depolama                                                                                                     | Kod ve veri için hesap merkezli zihniyet                              |
+| **Kod Örneği**                | [ERC-20](https://github.com/OpenZeppelin/openzeppelin-contracts/tree/master/contracts/token/ERC20)                             | [Fungible Asset](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/fungible_asset.move) |
+| **Çağıran Kimliği**           | `msg.sender`                                                                                                                   | `&signer` referansı                                                    |
+| **Yükseltilebilirlik**        | Proxy desenleri                                                                                                                | Doğrudan modül yükseltmeleri                                          |
+| **Güvenlik ve Güvenlik**      | Reentrancy gibi saldırılara karşı savunmasız                                                                                    | Yaygın güvenlik açıklarını azaltır                                    |
+| **Dispatch Türü**             | Dinamik dispatch                                                                                                               | Statik dispatch                                                       |
+| **FT Standardı**               | [ERC-20](https://docs.openzeppelin.com/contracts/4.x/erc20)                                                                    | [Coin](/build/smart-contracts/aptos-coin) (legacy) ve [Fungible Asset](/build/smart-contracts/fungible-asset) |
+| **NFT Standartları**          | [ERC-721](https://docs.openzeppelin.com/contracts/4.x/erc721), [ERC-1155](https://docs.openzeppelin.com/contracts/4.x/erc1155) | [Digital Asset](/build/smart-contracts/digital-asset)                 |
+| **Blok Zinciri Etkileşimi**   | [Ethers.js kütüphanesi](https://docs.ethers.org/v6/)                                                                           | [Aptos TypeScript SDK](/build/sdks/ts-sdk)                            |
+
+<br />
+
+### Token Standartlarının Detaylı Karşılaştırması
+
+|                        | Solidity                                                               | Move (Aptos)                                                                 |
+|------------------------|------------------------------------------------------------------------|------------------------------------------------------------------------------|
+| **Token Yapısı**       | Her token kendi sözleşmesidir.                                         | Her token tek kullanımlık sözleşmeyi kullanarak yazılan `Coin` veya `FungibleAsset`'tır. |
+| **Token Standardı**    | ERC20 gibi standartlara uymalıdır; uygulamalar farklılık gösterebilir. | Tüm token'lar için tek tip arayüz ve uygulama.                               |
+| **Bakiye Depolama**    | Bakiyeler mapping yapısını kullanarak sözleşmede depolanır.           | **Kaynak Odaklı Bakiye**: Bakiyeler kullanıcının hesabında kaynak olarak depolanır. Kaynaklar rastgele oluşturulamadığından, token değerinin bütünlüğü sağlanır. |
+| **Transfer Mekanizması** | Token'lar alıcının açık izni olmadan transfer edilebilir.              | Belirli durumlar hariç (AptosCoin gibi), token'lar genellikle transfer için alıcının `signer` yetkisini gerektirir. |
+
+<br />
+
+### EVM ve Move VM'nin Detaylı Karşılaştırması
+
+- **EVM**: Esnekliği ve dinamik dispatch'iyle bilinir, bu da geniş bir akıllı sözleşme davranışı yelpazesine izin verir. Bu esneklik ancak paralel yürütme ve ağ işlemlerinde karmaşıklıklara yol açabilir.
+- **Move VM**: Güvenlik ve verimliliğe odaklanır, VM ve programlama dili arasında daha entegre bir yaklaşım sunar. Veri depolama modeli daha iyi paralellemeye izin verir ve statik dispatch metodu güvenliği ve öngörülebilirliği artırır.
+
+<br />
+
+|                                 | EVM (Ethereum Virtual Machine)                                         | Move VM (Move Virtual Machine)                                     |
+|---------------------------------|------------------------------------------------------------------------|-------------------------------------------------------------------|
+| **Veri Depolama**               | Veri akıllı sözleşmenin depolama alanında saklanır.                   | Veri akıllı sözleşmeler, kullanıcı hesapları ve nesneler arasında saklanır. |
+| **Paralelleştirme**             | Paralel yürütme ortak depolama alanı nedeniyle sınırlıdır.            | Esnek bölünmüş depolama tasarımı sayesinde daha fazla paralel yürütme. |
+| **VM ve Dil Entegrasyonu**      | EVM ve akıllı sözleşme dilleri (örneğin Solidity) için ayrı katmanlar. | VM katmanı ve Move dili arasında kusursuz entegrasyon, Rust'ta yazılan yerel fonksiyonlar Move'da çalıştırılabilir. |
+| **Kritik Ağ İşlemleri**         | Ağ işlemlerinin uygulanması karmaşık ve dolaylı olabilir.             | Doğrulayıcı kümesi yönetimi gibi kritik işlemler Move'da yerel olarak uygulanır, doğrudan yürütmeye izin verir. |
+| **Fonksiyon Çağrısı**           | Dinamik dispatch rastgele akıllı sözleşme çağrılarına izin verir.      | Statik dispatch güvenlik ve öngörülebilir davranış odağına uyar. |
+| **Tip Güvenliği**               | Sözleşme tipleri tip güvenliğinin bir seviyesini sağlar.              | Move'daki modül yapıları ve generics güçlü tip güvenliği sağlar.  |
+| **İşlem Güvenliği**             | İşlem sırası ve güvenliği için nonce'ları kullanır.                   | İşlem sırası ve güvenliği için sequence number'ları kullanır.     |
+| **Kimlik Doğrulamalı Depolama** | Evet, akıllı sözleşme depolama ile.                                    | Evet, Move'un kaynak modelini kullanarak.                         |
+| **Nesne Erişilebilirliği**      | Nesnelere küresel olarak erişilemez; akıllı sözleşme kapsamına bağlıdır. | Nesnelerin küresel erişilebilirliği garanti edilir.               |

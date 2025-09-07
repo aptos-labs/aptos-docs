@@ -1,0 +1,60 @@
+---
+title: "Guia de Migração Ethereum para Aptos"
+description: "Comparação abrangente e guia de migração para desenvolvedores Ethereum fazendo a transição para desenvolvimento blockchain Aptos"
+sidebar:
+  label: "Ethereum → Aptos"
+---
+
+Para saber mais sobre as diferenças e semelhanças, consulte [Aptos Learn](https://learn.aptoslabs.com/en/tutorials/ethereum-to-aptos-guide/cheat-sheet?workshop=eth-to-aptos)
+
+### Visão Geral de Alto Nível
+
+| Recurso                    | Ethereum                                                                                                                       | Aptos                                                                 |
+|----------------------------|-------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------|
+| **Contratos Inteligentes** | Solidity, EVM                                                                                                                  | Move, MoveVM                                                          |
+| **Benefícios**             | Maduro, ampla adoção                                                                                                          | Escalabilidade, baixa latência, taxas previsíveis                    |
+| **Taxas de Transação**     | Variáveis, podem ser altas                                                                                                    | Mais baixas e mais previsíveis                                        |
+| **Endereços de Conta**     | 160-bit                                                                                                                        | 256-bit                                                               |
+| **Estrutura de Conta**     | Saldo em um campo único, usa nonce                                                                                             | Módulos e recursos, usa número de sequência                          |
+| **Armazenamento de Dados** | Árvores de Merkle Patricia                                                                                                     | Armazenamento global com recursos e módulos                          |
+| **Mentalidade de Armazenamento** | Armazenamento baseado em contrato                                                                                              | Mentalidade centrada em conta para código e dados                    |
+| **Exemplo de Código**      | [ERC-20](https://github.com/OpenZeppelin/openzeppelin-contracts/tree/master/contracts/token/ERC20)                             | [Ativo Fungível](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/fungible_asset.move) |
+| **ID do Chamador**         | `msg.sender`                                                                                                                   | Referência `&signer`                                                  |
+| **Atualizabilidade**       | Padrões proxy                                                                                                                  | Atualizações diretas de módulo                                        |
+| **Segurança e Segurança**  | Vulnerável a ataques como reentrância                                                                                          | Mitiga vulnerabilidades comuns                                        |
+| **Tipo de Dispatch**       | Dispatch dinâmico                                                                                                              | Dispatch estático                                                     |
+| **Padrão FT**              | [ERC-20](https://docs.openzeppelin.com/contracts/4.x/erc20)                                                                    | [Coin](/build/smart-contracts/aptos-coin) (legacy) e [Ativo Fungível](/build/smart-contracts/fungible-asset) |
+| **Padrões NFT**            | [ERC-721](https://docs.openzeppelin.com/contracts/4.x/erc721), [ERC-1155](https://docs.openzeppelin.com/contracts/4.x/erc1155) | [Ativo Digital](/build/smart-contracts/digital-asset)                 |
+| **Interação Blockchain**   | [Biblioteca Ethers.js](https://docs.ethers.org/v6/)                                                                            | [SDK TypeScript Aptos](/build/sdks/ts-sdk)                            |
+
+<br />
+
+### Comparação Detalhada de Padrões de Token
+
+|                        | Solidity                                                               | Move (Aptos)                                                                 |
+|------------------------|------------------------------------------------------------------------|------------------------------------------------------------------------------|
+| **Estrutura de Token** | Cada token é seu próprio contrato.                                     | Cada token é um `Coin` ou `FungibleAsset` tipado usando um contrato único e reutilizável. |
+| **Padrão de Token**    | Deve estar em conformidade com padrões como ERC20; implementações podem variar. | Interface uniforme e implementação para todos os tokens.                     |
+| **Armazenamento de Saldo** | Saldos armazenados no contrato usando uma estrutura de mapeamento.     | **Saldo Orientado a Recursos**: Saldos armazenados como um recurso na conta do usuário. Recursos não podem ser criados arbitrariamente, garantindo a integridade do valor do token. |
+| **Mecanismo de Transferência** | Tokens podem ser transferidos sem permissão explícita do destinatário. | Exceto para casos específicos (como AptosCoin), tokens geralmente requerem autoridade `signer` do destinatário para transferência. |
+
+<br />
+
+### Comparação Detalhada de EVM e Move VM
+
+- **EVM**: Conhecido por sua flexibilidade e dispatch dinâmico, que permite uma ampla gama de comportamentos de contratos inteligentes. Esta flexibilidade, no entanto, pode levar a complexidades na execução paralela e operações de rede.
+- **Move VM**: Foca na segurança e eficiência com uma abordagem mais integrada entre a VM e a linguagem de programação. Seu modelo de armazenamento de dados permite melhor paralelização, e seu método de dispatch estático aprimora segurança e previsibilidade.
+
+<br />
+
+|                                 | EVM (Ethereum Virtual Machine)                                         | Move VM (Move Virtual Machine)                                     |
+|---------------------------------|------------------------------------------------------------------------|-------------------------------------------------------------------|
+| **Armazenamento de Dados**      | Dados são armazenados no espaço de armazenamento do contrato inteligente. | Dados são armazenados entre contratos inteligentes, contas de usuário e objetos. |
+| **Paralelização**               | Execução paralela é limitada devido ao espaço de armazenamento compartilhado. | Mais execução paralela habilitada devido ao design flexível de armazenamento dividido. |
+| **Integração VM e Linguagem**   | Camadas separadas para EVM e linguagens de contratos inteligentes (ex., Solidity). | Integração perfeita entre a camada VM e a linguagem Move, com funções nativas escritas em Rust executáveis em Move. |
+| **Operações de Rede Críticas**  | Implementação de operações de rede pode ser complexa e menos direta.   | Operações críticas como gerenciamento do conjunto de validadores são implementadas nativamente em Move, permitindo execução direta. |
+| **Chamada de Função**           | Dispatch dinâmico permite chamadas arbitrárias de contratos inteligentes. | Dispatch estático se alinha com um foco em segurança e comportamento previsível. |
+| **Segurança de Tipo**           | Tipos de contrato fornecem um nível de segurança de tipo.               | Structs de módulo e genéricos em Move oferecem segurança de tipo robusta. |
+| **Segurança de Transação**      | Usa nonces para ordenação e segurança de transação.                    | Usa números de sequência para ordenação e segurança de transação. |
+| **Armazenamento Autenticado**   | Sim, com armazenamento de contrato inteligente.                        | Sim, aproveitando o modelo de recursos do Move.                   |
+| **Acessibilidade de Objeto**    | Objetos não são globalmente acessíveis; vinculados ao escopo do contrato inteligente. | Acessibilidade global garantida de objetos.                       |

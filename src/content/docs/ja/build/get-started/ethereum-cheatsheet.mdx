@@ -1,60 +1,60 @@
 ---
-title: "EthereumからAptosへの移行ガイド"
-description: "Aptosブロックチェーン開発に移行するEthereum開発者向けの包括的な比較と移行ガイド"
+title: "Ethereum to Aptos Migration Guide"
+description: "Comprehensive comparison and migration guide for Ethereum developers transitioning to Aptos blockchain development"
 sidebar:
   label: "Ethereum → Aptos"
 ---
 
-違いと類似点の詳細については[Aptos Learn](https://learn.aptoslabs.com/en/tutorials/ethereum-to-aptos-guide/cheat-sheet?workshop=eth-to-aptos)を参照してください
+To learn more about the differences and similarities see [Aptos Learn](https://learn.aptoslabs.com/en/tutorials/ethereum-to-aptos-guide/cheat-sheet?workshop=eth-to-aptos)
 
-### 高レベルの概要
+### High Level Overview
 
-| 機能                        | Ethereum                                                                                                                       | Aptos                                                                 |
-|-----------------------------|-------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------|
-| **スマートコントラクト**    | Solidity, EVM                                                                                                                  | Move, MoveVM                                                          |
-| **利点**                    | 成熟、大規模採用                                                                                                              | スケーラビリティ、低遅延、予測可能な手数料                           |
-| **トランザクション手数料**  | 変動的、高くなる可能性                                                                                                        | より低く、より予測可能                                               |
-| **アカウントアドレス**      | 160ビット                                                                                                                      | 256ビット                                                             |
-| **アカウント構造**          | 単一フィールドの残高、nonce使用                                                                                                | モジュールとリソース、シーケンス番号使用                             |
-| **データストレージ**        | Patricia Merkleツリー                                                                                                          | リソースとモジュールによるグローバルストレージ                      |
-| **ストレージマインドセット** | コントラクトベースストレージ                                                                                                   | コードとデータのためのアカウント中心マインドセット                   |
-| **サンプルコード**          | [ERC-20](https://github.com/OpenZeppelin/openzeppelin-contracts/tree/master/contracts/token/ERC20)                             | [Fungible Asset](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/fungible_asset.move) |
-| **呼び出し元ID**           | `msg.sender`                                                                                                                   | `&signer`参照                                                         |
-| **アップグレード可能性**    | プロキシパターン                                                                                                               | 直接モジュールアップグレード                                          |
-| **安全性とセキュリティ**    | リエントランスなどの攻撃に対して脆弱                                                                                            | 一般的な脆弱性を軽減                                                  |
-| **ディスパッチタイプ**      | 動的ディスパッチ                                                                                                                | 静的ディスパッチ                                                       |
-| **FT標準**                  | [ERC-20](https://docs.openzeppelin.com/contracts/4.x/erc20)                                                                    | [Coin](/build/smart-contracts/aptos-coin) (legacy) と [Fungible Asset](/build/smart-contracts/fungible-asset) |
-| **NFT標準**                 | [ERC-721](https://docs.openzeppelin.com/contracts/4.x/erc721), [ERC-1155](https://docs.openzeppelin.com/contracts/4.x/erc1155) | [Digital Asset](/build/smart-contracts/digital-asset)                 |
-| **ブロックチェーン相互作用** | [Ethers.jsライブラリ](https://docs.ethers.org/v6/)                                                                              | [Aptos TypeScript SDK](/build/sdks/ts-sdk)                            |
-
-<br />
-
-### トークン標準の詳細比較
-
-|                        | Solidity                                                               | Move (Aptos)                                                                 |
-|------------------------|------------------------------------------------------------------------|------------------------------------------------------------------------------|
-| **トークン構造**      | 各トークンは独自のコントラクトです。                                  | すべてのトークンは単一の再利用可能なコントラクトを使用して型付けされた`Coin`または`FungibleAsset`です。 |
-| **トークン標準**      | ERC20などの標準に準拠する必要があります；実装が異なる場合があります。 | すべてのトークンに対する統一されたインターフェースと実装。                  |
-| **残高ストレージ**    | マッピング構造を使用してコントラクトに残高を保存。                    | **リソース指向残高**: 残高はユーザーのアカウントにリソースとして保存されます。リソースは任意に作成できないため、トークン価値の完全性を確保します。 |
-| **転送メカニズム**    | 受信者の明示的な許可なしにトークンを転送できます。                    | 特定のケース(AptosCoinなど)を除き、トークンは通常転送のために受信者の`signer`権限が必要です。 |
+| Feature                    | Ethereum                                                                                                                       | Aptos                                                                                                                                 |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| **スマートコントラクトs**        | Solidity, EVM                                                                                                                  | Move, MoveVM                                                                                                                          |
+| **Benefits**               | Mature, wide adoption                                                                                                          | Scalability, low latency, predictable fees                                                                                            |
+| **Transaction Fees**       | Variable, can be high                                                                                                          | Lower and more predictable                                                                                                            |
+| **Account Addresses**      | 160-bit                                                                                                                        | 256-bit                                                                                                                               |
+| **Account Structure**      | Balance in a single field, uses nonce                                                                                          | Modules and resources, uses sequence number                                                                                           |
+| **Data Storage**           | Patricia Merkle Trees                                                                                                          | Global storage with resources and modules                                                                                             |
+| **Storage Mindset**        | Contract-based storage                                                                                                         | Account centric mindset for code and data                                                                                             |
+| **Example Code**           | [ERC-20](https://github.com/OpenZeppelin/openzeppelin-contracts/tree/master/contracts/token/ERC20)                             | [Fungible Asset](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/fungible_asset.move) |
+| **Caller ID**              | `msg.sender`                                                                                                                   | `&signer` reference                                                                                                                   |
+| **Upgradeability**         | Proxy patterns                                                                                                                 | Direct module upgrades                                                                                                                |
+| **Safety & Security**  | Vulnerable to attacks like reentrancy                                                                                          | Mitigates common vulnerabilities                                                                                                      |
+| **Dispatch Type**          | Dynamic dispatch                                                                                                               | Static dispatch                                                                                                                       |
+| **FT Standard**            | [ERC-20](https://docs.openzeppelin.com/contracts/4.x/erc20)                                                                    | [Coin](/build/smart-contracts/aptos-coin) (legacy) and [Fungible Asset](/build/smart-contracts/fungible-asset)                        |
+| **NFT Standards**          | [ERC-721](https://docs.openzeppelin.com/contracts/4.x/erc721), [ERC-1155](https://docs.openzeppelin.com/contracts/4.x/erc1155) | [Digital Asset](/build/smart-contracts/digital-asset)                                                                                 |
+| **Blockchain Interaction** | [Ethers.js library](https://docs.ethers.org/v6/)                                                                               | [Aptos Typescript SDK](/build/sdks/ts-sdk)                                                                                            |
 
 <br />
 
-### EVMとMove VMの詳細比較
+### Comparing Token Standards in Detail
 
-- **EVM**: 柔軟性と動的ディスパッチで知られており、これは幅広いスマートコントラクト動作を可能にします。この柔軟性はしかし、並列実行とネットワーク操作における複雑性を引き起こす可能性があります。
-- **Move VM**: VMとプログラミング言語間のより統合されたアプローチでセキュリティと効率性に焦点を当てています。そのデータストレージモデルはより優れた並列化を可能にし、静的ディスパッチ方法はセキュリティと予測可能性を向上させます。
+|                        | Solidity                                                               | Move (Aptos)                                                                                                                                                         |
+| ---------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Token Structure**    | Each token is its own contract.                                        | Every token is a typed `Coin` or `FungibleAsset` using a single, reusable contract.                                                                                  |
+| **Token Standard**     | Must conform to standards like ERC20; implementations can vary.        | Uniform interface and implementation for all tokens.                                                                                                                 |
+| **Balance Storage**    | Balances stored in contract using a mapping structure.                 | **Resource-Oriented Balance**: Balances stored as a resource in the user's account. Resources cannot be arbitrarily created, ensuring integrity of token value. |
+| **Transfer Mechanism** | Tokens can be transferred without receiver's explicit permission. | Except for specific cases (like AptosCoin), Tokens generally require receiver's `signer` authority for transfer.                                                |
 
 <br />
 
-|                                 | EVM (Ethereum Virtual Machine)                                         | Move VM (Move Virtual Machine)                                     |
-|---------------------------------|------------------------------------------------------------------------|-------------------------------------------------------------------|
-| **データストレージ**            | データはスマートコントラクトのストレージスペースに保存されます。      | データはスマートコントラクト、ユーザーアカウント、オブジェクトにまたがって保存されます。 |
-| **並列化**                      | 共有ストレージスペースのため並列実行が制限されます。                  | 柔軟な分割ストレージ設計により、より多くの並列実行が可能になります。 |
-| **VMと言語の統合**              | EVMとスマートコントラクト言語(例: Solidity)の別々のレイヤー。         | VMレイヤーとMove言語間のシームレスな統合、Rustで記述されたネイティブ関数がMoveで実行可能。 |
-| **重要なネットワーク操作**      | ネットワーク操作の実装が複雑であまり直接的でない場合があります。      | バリデータセット管理などの重要な操作がMoveでネイティブに実装され、直接実行を可能にします。 |
-| **関数呼び出し**                | 動的ディスパッチが任意のスマートコントラクト呼び出しを許可します。     | 静的ディスパッチがセキュリティと予測可能な動作に焦点を当てています。 |
-| **型安全性**                    | コントラクト型が型の安全性のレベルを提供します。                     | Moveのモジュール構造とジェネリックが堅牢な型安全性を提供します。     |
-| **トランザクション安全性**       | トランザクションの順序と安全性のためのnonceを使用します。             | トランザクションの順序と安全性のためのシーケンス番号を使用します。   |
-| **認証ストレージ**              | スマートコントラクトストレージで可能。                               | Moveのリソースモデルを活用して可能。                              |
-| **オブジェクトアクセシビリティ** | オブジェクトはグローバルにアクセスできません；スマートコントラクトスコープにバインドされます。 | オブジェクトのグローバルアクセシビリティが保証されます。            |
+### Comparing EVM and Move VM in Detail
+
+- **EVM**: Known for its flexibility and dynamic dispatch, which allows a wide range of smart contract behaviors. This flexibility, however, can lead to complexities in parallel execution and network operations.
+- **Move VM**: Focuses on safety and efficiency with a more integrated approach between the VM and the programming language. Its data storage model allows for better parallelization, and its static dispatch method enhances security and predictability.
+
+<br />
+
+|                                 | EVM (Ethereum Virtual Machine)                                         | Move VM (Move Virtual Machine)                                                                                     |
+| ------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **Data Storage**                | Data is stored in the smart contract's storage space.             | Data is stored across smart contracts, user accounts, and objects.                                                 |
+| **Parallelization**             | Parallel execution is limited due to shared storage space.             | More parallel execution enabled due to flexible split storage design.                                              |
+| **VM and Language Integration** | Separate layers for EVM and smart contract languages (e.g., Solidity). | Seamless integration between VM layer and Move language, with native functions written in Rust executable in Move. |
+| **Critical Network Operations** | Implementation of network operations can be complex and less direct.   | Critical operations like validator set management natively implemented in Move, allowing for direct execution.     |
+| **Function Calling**            | Dynamic dispatch allows for arbitrary smart contract calls.            | Static dispatch aligns with a focus on security and predictable behavior.                                          |
+| **Type Safety**                 | Contract types provide a level of type safety.                         | Module structs and generics in Move offer robust type safety.                                                      |
+| **Transaction Safety**          | Uses nonces for transaction ordering and safety.                       | Uses sequence numbers for transaction ordering and safety.                                                         |
+| **Authenticated Storage**       | Yes, with smart contract storage.                                      | Yes, leveraging Move’s resource model.                                                                             |
+| **Object Accessibility**        | Objects are not globally accessible; bound to smart contract scope.    | Guaranteed global accessibility of objects.                                                                        |

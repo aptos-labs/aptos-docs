@@ -1,6 +1,6 @@
 const allLanguages = {
   en: "English",
-  // de: 'Deutsch',
+  de: "Deutsch",
   es: "Español",
   "pt-BR": "Português (Brasil)",
   fr: "Français",
@@ -10,6 +10,8 @@ const allLanguages = {
   zh: "简体中文",
   ko: "한국어",
   ja: "日本語",
+  id: "Bahasa Indonesia",
+  fi: "Suomi",
   // es: 'Español',
   // 'zh-cn': '简体中文',
   // 'zh-tw': '正體中文',

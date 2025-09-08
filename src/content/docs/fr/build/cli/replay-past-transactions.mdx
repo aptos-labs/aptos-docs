@@ -1,0 +1,137 @@
+---
+title: "Rejouer les Transactions Passées"
+description: "Apprenez à rejouer les transactions blockchain historiques localement pour le débogage, le benchmarking et le profilage de gaz en utilisant la CLI Aptos."
+sidebar:
+  label: "Rejouer les Transactions"
+---
+
+import { Aside, FileTree } from '@astrojs/starlight/components';
+
+## Bases
+
+Vous pouvez rejouer les transactions passées localement en utilisant la commande `aptos move replay`.
+La commande est assez simple mais elle nécessite que vous spécifiez deux informations requises :
+
+- `--network`
+  - C'est le réseau sur lequel vous voulez rejouer
+  - Valeurs possibles : `mainnet`, `testnet`, `devnet` ou `<URL VERS LE POINT DE TERMINAISON REST PERSONNALISÉ>`
+- `--txn-id`
+  - C'est l'id de la transaction que vous voulez rejouer
+  - Ceci est aussi parfois appelé `version` sur les explorateurs
+  - Spécifiquement, ce n'est PAS le hash de transaction hexadécimal
+
+Utilisons la transaction mainnet [581400718](https://explorer.aptoslabs.com/txn/581400718?network=mainnet) (une simple transaction de transfert de pièces) comme exemple.
+
+```shellscript filename="Terminal"
+aptos move replay --network mainnet --txn-id 581400718
+```
+
+<details>
+  <summary>Sortie</summary>
+
+  ```shellscript
+  Got 1/1 txns from RestApi.
+  Replaying transaction...
+  {
+    "Result": {
+      "transaction_hash": "0x1ba73d03a0442a845735a17c7be46f3b51e2acb0e5cf68749305c5a17539ac63",
+      "gas_used": 7,
+      "gas_unit_price": 100,
+      "sender": "c94e16736910cc160347d01de345407fe2d350fce5635ac1150319b0fbf5630e",
+      "sequence_number": 14637,
+      "success": true,
+      "version": 581400718,
+      "vm_status": "status EXECUTED of type Execution"
+    }
+  }
+  ```
+</details>
+
+Alternativement, si vous voulez simuler une nouvelle transaction, consultez [Simulation Locale, Benchmarking et Profilage de Gaz](/build/cli/working-with-move-contracts/local-simulation-benchmarking-and-gas-profiling).
+
+## Modes Alternatifs
+
+Semblable aux simulations locales, la commande replay peut être améliorée avec l'une des options suivantes :
+
+- `--benchmark` : Benchmark de la transaction et rapport des temps d'exécution.
+- `--profile-gas` : Profil de la transaction pour l'utilisation détaillée du gaz.
+
+### Benchmarking
+
+```shellscript filename="Terminal"
+aptos move replay --network mainnet --txn-id 581400718 --benchmark
+```
+
+<details>
+  <summary>Sortie</summary>
+
+  ```shellscript
+  Got 1/1 txns from RestApi.
+  Benchmarking transaction...
+  Running time (cold code cache): 914.821µs
+  Running time (warm code cache): 820.189µs
+  {
+    "Result": {
+      "transaction_hash": "0x1ba73d03a0442a845735a17c7be46f3b51e2acb0e5cf68749305c5a17539ac63",
+      "gas_used": 7,
+      "gas_unit_price": 100,
+      "sender": "c94e16736910cc160347d01de345407fe2d350fce5635ac1150319b0fbf5630e",
+      "sequence_number": 14637,
+      "success": true,
+      "version": 581400718,
+      "vm_status": "status EXECUTED of type Execution"
+    }
+  }
+  ```
+</details>
+
+Il convient de noter que ces temps d'exécution servent uniquement de références informatives, car ils dépendent des spécifications de votre machine locale et peuvent être influencés par du bruit ou d'autres facteurs aléatoires.
+
+**Si vous visez à optimiser votre contrat, vous devriez baser vos décisions sur les résultats du profilage de gaz.**
+
+<Aside type="note" emoji="ℹ️">
+  Pour minimiser les erreurs de mesure, le harnais de benchmark exécute la même transaction plusieurs fois. Pour cette raison, il peut prendre un certain temps pour que la tâche de benchmark se termine.
+</Aside>
+
+### Profilage de Gaz
+
+Le Profileur de Gaz Aptos est un outil puissant qui peut vous aider à comprendre l'utilisation du gaz des transactions Aptos. Une fois activé, il simulera les transactions en utilisant une VM instrumentée et générera un rapport basé sur le web.
+
+Le profileur de gaz peut aussi servir de débogueur puisque le rapport inclut également une trace d'exécution complète.
+
+```shellscript filename="Terminal"
+aptos move replay --network mainnet --txn-id 581400718 --profile-gas
+```
+
+<details>
+  <summary>Sortie</summary>
+
+  ```shellscript
+  Got 1/1 txns from RestApi.
+  Profiling transaction...
+  Gas report saved to gas-profiling/txn-1ba73d03-0x1-aptos_account-transfer.
+  {
+    "Result": {
+      "transaction_hash": "0x1ba73d03a0442a845735a17c7be46f3b51e2acb0e5cf68749305c5a17539ac63",
+      "gas_used": 7,
+      "gas_unit_price": 100,
+      "sender": "c94e16736910cc160347d01de345407fe2d350fce5635ac1150319b0fbf5630e",
+      "sequence_number": 14637,
+      "success": true,
+      "version": 581400718,
+      "vm_status": "status EXECUTED of type Execution"
+    }
+  }
+  ```
+</details>
+
+Vous pouvez ensuite trouver le [rapport de gaz généré](/gas-profiling/sample-report-2/index.html) dans le répertoire gas-profiling :
+
+<FileTree>
+  - gas-profiling/
+    - txn-1ba73d03-0x1-aptos\_account-transfer/
+      - assets/
+      - index.html
+</FileTree>
+
+Pour comprendre le rapport de gaz, veuillez vous référer à [cette section](/build/cli/working-with-move-contracts/local-simulation-benchmarking-and-gas-profiling#understanding-the-gas-report) du tutoriel de simulation locale.

@@ -124,6 +124,9 @@ export default navDictionary({
   // AI Sub-Groups
   "ai.group.aptos-mcp": "Aptos MCP",
 
+  // Languages Sub-Groups
+  "languages.group.translationStatus": "翻译状态", // Translation Status
+
   // Contribute Sub-Groups
   "contribute.group.components": "组件", // Components
 });

@@ -1,60 +1,60 @@
 ---
-title: "Ethereum'dan Aptos'a Geçiş Kılavuzu"
-description: "Aptos blok zinciri geliştirmeye geçiş yapan Ethereum geliştiricileri için kapsamlı karşılaştırma ve geçiş kılavuzu"
+title: "Ethereum to Aptos Migration Guide"
+description: "Comprehensive comparison and migration guide for Ethereum developers transitioning to Aptos blockchain development"
 sidebar:
   label: "Ethereum → Aptos"
 ---
 
-Farklılıklar ve benzerlikler hakkında daha fazla bilgi için [Aptos Learn](https://learn.aptoslabs.com/en/tutorials/ethereum-to-aptos-guide/cheat-sheet?workshop=eth-to-aptos)'e bakın
+To learn more about the differences and similarities see [Aptos Learn](https://learn.aptoslabs.com/en/tutorials/ethereum-to-aptos-guide/cheat-sheet?workshop=eth-to-aptos)
 
-### Yüksek Düzey Genel Bakış
+### High Level Overview
 
-| Özellik                       | Ethereum                                                                                                                       | Aptos                                                                 |
-|-------------------------------|-------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------|
-| **Akıllı Sözleşmeler**        | Solidity, EVM                                                                                                                  | Move, MoveVM                                                          |
-| **Avantajlar**                | Olgun, geniş kabul                                                                                                            | Ölçeklenebilirlik, düşük gecikme, öngörülebilir ücretler              |
-| **İşlem Ücretleri**           | Değişken, yüksek olabilir                                                                                                     | Daha düşük ve daha öngörülebilir                                      |
-| **Hesap Adresleri**           | 160 bit                                                                                                                        | 256 bit                                                               |
-| **Hesap Yapısı**              | Tek alanda bakiye, nonce kullanır                                                                                              | Modüller ve kaynaklar, sequence number kullanır                       |
-| **Veri Depolama**             | Patricia Merkle ağaçları                                                                                                      | Kaynaklar ve modüllerle küresel depolama                              |
-| **Depolama Zihniyeti**        | Sözleşme tabanlı depolama                                                                                                     | Kod ve veri için hesap merkezli zihniyet                              |
-| **Kod Örneği**                | [ERC-20](https://github.com/OpenZeppelin/openzeppelin-contracts/tree/master/contracts/token/ERC20)                             | [Fungible Asset](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/fungible_asset.move) |
-| **Çağıran Kimliği**           | `msg.sender`                                                                                                                   | `&signer` referansı                                                    |
-| **Yükseltilebilirlik**        | Proxy desenleri                                                                                                                | Doğrudan modül yükseltmeleri                                          |
-| **Güvenlik ve Güvenlik**      | Reentrancy gibi saldırılara karşı savunmasız                                                                                    | Yaygın güvenlik açıklarını azaltır                                    |
-| **Dispatch Türü**             | Dinamik dispatch                                                                                                               | Statik dispatch                                                       |
-| **FT Standardı**               | [ERC-20](https://docs.openzeppelin.com/contracts/4.x/erc20)                                                                    | [Coin](/build/smart-contracts/aptos-coin) (legacy) ve [Fungible Asset](/build/smart-contracts/fungible-asset) |
-| **NFT Standartları**          | [ERC-721](https://docs.openzeppelin.com/contracts/4.x/erc721), [ERC-1155](https://docs.openzeppelin.com/contracts/4.x/erc1155) | [Digital Asset](/build/smart-contracts/digital-asset)                 |
-| **Blok Zinciri Etkileşimi**   | [Ethers.js kütüphanesi](https://docs.ethers.org/v6/)                                                                           | [Aptos TypeScript SDK](/build/sdks/ts-sdk)                            |
-
-<br />
-
-### Token Standartlarının Detaylı Karşılaştırması
-
-|                        | Solidity                                                               | Move (Aptos)                                                                 |
-|------------------------|------------------------------------------------------------------------|------------------------------------------------------------------------------|
-| **Token Yapısı**       | Her token kendi sözleşmesidir.                                         | Her token tek kullanımlık sözleşmeyi kullanarak yazılan `Coin` veya `FungibleAsset`'tır. |
-| **Token Standardı**    | ERC20 gibi standartlara uymalıdır; uygulamalar farklılık gösterebilir. | Tüm token'lar için tek tip arayüz ve uygulama.                               |
-| **Bakiye Depolama**    | Bakiyeler mapping yapısını kullanarak sözleşmede depolanır.           | **Kaynak Odaklı Bakiye**: Bakiyeler kullanıcının hesabında kaynak olarak depolanır. Kaynaklar rastgele oluşturulamadığından, token değerinin bütünlüğü sağlanır. |
-| **Transfer Mekanizması** | Token'lar alıcının açık izni olmadan transfer edilebilir.              | Belirli durumlar hariç (AptosCoin gibi), token'lar genellikle transfer için alıcının `signer` yetkisini gerektirir. |
+| Feature                    | Ethereum                                                                                                                       | Aptos                                                                                                                                 |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| **Akıllı Sözleşmes**        | Solidity, EVM                                                                                                                  | Move, MoveVM                                                                                                                          |
+| **Benefits**               | Mature, wide adoption                                                                                                          | Scalability, low latency, predictable fees                                                                                            |
+| **Transaction Fees**       | Variable, can be high                                                                                                          | Lower and more predictable                                                                                                            |
+| **Account Addresses**      | 160-bit                                                                                                                        | 256-bit                                                                                                                               |
+| **Account Structure**      | Balance in a single field, uses nonce                                                                                          | Modules and resources, uses sequence number                                                                                           |
+| **Data Storage**           | Patricia Merkle Trees                                                                                                          | Global storage with resources and modules                                                                                             |
+| **Storage Mindset**        | Contract-based storage                                                                                                         | Account centric mindset for code and data                                                                                             |
+| **Example Code**           | [ERC-20](https://github.com/OpenZeppelin/openzeppelin-contracts/tree/master/contracts/token/ERC20)                             | [Fungible Asset](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/fungible_asset.move) |
+| **Caller ID**              | `msg.sender`                                                                                                                   | `&signer` reference                                                                                                                   |
+| **Upgradeability**         | Proxy patterns                                                                                                                 | Direct module upgrades                                                                                                                |
+| **Safety & Security**  | Vulnerable to attacks like reentrancy                                                                                          | Mitigates common vulnerabilities                                                                                                      |
+| **Dispatch Type**          | Dynamic dispatch                                                                                                               | Static dispatch                                                                                                                       |
+| **FT Standard**            | [ERC-20](https://docs.openzeppelin.com/contracts/4.x/erc20)                                                                    | [Coin](/build/smart-contracts/aptos-coin) (legacy) and [Fungible Asset](/build/smart-contracts/fungible-asset)                        |
+| **NFT Standards**          | [ERC-721](https://docs.openzeppelin.com/contracts/4.x/erc721), [ERC-1155](https://docs.openzeppelin.com/contracts/4.x/erc1155) | [Digital Asset](/build/smart-contracts/digital-asset)                                                                                 |
+| **Blockchain Interaction** | [Ethers.js library](https://docs.ethers.org/v6/)                                                                               | [Aptos Typescript SDK](/build/sdks/ts-sdk)                                                                                            |
 
 <br />
 
-### EVM ve Move VM'nin Detaylı Karşılaştırması
+### Comparing Token Standards in Detail
 
-- **EVM**: Esnekliği ve dinamik dispatch'iyle bilinir, bu da geniş bir akıllı sözleşme davranışı yelpazesine izin verir. Bu esneklik ancak paralel yürütme ve ağ işlemlerinde karmaşıklıklara yol açabilir.
-- **Move VM**: Güvenlik ve verimliliğe odaklanır, VM ve programlama dili arasında daha entegre bir yaklaşım sunar. Veri depolama modeli daha iyi paralellemeye izin verir ve statik dispatch metodu güvenliği ve öngörülebilirliği artırır.
+|                        | Solidity                                                               | Move (Aptos)                                                                                                                                                         |
+| ---------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Token Structure**    | Each token is its own contract.                                        | Every token is a typed `Coin` or `FungibleAsset` using a single, reusable contract.                                                                                  |
+| **Token Standard**     | Must conform to standards like ERC20; implementations can vary.        | Uniform interface and implementation for all tokens.                                                                                                                 |
+| **Balance Storage**    | Balances stored in contract using a mapping structure.                 | **Resource-Oriented Balance**: Balances stored as a resource in the user's account. Resources cannot be arbitrarily created, ensuring integrity of token value. |
+| **Transfer Mechanism** | Tokens can be transferred without receiver's explicit permission. | Except for specific cases (like AptosCoin), Tokens generally require receiver's `signer` authority for transfer.                                                |
 
 <br />
 
-|                                 | EVM (Ethereum Virtual Machine)                                         | Move VM (Move Virtual Machine)                                     |
-|---------------------------------|------------------------------------------------------------------------|-------------------------------------------------------------------|
-| **Veri Depolama**               | Veri akıllı sözleşmenin depolama alanında saklanır.                   | Veri akıllı sözleşmeler, kullanıcı hesapları ve nesneler arasında saklanır. |
-| **Paralelleştirme**             | Paralel yürütme ortak depolama alanı nedeniyle sınırlıdır.            | Esnek bölünmüş depolama tasarımı sayesinde daha fazla paralel yürütme. |
-| **VM ve Dil Entegrasyonu**      | EVM ve akıllı sözleşme dilleri (örneğin Solidity) için ayrı katmanlar. | VM katmanı ve Move dili arasında kusursuz entegrasyon, Rust'ta yazılan yerel fonksiyonlar Move'da çalıştırılabilir. |
-| **Kritik Ağ İşlemleri**         | Ağ işlemlerinin uygulanması karmaşık ve dolaylı olabilir.             | Doğrulayıcı kümesi yönetimi gibi kritik işlemler Move'da yerel olarak uygulanır, doğrudan yürütmeye izin verir. |
-| **Fonksiyon Çağrısı**           | Dinamik dispatch rastgele akıllı sözleşme çağrılarına izin verir.      | Statik dispatch güvenlik ve öngörülebilir davranış odağına uyar. |
-| **Tip Güvenliği**               | Sözleşme tipleri tip güvenliğinin bir seviyesini sağlar.              | Move'daki modül yapıları ve generics güçlü tip güvenliği sağlar.  |
-| **İşlem Güvenliği**             | İşlem sırası ve güvenliği için nonce'ları kullanır.                   | İşlem sırası ve güvenliği için sequence number'ları kullanır.     |
-| **Kimlik Doğrulamalı Depolama** | Evet, akıllı sözleşme depolama ile.                                    | Evet, Move'un kaynak modelini kullanarak.                         |
-| **Nesne Erişilebilirliği**      | Nesnelere küresel olarak erişilemez; akıllı sözleşme kapsamına bağlıdır. | Nesnelerin küresel erişilebilirliği garanti edilir.               |
+### Comparing EVM and Move VM in Detail
+
+- **EVM**: Known for its flexibility and dynamic dispatch, which allows a wide range of smart contract behaviors. This flexibility, however, can lead to complexities in parallel execution and network operations.
+- **Move VM**: Focuses on safety and efficiency with a more integrated approach between the VM and the programming language. Its data storage model allows for better parallelization, and its static dispatch method enhances security and predictability.
+
+<br />
+
+|                                 | EVM (Ethereum Virtual Machine)                                         | Move VM (Move Virtual Machine)                                                                                     |
+| ------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **Data Storage**                | Data is stored in the smart contract's storage space.             | Data is stored across smart contracts, user accounts, and objects.                                                 |
+| **Parallelization**             | Parallel execution is limited due to shared storage space.             | More parallel execution enabled due to flexible split storage design.                                              |
+| **VM and Language Integration** | Separate layers for EVM and smart contract languages (e.g., Solidity). | Seamless integration between VM layer and Move language, with native functions written in Rust executable in Move. |
+| **Critical Network Operations** | Implementation of network operations can be complex and less direct.   | Critical operations like validator set management natively implemented in Move, allowing for direct execution.     |
+| **Function Calling**            | Dynamic dispatch allows for arbitrary smart contract calls.            | Static dispatch aligns with a focus on security and predictable behavior.                                          |
+| **Type Safety**                 | Contract types provide a level of type safety.                         | Module structs and generics in Move offer robust type safety.                                                      |
+| **Transaction Safety**          | Uses nonces for transaction ordering and safety.                       | Uses sequence numbers for transaction ordering and safety.                                                         |
+| **Authenticated Storage**       | Yes, with smart contract storage.                                      | Yes, leveraging Move’s resource model.                                                                             |
+| **Object Accessibility**        | Objects are not globally accessible; bound to smart contract scope.    | Guaranteed global accessibility of objects.                                                                        |

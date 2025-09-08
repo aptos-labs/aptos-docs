@@ -121,6 +121,9 @@ const labels = {
   // Sub-Grupos de AI
   "ai.group.aptos-mcp": "Aptos MCP",
 
+  // Languages Sub-Groups
+  "languages.group.translationStatus": "Estado de la Traducción",
+
   // Sub-Grupos de Contribuir
   "contribute.group.components": "Componentes",
 } as const;

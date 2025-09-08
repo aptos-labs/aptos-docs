@@ -170,84 +170,134 @@ Currently, the adapter supports Solana and EVM chains
 
 That will handle the logic and implementation to include the x-chain accounts as if they were Aptos wallets.
 
-#### Submitting a transaction
+### Submitting a transaction
 
 In most cases, allowing users to submit a transaction with a x-chain account to the Aptos chain requires using a sponsor transaction. This is because the x-chain account might not have APT to pay for gas.
 Therefore, the dApp should consider maintaining a sponsor account to sponsor the transactions.
 
-```tsx filename="SignAndSubmitDemo.tsx"
-import React from 'react';
-import { useWallet } from '@aptos-labs/wallet-adapter-react';
-import { Aptos, AptosConfig, Network, Ed25519PrivateKey, PrivateKey, PrivateKeyVariants, Account } from '@aptos-labs/ts-sdk';
+<Tabs>
+  <TabItem label="Local Sponsor Account">
+    ```tsx filename="SignAndSubmitDemo.tsx"
+    import React from 'react';
+    import { useWallet } from '@aptos-labs/wallet-adapter-react';
+    import { Aptos, AptosConfig, Network, Ed25519PrivateKey, PrivateKey, PrivateKeyVariants, Account } from '@aptos-labs/ts-sdk';
 
-// Initialize an Aptos client
-const config = new AptosConfig({ network: Network.TESTNET });
-const aptos = new Aptos(config);
+    // Initialize an Aptos client
+    const config = new AptosConfig({ network: Network.TESTNET });
+    const aptos = new Aptos(config);
 
-// Generate a sponsor account or use an existing account
-const privateKey = new Ed25519PrivateKey(
-  PrivateKey.formatPrivateKey(
-    "0x123",
-    PrivateKeyVariants.Ed25519
-  )
-);
-const sponsor = Account.fromPrivateKey({ privateKey });
+    // Generate a sponsor account or use an existing account
+    const privateKey = new Ed25519PrivateKey(
+      PrivateKey.formatPrivateKey(
+        "0x123",
+        PrivateKeyVariants.Ed25519
+      )
+    );
+    const sponsor = Account.fromPrivateKey({ privateKey });
 
-const SignAndSubmit = () => {
-  const { account, signTransaction } = useWallet();
+    const SignAndSubmit = () => {
+      const { account, signTransaction } = useWallet();
 
-  const onSignAndSubmitTransaction = async () => {
-    if(!account) {
-      throw new Error("Account is not connected and unable to sign transaction")
-    }
-
-    try {
-      // Build the transaction
-      const rawTransaction = await aptos.transaction.build.simple({
-        data: {
-          function: "0x1::aptos_account::transfer",
-          functionArguments: [account.address.toString(), 1],
-        },
-        sender: account.address,
-        withFeePayer: true,
-      });
-
-      // Send it to the wallet to sign
-      const walletSignedTransaction = await signTransaction({
-        transactionOrPayload: rawTransaction,
-      });
-
-      // Sponsor account signs the transaction to pay for the gas fees
-      const sponsorAuthenticator = aptos.transaction.signAsFeePayer({
-        signer: sponsor,
-        transaction: rawTransaction,
-      });
-
-      // Submit the transaction to chain
-      const txnSubmitted = await aptosClient(network).transaction.submit.simple(
-        {
-          transaction: rawTransaction,
-          senderAuthenticator: walletSignedTransaction.authenticator,
-          feePayerAuthenticator: sponsorAuthenticator,
+      const onSignAndSubmitTransaction = async () => {
+        if(!account) {
+          throw new Error("Account is not connected and unable to sign transaction")
         }
+
+        try {
+          // Build the transaction
+          const rawTransaction = await aptos.transaction.build.simple({
+            data: {
+              function: "0x1::aptos_account::transfer",
+              functionArguments: [account.address.toString(), 1],
+            },
+            sender: account.address,
+            withFeePayer: true,
+          });
+
+          // Send it to the wallet to sign
+          const walletSignedTransaction = await signTransaction({
+            transactionOrPayload: rawTransaction,
+          });
+
+          // Sponsor account signs the transaction to pay for the gas fees
+          const sponsorAuthenticator = aptos.transaction.signAsFeePayer({
+            signer: sponsor,
+            transaction: rawTransaction,
+          });
+
+          // Submit the transaction to chain
+          const txnSubmitted = await aptosClient(network).transaction.submit.simple(
+            {
+              transaction: rawTransaction,
+              senderAuthenticator: walletSignedTransaction.authenticator,
+              feePayerAuthenticator: sponsorAuthenticator,
+            }
+          );
+
+          // if you want to wait for transaction
+          await aptos.waitForTransaction({ transactionHash: txnSubmitted.hash });
+        } catch (error) {
+          console.error(error);
+        }
+      };
+
+      return (
+        <button onClick={onSignAndSubmitTransaction}>
+          Sign and submit transaction
+        </button>
       );
+    };
 
-      // if you want to wait for transaction
-      await aptos.waitForTransaction({ transactionHash: txnSubmitted.hash });
-    } catch (error) {
-      console.error(error);
-    }
-  };
+    export default SignAndSubmit;
+    ```
+  </TabItem>
 
-  return (
-    <button onClick={onSignAndSubmitTransaction}>
-      Sign and submit transaction
-    </button>
-  );
-};
+  <TabItem label="Gas Station">
+    <Steps>
+      1. Follow the [Gas Station docs](https://geomi.dev/docs/gas-stations) to set up a Gas Station service to obtain a gas station API key.
 
-export default SignAndSubmit;
-```
+      2. Integrate a Gas Station instance in your application
+
+         ```tsx filename="SignAndSubmitDemo.tsx"
+           import {
+             GasStationClient,
+             GasStationTransactionSubmitter,
+           } from "@aptos-labs/gas-station-client";
+           import { Network } from "@aptos-labs/ts-sdk";
+
+           const network = Network.TESTNET;
+           const gasStationClient = new GasStationClient({
+             network,
+             apiKey: process.env.GAS_STATION_API_KEY,
+           });
+           const transactionSubmitter = new GasStationTransactionSubmitter(gasStationClient);
+         ```
+
+      3. Then, you can use the `transactionSubmitter` to sponsor only x-chain account transactions
+
+         ```tsx filename="SignAndSubmitDemo.tsx"
+
+         const { signAndSubmitTransaction, wallet } = useWallet();
+
+         const transactionInput = {
+           data: {
+             function:"0x1::aptos_account::transfer",
+             functionArguments: [account.address, 717],
+           },
+           sender: account.address,
+           transactionSubmitter: null
+         };
+
+         // If wallet is NOT an Aptos native wallet
+         if (!wallet.isAptosNativeWallet) {
+           transactionInput.transactionSubmitter = transactionSubmitter;
+         }
+
+         const txn = await signAndSubmitTransaction(transactionInput);
+         ```
+    </Steps>
+  </TabItem>
+</Tabs>
 
 ### Considerations
 

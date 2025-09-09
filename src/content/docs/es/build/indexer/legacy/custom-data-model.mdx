@@ -1,0 +1,205 @@
+---
+title: "Modelo de Datos Personalizado"
+description: "Documentación de modelo de datos personalizado legacy para indexer deprecado - migra al SDK de Indexer moderno para procesadores personalizados"
+sidebar:
+  label: "Modelo de Datos Personalizado (Legacy)"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="caution">
+  Esta es documentación para el indexer legacy. Para aprender cómo escribir un procesador personalizado con la pila de indexer más reciente, ver [Procesadores Personalizados](/build/indexer/custom-processors).
+</Aside>
+
+## Define tu propio modelo de datos
+
+Usa este método si quieres desarrollar tu indexer personalizado para los datos del ledger de Aptos.
+
+<Aside type="note">
+  ¿Cuándo deberías usar el indexer personalizado?
+
+  Actualmente el servicio de indexación proporcionado por Aptos (ver arriba) soporta los siguientes módulos Move centrales:
+
+  - `0x1::coin`.
+  - `0x3::token`.
+  - `0x3::token_transfers`.
+
+  Si necesitas una base de datos indexada para cualquier otro módulo Move y contratos, entonces deberías desarrollar tu indexer personalizado.
+</Aside>
+
+Crear un indexer personalizado involucra los siguientes pasos. Consulta el diagrama de bloques de indexación al inicio de este documento.
+
+1. Define nuevos esquemas de tabla, usando un ORM como [Diesel](https://diesel.rs/). En este documento Diesel se usa para describir los pasos de indexación personalizados ("Lógica de negocio" y las consultas de datos en el diagrama).
+2. Crea nuevos modelos de datos basados en las nuevas tablas ("Lógica de negocio" en el diagrama).
+3. Crea un nuevo procesador de transacciones, o opcionalmente agregar a un procesador existente. En el diagrama este paso corresponde a procesar la base de datos del ledger según la nueva lógica de negocio y escribir a la base de datos indexada.
+4. Integra el nuevo procesador. Opcional si estás reutilizando un procesador existente.
+
+En la descripción detallada abajo, se usa un ejemplo de indexación y consulta para los balances de monedas. Puedes ver esto en el [`coin_processor.rs`](https://github.com/aptos-labs/aptos-core/blob/main/crates/indexer/src/processors/coin_processor.rs).
+
+### 1. Define nuevos esquemas de tabla
+
+En este ejemplo usamos [PostgreSQL](https://www.postgresql.org/) y [Diesel](https://diesel.rs/) como el ORM. Para asegurar que hagamos cambios compatibles hacia atrás sin tener que resetear la base de datos en cada actualización, usamos [migraciones Diesel](https://docs.rs/diesel_migrations/latest/diesel_migrations/) para gestionar el esquema. Por esto es muy importante empezar generando una nueva migración Diesel antes de hacer cualquier otra cosa.
+
+Asegúrate de clonar el repo Aptos-core ejecutando `git clone https://github.com/aptos-labs/aptos-core.git` y luego `cd` al directorio `aptos-core/tree/main/crates/indexer`. Luego procede como abajo.
+
+a. El primer paso es crear una nueva migración Diesel. Esto generará una nueva carpeta bajo [migrations](https://github.com/aptos-labs/aptos-core/tree/main/crates/indexer/migrations) con `up.sql` y `down.sql`
+
+```shellscript filename="Terminal"
+DATABASE_URL=postgres://postgres@localhost:5432/postgres diesel migration generate add_coin_tables
+```
+
+b. Crea los esquemas de tabla necesarios. Esto es solo código PostgreSQL. En el código mostrado abajo, el `up.sql` tendrá los nuevos cambios y `down.sql` revertirá esos cambios.
+
+```sql filename="up.sql / down.sql"
+-- up.sql
+-- balances de monedas para cada versión
+CREATE TABLE coin_balances (
+  transaction_version BIGINT NOT NULL,
+  owner_address VARCHAR(66) NOT NULL,
+  -- Hash del tipo de moneda no truncado
+  coin_type_hash VARCHAR(64) NOT NULL,
+  -- creator_address::name::symbol<struct>
+  coin_type VARCHAR(5000) NOT NULL,
+  amount NUMERIC NOT NULL,
+  transaction_timestamp TIMESTAMP NOT NULL,
+  inserted_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  -- Restricciones
+  PRIMARY KEY (
+    transaction_version,
+    owner_address,
+    coin_type_hash
+  )
+);
+-- balances de monedas más recientes
+CREATE TABLE current_coin_balances {...}
+-- down.sql
+DROP TABLE IF EXISTS coin_balances;
+DROP TABLE IF EXISTS current_coin_balances;
+```
+
+Ver el [código fuente completo para `up.sql` y `down.sql`](https://github.com/aptos-labs/aptos-core/tree/main/crates/indexer/migrations/2022-10-04-073529_add_coin_tables).
+
+c. Ejecuta la migración. Sugerimos ejecutarla múltiples veces con `redo` para asegurar que tanto `up.sql` como `down.sql` estén implementados correctamente. Esto también modificará el archivo [`schema.rs`](https://github.com/aptos-labs/aptos-core/blob/main/crates/indexer/src/schema.rs).
+
+```shellscript filename="Terminal"
+DATABASE_URL=postgres://postgres@localhost:5432/postgres diesel migration run
+DATABASE_URL=postgres://postgres@localhost:5432/postgres diesel migration redo
+```
+
+### 2. Crea nuevos esquemas de datos
+
+Ahora tenemos que preparar los modelos de datos Rust que corresponden a los esquemas Diesel. En el caso de balances de monedas, definiremos `CoinBalance` y `CurrentCoinBalance` como abajo:
+
+```rust filename="coin_balance.rs"
+#[derive(Debug, Deserialize, FieldCount, Identifiable, Insertable, Serialize)]
+#[diesel(primary_key(transaction_version, owner_address, coin_type))]
+#[diesel(table_name = coin_balances)]
+pub struct CoinBalance {
+    pub transaction_version: i64,
+    pub owner_address: String,
+    pub coin_type_hash: String,
+    pub coin_type: String,
+    pub amount: BigDecimal,
+    pub transaction_timestamp: chrono::NaiveDateTime,
+}
+
+#[derive(Debug, Deserialize, FieldCount, Identifiable, Insertable, Serialize)]
+#[diesel(primary_key(owner_address, coin_type))]
+#[diesel(table_name = current_coin_balances)]
+pub struct CurrentCoinBalance {
+    pub owner_address: String,
+    pub coin_type_hash: String,
+    pub coin_type: String,
+    pub amount: BigDecimal,
+    pub last_transaction_version: i64,
+    pub last_transaction_timestamp: chrono::NaiveDateTime,
+}
+```
+
+También necesitaremos especificar la lógica de parseo, donde la entrada es una porción de la transacción. En el caso de balances de monedas, podemos encontrar todos los detalles en `WriteSetChanges`, específicamente donde el tipo de cambio de write set es `write_resources`.
+
+**Dónde encontrar los datos relevantes para parsear**: Esto requiere una combinación de entender el módulo Move y la estructura de la transacción. En el ejemplo del balance de monedas, el contrato vive en [coin.move](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/coin.move), específicamente el struct coin (busca `struct Coin`) que tiene un campo `value`. Luego miramos una [transacción de ejemplo](https://api.testnet.aptoslabs.com/v1/transactions/by_version/259518) donde encontramos esta estructura exacta en `write_resources`:
+
+```shellscript filename="Terminal"
+"changes": [
+  {
+    ...
+    "data": {
+      "type": "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>",
+      "data": {
+        "coin": {
+          "value": "49742"
+      },
+      ...
+```
+
+Ver el código completo en [coin\_balances.rs](https://github.com/aptos-labs/aptos-core/blob/main/crates/indexer/src/models/coin_models/coin_balances.rs).
+
+### 3. Crea un nuevo procesador
+
+Ahora que tenemos el modelo de datos y la función de parseo, necesitamos llamar esa función de parseo y guardar el modelo resultante en nuestra base de datos Postgres. Hacemos esto creando (o modificando) un `processor`. Ya hemos abstraído mucho de esa clase, así que la única función que debería implementarse es `process_transactions` (hay algunas funciones más que deberían copiarse, esas deberían ser obvias del ejemplo).
+
+La función `process_transactions` toma un vector de transacciones con una versión de inicio y fin que se usan para propósitos de seguimiento. El flujo general debería ser:
+
+- Hacer loop a través de transacciones en el vector.
+- Agregar modelos relevantes. A veces se requiere deduplicación, ej. en el caso de `CurrentCoinBalance`.
+- Insertar los modelos en la base de datos en una sola transacción Diesel. Esto es importante, para asegurar que no tengamos escrituras parciales.
+- Devolver estado (error o éxito).
+
+<Aside type="note">
+  Ver [coin\_processor.rs](https://github.com/aptos-labs/aptos-core/blob/main/crates/indexer/src/processors/coin_processor.rs) para un ejemplo relativamente directo. Puedes buscar `coin_balances` en la página para el fragmento de código específico relacionado con balances de monedas.
+</Aside>
+
+**Cómo decidir si crear un nuevo procesador:** Esto depende completamente de ti. El beneficio de crear un nuevo procesador es que estás empezando desde cero, así que tendrás control completo sobre exactamente qué se escribe a la base de datos indexada. La desventaja es que tendrás que mantener un nuevo fullnode, ya que hay un mapeo 1-a-1 entre un fullnode y el procesador.
+
+### 4. Integra el nuevo procesador
+
+Este es el paso más fácil e involucra solo algunas adiciones.
+
+1. Para empezar, asegurar de agregar el nuevo procesador en los archivos de código Rust: [`mod.rs`](https://github.com/aptos-labs/aptos-core/blob/main/crates/indexer/src/processors/mod.rs) y [`runtime.rs`](https://github.com/aptos-labs/aptos-core/blob/main/crates/indexer/src/runtime.rs). Ver abajo:
+
+[**mod.rs**](https://github.com/aptos-labs/aptos-core/blob/main/crates/indexer/src/processors/mod.rs)
+
+```rust filename="mod.rs"
+pub enum Processor {
+  CoinProcessor,
+  ...
+}
+...
+  COIN_PROCESSOR_NAME => Self::CoinProcessor,
+```
+
+[**runtime.rs**](https://github.com/aptos-labs/aptos-core/blob/main/crates/indexer/src/runtime.rs)
+
+```rust filename="runtime.rs"
+Processor::CoinProcessor => Arc::new(CoinTransactionProcessor::new(conn_pool.clone())),
+```
+
+2. Crea un `fullnode.yaml` con la configuración correcta y prueba el indexer personalizado iniciando un fullnode con este `fullnode.yaml`.
+
+**fullnode.yaml**
+
+```yaml filename="fullnode.yaml"
+storage:
+  enable_indexer: true
+  storage_pruner_config:
+    ledger_pruner_config:
+      enable: false
+
+indexer:
+  enabled: true
+  check_chain_id: true
+  emit_every: 1000
+  postgres_uri: "postgres://postgres@localhost:5432/postgres"
+  processor: "coin_processor"
+  fetch_tasks: 10
+  processor_tasks: 10
+```
+
+Prueba iniciando un fullnode de Aptos ejecutando el comando abajo. Verás muchos logs en la salida del terminal, así que usa el filtro `grep` para ver solo la salida de log del indexer, como se muestra abajo:
+
+```shellscript filename="Terminal"
+cargo run -p aptos-node --features "indexer" --release -- -f ./fullnode_coin.yaml | grep -E "_processor"
+```
+
+Ver las instrucciones completas sobre cómo iniciar un fullnode habilitado para indexer en [Fullnode Indexer](/build/indexer/legacy/indexer-fullnode).

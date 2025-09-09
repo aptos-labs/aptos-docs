@@ -1,0 +1,244 @@
+---
+title: "Guía de Usuario de Move Prover"
+description: "Guía completa para usar Move Prover para verificación formal, especificaciones y corrección de contratos."
+sidebar:
+  label: "Guía Prover"
+---
+
+Esta es la guía de usuario para Move Prover. Este documento acompaña al
+[lenguaje de especificación de Move](/build/smart-contracts/prover/spec-lang). Ver las secciones abajo para detalles.
+
+## Ejecutar Move Prover
+
+Move Prover se invoca a través del [CLI de Aptos](/build/cli). Para
+llamar al CLI, debes tener un [_paquete Move_](/build/smart-contracts/book/packages) en su lugar.
+En el caso más simple, un paquete Move se define por un directorio con un conjunto de
+archivos `.move` en él y un manifiesto con el nombre `Move.toml`. Puedes crear un nuevo
+paquete Move en una ubicación dada ejecutando el comando:
+`aptos move init --name <name>`
+
+Una vez que el paquete existe, llama a Move Prover desde el directorio a ser probado o
+proporcionando su ruta al argumento `--package-dir`:
+
+- Probar las fuentes del paquete en el directorio actual:
+  ```shellscript filename="Terminal"
+  aptos move prove
+  ```
+- Probar las fuentes del paquete en un directorio específico:
+  ```shellscript filename="Terminal"
+  aptos move prove --package-dir <path>
+  ```
+
+Ver salida de ejemplo y otras opciones disponibles en la sección
+[Probar Move](/build/cli/working-with-move-contracts#6-optional-formally-verifying-move-scripts)
+de Usar CLI de Aptos.
+
+### Filtrado de objetivos
+
+Por defecto, el comando `aptos move prove` verifica todos los archivos de un paquete.
+Durante el desarrollo iterativo de paquetes más grandes, a menudo es más efectivo
+enfocar la verificación en archivos particulares con la opción `-f` (`--filter`), así:
+
+```shellscript filename="Terminal"
+aptos move prove -f coin
+```
+
+En general, si la cadena proporcionada a la opción `-f` está contenida en algún lugar en
+el nombre de archivo de una fuente, esa fuente será incluida para verificación.
+
+> NOTA: Move Prover asegura que no hay diferencia semántica entre
+> verificar módulos uno por uno o todos a la vez. Sin embargo, si tu objetivo es
+> verificar todos los módulos, verificarlos en una sola ejecución de `aptos move prove` será
+> significativamente más rápido que secuencialmente.
+
+### Opciones de prover
+
+Move Prover tiene una serie de opciones (como la opción de filtro arriba) que
+pasas con una invocación de: `aptos move prove <options>`. La opción más comúnmente
+usada es la opción `-t` (`--trace`) que hace que Move Prover
+produzca diagnóstico más rico cuando encuentra errores:
+
+```shellscript filename="Terminal"
+aptos move prove -f coin -t
+```
+
+Para ver la lista de todas las opciones de línea de comandos, ejecuta: `aptos move prove --help`
+
+### Archivo de configuración de prover
+
+También puedes crear un archivo de configuración de Move Prover llamado `Prover.toml` que
+vive lado a lado con el archivo manifiesto `Move.toml` en la raíz del directorio del paquete. Por ejemplo, para habilitar trazado por defecto para un paquete, agrega un
+archivo `Prover.toml` con la siguiente configuración:
+
+```toml
+[prover]
+auto_trace_level = "VerifiedFunction"
+```
+
+Encuentra las opciones más comúnmente usadas en el ejemplo `.toml` abajo, que puedes
+cortar y pegar y adoptar para tus necesidades (ajustando los valores predeterminados mostrados en los
+valores mostrados según sea necesario):
+
+```toml
+# Nivel de verbosidad
+# Valores posibles: "ERROR", "WARN", "INFO", "DEBUG". Cada nivel subsume la salida del anterior.
+verbosity_level = "INFO"
+
+[prover]
+# Establecer nivel de auto-trazado, que mejora el diagnóstico que Move Prover produce en errores de verificación.
+# Valores posibles: "Off", "VerifiedFunction", "AllFunctions"
+auto_trace_level = "Off"
+
+# Nivel de severidad mínimo para que el diagnóstico sea reportado.
+# Valores posibles: "Error", "Warning", "Note"
+report_severity = "Warning"
+
+[backend]
+# Timeout en segundos para el backend del solver. Nota que este es un timeout suave y puede no ser siempre
+# respetado.
+vc_timeout = 40
+
+# Semilla aleatoria para el backend del solver. Diferentes semillas pueden resultar en diferentes tiempos de ejecución de verificación,
+# ya que el solver usa heurísticas.
+random_seed = 1
+
+# El número de núcleos de procesador a asumir para verificación concurrente de condiciones de verificación.
+proc_cores = 4
+```
+
+> SUGERENCIA: Para verificación local, es posible que quieras establecer `proc_cores` a un
+> número agresivo (tus núcleos reales) para acelerar el ciclo de respuesta.
+
+## Diagnóstico de prover
+
+Cuando Move Prover encuentra un error de verificación, imprime diagnóstico a salida estándar
+en un estilo similar a un compilador o un depurador. Explicamos los diferentes
+tipos de diagnósticos abajo, basados en el siguiente ejemplo en evolución:
+
+```move
+module 0x42::m {
+  struct Counter has key {
+    value: u8,
+  }
+
+  public fun increment(a: address) acquires Counter {
+    let r = borrow_global_mut<Counter>(a);
+    r.value = r.value + 1;
+  }
+
+  spec increment {
+    aborts_if !exists<Counter>(a);
+    ensures global<Counter>(a).value == old(global<Counter>(a)).value + 1;
+  }
+}
+```
+
+Modificaremos este ejemplo mientras demostramos diferentes tipos de diagnósticos.
+
+### Aborto inesperado
+
+Si ejecutamos Move Prover en el ejemplo inmediatamente arriba, obtenemos el siguiente
+error:
+
+```shellscript filename="Terminal"
+error: abort not covered by any of the `aborts_if` clauses
+   ┌─ m.move:11:5
+   │
+ 8 │           r.value = r.value + 1;
+   │                             - abort happened here with execution failure
+   ·
+11 │ ╭     spec increment {
+12 │ │         aborts_if !exists<Counter>(a);
+13 │ │         ensures global<Counter>(a).value == old(global<Counter>(a)).value + 1;
+14 │ │     }
+   │ ╰─────^
+   │
+   =     at m.move:6: increment
+   =         a = 0x29
+   =     at m.move:7: increment
+   =         r = &mmm.Counter{value = 255u8}
+   =     at m.move:8: increment
+   =         ABORTED
+
+{
+  "Error": "Move Prover failed: exiting with verification errors"
+}
+```
+
+Move Prover ha generado un contraejemplo que lleva a un desbordamiento cuando
+se suma 1 al valor de 255 para un `u8`. Este desbordamiento ocurre si la especificación de función
+requiere comportamiento de aborto, pero la condición bajo la cual la
+función está abortando no está cubierta por la especificación. Y de hecho, con
+`aborts_if !exists<Counter>(a)`, solo cubrimos el aborto causado por la ausencia
+del recurso, pero no el aborto causado por el desbordamiento aritmético.
+
+Arreglemos lo anterior y agreguemos la siguiente condición:
+
+```move
+module 0x42::m {
+  spec increment {
+    aborts_if global<Counter>(a).value == 255;
+    // ...
+  }
+}
+```
+
+Con esto, Move Prover tendrá éxito sin errores.
+
+### Falla de post-condición
+
+Inyectemos un error en la condición `ensures` del ejemplo anterior:
+
+```move
+module 0x42::m {
+  spec increment {
+    ensures global<Counter>(a).value == /*old*/(global<Counter>(a).value) + 1;
+  }
+}
+```
+
+Con esto, Move Prover producirá el siguiente diagnóstico:
+
+```shellscript filename="Terminal"
+error: post-condition does not hold
+   ┌─ m.move:14:9
+   │
+14 │         ensures global<Counter>(a).value == /*old*/(global<Counter>(a).value) + 1;
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │
+   =     at m.move:6: increment
+   =         a = 0x29
+   =     at m.move:7: increment
+   =         r = &mmm.Counter{value = 0u8}
+   =     at m.move:8: increment
+   =     at m.move:9: increment
+   =     at m.move:12: increment (spec)
+   =     at m.move:15: increment (spec)
+   =     at m.move:13: increment (spec)
+   =     at m.move:14: increment (spec)
+
+{
+  "Error": "Move Prover failed: exiting with verification errors"
+}
+```
+
+Aunque sabemos cuál es el error (ya que acabamos de inyectarlo), esto no es
+particularmente obvio en la salida. Esto es porque no vemos directamente en
+qué valores la condición `ensures` fue realmente evaluada. Para ver esto, usa
+la opción `-t` (`--trace`); esto no está habilitado por defecto porque hace el
+problema de verificación ligeramente más difícil para el solver.
+
+En lugar de o además de la opción `--trace`, puedes usar la función incorporada
+`TRACE(exp)` en condiciones para marcar explícitamente expresiones cuyos valores
+deberían imprimirse en fallas de verificación.
+
+> NOTA: Expresiones que dependen de símbolos cuantificados no pueden ser trazadas. También,
+> expresiones que aparecen en funciones de especificación actualmente no pueden ser trazadas.
+
+## Depurar Move Prover
+
+Move Prover es una herramienta en evolución con errores y deficiencias. A veces podría
+ser necesario depurar un problema basado en la salida que Move Prover pasa
+a los backends subyacentes. Si pasas la opción `--dump`, Move Prover
+producirá el bytecode Move original, así como el bytecode de Move Prover,
+ya que el anterior se transforma durante la compilación.

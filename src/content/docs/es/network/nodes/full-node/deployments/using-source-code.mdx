@@ -1,0 +1,82 @@
+---
+title: "Usando Código Fuente"
+description: "Despliega un public fullnode (PFN) construyendo desde el código fuente aptos-core con instrucciones completas de configuración y setup."
+sidebar:
+  label: "Código Fuente"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Para desplegar un PFN usando el código fuente `aptos-core`, primero, ver [Construir Aptos Desde Código Fuente](/network/nodes/building-from-source) para instrucciones
+sobre cómo descargar el repositorio `aptos-core` y construir el binario. Luego, sigue los pasos abajo:
+
+1. Asegúrate de que tu directorio de trabajo actual sea `aptos-core`.
+
+2. Cambia a la rama `mainnet` usando `git checkout --track origin/mainnet`; recuerda, puedes en su lugar usar `devnet` o `testnet`
+   si deseas ejecutar tu PFN en una red diferente.
+
+3. Siguiente, descarga los archivos `genesis.blob` y `waypoint.txt` para la red a la que tu PFN se conectará:
+
+   - Ejecuta este comando para descargar el blob génesis (para mainnet):
+
+     ```shellscript filename="Terminal"
+     curl -O https://raw.githubusercontent.com/aptos-labs/aptos-networks/main/mainnet/genesis.blob
+     ```
+
+   - Ejecuta este comando para descargar el archivo waypoint (para mainnet):
+     ```shellscript filename="Terminal"
+     curl -O https://raw.githubusercontent.com/aptos-labs/aptos-networks/main/mainnet/waypoint.txt
+     ```
+
+   <Aside type="caution">
+     **¿No quieres conectarte a mainnet?**<br />
+     Para conectarte a otras redes (ej., `devnet` y `testnet`), puedes encontrar el génesis y waypoint aquí ➜ https://github.com/aptos-labs/aptos-networks.
+     Asegúrate de descargar el `genesis.blob` y `waypoint.txt` para esas redes, en lugar de usar el génesis
+     y waypoint señalados por los comandos `curl` arriba.
+   </Aside>
+
+4. Siguiente, ejecuta el comando abajo para crear una copia de la plantilla YAML de configuración PFN:
+   ```shellscript filename="Terminal"
+   cp config/src/config/test_data/public_full_node.yaml fullnode.yaml
+   ```
+
+5. Finalmente, edita el archivo de configuración `fullnode.yaml` para asegurar que tu PFN: (i) contenga el blob génesis
+   y archivo waypoint que acabas de descargar; y (ii) guarde los datos de blockchain sincronizados en la ubicación de tu
+   elección (en tu máquina local). Para hacer esto:
+
+   1. Especifica la ruta correcta al archivo `genesis.blob` que acabas de descargar editando `execution.genesis_file_location` en la configuración `fullnode.yaml`. Por defecto, apunta a `genesis.blob` en el directorio de trabajo actual.
+      ```yaml filename="fullnode.yaml"
+      execution:
+        genesis_file_location: "./genesis.blob"
+      ```
+   2. Especifica la ruta correcta al archivo `waypoint.txt` que acabas de descargar editando `base.waypoint.from_file` en la configuración `fullnode.yaml`. Por defecto, apunta a `waypoint.txt` en el directorio de trabajo actual. Por ejemplo:
+      ```yaml filename="fullnode.yaml"
+      base:
+        waypoint:
+          from_file: "./waypoint.txt"
+      ```
+   3. Especifica el directorio en tu máquina local donde quieres almacenar la base de datos de blockchain editando el `base.data_dir` en la configuración `fullnode.yaml`. Por ejemplo, puedes crear un directorio `my-full-node/data` en tu directorio home y especificarlo como:
+      ```yaml filename="fullnode.yaml"
+      base:
+        data_dir: "</path/to/my/homedir/my-full-node/data>"
+      ```
+
+6. Inicia tu fullnode público local ejecutando el comando abajo:
+
+```shellscript filename="Terminal"
+cargo run -p aptos-node --release -- -f ./fullnode.yaml
+```
+
+<Aside type="note">
+  **¿Debugging?**<br />
+  El comando anterior construirá un binario release para `aptos-node` en: `aptos-core/target/release/aptos-node`. Los binarios
+  release tienden a ser sustancialmente más rápidos que los binarios debug pero carecen de información de debugging útil para desarrollo.
+  Para construir un binario debug, omite la bandera `--release` del comando anterior.
+</Aside>
+
+Ahora has configurado exitosamente e iniciado la ejecución de un PFN en la mainnet de Aptos.
+
+<Aside type="note">
+  **Verifica tu PFN**<br />
+  Si quieres verificar que tu PFN esté ejecutándose correctamente, puedes seguir las instrucciones en la guía [Verificar un PFN](/network/nodes/full-node/verify-pfn).
+</Aside>

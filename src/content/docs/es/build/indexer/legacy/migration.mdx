@@ -1,0 +1,129 @@
+---
+title: "Migrar al Servicio Transaction Stream"
+description: "Guía de migración del indexer legacy al Servicio Transaction Stream moderno con opciones de despliegue hospedado y auto-hospedado"
+sidebar:
+  label: "Guía de Migración"
+---
+
+Esta guía contiene información sobre cómo migrar al uso del Servicio Transaction Stream si actualmente estás ejecutando un indexer legacy.
+
+La pila de indexer antigua requiere ejecutar un fullnode archival con threads adicionales para procesar las transacciones, lo cual es difícil y costoso de mantener. Agregar más lógica personalizada requiere una máquina más robusta, o ejecutar varios fullnodes que escalan linealmente.
+
+Esta nueva forma de indexar usa el [Servicio Transaction Stream](/build/indexer/txn-stream). Puedes usar el [Servicio Transaction Stream Hospedado por Labs](/build/indexer/txn-stream/aptos-hosted-txn-stream) o [ejecutar tu propia instancia del Servicio Transaction Stream](/build/indexer/txn-stream/self-hosted).
+
+## 1. Clonar el repositorio
+
+```shellscript filename="Terminal"
+# SSH
+git clone git@github.com:aptos-labs/aptos-indexer-processors.git
+
+# HTTPS
+git clone https://github.com/aptos-labs/aptos-indexer-processors.git
+```
+
+Navegar al directorio del servicio:
+
+```shellscript filename="Terminal"
+cd aptos-indexer-processors
+cd rust/processor
+```
+
+## 2. Migrar procesadores al Servicio Transaction Stream
+
+Para cada procesador que estés migrando, necesitarás crear un archivo de configuración usando la plantilla abajo. Puedes encontrar más información sobre cada campo del archivo de configuración [aquí](/build/indexer/txn-stream/self-hosted#configuration).
+
+```yaml filename="config.yaml"
+health_check_port: 8084
+server_config:
+  processor_config:
+    type: default_processor
+  postgres_connection_string: <postgres_uri, e.g. postgresql://postgres:@localhost:5432/indexer>
+  indexer_grpc_data_service_address: <url_from_api_gateway>
+  indexer_grpc_http2_ping_interval_in_secs: 60
+  indexer_grpc_http2_ping_timeout_in_secs: 10
+  auth_token: <auto_token_from_api_gateway>
+  starting_version: 0 # opcional
+  ending_version: 0 # opcional
+```
+
+Para conectar el procesador al Servicio Transaction Stream, necesitas establecer la URL para `indexer_grpc_data_service_address`. Elige una de las siguientes opciones.
+
+### Opción A: Conectar al Servicio Transaction Stream Hospedado por Labs
+
+El principal beneficio de usar el Servicio Transaction Stream Hospedado por Labs es que ya no necesitas ejecutar un fullnode archival para obtener un stream de transacciones. Este servicio tiene límite de tasa. Instrucciones para conectar al Transaction Stream Hospedado por Labs se pueden encontrar [aquí](/build/indexer/txn-stream/aptos-hosted-txn-stream).
+
+### Opción B: Ejecutar un Servicio Transaction Stream Auto-Hospedado
+
+Si eliges hacerlo, puedes ejecutar una instancia auto-hospedada del Servicio Transaction Stream y conectar tus procesadores a ella. Instrucciones para ejecutar un Transaction Stream Auto-Hospedado se pueden encontrar [aquí](/build/indexer/txn-stream/self-hosted).
+
+## 3. (Opcional) Migrar procesadores personalizados al Servicio Transaction Stream
+
+Si tienes procesadores personalizados escritos con el indexer antiguo, recomendamos altamente empezar desde cero con una nueva base de datos. Usar una nueva base de datos asegura que todas tus migraciones de base de datos personalizadas se aplicarán durante esta migración.
+
+### a. Migrar esquemas de tabla personalizados
+
+Migra tus esquemas personalizados copiando cada una de tus migraciones personalizadas a la carpeta [`migrations`](https://github.com/aptos-labs/aptos-indexer-processors/tree/main/rust/processor/src/db/postgres/migrations).
+
+### b. Migrar código de procesadores personalizados
+
+Migra el código copiando tus procesadores personalizados a la carpeta [`processors`](https://github.com/aptos-labs/aptos-indexer-processors/tree/main/rust/processor) y cualquier modelo personalizado relevante a la carpeta [`models`](https://github.com/aptos-labs/aptos-indexer-processors/tree/main/rust/processor/src/db/common/models). Integra los procesadores personalizados con el resto del código agregándolos a los siguientes archivos de código Rust.
+
+[`mod.rs`](https://github.com/aptos-labs/aptos-indexer-processors/blob/main/rust/processor/src/processors/mod.rs)
+
+```rust filename="mod.rs"
+pub enum Processor {
+    ...
+    CoinProcessor,
+    ...
+}
+
+impl Processor {
+    ...
+    COIN_PROCESSOR_NAME => Self::CoinProcessor,
+    ...
+}
+```
+
+[`worker.rs`](https://github.com/aptos-labs/aptos-indexer-processors/blob/main/rust/processor/src/worker.rs)
+
+```rust filename="worker.rs"
+Processor::CoinProcessor => {
+    Arc::new(CoinTransactionProcessor::new(self.db_pool.clone()))
+},
+```
+
+## 4. Rellenar base de datos Postgres con Diesel
+
+Aunque los nuevos procesadores tienen los mismos esquemas Postgres que los antiguos, recomendamos que hagas un relleno completo (idealmente escribiendo a una nueva DB por completo) porque algunos campos son un poco diferentes como resultado de la conversión protobuf.
+
+Estas instrucciones asumen que estás familiarizado con usar [migraciones Diesel](https://docs.rs/diesel_migrations/latest/diesel_migrations/). Ejecuta la migración completa de base de datos con el siguiente comando:
+
+```shellscript filename="Terminal"
+DATABASE_URL=postgres://postgres@localhost:5432/postgres diesel migration run
+```
+
+## 5. Ejecutar los procesadores migrados
+
+Para ejecutar un solo procesador, usa el siguiente comando:
+
+```shellscript filename="Terminal"
+cargo run --release -- -c config.yaml
+```
+
+Si tienes múltiples procesadores, necesitarás ejecutar una instancia separada del servicio para cada uno de los procesadores.
+
+{/* TODO: Agregar instrucciones para ejecutar con Docker */}
+
+Si te gustaría ejecutar el procesador como una imagen Docker, las instrucciones están listadas aquí.
+
+## FAQs
+
+### 1. ¿Se actualizará alguna vez el protobuf, y qué necesito hacer en ese momento?
+
+El esquema protobuf puede actualizarse en el futuro. Los cambios incompatibles hacia atrás se comunicarán en las notas de lanzamiento.
+
+### 2. ¿Qué pasa si ya tengo lógica personalizada escrita en el indexer antiguo? ¿Es fácil migrar esas?
+
+Ya que la nueva pila de indexer tiene el mismo esquema Postgres que la pila de indexer antigua, debería ser fácil migrar tus procesadores. Aún recomendamos altamente crear una nueva DB para esta migración para que cualquier migración de DB personalizada se aplique.
+
+Sigue el Paso 3 en esta guía para migrar tu lógica personalizada a la nueva pila de procesadores.

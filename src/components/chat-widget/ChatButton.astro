@@ -22,6 +22,7 @@ const { isMobile = false } = Astro.props;
       alt="Aptos Logo"
       width={20}
       height={20}
+      fetchpriority="high"
     />
     <Image
       src={aptosLogoDark}
@@ -29,31 +30,91 @@ const { isMobile = false } = Astro.props;
       alt="Aptos Logo"
       width={20}
       height={20}
+      fetchpriority="high"
     />
   </div>
   <span class="text-sm font-semibold">AskAptos</span>
 </button>
 
+<!-- Chat overlay that shows immediately -->
+<div id="chat-overlay" class="chat-overlay hidden">
+  <div class="chat-loading-content">
+    <div class="chat-loading-spinner">
+      <div class="spinner"></div>
+    </div>
+    <p class="chat-loading-text">Loading AskAptos...</p>
+  </div>
+</div>
+
 <script>
   const mobileButton = document.getElementById("mobile-chat-trigger");
   const desktopButton = document.getElementById("chat-trigger");
+  const loadingOverlay = document.getElementById("chat-overlay");
 
-  if (mobileButton) {
-    mobileButton.addEventListener("click", () => {
-      window.dispatchEvent(new CustomEvent("toggle-chat"));
-      // Close the mobile menu when opening chat
+  function showLoadingOverlay() {
+    if (loadingOverlay) {
+      loadingOverlay.classList.remove("hidden");
+      loadingOverlay.classList.add("visible");
+    }
+  }
+
+  function hideLoadingOverlay() {
+    if (loadingOverlay) {
+      loadingOverlay.classList.remove("visible");
+      loadingOverlay.classList.add("hidden");
+    }
+  }
+
+  function handleChatToggle() {
+    // Show loading overlay immediately
+    showLoadingOverlay();
+
+    // Dispatch the event to load the React component
+    window.dispatchEvent(new CustomEvent("toggle-chat"));
+
+    // Close the mobile menu when opening chat
+    if (document.body.hasAttribute("data-mobile-menu-expanded")) {
       document.body.removeAttribute("data-mobile-menu-expanded");
       const menuButton = document.querySelector("starlight-menu-button");
       if (menuButton) {
         menuButton.setAttribute("aria-expanded", "false");
       }
+    }
+
+    // Set up cleanup controller
+    const controller = new AbortController();
+
+    const cleanup = () => {
+      hideLoadingOverlay();
+      controller.abort();
+    };
+
+    // Hide loading when React component is ready
+    window.addEventListener("chat-ready", cleanup, {
+      once: true,
+      signal: controller.signal,
     });
+
+    // Also hide loading if dialog is closed before ready
+    window.addEventListener("chat-closed", cleanup, {
+      once: true,
+      signal: controller.signal,
+    });
+
+    // Fallback: hide loading after 30 seconds (safety mechanism for extreme cases)
+    setTimeout(() => {
+      if (!controller.signal.aborted) {
+        cleanup();
+      }
+    }, 30000);
+  }
+
+  if (mobileButton) {
+    mobileButton.addEventListener("click", handleChatToggle);
   }
 
   if (desktopButton) {
-    desktopButton.addEventListener("click", () => {
-      window.dispatchEvent(new CustomEvent("toggle-chat"));
-    });
+    desktopButton.addEventListener("click", handleChatToggle);
   }
 </script>
 
@@ -135,5 +196,70 @@ const { isMobile = false } = Astro.props;
 
   :global([data-theme="dark"]) .mobile-icon {
     padding: 0.375rem;
+  }
+
+  /* Loading overlay styles */
+  .chat-overlay {
+    position: fixed;
+    inset: 0;
+    background: color-mix(in srgb, var(--sl-color-black) 70%, transparent);
+    backdrop-filter: blur(6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    opacity: 0;
+    transition: opacity 0.2s ease-out;
+  }
+
+  .chat-overlay.visible {
+    opacity: 1;
+  }
+
+  .chat-overlay.hidden {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .chat-loading-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    padding: 2rem;
+    background-color: var(--sl-color-black);
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.75rem;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  }
+
+  .chat-loading-spinner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .spinner {
+    width: 2rem;
+    height: 2rem;
+    border: 2px solid var(--sl-color-gray-5);
+    border-top: 2px solid var(--sl-color-accent);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+
+  .chat-loading-text {
+    color: var(--sl-color-white);
+    font-size: var(--sl-text-sm);
+    margin: 0;
+  }
+
+  @keyframes spin {
+    0% {
+      transform: rotate(0deg);
+    }
+    100% {
+      transform: rotate(360deg);
+    }
   }
 </style>

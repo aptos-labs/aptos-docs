@@ -1,0 +1,77 @@
+---
+title: "Apagar Nodos"
+description: "Apaga de forma segura tu validator y validator fullnode (VFN) saliendo del conjunto de validators y limpiando recursos a través de diferentes métodos de despliegue."
+sidebar:
+  label: "Apagar"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Si quieres apagar tu validator y validator fullnode (VFN), sigue las instrucciones abajo para salir del
+conjunto de validators y limpiar los recursos usados por los nodos.
+
+<Aside type="caution">
+  **SAL DEL CONJUNTO DE VALIDATORS PRIMERO**<br />
+  Es importante salir del conjunto de validators antes de apagar tus nodos. De lo contrario, reducirás la participación de stake
+  en la red y arriesgas degradar la salud de la red.
+</Aside>
+
+## Salir del conjunto de validators
+
+Antes de apagar tus nodos, debes salir del conjunto de validators. Esto asegurará que tu nodo ya no sea
+responsable de participar en consenso. Los nodos validator pueden salir del conjunto de validators en cualquier momento. Esto también
+sucede automáticamente cuando hay stake insuficiente en la cuenta del validator.
+
+Cuando sales del conjunto de validators, tu nodo será marcado como "inactivo" en la siguiente época. Para salir del conjunto de validators,
+ejecuta el siguiente comando usando el CLI de Aptos. Necesitarás establecer las banderas `profile` y `owner-address`.
+
+```shellscript filename="Terminal"
+aptos node leave-validator-set --profile <operator-profile> --pool-address <owner-address>
+```
+
+<Aside type="caution">
+  **ESPERANDO CAMBIOS DE ÉPOCA**<br />
+  Si sales del conjunto de validators, solo tomará efecto al comienzo de la siguiente época. Necesitarás
+  esperar a que comience la siguiente época antes de apagar tus nodos. Similarmente, si sales
+  del conjunto de validators y luego te unes de nuevo en la misma época, la reincorporación fallará. Deberías esperar a que
+  comience la siguiente época antes de reincorporarte al conjunto de validators.
+</Aside>
+
+## Métodos de apagado
+
+Una vez que hayas salido exitosamente del conjunto de validators, puedes apagar tus nodos. El método para apagar tus
+nodos depende de cómo los desplegaste. Elige la sección apropiada abajo para apagar tus nodos.
+
+## Usando Código Fuente
+
+1. Detén tu nodo matando el proceso `aptos-node`. Esto es suficiente para apagar tu nodo.
+2. (Opcional) Si deseas liberar espacio, elimina el directorio de datos, ej., `rm -r <your-data-directory>`.
+3. (Opcional) Si deseas reutilizar tu identidad de nodo, deberías mantener los archivos de configuración:
+   - `public-keys.yaml`
+   - `private-keys.yaml`
+   - `validator-identity.yaml`
+   - `validator-full-node-identity.yaml`
+
+## Usando Docker
+
+1. Detén tu nodo y elimina los volúmenes de datos ejecutando el comando: `docker compose down --volumes`.
+   Esto es suficiente para apagar tu nodo.
+2. (Opcional) Si deseas reutilizar tu identidad de nodo, deberías mantener los archivos de configuración:
+   - `public-keys.yaml`
+   - `private-keys.yaml`
+   - `validator-identity.yaml`
+   - `validator-full-node-identity.yaml`
+
+## Usando Terraform
+
+<Aside type="note">
+  Terraform se usa comúnmente para configurar nodos en proveedores de nube como AWS, Azure, y GCP.
+</Aside>
+
+1. Detén tu nodo y elimina todos los recursos ejecutando el comando: `terraform destroy`. Esto
+   es suficiente para apagar tu nodo.
+2. (Opcional) Si deseas reutilizar tu identidad de nodo, deberías mantener los archivos de configuración:
+   - `public-keys.yaml`
+   - `private-keys.yaml`
+   - `validator-identity.yaml`
+   - `validator-full-node-identity.yaml`

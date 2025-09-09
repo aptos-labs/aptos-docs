@@ -1,0 +1,29 @@
+---
+title: "Preguntas Frecuentes del Verificador de Salud del Nodo"
+description: "Preguntas frecuentes sobre el Verificador de Salud del Nodo de Aptos incluyendo solución de problemas de fallas de evaluación y comprensión de pruebas de latencia."
+sidebar:
+  label: "FAQ NHC"
+---
+
+El servicio Verificador de Salud del Nodo (NHC) de Aptos puede usarse para verificar la salud de tu(s) nodo(s). Ver [Verificador de Salud del Nodo](/network/nodes/measure/node-health-checker) para documentación completa sobre el NHC.
+
+El propósito de esta FAQ es ayudarte a entender por qué tu nodo no pasó una verificación de salud particular cuando ejecutaste NHC para él. Si no encontraste la información que querías en esta FAQ, [abre un issue](https://github.com/aptos-labs/aptos-core/issues/new/choose), o [abre un PR](https://github.com/aptos-labs/aptos-core/pulls) y agrega la información tú mismo.
+
+## ¿Cómo funciona el evaluador de latencia?
+
+Probablemente estás aquí porque recibiste un resultado de evaluación NHC como este:
+
+```shellscript filename="Terminal"
+Average latency too high: The average latency was 1216ms, which is higher than the maximum allowed latency of 1000ms.
+```
+
+Mientras el NHC reporta 1216ms arriba, cuando haces `ping` podrías ver una latencia como 600ms. Esta diferencia es porque cuando haces `ping` a una IP, el resultado que ves es un solo viaje de ida y vuelta (donde la latencia es el tiempo de viaje de ida y vuelta (RTT)). Por otro lado, la prueba de latencia NHC hará una solicitud a la API ejecutándose en tu nodo. En efecto, esto significa que el NHC cronometrará 2 viajes de ida y vuelta, porque hace lo siguiente:
+
+1. SYN
+2. SYNACK
+3. ACK + Enviar solicitud HTTP
+4. Recibir respuesta HTTP
+
+es decir, el NHC debe hacer un handshake TCP (un viaje de ida y vuelta) y luego hacer una solicitud HTTP (segundo viaje de ida y vuelta).
+
+La razón por la que el NHC usa el evaluador de latencia es para asegurar que podamos mantener buen rendimiento de red. En particular, si la latencia a tu nodo es demasiado alta, resultará en un TPS bajo y alto tiempo hasta finalidad, ambos muy importantes para ejecutar una blockchain L1 de alto rendimiento. **Si recibes este error, necesitarás tratar de mejorar la latencia a tu nodo. Hemos establecido umbrales altos en este valor con el entendimiento de que los nodos estarán ejecutándose por todo el mundo**.

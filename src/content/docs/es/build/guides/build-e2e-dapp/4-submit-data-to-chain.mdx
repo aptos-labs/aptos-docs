@@ -1,0 +1,106 @@
+---
+title: "4. Enviar Datos a la Cadena"
+description: "Implementar envío de transacciones para crear nuevas listas de tareas usando la función signAndSubmitTransaction del adaptador de billetera."
+sidebar:
+  label: "4. Enviar Datos"
+---
+
+En el cuarto capítulo del tutorial sobre [construir una dapp de extremo a extremo en Aptos](/build/guides/build-e2e-dapp), estarás enviando datos a la cadena.
+
+Así que ahora tenemos un botón **Agregar nueva lista** que aparece si la cuenta conectada aún no ha creado una lista. Todavía no tenemos una forma para que una cuenta cree una lista, así que agreguemos esa funcionalidad.
+
+1. Primero, nuestro proveedor de adaptador de billetera tiene una función `signAndSubmitTransaction`; vamos a extraerla actualizando lo siguiente:
+
+```tsx filename="App.tsx"
+const { account, signAndSubmitTransaction } = useWallet();
+```
+
+2. Agrega un evento `onClick` al botón de nueva lista:
+
+```tsx filename="App.tsx"
+<Button
+  onClick={addNewList}
+>
+  Agregar nueva lista
+</Button>
+```
+
+3. Actualiza la declaración de importación de `@aptos-labs/wallet-adapter-react` para también importar el tipo `InputTransactionData`:
+
+```tsx filename="App.tsx"
+import {
+  useWallet,
+  InputTransactionData,
+} from "@aptos-labs/wallet-adapter-react";
+```
+
+4. Agrega la función `addNewList`:
+
+```tsx filename="App.tsx"
+
+const addNewList = async () => {
+  if (!account) return [];
+
+   const transaction:InputTransactionData = {
+      data: {
+        function:`${moduleAddress}::todolist::create_list`,
+        functionArguments:[]
+      }
+    }
+  try {
+    // firmar y enviar transacción a la cadena
+    const response = await signAndSubmitTransaction(transaction);
+    // esperar la transacción
+    await aptosClient().waitForTransaction({transactionHash:response.hash});
+    setAccountHasList(true);
+  } catch (error: any) {
+    setAccountHasList(false);
+  }
+};
+```
+
+5. Dado que nuestra nueva función también usa `moduleAddress`, saquémosla del ámbito de la función `fetchList` al ámbito global para que pueda ser usada globalmente.
+
+En nuestra función `fetchList`, encuentra la línea:
+
+```tsx filename="App.tsx"
+const moduleAddress = MODULE_ADDRESS;
+```
+
+Y muévela fuera de la función principal `App`, para que pueda ser accedida globalmente.
+
+**Repasemos el código de la función `addNewList`.**
+
+Primero, usamos la propiedad `account` de nuestro proveedor de billetera para asegurarnos de que hay una cuenta conectada a nuestra aplicación.
+
+Luego construimos nuestros datos de transacción para ser enviados a la cadena:
+
+```tsx filename="App.tsx"
+const transaction:InputTransactionData = {
+      data: {
+        function:`${moduleAddress}::todolist::create_list`,
+        functionArguments:[]
+      }
+    }
+```
+
+- `function` - la función del contrato inteligente que queremos llamar. En nuestro caso, queremos llamar a la función `create_list` en nuestro módulo `todolist`.
+- `functionArguments` - argumentos que se pasan a nuestra función del contrato inteligente. En nuestro caso, nuestra función `create_list` no espera argumentos (además del firmante), así que pasamos un array vacío.
+
+Luego, usamos la función `signAndSubmitTransaction` del adaptador de billetera para firmar la transacción con la billetera del usuario y enviarla a la cadena.
+
+```tsx filename="App.tsx"
+const response = await signAndSubmitTransaction(transaction);
+```
+
+Una vez que la transacción es enviada a la cadena, obtenemos un hash de transacción de vuelta. Podemos usar ese hash para esperar a que la transacción se procese usando el método `waitForTransaction`:
+
+```tsx filename="App.tsx"
+await aptosClient().waitForTransaction({transactionHash:response.hash});
+```
+
+Finalmente, si todo va bien, establecemos `accountHasList` a `true` ya que ahora la cuenta tiene una lista.
+
+¡Excelente! Ahora puedes probar crear una nueva lista. Conecta una billetera, y si la cuenta no tiene una lista de tareas, verás el botón **Agregar nueva lista**. Haz clic en él, aprueba la transacción en tu billetera, y una vez que la transacción se procese, deberías ver que la interfaz de usuario cambia para mostrar el estado "Mi Lista de Tareas".
+
+En el siguiente capítulo, aprenderemos cómo manejar tareas - obtener tareas existentes y agregar nuevas tareas a la lista.

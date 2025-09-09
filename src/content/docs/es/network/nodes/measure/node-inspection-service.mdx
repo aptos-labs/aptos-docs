@@ -1,0 +1,134 @@
+---
+title: "Servicio de Inspección de Nodos"
+description: "Accede a métricas de tiempo de ejecución e información del sistema de nodos Aptos a través del servicio de inspección para monitorear salud y rendimiento."
+sidebar:
+  label: "Servicio de Inspección"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Los nodos Aptos recolectan métricas e información del sistema mientras se ejecutan. Estas métricas proporcionan una forma de rastrear,
+monitorear e inspeccionar la salud y rendimiento del nodo dinámicamente, en tiempo de ejecución. Las métricas del nodo e información del sistema
+pueden consultarse o exportarse vía un servicio de inspección que se ejecuta en cada nodo.
+Para ver la lista de métricas y contadores importantes, ver el documento [Métricas Importantes del Nodo](/network/nodes/measure/important-metrics).
+
+<Aside type="caution">
+  No recomendamos hacer el servicio de inspección públicamente accesible, ya que puede exponer información potencialmente sensible
+  sobre tu nodo, como rutas de archivos y directorios.
+</Aside>
+
+## Características del servicio de inspección
+
+Si te gustaría examinar todos los endpoints proporcionados por el servicio de inspección, visita la siguiente URL
+una vez que hayas iniciado tu nodo:
+
+```sh
+http://localhost:9101/
+```
+
+Esto mostrará un directorio de todos los endpoints y características ofrecidas por el servicio, por ejemplo:
+
+```
+Welcome to the Aptos Inspection Service!
+The following endpoints are available:
+	- /configuration
+	- /consensus_health_check
+	- /forge_metrics
+	- /identity_information
+	- /json_metrics
+	- /metrics
+	- /peer_information
+	- /system_information
+```
+
+## Examinar métricas del nodo
+
+Si te gustaría examinar las métricas de tu nodo en tiempo de ejecución, visita la siguiente URL:
+
+```sh
+http://localhost:9101/metrics
+```
+
+Esto mostrará los valores de todas las métricas y contadores de tu nodo en el momento que lo consultaste.
+Para ver actualizaciones a estos valores, simplemente refresca la página.
+
+Igualmente, si deseas ver las métricas en formato `json`, visita la siguiente URL:
+
+```sh
+http://localhost:9101/json_metrics
+```
+
+## Configurar el servicio de inspección
+
+Puedes configurar varios aspectos del servicio de inspección del nodo, por ejemplo, puedes cambiar el puerto en el que escucha,
+habilitar o deshabilitar ciertos endpoints, y más. El servicio de inspección está habilitado por defecto, por lo que no necesitas hacer
+nada especial una vez que inicies tu nodo.
+
+El servicio de inspección debería ejecutarse por defecto en el puerto `9101`. Para cambiar el puerto en el que el servicio de inspección escucha
+(ej., a `1000`), agrega lo siguiente a tu archivo de configuración de nodo:
+
+```yaml filename="fullnode.yaml"
+inspection_service:
+  port: 1000
+```
+
+## Examinar configuración del nodo
+
+El servicio de inspección también proporciona una forma de examinar el archivo de configuración de tu nodo
+en tiempo de ejecución (es decir, el archivo de configuración del nodo con el que tu nodo inició).
+
+<Aside type="caution">
+  Por defecto, el endpoint de configuración está deshabilitado ya que puede exponer información potencialmente sensible
+  sobre tu nodo, ej., rutas de archivos y directorios. Recomendamos habilitar este
+  endpoint solo si el servicio de inspección no es públicamente accesible.
+</Aside>
+
+Para habilitar esta característica, agrega lo siguiente a tu archivo de configuración de nodo:
+
+```yaml filename="fullnode.yaml"
+inspection_service:
+  expose_configuration: true
+```
+
+Y visita la URL de configuración:
+
+```sh
+http://localhost:9101/configuration
+```
+
+## Examinar información del sistema
+
+Igualmente, el servicio de inspección también proporciona una forma de examinar la información del sistema de tu nodo
+en tiempo de ejecución (es decir, información de construcción y hardware). Simplemente visita la siguiente URL:
+
+```sh
+http://localhost:9101/system_information
+```
+
+Si te gustaría deshabilitar este endpoint, agrega lo siguiente a tu archivo de configuración de nodo:
+
+```yaml filename="fullnode.yaml"
+inspection_service:
+  expose_system_information: false
+```
+
+<Aside type="note">
+  La información del sistema mostrada aquí no está garantizada de ser 100% precisa debido a limitaciones
+  en la forma en que esta información se recolecta.
+</Aside>
+
+## Examinar información de identidad
+
+El servicio de inspección también proporciona una forma fácil de examinar la identidad de tu nodo
+(es decir, el ID de par para cada red) en tiempo de ejecución. Simplemente visita la siguiente URL:
+
+```sh
+http://localhost:9101/identity_information
+```
+
+Si te gustaría deshabilitar este endpoint, agrega lo siguiente a tu archivo de configuración de nodo:
+
+```yaml filename="fullnode.yaml"
+inspection_service:
+  expose_identity_information: false
+```

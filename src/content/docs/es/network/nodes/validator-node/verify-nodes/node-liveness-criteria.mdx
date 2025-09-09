@@ -1,0 +1,95 @@
+---
+title: "Salud del Nodo"
+description: "Verifica y monitorea la salud de tu validator y validator fullnode (VFN) usando métricas de tiempo de ejecución, herramientas de monitoreo local, y datos de telemetría."
+sidebar:
+  label: "Verificación de Salud"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Este documento describe cómo puedes verificar y monitorear la salud de tu validator y validator fullnode (VFN) en la
+red de Aptos. Muchos de los métodos descritos aquí dependen de las métricas de tiempo de ejecución que tus nodos recolectan y reportan. Estas
+métricas son recolectadas por el binario del nodo Aptos y se exponen vía un endpoint de métricas Prometheus. Para una descripción detallada
+de las métricas importantes, ver la documentación del [Servicio de Inspección de Nodos](/network/nodes/measure/node-inspection-service) y
+[Métricas Importantes del Nodo](/network/nodes/measure/important-metrics).
+
+## Verificación Inicial del Nodo
+
+Después de desplegar tus nodos y conectarlos a la red de Aptos, deberías verificar que tus nodos estén ejecutándose
+correctamente.
+
+<Aside type="note">
+  **¿PRIMERA VEZ?**<br />
+  En algunos entornos, ej., `mainnet` y `testnet`, tu VFN comenzará a sincronizar primero (antes de que tu validator pueda sincronizar).
+  Este es comportamiento normal. Una vez que tu VFN haya terminado de sincronizar, tu nodo validator comenzará a sincronizar y eventualmente comenzará a participar en consenso.
+</Aside>
+
+Puedes verificar la corrección de tus nodos inspeccionando varias métricas simples. Sigue estos pasos:
+
+1. Verifica si tus nodos están sincronizando estado ejecutando este comando:
+
+   ```shellscript filename="Terminal"
+   curl 127.0.0.1:9101/metrics 2> /dev/null | grep "aptos_state_sync_version"
+   ```
+
+   Deberías esperar ver las versiones `synced` o `synced_states` aumentando. Las versiones deberían comenzar a aumentar
+   para tu VFN primero, luego eventualmente tu nodo validator comenzará a sincronizar.
+
+   <Aside type="note">
+     **¿DESPLIEGUE EN NUBE?**<br />
+     Podrías necesitar reemplazar `127.0.0.1` con tu IP/DNS de validator o VFN si está desplegado en la nube.
+   </Aside>
+
+2. Verifica que tu validator se esté conectando a otros pares en la red.
+
+   ```shellscript filename="Terminal"
+   curl 127.0.0.1:9101/metrics 2> /dev/null | grep "aptos_connections{.*\"Validator\".*}"
+   ```
+
+   El comando producirá el número de conexiones entrantes y salientes de tu nodo validator. Por ejemplo:
+
+   ```shellscript filename="Terminal"
+   aptos_connections{direction="inbound",network_id="Validator",peer_id="f326fd30",role_type="validator"} 5
+   aptos_connections{direction="outbound",network_id="Validator",peer_id="f326fd30",role_type="validator"} 2
+   ```
+
+   Mientras una de las métricas sea mayor que cero, tu nodo validator está conectado a al menos uno de los pares en la red. Si tu validator no está
+   conectado a ningún par, asegúrate de que tu VFN haya completado la sincronización primero. Una vez que tu VFN haya terminado de sincronizar, tu nodo validator
+   comenzará a sincronizar y eventualmente podrá conectarse a otros pares.
+
+3. Después de que tu nodo sincronice a la última versión, también puedes verificar si el consenso está progresando, y tu nodo está proponiendo.
+
+   ```shellscript filename="Terminal"
+   curl 127.0.0.1:9101/metrics 2> /dev/null | grep "aptos_consensus_current_round"
+
+   curl 127.0.0.1:9101/metrics 2> /dev/null | grep "aptos_consensus_proposals_count"
+   ```
+
+   Deberías esperar ver estos números continuar aumentando.
+
+## Monitoreo Local
+
+Si eres un operador de nodo, hay varias herramientas disponibles para ti para verificar la salud de tu nodo en adelante:
+
+- **Métricas:** Puedes monitorear tu endpoint de métricas local ejecutando un comando `curl` contra el
+  [Servicio de Inspección de Nodos](/network/nodes/measure/node-inspection-service) y verificar métricas clave. Por ejemplo, puedes
+  verificar el estado de sincronización de tu nodo ejecutando el comando delineado en la
+  sección [Verificar sincronización](/network/nodes/full-node/verify-pfn#verify-synchronization).
+
+- **API REST:** También puedes monitorear la salud de tu nodo consultando la API REST. Por ejemplo, puedes verificar la
+  altura de bloque actual de tu nodo haciendo ping a la página índice de la API REST de tu nodo. Para más información, ver la
+  [Especificación de la API de Aptos](/build/apis/fullnode-rest-api).
+
+- **Herramientas de monitoreo:** Para mejorar la observabilidad, también puedes instalar herramientas de monitoreo que extraigan del endpoint de métricas local:
+  - Para despliegues basados en Kubernetes, instala el chart Helm de monitoreo ([https://github.com/aptos-labs/aptos-core/tree/main/terraform/helm/monitoring](https://github.com/aptos-labs/aptos-core/tree/main/terraform/helm/monitoring)).
+  - Localmente, puedes ejecutar Prometheus y Grafana directamente. Los dashboards que utilizan las métricas se pueden encontrar aquí: ([https://github.com/aptos-labs/aptos-core/tree/main/dashboards](https://github.com/aptos-labs/aptos-core/tree/main/dashboards)).
+
+## Telemetría
+
+El equipo de Aptos Labs también puede monitorear tu nodo remotamente usando [Telemetría de Nodo](/network/nodes/configure/telemetry). Cuando habilitas telemetría en
+tus nodos, el binario del nodo Aptos enviará datos de telemetría en segundo plano, que incluye las métricas del nodo.
+Los datos de telemetría de tu nodo son necesarios para evaluar el rendimiento, vitalidad y salud de tus nodos.
+
+Si tu nodo está usando la configuración por defecto sin deshabilitar explícitamente la telemetría, y tiene acceso de salida `HTTPS` a
+internet, entonces reportará varias métricas clave a Aptos Labs. Aptos Labs también observará los eventos on-chain
+como propuestas por hora en tu nodo, como se define en los criterios de vitalidad.

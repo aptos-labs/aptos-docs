@@ -4,6 +4,7 @@ module.exports = {
   trailingComma: "all",
   printWidth: 100,
   plugins: [require.resolve("prettier-plugin-astro")],
+  endOfLine: "lf",
   overrides: [
     {
       files: "*.astro",

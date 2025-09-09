@@ -1,0 +1,38 @@
+---
+title: "Paso de Transaction Stream"
+description: "Paso central de streaming de transacciones para procesadores con conexiones gRPC, obtención por lotes y gestión resiliente de conexión"
+sidebar:
+  label: "Transaction Stream"
+---
+
+El `TransactionStreamStep` es un componente fundamental en el pipeline de procesamiento de transacciones. Establece una conexión gRPC con el servicio `TransactionStream`, obtiene transacciones en lotes, y las produce para procesamiento adicional. Este paso también gestiona reintentos de conexión y reconexiones en caso de fallas transitorias. Típicamente, este es el paso inicial en un procesador, responsable de hacer streaming de transacciones para pasos downstream.
+
+## Responsabilidades Clave
+
+1. **Obtener Transacciones**: Recupera lotes de transacciones de un servicio gRPC.
+2. **Gestionar Conexiones**: Maneja reconexiones gRPC para asegurar un stream resiliente.
+3. **Proporcionar Metadatos**: Adjunta información contextual como versiones y timestamps a las transacciones.
+
+## Definición de Struct
+
+El struct `TransactionStreamStep` se define como sigue:
+
+```rust
+pub struct TransactionStreamStep
+where
+    Self: Sized + Send + 'static,
+{
+    transaction_stream_config: TransactionStreamConfig,
+    pub transaction_stream: Mutex<TransactionStreamInternal>,
+}
+```
+
+## Cómo Funciona
+
+- El `TransactionStreamStep` se conecta al servicio gRPC `TransactionStream`.
+- Continuamente sondea para nuevas transacciones usando el método `poll`.
+- Cada lote se envuelve en un `TransactionContext`, que incluye metadatos como:
+  - Versiones de inicio y fin.
+  - Timestamps de transacciones.
+  - Tamaño del lote en bytes.
+- Si la conexión se interrumpe, intenta reconectarse sin problemas.

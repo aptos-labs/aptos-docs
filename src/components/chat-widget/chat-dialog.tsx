@@ -101,10 +101,12 @@ export function ChatDialog({
       <Dialog.Portal>
         <div className="chat-dialog-container">
           <Dialog.Overlay className="chat-dialog-overlay" />
-          <Dialog.Content
-            className={`chat-dialog-content ${className ?? ""}`}
-            aria-describedby="dialog-description"
-          >
+          <Dialog.Content className={`chat-dialog-content ${className ?? ""}`}>
+            <Dialog.Description className="sr-only">
+              Chat interface for interacting with Aptos AI assistant. Use this dialog to ask
+              questions and get responses from the AI.
+            </Dialog.Description>
+
             <div className="chat-dialog-header">
               <div className="chat-dialog-title">
                 <Dialog.Title className="chat-dialog-title-text">
@@ -166,11 +168,6 @@ export function ChatDialog({
                 </Dialog.Close>
               </div>
             </div>
-
-            <Dialog.Description id="dialog-description" className="sr-only">
-              Chat interface for interacting with Aptos AI assistant. Use this dialog to ask
-              questions and get responses from the AI.
-            </Dialog.Description>
 
             <div className="chat-dialog-body">
               {showSidebar && (
@@ -297,23 +294,23 @@ export function ChatDialog({
                       disabled={isRateLimited}
                     />
                     <div className="chat-disclaimer">
-                      By messaging AskAptos, you agree to our{" "}
+                      By using Ask Aptos, you agree to the Aptos Foundation's{" "}
                       <a
-                        href="https://aptoslabs.com/terms"
+                        href="https://aptosfoundation.org/terms"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="chat-disclaimer-link"
                       >
                         Terms
                       </a>{" "}
-                      and have read our{" "}
+                      and{" "}
                       <a
-                        href="https://aptoslabs.com/privacy"
+                        href="https://aptosfoundation.org/privacy"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="chat-disclaimer-link"
                       >
-                        Privacy Policy
+                        Privacy Notice
                       </a>{" "}
                       Join our{" "}
                       <a

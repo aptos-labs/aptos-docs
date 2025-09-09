@@ -1,0 +1,128 @@
+---
+title: "Rotar Clave de Consenso"
+description: "Guía paso a paso para rotar la clave de consenso de tu validator para seguridad mejorada incluyendo generación de claves, actualizaciones on-chain, y procedimientos de limpieza."
+sidebar:
+  label: "Rotar Clave de Consenso"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+La rotación de clave de consenso es una acción tomada por un operador de nodo para cambiar la identidad de un validator que controla.
+Sucede típicamente cuando la clave privada correspondiente está (potencialmente) perdida/filtrada,
+o cada pocos meses como una práctica de seguridad común.
+
+Abajo está la guía paso a paso para realizar una rotación de clave de consenso con ejemplos detallados.
+
+## Generación de nueva clave
+
+Usando el siguiente comando [CLI de Aptos](/build/cli) para generar una nueva identidad de consenso.
+En este ejemplo, los archivos de identidad se guardan en el directorio `/new/key/root`.
+
+```shellscript filename="Terminal"
+aptos genesis generate-keys --output-dir /new/key/root
+```
+
+## Agregar nueva clave privada al nodo
+
+Edita el yaml de configuración del nodo como se describe abajo.
+
+```yaml
+# ...
+consensus:
+    # ...
+    safety_rules:
+        # ...
+        initial_safety_rules_config:
+            from_file:
+                # ...
+                identity_blob_path: /old/key/root/validator-identity.yaml
+                overriding_identity_paths:              # ¡nuevo!
+                - /new/key/root/validator-identity.yaml # ¡nuevo!
+```
+
+<Aside type="note">
+  - El campo `identity_blob_path` es requerido.
+  - El campo `overriding_identity_paths` es opcional, y permite que múltiples identidades sean especificadas para propósitos de rotación.
+  - El nodo elegirá la identidad que coincida con el estado on-chain.
+</Aside>
+
+Ahora reinicia el nodo.
+Debería cargar la nueva clave pero continuar usando la clave antigua para consenso.
+
+## Agregar nueva clave pública on-chain
+
+Se necesita el CLI de Aptos de nuevo, y se asume que tu cuenta de operador ha sido configurada como un perfil CLI `profile1`.
+
+Encuentra tu dirección de pool (denotada por `$POOL_ADDR`).
+
+En `/new/key/root/public-keys.yaml`,
+
+- encuentra la clave pública de tu nueva identidad de consenso (denotada por `$NEW_PUBLIC_KEY`);
+- encuentra la prueba de posesión de tu nueva identidad de consenso (denotada por `$PROOF_OF_POSSESSION`).
+
+Ejecuta una transacción con el CLI de aptos para actualizar la clave pública de consenso on-chain para la siguiente época.
+
+```shellscript
+aptos move run \
+    --profile profile1 \
+    --function-id 0x1::stake::rotate_consensus_key \
+    --args \
+        address:$POOL_ADDR \
+        hex:$NEW_PUBLIC_KEY \
+        hex:$PROOF_OF_POSSESSION
+```
+
+Aquí hay un ejemplo completo.
+
+```shellscript
+aptos move run \
+    --profile profile1 \
+    --function-id 0x1::stake::rotate_consensus_key \
+    --args \
+        address:0x1eb42885d7d5232269229e56bb80d0959584e14485097ebf9ab619cf4fda5c02 \
+        hex:0xacb7859468ca85cf9935e64ebb2b9b3fa8187de42d541acebaf732365a0131eaa994098f9d0d7e6b8ddea8ef11e16c55 \
+        hex:0x8e27fd9300433191b1123217928a6f5190a6ec344ea8623555712a850029b34f5c4bab68df7568b48bcced408cde5174064284407ee760df5dbf12d1c6090589ea1a692997018aca740e91d2182e5715c7745565fe99361e279ccfcfa10ae1f7
+```
+
+## Esperar la siguiente época
+
+La nueva clave debería volverse efectiva después del siguiente cambio de época (que sucede cada 2 horas).
+
+## (Avanzado) Limpieza de clave antigua
+
+En el almacenamiento seguro (típicamente un archivo llamado `secure_storage.json`),
+las identidades de consenso están organizadas como sigue.
+
+- El campo `consensus` contiene la identidad de consenso por defecto.
+  - Típicamente creada cuando inicias el nodo por primera vez.
+  - Debe existir.
+- El campo `consensus_X` contiene identidades de consenso adicionales con `X` como su clave pública.
+  - Creada porque una vez la agregaste a `overriding_identity_paths` en el yaml de configuración del nodo.
+
+**Actualmente, las identidades no serán eliminadas automáticamente del almacenamiento seguro**,
+incluso si eliminas la identidad correspondiente del yaml de configuración del nodo.
+
+Si necesitas asegurar que la clave antigua se haya ido completamente, se necesita limpieza manual.
+
+Aquí hay un ejemplo de `secure_storage.json`.
+
+```js
+{
+    // ...
+    "consensus": {
+        "data": "GetResponse",
+        "last_update": 1731372563,
+        "value": "0x221f6fbfefa0a40b84c88fbb546a0884977dcc56719a96ed4e5d69b6a4ff58c8"
+    },
+    "consensus_acb7859468ca85cf9935e64ebb2b9b3fa8187de42d541acebaf732365a0131eaa994098f9d0d7e6b8ddea8ef11e16c55": {
+        "data": "GetResponse",
+        "last_update": 1731383387,
+        "value": "0x18d5098b3819d5fb0fc208b8bb0946b263f961f60716fc4d10d4b010fdb89a55"
+    },
+    // ...
+}
+```
+
+Para eliminar la clave privada `0x18d5...`, simplemente elimina todo el campo con clave `consensus_acb7...`.
+
+Para eliminar la clave privada `0x221f...`, actualiza el valor `0x221f...` a algo más (ej. otra clave privada).

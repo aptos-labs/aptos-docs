@@ -1,0 +1,137 @@
+---
+title: "Inicializar desde un Backup"
+description: "Inicializa nodos Aptos usando archivos de backup criptográficamente probados para restaurar rápidamente bases de datos o recuperar datos históricos de blockchain."
+sidebar:
+  label: "Desde Backup"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Este documento describe cómo inicializar un nodo Aptos usando un backup. Esto se puede hacer en todos los tipos de nodos, incluyendo
+validators, VFNs y PFNs. Inicializar usando un backup ayuda a los operadores de nodos a lograr dos objetivos:
+
+1. Inicializar rápidamente una base de datos para comenzar un nodo nuevo o fallido.
+2. Recuperar eficientemente datos de cualquier período específico en la historia de la blockchain (ej., desde génesis hasta una versión objetivo).
+
+Para lograr estos objetivos, la herramienta de restauración de base de datos de Aptos te permite usar [archivos de backup públicos](#public-backup-files) existentes para restaurar
+la base de datos de un nodo. Esto incluye el historial de transacciones conteniendo eventos, write sets, y pares clave-valor. Usando
+la herramienta, puedes restaurar transacciones de cualquier rango histórico, o restaurar la base de datos a la última versión en el
+backup. Los archivos de backup públicos están respaldados por pruebas criptográficas y almacenados tanto en AWS como en Google Cloud para fácil
+acceso.
+
+## Archivos de backup públicos
+
+Aptos Labs mantiene algunos backups de base de datos públicamente accesibles consultando continuamente un PFN y almacenando los datos de backup
+en almacenamiento remoto, como Amazon S3 o Google Cloud Storage. Los enlaces a estos datos de backup se pueden ver abajo:
+
+|         | Datos de Backup AWS                                                                       | Datos de Backup Google Cloud                                                        |
+| ------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Testnet | Descontinuado                                                                          | https://github.com/aptos-labs/aptos-networks/blob/main/testnet/backups/gcs.yaml |
+| Mainnet | https://github.com/aptos-labs/aptos-networks/blob/main/mainnet/backups/s3-public.yaml | https://github.com/aptos-labs/aptos-networks/blob/main/mainnet/backups/gcs.yaml |
+
+<Aside type="note">
+  Los backups solo se crean para `testnet` y `mainnet`. Dado que `devnet` se limpia frecuentemente, no es útil mantener backups para él.
+</Aside>
+
+Los archivos de backup consisten en tres tipos de datos que pueden usarse para reconstruir la DB de blockchain:
+
+- `epoch_ending` – Esto contiene el ledger\_info en el bloque final de cada época desde génesis. Estos datos pueden usarse para probar la procedencia de la época desde génesis y el conjunto de validators de cada época.
+- `state_snapshot` – Esto contiene un snapshot del árbol Merkle de estado (SMT) de la blockchain y valores clave en una cierta versión.
+- `transaction` – Esto contiene los metadatos de transacción cruda, payload, las salidas ejecutadas de la transacción después de VM, y las pruebas criptográficas de la transacción en el historial del ledger.
+
+Cada tipo de datos en el almacenamiento de backup se organiza como sigue:
+
+- El archivo de metadatos en la carpeta de metadatos contiene el rango de cada backup y la ruta relativa a la carpeta de backup.
+- El backup contiene un archivo de manifiesto y todos los archivos de datos chunked reales.
+
+Ver el diagrama abajo para una representación visual de la estructura de datos de backup:
+
+![aptos-db-restore.png](~/images/aptos-db-restore.png)
+
+## Restaurar una DB de Aptos
+
+El [CLI de Aptos](/build/cli) soporta dos tipos de operaciones de restauración para nodos Aptos:
+
+1. Recrear una base de datos con un historial de transacciones mínimo en una versión de transacción especificada por el usuario (o la última versión ofrecida por el backup).
+2. Restaurar la base de datos sobre un período específico. Además de lo anterior, esta opción asegura que la
+   base de datos recreada lleve el historial del ledger del rango de versión designado por el usuario.
+
+<Aside type="note">
+  Se necesita CLI de Aptos 1.0.14 o más nuevo para realizar estas operaciones. Adicionalmente, dependiendo de si usas AWS o
+  Google Cloud, instala [CLI de AWS](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) o
+  [gsutil](https://cloud.google.com/storage/docs/gsutil_install).
+</Aside>
+
+Las secciones abajo proporcionan ejemplos de cómo usar el CLI de Aptos para restaurar una base de datos desde un backup.
+
+### Inicializar a la última versión
+
+El comando `aptos node bootstrap-db` puede restaurar rápidamente una base de datos desde el último snapshot hasta una versión objetivo,
+pero no restaura el historial de transacciones anterior a la versión objetivo.
+
+Usa las siguientes opciones para ejecutar el comando:
+
+- `target-version` – La sincronización comenzará desde este período en adelante en el historial de transacciones (hacia la última versión).
+- `command-adapter-config` – La ruta a uno de los [archivos de configuración YAML](#public-backup-files) que
+  especifica la ubicación de los archivos de backup públicos y comandos usados por nuestra herramienta de backup y restauración para interactuar con el almacenamiento remoto.
+- `target-db-dir` – La ruta de DB objetivo para escribir la base de datos restaurada.
+
+Comando de ejemplo:
+
+```shellscript filename="Terminal"
+aptos node bootstrap-db \
+    --target-version 500000000 \
+    --command-adapter-config /path/to/s3-public.yaml \
+    --target-db-dir /path/to/local/db
+```
+
+### Restaurar sobre un período de tiempo específico
+
+El comando `aptos node bootstrap-db` puede restaurar el historial de transacciones dentro de un período especificado, junto con el árbol Merkle de estado en la versión objetivo.
+
+Usa las siguientes opciones para ejecutar el comando:
+
+- `ledger-history-start-version` – La sincronización comenzará desde este período en adelante en el historial de transacciones (hacia la versión objetivo).
+- `target-version` – La sincronización terminará en este período en el historial de transacciones.
+- `command-adapter-config` – La ruta a uno de los [archivos de configuración YAML](#public-backup-files) que especifica la ubicación de los archivos de backup públicos y comandos usados por nuestra herramienta de backup y restauración para interactuar con el almacenamiento remoto.
+- `target-db-dir` – La ruta de DB objetivo para escribir la base de datos restaurada.
+
+Comando de ejemplo:
+
+```shellscript filename="Terminal"
+aptos node bootstrap-db \
+    --ledger-history-start-version 150000000 \
+    --target-version 155000000
+    --command-adapter-config /path/to/s3-public.yaml \
+    --target-db-dir /path/to/local/db
+```
+
+### Restaurar un historial completo desde génesis
+
+Para restaurar un nodo Aptos con el historial completo desde génesis, establece `ledger-history-start-version` a 0 y
+deshabilita el podador siguiendo las instrucciones en la sección [deshabilitar el podador de ledger](/network/nodes/configure/data-pruning) antes de
+iniciar el nodo. Nota: realizar una restauración de historial completo requiere una cantidad significativa de recursos y tiempo.
+Ver los requisitos de recursos abajo.
+
+- **Límite de Archivos Abiertos**: Establece el límite de archivos abiertos >= 999999, ej., usando `ulimit -n 1048576`.
+
+Si estás restaurando un nodo, necesitarás los siguientes recursos:
+
+|         | Disco  | RAM   |
+| ------- | ------ | ----- |
+| Testnet | 1.5 TB | 32 GB |
+| Mainnet | 1 TB   | 32 GB |
+
+Comando de ejemplo:
+
+```shellscript filename="Terminal"
+aptos node bootstrap-db \
+  --ledger-history-start-version 0 \
+  --target-version use_the_largest_version_in_backup \
+  --command-adapter-config /path/to/s3-public.yaml \
+  --target-db-dir /path/to/local/db
+```
+
+<Aside type="note">
+  Si no especificas el target\_version (vía `--target-version`), la herramienta usará la última versión en el backup como la versión objetivo.
+</Aside>

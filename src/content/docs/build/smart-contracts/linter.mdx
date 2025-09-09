@@ -1,5 +1,9 @@
 ---
 title: "Aptos Move Lint"
+label: "Linter"
+description: "Learn about linter for Move smart contract development on Aptos blockchain."
+sidebar:
+  label: "Linter"
 ---
 
 The "Aptos Move Lint" tool runs on a Move package to find and warn about common issues in Move programs, helping improve your Move code.
@@ -61,6 +65,15 @@ It is a common Move pattern to provide inline specifications in conditions, espe
 
 Note that an `assert!` is translated to a conditional abort, so blocks in `assert!` condition also are reported by this lint.
 
+### `empty_if`
+
+Checks for `if` statements that have no body, which is likely a mistake. For example:
+
+```move
+if (x) {
+}
+```
+
 ### `equal_operands_in_bin_op`
 
 Checks for binary operations where both operands are the same, which is likely a mistake. For example `x % x`, `x ^ x`,  `x > x`, `x >= x`, `x == x`, `x | x`, `x & x`, `x / x`, and `x != x` are all caught by this lint. The lint suggests replacing these with a more appropriate value or expression, such as `0`, `true`, or `false`.
@@ -91,7 +104,7 @@ let y = x; // cast removed
 
 ### `infinite_recursion`
 
-Checks for functions or groups of functions that recurse infinitely. Note that the linter cannot detect *conditional* infinite recursion, only inconditional, so a flag is a definite error in the program.
+Checks for functions or groups of functions that recurse infinitely. Note that the linter cannot detect _conditional_ infinite recursion, only inconditional, so a flag is a definite error in the program.
 
 ### `known_to_abort`
 
@@ -381,6 +394,10 @@ if (!table::contains(&table, key)) {
 
 - For `table::borrow`: Use `table::contains` first to check if the key exists
 - For `table::add`: Use `table::upsert` instead, or check with `table::contains` that the key doesn't exist first
+
+### `zero_address`
+
+This security check detects the use of `address` parameters in external functions that are not checked for being zero before being used. This could lead to loss of funds or other security issues.⏎
 
 ### `return_constructor_ref`
 

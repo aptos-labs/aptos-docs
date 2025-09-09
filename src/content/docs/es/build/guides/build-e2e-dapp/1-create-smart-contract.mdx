@@ -1,0 +1,234 @@
+---
+title: "1. Crear un Contrato Inteligente"
+description: "Primer paso para construir una dapp de extremo a extremo: crear y desplegar el contrato inteligente Move para gestionar tareas de lista de tareas."
+sidebar:
+  label: "1. Contrato Inteligente"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Este es el primer capítulo del tutorial sobre [construir una dapp de extremo a extremo en Aptos](/build/guides/build-e2e-dapp). Si no lo has hecho, revisa esa introducción y asegúrate de que tu entorno cumpla con los [requisitos previos](/build/guides/build-e2e-dapp#prerequisites) listados allí.
+
+Ahora que estás todo configurado, exploremos el directorio `contract`.
+
+![contract-directory](~/images/build-e2e-dapp-img-1-1.png)
+
+### ¿Qué es un archivo `Move.toml`?
+
+Un archivo `Move.toml` es un archivo de manifiesto que contiene metadatos como nombre, versión y dependencias para el paquete.
+
+Echa un vistazo al nuevo archivo `Move.toml`. Deberías ver la información de tu paquete y una dependencia `AptosFramework`. La dependencia `AptosFramework` apunta a la rama principal del repositorio GitHub `aptos-core/aptos-move/framework/aptos-framework`.
+
+### ¿Por qué el directorio `sources`?
+
+El directorio `sources` contiene una colección de archivos de módulos `.move`. Y más tarde cuando queramos compilar el paquete usando el CLI, el compilador buscará ese directorio `sources` y su archivo `Move.toml`.
+
+### ¿Qué es el directorio `tests`?
+
+El directorio `tests` contiene archivos `.move` que se usan para probar los archivos en nuestro directorio `sources`.
+
+### Crear un módulo Move
+
+Se necesita una cuenta para publicar un módulo Move. Cuando instalamos la plantilla, la herramienta creó una nueva cuenta para nosotros y la agregó al archivo `.env`.
+Si abres ese archivo, verás contenido parecido a:
+
+```shellscript filename=".env"
+PROJECT_NAME=my-aptos-dapp
+VITE_APP_NETWORK=devnet
+VITE_APTOS_API_KEY=""
+VITE_MODULE_PUBLISHER_ACCOUNT_ADDRESS=0x1cecfef9e239eff12fb1a3d189a121c37f48908d86c0e9c02ec103e0a05ddebb
+#Esta es la clave privada de la cuenta publicadora del módulo. Ten cuidado con quién la compartes, y asegúrate de que no se exponga al desplegar tu dApp.
+VITE_MODULE_PUBLISHER_ACCOUNT_PRIVATE_KEY=0x84638fd5c42d0937503111a587307169842f355ab661b5253c01cfe389373f43
+```
+
+<Aside type="note">
+  ¡Acabas de crear una nueva cuenta en la red Aptos (dev)! ¡Genial! Puedes verla yendo a la vista de red Devnet del Explorador de Aptos, pegando el valor `VITE_MODULE_PUBLISHER_ACCOUNT_ADDRESS` de tu archivo `.env` en el campo de búsqueda, y haciendo clic en la opción desplegable!
+</Aside>
+
+La plantilla Boilerplate viene con un archivo `message_board.move` pregenerado, un archivo de prueba relevante y un archivo `Move.toml`.
+
+Como se mencionó, nuestro directorio sources contiene nuestros archivos de módulos `.move`; así que creemos un nuevo archivo `todolist.move`.
+
+1. Crea un nuevo archivo `todolist.move` dentro del directorio `sources` y agrega lo siguiente a ese archivo:
+
+```move filename="todolist.move"
+module todolist_addr::todolist {
+
+}
+```
+
+2. Abre el archivo `Move.toml`.
+3. Agrega el siguiente código a ese archivo Move:
+
+```toml filename="Move.toml"
+[addresses]
+todolist_addr='_'
+```
+
+<Aside type="note">
+  Un módulo Move se almacena bajo una dirección (así que cuando se publique cualquiera puede acceder a él usando esa dirección); la sintaxis para un módulo Move es
+
+  ```move filename="todolist.move"
+  module <account-address>::<module-name> {
+
+  }
+  ```
+
+  En nuestro módulo, la `account-address` es `todolist_addr` (una variable que acabamos de declarar en el archivo `Move.toml` en el paso anterior que contiene una `address`), y el `module-name` es `todolist` (un nombre aleatorio que seleccionamos).
+</Aside>
+
+### ¿Qué es el `'_'` en el archivo `Move.toml`?
+
+El `'_'` es un marcador de posición para la dirección de cuenta. Cuando ejecutemos el compilador `move`, el compilador lo reemplazará con la dirección de cuenta real.
+
+`create-aptos-dapp` viene con scripts premade para ejecutar fácilmente comandos `move`, como `compile`, `test` y `publish`.
+
+1. Abre cada uno de los archivos en el directorio `scripts/move` y actualiza la variable `message_board_addr` para que sea `todolist_addr`.
+
+```js filename="scripts/move/compile.js"
+...
+  namedAddresses: {
+    todolist_addr: process.env.VITE_MODULE_PUBLISHER_ACCOUNT_ADDRESS,
+  },
+...
+```
+
+<Aside type="note">
+  Más tarde, cuando ejecutemos cada uno de los comandos `move`, ejecutará estos scripts, y reemplazará el `'_'` con la dirección de cuenta real que se asignó a la variable `todolist_addr`.
+</Aside>
+
+### Nuestra lógica de contrato
+
+Ahora que tenemos nuestro módulo configurado, agreguemos algunas funcionalidades a él.
+
+Nuestra aplicación de lista de tareas necesitará:
+
+1. La capacidad de crear una nueva lista de tareas
+2. La capacidad de crear una nueva tarea en esa lista
+3. La capacidad de marcar una tarea como completada
+
+Actualiza el contenido del archivo `todolist.move` para incluir la lógica del contrato inteligente completo:
+
+```move filename="todolist.move"
+module todolist_addr::todolist {
+    use std::signer;
+    use aptos_framework::account;
+    use std::string::String;
+    use aptos_framework::event;
+    use std::vector;
+
+    // Estructura para una tarea individual
+    struct Task has store, drop, copy {
+        task_id: u64,
+        address: address,
+        content: String,
+        completed: bool,
+    }
+
+    // Estructura para la lista de tareas de un usuario
+    struct TodoList has key {
+        tasks: vector<Task>,
+        set_task_event: event::EventHandle<Task>,
+        task_counter: u64
+    }
+
+    /// No hay una lista de tareas encontrada en la dirección dada
+    const E_NOT_INITIALIZED: u64 = 1;
+    /// La tarea no existe
+    const E_TASK_DOESNT_EXIST: u64 = 2;
+    /// La tarea ya está completada
+    const E_TASK_IS_COMPLETED: u64 = 3;
+
+    public entry fun create_list(account: &signer){
+        let todo_list = TodoList {
+            tasks: vector::empty(),
+            set_task_event: account::new_event_handle<Task>(account),
+            task_counter: 0
+        };
+        // mover la TodoList bajo la cuenta del firmante
+        move_to(account, todo_list);
+    }
+
+    public entry fun create_task(account: &signer, content: String) acquires TodoList {
+        // obtiene la dirección del firmante
+        let signer_address = signer::address_of(account);
+        // afirma que el firmante tiene creada una lista
+        assert!(exists<TodoList>(signer_address), E_NOT_INITIALIZED);
+        // obtiene la TodoList del firmante
+        let todo_list = borrow_global_mut<TodoList>(signer_address);
+        // incrementa el contador de tareas
+        let counter = todo_list.task_counter + 1;
+        // crea una nueva Tarea
+        let new_task = Task {
+            task_id: counter,
+            address: signer_address,
+            content,
+            completed: false
+        };
+        // agrega la nueva tarea al vector de tareas
+        vector::push_back(&mut todo_list.tasks, new_task);
+        // actualiza el contador de tareas
+        todo_list.task_counter = counter;
+        // emite un evento de nueva tarea
+        event::emit_event<Task>(
+            &mut todo_list.set_task_event,
+            new_task,
+        );
+    }
+
+    public entry fun complete_task(account: &signer, task_id: u64) acquires TodoList {
+        // obtiene la dirección del firmante
+        let signer_address = signer::address_of(account);
+        // afirma que el firmante tiene creada una lista
+        assert!(exists<TodoList>(signer_address), E_NOT_INITIALIZED);
+        // obtiene la TodoList del firmante
+        let todo_list = borrow_global_mut<TodoList>(signer_address);
+        // afirma que la tarea existe
+        assert!(task_id > 0 && task_id <= todo_list.task_counter, E_TASK_DOESNT_EXIST);
+        // encuentra la tarea en el vector
+        let tasks_len = vector::length(&todo_list.tasks);
+        let i = 0;
+        while (i < tasks_len) {
+            let task_ref = vector::borrow_mut(&mut todo_list.tasks, i);
+            if (task_ref.task_id == task_id) {
+                // afirma que la tarea no está completada
+                assert!(task_ref.completed == false, E_TASK_IS_COMPLETED);
+                // actualiza el estado de la tarea a completada
+                task_ref.completed = true;
+            };
+            i = i + 1;
+        }
+    }
+
+    #[view]
+    public fun get_tasks(account_addr: address): vector<Task> acquires TodoList {
+        assert!(exists<TodoList>(account_addr), E_NOT_INITIALIZED);
+        let todo_list = borrow_global<TodoList>(account_addr);
+        todo_list.tasks
+    }
+}
+```
+
+¡Excelente! Ahora tenemos nuestro contrato inteligente completo. Procedamos a compilar y desplegar nuestro contrato.
+
+### Compilar nuestro contrato
+
+Para compilar nuestro contrato, ejecuta:
+
+```bash
+npm run move:compile
+```
+
+Si todo está configurado correctamente, deberías ver una salida exitosa de compilación.
+
+### Desplegar nuestro contrato
+
+Para desplegar nuestro contrato a devnet, ejecuta:
+
+```bash
+npm run move:publish
+```
+
+¡Felicidades! Has creado y desplegado exitosamente tu primer contrato inteligente Move en Aptos.
+
+En el siguiente capítulo, configuraremos el frontend para interactuar con nuestro contrato inteligente.

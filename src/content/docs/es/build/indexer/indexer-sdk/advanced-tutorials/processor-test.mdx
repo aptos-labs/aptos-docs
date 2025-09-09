@@ -1,0 +1,182 @@
+---
+title: "Probar Procesador"
+description: "Estrategias de pruebas integrales para procesadores de Aptos incluyendo validación, pruebas de transformación y verificación de precisión de datos"
+sidebar:
+  label: "Probar Procesador"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+### ¿Qué Es un Procesador?
+
+Un procesador es un componente central del Indexer de Aptos que maneja el procesamiento de transacciones de blockchain. Valida, transforma y almacena transacciones en una base de datos, habilitando aplicaciones downstream como análisis, indexación y consultas. Probar el procesador asegura que todas las transacciones sean manejadas correctamente, manteniendo precisión y consistencia de datos.
+
+### ¿Qué Estamos Probando Con Esto?
+
+- **Corrección de transacciones**: Asegurar que cada transacción sea procesada y almacenada con precisión.
+- **Consistencia de esquema**: Verificar que el esquema de base de datos esté correctamente configurado y mantenido a lo largo de las pruebas.
+
+### Flujo General de Cómo Funciona la Prueba de Procesador
+
+1. Especificas las transacciones a probar
+2. El framework de pruebas del SDK levanta un Servicio gRPC mock con las transacciones que especificaste para devolver cuando el procesador solicite transacciones.
+3. El procesador procesa las transacciones y escribe la salida a una base de datos.
+4. Opcionalmente, puedes generar salida de base de datos esperada para validación.
+
+Tipo de Escenarios que Soporta:
+
+1. Una sola transacción
+2. Un solo lote de múltiples transacciones
+   Entrada \[A, B, C]
+   1. El procesador procesa A, B, y C
+3. Múltiples lotes de transacciones secuenciales:
+   Entrada \[A, B, C]
+   1. El procesador procesa A y B
+   2. El procesador procesa C
+
+## Prerrequisitos
+
+1. Asegurar que Docker Desktop esté ejecutándose para soporte de contenedor PostgreSQL.
+   - **Instalación Docker Desktop**: Instala Docker Desktop siguiendo [esta guía](https://docs.docker.com/desktop/) en tu máquina.
+   - Inicia Docker Desktop si no está ejecutándose
+2. Identificar las transacciones a probar.
+   - Usa transacciones importadas o escribe tus propios scripts Move personalizados para generar transacciones de prueba. Consulta [Guía de Importación de Transacciones](/build/indexer/indexer-sdk/advanced-tutorials/txn-importer) y [Guía de Generación de Transacciones usando Script Move](/build/indexer/indexer-sdk/advanced-tutorials/txn-script) para instrucciones detalladas.
+3. Importar aptos-indexer-testing-framework a tu Cargo.toml
+
+<Aside type="note"> - Este tutorial asume que estás usando Postgres como la base de datos. </Aside>
+
+- **Adaptación a Otras Bases de Datos**:
+  - Reemplaza el código específico de PostgreSQL con código de base de datos relevante que pretendas usar (ej. MySQL).
+  - Actualiza inicialización de esquema y métodos de consulta.
+- **Referencias a Pruebas de Procesador**:
+  - Ejemplo: [Pruebas de Procesador de Eventos](https://github.com/aptos-labs/aptos-indexer-processors/blob/main/rust/integration-tests/src/sdk_tests/events_processor_tests.rs#L139).
+
+## Pasos para Escribir una Prueba
+
+### 1. Configurar el Entorno de Prueba
+
+Antes de configurar el entorno de prueba, es importante entender las configuraciones siendo usadas en este paso:
+
+**¿Qué Son Estas Configuraciones?**
+
+`generate_file_flag`
+
+- Si `generate_file_flag` es true, la prueba sobrescribirá cualquier salida de base de datos guardada de ejecuciones de prueba anteriores. Si `generate_file_flag` es false, la prueba solo comparará la salida de base de datos actual con la salida de base de datos esperada y registrará diferencias.
+
+`custom_output_path`
+
+- Una configuración opcional para especificar una ruta personalizada donde la salida de base de datos esperada será almacenada.
+  Si no se proporciona, la prueba usará la ruta predeterminada definida por DEFAULT\_OUTPUT\_FOLDER.
+
+`DEFAULT_OUTPUT_FOLDER`
+
+- Esta constante define la carpeta predeterminada donde el sistema almacena archivos de salida para las pruebas.
+  Ejemplo: "sdk\_expected\_db\_output\_files".
+  Modifica este valor en tu configuración si prefieres un directorio predeterminado diferente.
+
+```rust
+let (generate_file_flag, custom_output_path) = get_test_config();
+let output_path = custom_output_path.unwrap_or_else(|| format!("{}/imported_mainnet_txns", DEFAULT_OUTPUT_FOLDER));
+
+// Configurar DB y reemplazar según sea necesario
+let mut db = PostgresTestDatabase::new();
+db.setup().await.unwrap();
+
+let mut test_context = SdkTestContext::new(&[CONST_VARIABLE_OF_YOUR_TEST_TRANSACTION]); // Reemplazar con tu transacción de prueba
+if test_context.init_mock_grpc().await.is_err() {
+    panic!("Failed to initialize mock grpc");
+};
+```
+
+### 2. Configurar el Procesador
+
+<Aside type="note">
+  - Cada prueba se ejecuta en un entorno aislado usando un contenedor PostgreSQL para prevenir interferencia.
+</Aside>
+
+```rust
+let db_url = db.get_db_url();
+let transaction_stream_config = test_context.create_transaction_stream_config();
+let postgres_config = PostgresConfig {
+    connection_string: db_url.to_string(),
+    db_pool_size: 100,
+};
+
+let db_config = DbConfig::PostgresConfig(postgres_config);
+let default_processor_config = DefaultProcessorConfig {
+    per_table_chunk_sizes: AHashMap::new(),
+    channel_size: 100,
+    deprecated_tables: HashSet::new(),
+};
+
+let processor_config = ProcessorConfig::DefaultProcessor(default_processor_config);
+let processor_name = processor_config.name();
+```
+
+### 3. Crear el Procesador
+
+```rust
+let processor = DefaultProcessor::new(indexer_processor_config)
+    .await
+    .expect("Failed to create processor");
+```
+
+Nota: Reemplaza `DefaultProcessor` con el procesador que estás probando.
+
+### 4. Configurar una Consulta
+
+Configura una consulta para cargar datos de la base de datos local y compararlos con resultados esperados, ver [función de carga de ejemplo](https://github.com/aptos-labs/aptos-indexer-processors/blob/a8f9c5915f4e3f1f596ed3412b8eb01feca1aa7b/rust/integration-tests/src/diff_test_helper/default_processor.rs#L45)
+
+### 5. Configurar una función run del Contexto de Prueba
+
+Usa la función test\_context.run() para ejecutar el procesador, validar salidas usando tu consulta, y opcionalmente generar archivos de salida de base de datos:
+
+```rust
+    let txn_versions: Vec<i64> = test_context
+        .get_test_transaction_versions()
+        .into_iter()
+        .map(|v| v as i64)
+        .collect();
+
+    let db_values = test_context
+        .run(
+            &processor,
+            generate_file_flag,
+            output_path.clone(),
+            custom_file_name,
+            move || {
+                let mut conn = PgConnection::establish(&db_url).unwrap_or_else(|e| {
+                    eprintln!("[ERROR] Failed to establish DB connection: {:?}", e);
+                    panic!("Failed to establish DB connection: {:?}", e);
+                });
+
+                let db_values = match load_data(&mut conn, txn_versions.clone()) {
+                    Ok(db_data) => db_data,
+                    Err(e) => {
+                        eprintln!("[ERROR] Failed to load data {}", e);
+                        return Err(e);
+                    },
+                };
+
+                if db_values.is_empty() {
+                    eprintln!("[WARNING] No data found for versions: {:?}", txn_versions);
+                }
+
+                Ok(db_values)
+            },
+        )
+```
+
+### 6. Ejecutar la Prueba del Procesador
+
+Una vez que tengas tu prueba lista, ejecuta el siguiente comando para generar la salida esperada para validación:
+
+```shellscript
+cargo test sdk_tests -- generate-output
+```
+
+Argumentos:
+generate-output: Establece esto true si quieres generar o sobrescribir salida de base de datos guardada, o false si quieres comparar salidas de base de datos en modo diff.
+output-path: es un argumento opcional para especificar la ruta de salida para la salida de db.
+
+La salida de base de datos esperada será guardada en el output\_path especificado o `sdk_expected_db_output_files` por defecto.

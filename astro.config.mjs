@@ -5,6 +5,7 @@ import starlight from "@astrojs/starlight";
 import tailwindcss from "@tailwindcss/vite";
 import starlightOpenAPI from "starlight-openapi";
 import starlightDocSearch from "@astrojs/starlight-docsearch";
+import mermaid from "astro-mermaid";
 
 import vercel from "@astrojs/vercel";
 import remarkMath from "remark-math";
@@ -24,6 +25,8 @@ import { SUPPORTED_LANGUAGES, SITE_TITLES } from "./src/config/18n";
 import { firebaseIntegration } from "./src/integrations/firebase";
 import { remarkClientOnly } from "./src/plugins";
 import { devServerFileWatcher } from "./src/integrations/dev-server-file-watcher";
+import onDemandDirective from "./src/integrations/client-on-demand/register.js";
+import { cspConfig } from "./src/config/csp";
 // import { isMoveReferenceEnabled } from "./src/utils/isMoveReferenceEnabled";
 // import { rehypeAddDebug } from "./src/plugins";
 
@@ -36,6 +39,9 @@ const enableApiReference = true;
 
 // https://astro.build/config
 export default defineConfig({
+  build: {
+    inlineStylesheets: "never",
+  },
   site:
     ENV.VERCEL_ENV === "production"
       ? "https://aptos.dev"
@@ -44,6 +50,10 @@ export default defineConfig({
         : "http://localhost:4321",
   trailingSlash: "never",
   integrations: [
+    // Custom client directive for on-demand loading
+    onDemandDirective(),
+    // Mermaid diagram support
+    mermaid(),
     // Only include devServerFileWatcher in development mode
     ...(process.env.NODE_ENV === "development" || !process.env.VERCEL
       ? [
@@ -105,12 +115,14 @@ export default defineConfig({
       components: {
         Head: "./src/starlight-overrides/Head.astro",
         Header: "./src/starlight-overrides/Header.astro",
+        Hero: "./src/starlight-overrides/Hero.astro",
         LanguageSelect: "./src/starlight-overrides/LanguageSelect.astro",
         MobileMenuToggle: "./src/starlight-overrides/MobileMenuToggle.astro",
         PageFrame: "./src/starlight-overrides/PageFrame.astro",
         PageSidebar: "./src/starlight-overrides/PageSidebar.astro",
         PageTitle: "./src/starlight-overrides/PageTitle.astro",
         Sidebar: "./src/starlight-overrides/Sidebar.astro",
+        TwoColumnContent: "./src/starlight-overrides/TwoColumnContent.astro",
       },
       plugins: [
         starlightLlmsTxt({
@@ -199,6 +211,9 @@ export default defineConfig({
   ],
   adapter: process.env.VERCEL
     ? vercel({
+        experimentalStaticHeaders: {
+          cspMode: "global",
+        },
         edgeMiddleware: false,
         imageService: true,
         imagesConfig: {
@@ -209,6 +224,7 @@ export default defineConfig({
       })
     : node({
         mode: "standalone",
+        experimentalStaticHeaders: true,
       }),
   vite: {
     plugins: [tailwindcss()],
@@ -280,6 +296,7 @@ export default defineConfig({
     validateSecrets: true,
   },
   experimental: {
+    csp: cspConfig,
     fonts: [
       {
         provider: "local",

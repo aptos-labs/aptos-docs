@@ -74,11 +74,16 @@ export default defineMiddleware((ctx, next) => {
   const url = new URL(ctx.request.url);
   const pathname = url.pathname;
 
+  console.log("i18n-redirect middleware invoked for:", pathname);
+  console.log("isPrerendered:", ctx.isPrerendered);
+
   // Skip prerendered pages, since they are static and don't have access to request headers & cookies.
   // But when this middleware is deployed as edge middleware to Vercel, ctx.isPrerendered is always false.
   if (ctx.isPrerendered) {
     return next();
   }
+
+  console.log("i18nmatcherRegexp", i18MatcherRegexp.test(pathname));
 
   if (!(i18MatcherRegexp as unknown as RegExp).test(pathname)) {
     return next();
@@ -86,6 +91,8 @@ export default defineMiddleware((ctx, next) => {
 
   // Check if the request is from a crawler
   const userAgent = ctx.request.headers.get("user-agent");
+
+  console.log("isCrawler:", isCrawler(userAgent), "userAgent:", userAgent);
 
   if (isCrawler(userAgent)) {
     return next(); // Do not redirect crawlers

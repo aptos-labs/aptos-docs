@@ -71,7 +71,7 @@ Checks for `if` statements that have no body, which is likely a mistake. For exa
 
 ```move
 if (x) {
-} 
+}
 ```
 
 ### `equal_operands_in_bin_op`
@@ -394,6 +394,29 @@ if (!table::contains(&table, key)) {
 
 - For `table::borrow`: Use `table::contains` first to check if the key exists
 - For `table::add`: Use `table::upsert` instead, or check with `table::contains` that the key doesn't exist first
+
+### `return_signer`
+
+This security check detects when a public function returns a `signer` value, which can leak authority and is usually a security risk. Returning a `signer` from a public function allows callers to obtain signer capabilities that they shouldn't have access to, potentially leading to unauthorized operations.
+
+**Examples of patterns caught by this lint:**
+
+```move
+// Direct signer return - security risk
+public fun get_signer(): signer {
+    // ... code that returns a signer
+}
+
+// Signer in vector - security risk
+public fun get_signers(): vector<signer> {
+    // ... code that returns signers
+}
+
+// Signer in tuple - security risk
+public fun get_data(): (u64, signer) {
+    // ... code that returns a tuple with signer
+}
+```
 
 ### `zero_address`
 

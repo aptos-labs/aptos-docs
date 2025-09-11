@@ -1,0 +1,105 @@
+---
+title: "Indexer"
+---
+
+import { Aside, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+import { GraphQLEditor } from '~/components/react/GraphQLEditor';
+
+Wir haben mehrere Angebote, um indexierte Daten aus der Aptos-Blockchain zu erhalten.
+
+1. Abfragen der [Indexer API](/de/build/indexer/indexer-api), um grundlegende Daten über Transaktionen, fungible Assets und Token zu erhalten
+2. Indexieren Sie Ihren benutzerdefinierten Vertrag mit dem [Indexer SDK](/de/build/indexer/indexer-sdk)
+3. Streamen Sie Rohtransaktionen vom [Transaction Stream Service](/de/build/indexer/txn-stream) zu Ihrem Prozessor oder Service
+
+## Indexer API
+
+Der Aptos Indexer ist eine API, die Sie verwenden können, um zu erhalten:
+
+1. Aggregierte Daten (z.B. Wie viele NFTs existieren?)
+2. Historische Daten (z.B. Welche Transaktionen hat dieses Konto eingereicht?)
+3. Daten, die schwer von der einfacheren [Aptos Node API](/de/build/apis/fullnode-rest-api) zu erhalten sind (z.B. Welches Konto besitzt einen Token namens "ExampleToken"?).
+
+Zum Beispiel können Sie die Indexer API verwenden, um die fungiblen Asset-Salden eines beliebigen Kontos so nachzuschauen:
+
+<GraphQLEditor
+  query={`query GetFungibleAssetBalances($address: String, $offset: Int) {
+  current_fungible_asset_balances(
+    where: { owner_address: { _eq: $address } }
+    offset: $offset
+    limit: 100
+    order_by: { amount: desc }
+  ) {
+    asset_type
+    amount
+    __typename
+  }
+}`}
+  variables={`{
+  "address": "0x0000000000000000000000000000000000000000000000000000000000000001",
+  "offset": 0
+}`}
+/>
+
+<Aside type="note">
+  Der Indexer verfolgt jede Transaktion, die on-chain stattfindet, und stellt diese Daten dann über eine GraphQL-API zur Verfügung.
+</Aside>
+
+## Verwendung der Indexer API
+
+Lernen Sie, wie Sie die Indexer API verwenden, was jede Tabelle darstellt und die Architektur.
+
+<CardGrid>
+  <LinkCard href="/de/build/indexer/indexer-api" title="Zugriff auf die API" description="Lernen Sie, wie Sie die Indexer API abfragen." />
+
+  <LinkCard href="/de/build/indexer/indexer-api/indexer-reference" title="Indexer-Tabellenreferenz" description="Detaillierte Referenz für Indexer-Tabellen und ihre Schemas." />
+
+  <LinkCard href="/de/build/indexer/indexer-api/architecture" title="Architektur" description="Detailliertes Layout der Indexer-Architektur." />
+
+  <LinkCard href="/de/build/indexer/indexer-api/self-hosted" title="Selbst gehostete Indexer API" description="Hosten Sie Ihre eigene Indexer API" />
+</CardGrid>
+
+### Beispielabfragen
+
+Um Ihnen den Einstieg zu erleichtern, hier sind die häufigsten Abfragen, für die der Indexer verwendet wird.
+
+<CardGrid>
+  <LinkCard href="/de/build/indexer/indexer-api/fungible-asset-balances" title="Fungible Asset-Salden abrufen" description="Alle fungiblen Assets abrufen, die ein Konto derzeit besitzt." />
+
+  <LinkCard href="/de/build/indexer/indexer-api/account-transactions" title="Kontotransaktionen abrufen" description="Alle Transaktionen abrufen, die ein Konto betreffen." />
+
+  <LinkCard href="/de/build/indexer/indexer-api/ans-lookup" title="Aptos-Namen abrufen" description="Den mit einem Konto verknüpften Aptos-Namen abrufen (über das ANS)." />
+
+  <LinkCard href="/de/build/indexer/indexer-api/fungible-asset-info" title="Fungible Asset-Informationen abrufen" description="Detaillierte Informationen über ein bestimmtes fungibles Asset abrufen." />
+
+  <LinkCard href="/de/build/indexer/indexer-api/get-nft-collections" title="NFT-Sammlungen abrufen" description="NFT-Sammlungen abrufen, die einem bestimmten Konto gehören." />
+
+  <LinkCard href="/de/build/indexer/indexer-api/get-nfts" title="NFTs abrufen" description="Einzelne NFTs abrufen, die einem bestimmten Konto gehören." />
+
+  <LinkCard href="/de/build/indexer/indexer-api/token-metadata" title="Token-Metadaten abrufen" description="Metadateninformationen für einen bestimmten Token abrufen." />
+
+  <LinkCard href="/de/build/indexer/indexer-api/get-delegators" title="Delegatoren im Staking-Pool zählen" description="Die Anzahl der aktiven Delegatoren in einem Staking-Pool abrufen." />
+</CardGrid>
+
+## Indexer SDK
+
+Wenn die gehostete Indexer API nicht ausreicht oder wenn Sie Ihren benutzerdefinierten Vertrag indexieren möchten, können Sie einen Prozessor mit dem [Indexer SDK](/de/build/indexer/indexer-sdk) erstellen.
+
+<CardGrid>
+  <LinkCard href="/de/build/indexer/indexer-sdk/quickstart" title="Schnellstart-Leitfaden" description="Erste Schritte mit dem Indexer SDK" />
+
+  <LinkCard href="/de/build/indexer/indexer-sdk/documentation" title="Dokumentation" description="Lesen Sie die Dokumentation über das Indexer SDK" />
+</CardGrid>
+
+## Transaction Stream Service
+
+Transaction Stream Service ist ein GRPC-Service, der Rohtransaktionen zu Ihrem Prozessor oder Service streamt.
+Wenn Sie das Indexer SDK verwenden, benötigen Sie einen Autorisierungstoken, um sich mit dem Transaction Stream Service zu verbinden.
+
+<CardGrid>
+  <LinkCard href="/de/build/indexer/txn-stream/aptos-hosted-txn-stream" title="Aptos-gehosteter Transaction Stream Service" description="Zugang zum Aptos-gehosteten Transaction Stream Service erhalten" />
+</CardGrid>
+
+## Legacy Indexer
+
+Finden Sie Informationen über den Legacy-Indexer [hier](/de/build/indexer/legacy).

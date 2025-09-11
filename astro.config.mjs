@@ -129,7 +129,7 @@ export default defineConfig({
         starlightLinksValidator({
           errorOnFallbackPages: false,
           errorOnInconsistentLocale: true,
-          sameSitePolicy: "error",
+          sameSitePolicy: "validate",
           errorOnInvalidHashes: false,
           errorOnLocalLinks: false,
           exclude: ({ link }) => {

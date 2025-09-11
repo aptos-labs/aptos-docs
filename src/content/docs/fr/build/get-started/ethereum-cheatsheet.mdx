@@ -1,0 +1,60 @@
+---
+title: "Guide de Migration Ethereum vers Aptos"
+description: "Comparaison complète et guide de migration pour les développeurs Ethereum passant au développement blockchain Aptos"
+sidebar:
+  label: "Ethereum → Aptos"
+---
+
+Pour en savoir plus sur les différences et similarités, consultez [Aptos Learn](https://learn.aptoslabs.com/en/tutorials/ethereum-to-aptos-guide/cheat-sheet?workshop=eth-to-aptos)
+
+### Vue d'Ensemble de Haut Niveau
+
+| Fonctionnalité             | Ethereum                                                               | Aptos                                                                 |
+|----------------------------|------------------------------------------------------------------------|-----------------------------------------------------------------------|
+| **Contrats Intelligents**  | Solidity, EVM                                                          | Move, MoveVM                                                          |
+| **Avantages**              | Mûr, adoption large                                                    | Évolutivité, faible latence, frais prévisibles                       |
+| **Frais de Transaction**   | Variables, peuvent être élevés                                         | Plus bas et plus prévisibles                                          |
+| **Adresses de Compte**     | 160-bit                                                                | 256-bit                                                               |
+| **Structure de Compte**    | Solde dans un champ unique, utilise nonce                               | Modules et ressources, utilise numéro de séquence                     |
+| **Stockage de Données**    | Arbres de Merkle Patricia                                              | Stockage global avec ressources et modules                            |
+| **Mentalité de Stockage**  | Stockage basé sur contrat                                              | Mentalité centrée sur le compte pour le code et les données           |
+| **Exemple de Code**        | [ERC-20](https://github.com/OpenZeppelin/openzeppelin-contracts/tree/master/contracts/token/ERC20) | [Actif Fongible](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/fungible_asset.move) |
+| **ID de l'Appelant**       | `msg.sender`                                                           | Référence `&signer`                                                   |
+| **Mise à Niveau**          | Patterns proxy                                                         | Mises à niveau directes de module                                     |
+| **Sécurité et Sécurité**   | Vulnérable aux attaques comme la réentrance                           | Atténue les vulnérabilités communes                                   |
+| **Type de Dispatch**       | Dispatch dynamique                                                     | Dispatch statique                                                     |
+| **Standard FT**            | [ERC-20](https://docs.openzeppelin.com/contracts/4.x/erc20)           | [Coin](/build/smart-contracts/aptos-coin) (legacy) et [Actif Fongible](/build/smart-contracts/fungible-asset) |
+| **Standards NFT**          | [ERC-721](https://docs.openzeppelin.com/contracts/4.x/erc721), [ERC-1155](https://docs.openzeppelin.com/contracts/4.x/erc1155) | [Actif Numérique](/build/smart-contracts/digital-asset)               |
+| **Interaction Blockchain** | [Bibliothèque Ethers.js](https://docs.ethers.org/v6/)                  | [SDK TypeScript Aptos](/build/sdks/ts-sdk)                            |
+
+<br />
+
+### Comparaison Détaillée des Standards de Token
+
+|                      | Solidity                                                               | Move (Aptos)                                                                 |
+|----------------------|------------------------------------------------------------------------|------------------------------------------------------------------------------|
+| **Structure de Token** | Chaque token est son propre contrat.                                  | Chaque token est un `Coin` ou `FungibleAsset` typé utilisant un contrat unique et réutilisable. |
+| **Standard de Token**  | Doit se conformer aux standards comme ERC20 ; les implémentations peuvent varier. | Interface uniforme et implémentation pour tous les tokens.                   |
+| **Stockage de Solde**  | Soldes stockés dans le contrat utilisant une structure de mapping.     | **Solde Orienté Ressource** : Soldes stockés comme une ressource dans le compte de l'utilisateur. Les ressources ne peuvent pas être créées arbitrairement, assurant l'intégrité de la valeur du token. |
+| **Mécanisme de Transfert** | Les tokens peuvent être transférés sans permission explicite du destinataire. | Sauf pour des cas spécifiques (comme AptosCoin), les tokens nécessitent généralement l'autorité `signer` du destinataire pour le transfert. |
+
+<br />
+
+### Comparaison Détaillée d'EVM et Move VM
+
+- **EVM** : Connu pour sa flexibilité et son dispatch dynamique, ce qui permet une large gamme de comportements de contrats intelligents. Cette flexibilité, cependant, peut entraîner des complexités dans l'exécution parallèle et les opérations réseau.
+- **Move VM** : Se concentre sur la sécurité et l'efficacité avec une approche plus intégrée entre la VM et le langage de programmation. Son modèle de stockage de données permet une meilleure parallélisation, et sa méthode de dispatch statique améliore la sécurité et la prévisibilité.
+
+<br />
+
+|                               | EVM (Ethereum Virtual Machine)                                         | Move VM (Move Virtual Machine)                                     |
+|-------------------------------|------------------------------------------------------------------------|-------------------------------------------------------------------|
+| **Stockage de Données**       | Les données sont stockées dans l'espace de stockage du contrat intelligent. | Les données sont stockées dans les contrats intelligents, comptes d'utilisateurs et objets. |
+| **Parallélisation**           | L'exécution parallèle est limitée en raison de l'espace de stockage partagé. | Plus d'exécution parallèle activée grâce à la conception flexible de stockage divisé. |
+| **Intégration VM et Langage** | Couches séparées pour EVM et langages de contrats intelligents (par ex., Solidity). | Intégration transparente entre la couche VM et le langage Move, avec des fonctions natives écrites en Rust exécutables dans Move. |
+| **Opérations Réseau Critiques** | L'implémentation des opérations réseau peut être complexe et moins directe. | Les opérations critiques comme la gestion de l'ensemble des validateurs sont nativement implémentées dans Move, permettant une exécution directe. |
+| **Appel de Fonction**         | Le dispatch dynamique permet des appels arbitraires de contrats intelligents. | Le dispatch statique s'aligne avec un focus sur la sécurité et le comportement prévisible. |
+| **Sécurité de Type**          | Les types de contrat fournissent un niveau de sécurité de type.         | Les structs de module et les génériques dans Move offrent une sécurité de type robuste. |
+| **Sécurité de Transaction**   | Utilise des nonces pour l'ordre et la sécurité des transactions.        | Utilise des numéros de séquence pour l'ordre et la sécurité des transactions. |
+| **Stockage Authentifié**      | Oui, avec le stockage de contrats intelligents.                        | Oui, en tirant parti du modèle de ressource de Move.             |
+| **Accessibilité d'Objet**     | Les objets ne sont pas globalement accessibles ; liés à la portée du contrat intelligent. | Accessibilité globale garantie des objets.                        |

@@ -1,0 +1,199 @@
+---
+title: "Exécuter un Réseau Local via CLI Aptos"
+description: "Configurez et exécutez un réseau Aptos local pour les tests et le développement avec Docker, incluant les services Node API, Indexer API et faucet."
+sidebar:
+  label: "Exécuter un Réseau Local"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+Les réseaux locaux peuvent être utiles lors du test de votre code. Ils ne sont connectés à aucun réseau Aptos de production comme le mainnet, mais ils sont utiles pour trois raisons principales :
+
+1. **Aucune limite de taux :** Vous pouvez interagir avec des services hébergés comme l'API Node, l'API Indexer et le faucet sans limites de taux pour accélérer les tests.
+2. **Reproductibilité :** Vous pouvez configurer des scénarios spécifiques sur la chaîne et redémarrer le réseau depuis zéro à tout moment pour revenir à un état propre.
+3. **Haute disponibilité :** Les réseaux Aptos devnet et testnet sont périodiquement mis à niveau, pendant lesquels ils peuvent être indisponibles. Les réseaux de développement locaux sont toujours disponibles même si vous n'avez pas d'accès internet.
+
+<br />
+
+# Démarrage d'un Réseau Local
+
+<Steps>
+  1. Assurez-vous que la CLI Aptos est installée.
+
+  2. Assurez-vous que Docker est installé.
+
+     1. Ceci est exclusivement nécessaire pour créer un environnement de type production en exécutant l'API Indexer. De nombreux outils en aval tels que le SDK Aptos dépendent de l'API Indexer.
+     2. Docker recommande que vous installiez via [Docker Desktop](https://www.docker.com/products/docker-desktop/) pour obtenir des mises à jour automatiques.
+
+  3. Démarrez Docker.
+
+  4. Exécutez la commande suivante dans un nouveau terminal pour démarrer le réseau privé :
+
+     ```shellscript filename="Terminal"
+     aptos node run-local-testnet --with-indexer-api
+     ```
+
+     <Aside type="caution">
+       Note : Malgré le nom (`local-testnet`), ceci n'a rien à voir avec le réseau testnet Aptos, il exécutera un réseau entièrement local sur votre machine.
+     </Aside>
+
+     Vous devriez voir une sortie similaire à ceci :
+
+     ```shellscript filename="Terminal"
+     Readiness endpoint: http://0.0.0.0:8070/
+
+     Indexer API is starting, please wait...
+     Node API is starting, please wait...
+     Transaction stream is starting, please wait...
+     Postgres is starting, please wait...
+     Faucet is starting, please wait...
+
+     Completed generating configuration:
+             Log file: "/Users/dport/.aptos/testnet/validator.log"
+             Test dir: "/Users/dport/.aptos/testnet"
+             Aptos root key path: "/Users/dport/.aptos/testnet/mint.key"
+             Waypoint: 0:397412c0f96b10fa3daa24bfda962671c3c3ae484e2d67ed60534750e2311f3d
+             ChainId: 4
+             REST API endpoint: http://0.0.0.0:8080
+             Metrics endpoint: http://0.0.0.0:9101/metrics
+             Aptosnet fullnode network endpoint: /ip4/0.0.0.0/tcp/6181
+             Indexer gRPC node stream endpoint: 0.0.0.0:50051
+
+     Aptos is running, press ctrl-c to exit
+
+     Node API is ready. Endpoint: http://0.0.0.0:8080/
+     Postgres is ready. Endpoint: postgres://postgres@127.0.0.1:5433/local_testnet
+     Transaction stream is ready. Endpoint: http://0.0.0.0:50051/
+     Indexer API is ready. Endpoint: http://127.0.0.1:8090/
+     Faucet is ready. Endpoint: http://127.0.0.1:8081/
+
+     Applying post startup steps...
+
+     Setup is complete, you can now use the local testnet!
+     ```
+
+  5. Attendez que le réseau démarre
+
+     Une fois que le terminal dit `Setup is complete, you can now use the local testnet!` le réseau local sera en cours d'exécution.
+
+     <Aside type="caution">
+       Si vous rencontrez une erreur, consultez les erreurs courantes ci-dessous pour déboguer.
+     </Aside>
+
+     <details>
+       <summary>Erreurs Courantes au Démarrage du Réseau</summary>
+
+       ### Adresse Déjà Utilisée
+
+       ```shellscript filename="Terminal"
+       panicked at 'error binding to 0.0.0.0:8080: error creating server listener: Address already in use (os error 48)'
+       ```
+
+       Cela signifie que l'un des ports nécessaires au réseau local est déjà utilisé par un autre processus.
+
+       Pour corriger cela sur les systèmes Unix, vous pouvez :
+
+       1. Identifier le nom et le PID du processus en exécutant `lsof -i :8080`.
+       2. Exécuter `kill <pid>` une fois que vous connaissez le PID pour libérer ce port.
+
+       ### Erreur Trop de Fichiers Ouverts
+
+       ```shellscript filename="Terminal"
+       panicked at crates/aptos/src/node/local_testnet/logging.rs:64:10:
+       called \`Result::unwrap()\` on an \`Err\` value: Os { code: 24, kind: Uncategorized, message: \"Too many open files\" }
+       ```
+
+       Cela signifie qu'il y avait trop de fichiers ouverts sur votre système. Sur de nombreux systèmes Unix, vous pouvez augmenter le nombre maximum de fichiers ouverts en ajoutant quelque chose comme ceci à votre `.zshrc` :
+
+       ```shellscript filename="Terminal"
+       ulimit -n 1048576
+       ```
+
+       ### Docker n'est pas Disponible
+
+       ```shellscript filename="Terminal"
+       Unexpected error: Failed to apply pre-run steps for Postgres: Docker is not available, confirm it is installed and running. On Linux you may need to use sudo
+       ```
+
+       Pour déboguer cela, essayez les corrections ci-dessous :
+
+       1. Assurez-vous que vous avez docker installé en exécutant `docker --version`.
+       2. Assurez-vous que le démon Docker fonctionne en exécutant `docker info` (si cela donne une erreur disant `Cannot connect to the Docker daemon` Docker ne fonctionne PAS).
+       3. Assurez-vous que le socket pour la connexion à Docker est présent sur votre machine à l'emplacement par défaut. Par exemple, sur les systèmes Unix `/var/run/docker.sock` devrait exister.
+          1. Si ce fichier n'existe pas, ouvrez Docker Desktop et activez `Settings -> Advanced -> Allow the default Docker socket to be used`.
+          2. Ou, vous pouvez trouver où se trouve le socket Docker en exécutant `docker context inspect | grep Host`, puis créer un lien symbolique de cet emplacement vers l'emplacement par défaut en exécutant `sudo ln -s /Users/dport/.docker/run/docker.sock /var/run/docker.sock`
+     </details>
+
+     Comme vous pouvez le voir dans l'exemple de sortie à l'étape 4, une fois que le réseau local fonctionne, vous avez accès aux services suivants :
+
+     - [API Node](/build/apis/fullnode-rest-api) : Il s'agit d'une API REST qui fonctionne directement sur le nœud. Elle permet la fonctionnalité d'écriture de base telle que la soumission de transactions et un ensemble limité de fonctionnalité de lecture, telle que la lecture des ressources de compte ou des informations de module Move.
+     - [API Indexer](/build/indexer/indexer-api) : Il s'agit d'une API [GraphQL](https://graphql.org/) qui fournit un accès de lecture riche aux données blockchain indexées. Si vous cliquez sur l'URL de l'API Indexer ci-dessus, par défaut [http://127.0.0.1:8090](http://127.0.0.1:8090/), elle ouvrira la Console Hasura, une interface web qui vous aidera à interroger l'API GraphQL Indexer.
+     - [Service de Flux de Transactions](/build/indexer/txn-stream) : Il s'agit d'un flux gRPC de transactions utilisé par l'API Indexer et le SDK. Ceci n'est pertinent pour vous que si vous développez un processeur personnalisé [SDK Indexer](/build/indexer/indexer-sdk).
+     - [Postgres](https://www.postgresql.org/) : Il s'agit de la base de données dans laquelle les processeurs Indexer écrivent. L'API Indexer lit à partir de cette base de données.
+     - [Faucet](/build/apis/faucet-api) : Vous pouvez l'utiliser pour financer des comptes sur votre réseau local.
+
+     Si vous ne voulez pas exécuter l'un de ces sous-composants d'un réseau, il y a des drapeaux pour les désactiver.
+
+     Si vous écrivez un script et souhaitez attendre que le réseau local soit prêt avec tous les services, vous pouvez faire une requête GET à `http://127.0.0.1:8070`. Au début, cela retournera le code http [503](https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/503). Quand il retourne [200](https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/200), cela signifie que tous les services sont prêts.
+
+     Pour plus d'informations sur les différents drapeaux que vous pouvez passer lors du démarrage de votre réseau local, ou les paramètres de configuration tels que le changement du port sur lequel certains services fonctionnent, exécutez la commande d'aide :
+
+     ```shellscript filename="Terminal"
+     aptos node run-local-testnet --help
+     ```
+</Steps>
+
+## Utilisation du Réseau Local
+
+Maintenant que le réseau fonctionne, vous pouvez l'utiliser comme n'importe quel autre réseau.
+
+Vous pouvez donc créer un profil local comme ceci :
+
+```shellscript filename="Terminal"
+aptos init --profile <your-profile-name> --network local
+```
+
+Vous pouvez ensuite utiliser ce profil pour toutes les commandes que vous souhaitez utiliser à l'avenir. Par exemple, si vous vouliez publier un module Move comme le package [`hello_blockchain`](https://github.com/aptos-labs/aptos-core/tree/main/aptos-move/move-examples/hello_blockchain) sur votre réseau local, vous pourriez exécuter :
+
+```shellscript filename="Terminal"
+aptos move publish --profile <your-profile-name> --package-dir /opt/git/aptos-core/aptos-move/move-examples/hello_blockchain --named-addresses HelloBlockchain=local
+```
+
+### Configuration du SDK TypeScript
+
+Si vous voulez utiliser le réseau local avec le SDK TypeScript, vous pouvez utiliser les URLs du réseau local lors de l'initialisation de l'objet client (`Aptos`) :
+
+```tsx
+import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
+
+const network = Network.LOCAL;
+const config = new AptosConfig({ network });
+const client = new Aptos(config);
+```
+
+### Réinitialisation du réseau local
+
+Parfois lors du développement, il est utile de réinitialiser le réseau local à son état initial, par exemple :
+
+- Vous avez fait des changements non rétrocompatibles à un module Move, et vous aimeriez le redéployer sans le renommer ou utiliser un nouveau compte.
+- Vous construisez un processeur personnalisé [SDK Indexer](/build/indexer/indexer-sdk) et aimeriez indexer en utilisant un réseau frais.
+- Vous voulez effacer tout l'état sur la chaîne, par exemple les comptes, objets, etc.
+
+Pour commencer avec un tout nouveau réseau local, utilisez le drapeau `--force-restart` :
+
+```shellscript filename="Terminal"
+aptos node run-local-testnet --force-restart
+```
+
+Il vous demandera alors si vous voulez vraiment redémarrer la chaîne, pour s'assurer que vous ne supprimez pas votre travail par accident.
+
+```shellscript filename="Terminal"
+Are you sure you want to delete the existing chain? [yes/no]
+> yes
+```
+
+Si vous ne voulez pas être invité, incluez également `--assume-yes` :
+
+```shellscript filename="Terminal"
+aptos node run-local-testnet --force-restart --assume-yes
+```

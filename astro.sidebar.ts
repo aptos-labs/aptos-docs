@@ -811,6 +811,10 @@ export const sidebar = [
     ],
   }),
 
+  group("languages.group.translationStatus", {
+    items: ["translation-status"],
+  }),
+
   // --- CONTRIBUTE Tab ---
   // TODO" For now hide the contribute section until we have more content and a better icon
   /*group("contribute", {

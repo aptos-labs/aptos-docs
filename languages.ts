@@ -1,20 +1,23 @@
 const allLanguages = {
   en: "English",
-  // de: 'Deutsch',
+  de: "Deutsch",
   es: "Español",
+  "pt-BR": "Português (Brasil)",
+  fr: "Français",
+  tr: "Türkçe",
+  ru: "Русский",
+  ar: "العربية",
   zh: "简体中文",
+  ko: "한국어",
   ja: "日本語",
-  // 'pt-br': 'Português do Brasil',
+  id: "Bahasa Indonesia",
+  fi: "Suomi",
   // es: 'Español',
   // 'zh-cn': '简体中文',
   // 'zh-tw': '正體中文',
-  // fr: 'Français',
   // hi: 'हिन्दी',
-  // ar: 'العربية',
   // ja: '日本語',
-  // ko: '한국어',
   // pl: 'Polski',
-  // ru: 'Русский',
   // it: 'Italiano',
 } as const;
 
@@ -30,4 +33,4 @@ const twoLanguages = {
  */
 export default import.meta.env.PUBLIC_TWO_LANG ? twoLanguages : allLanguages;
 
-// export const rtlLanguages = new Set(['ar']);
+export const rtlLanguages = new Set(["ar"]);

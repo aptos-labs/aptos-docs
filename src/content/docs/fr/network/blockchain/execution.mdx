@@ -1,0 +1,46 @@
+---
+title: "Exécution"
+description: "Explorez l'exécution des transactions sur Aptos, incluant le traitement déterministe, l'exécution parallèle avec Block-STM, et les optimisations de performance pour un débit élevé."
+sidebar:
+  label: "Exécution"
+---
+
+Sur Aptos, l'exécution fait référence au processus où les validateurs exécutent et appliquent les transactions de contrats intelligents depuis un bloc ordonné. La sortie d'exécution est ensuite appliquée à l'état de la blockchain.
+
+Il est crucial que l'exécution soit [déterministe](https://en.wikipedia.org/wiki/Deterministic_algorithm), et tous les validateurs devraient idéalement être d'accord sur le même état final du registre. Une majorité de validateurs (plus de 2/3 des validateurs) doivent être d'accord sur l'état final du registre afin d'arriver à un consensus. Pour plus d'informations détaillées sur les propriétés de consensus, voir la section sur [BFT](/network/glossary#byzantine-fault-tolerance-bft) et [consensus](/network/glossary#consensus).
+
+Une exécution efficace, particulièrement l'exécution parallèle, est clé pour scaler les performances et le débit de la blockchain. L'impact de cela peut être ressenti dans le temps de bloc. En décembre 2024, les blocs Aptos se ferment en moins de 250ms.
+
+## Pourquoi l'Exécution Parallèle ?
+
+![](https://miro.medium.com/v2/resize:fit:4800/format:webp/0*qG0KRe1KzsP8Odth)
+
+L'approche la plus simple pour l'exécution de contrats intelligents est d'exécuter les transactions dans un bloc séquentiellement, une à la fois. Cependant, cela ne scale pas bien. Avoir un grand nombre de transactions séquentielles, particulièrement avec des temps d'exécution variables, peut causer la chute drastique de la latence et du débit de la blockchain.
+
+Pour résoudre ce problème, les blockchains ont commencé à adopter l'exécution parallèle, ou la capacité de traiter plusieurs transactions en parallèle. Le défi avec l'exécution parallèle, cependant, est que certaines transactions peuvent lire ou écrire la même ressource, causant des conflits.
+
+### Parallélisme Statique
+
+Une approche pour adresser le problème de conflit dans l'exécution parallèle est le **parallélisme statique**, qui nécessite que les développeurs spécifient les conflits entre transactions à l'avance. Cependant, cela apporte une charge plus élevée sur le développeur, et dans beaucoup de cas force les transactions qui ne conflictent pas réellement à être séquentielles.
+
+### Parallélisme Dynamique
+
+Le **parallélisme dynamique** calcule l'ordonnancement d'exécution des transactions à la volée, détectant dynamiquement les dépendances et évitant les conflits pendant l'exécution. Une propriété supplémentaire qui est importante pour le parallélisme dynamique sur une blockchain est que la sortie d'exécution est cohérente avec l'exécution des transactions selon un ordre prédéfini.
+
+En ne nécessitant pas que les développeurs spécifient les conflits à l'avance, le parallélisme dynamique permet aux développeurs d'écrire des applications de manière flexible sans faire face aux contraintes de conception de déclarer statiquement les dépendances de transaction.
+
+## Block-STM
+
+Aptos utilise un moteur d'exécution parallèle en mémoire multi-threadé hautement efficace appelé Block-STM. Block-STM tire parti de l'ordre prédéfini des transactions et combine les techniques de Mémoire Transactionnelle Logicielle avec un calendrier collaboratif novateur.
+
+Block-STM est le moteur d'exécution parallélisme dynamique de pointe développé par l'équipe Aptos Labs.
+
+Depuis sa sortie, [Polygon](https://polygon.technology/blog/innovating-the-main-chain-a-polygon-pos-study-in-parallelization), Sei, [Starknet](https://www.starknet.io/blog/parallel-execution-and-v0-13-2/), et d'autres blockchains l'ont adopté pour atteindre l'exécution parallèle sur leurs chaînes respectives.
+
+Pour en savoir plus, voir :
+
+- [Article de blog Block-STM](https://medium.com/aptoslabs/block-stm-how-we-execute-over-160k-transactions-per-second-on-the-aptos-blockchain-3b003657e4ba)
+- [Article Block-STM](https://arxiv.org/pdf/2203.06871)
+- [Discussion a16z crypto research](https://www.youtube.com/watch?v=2SE5KzsP8Odth)
+- [Stark Spaces | Block-STM et Starknet](https://www.youtube.com/watch?v=y1kXOi39RX0)
+- [Block-STM: Accélérer le Traitement des Contrats Intelligents](https://blog.chain.link/block-stm/)

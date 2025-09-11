@@ -1,0 +1,64 @@
+---
+title: "Ressources Move"
+description: "Apprenez les Ressources dans Move sur Aptos, comment elles diffèrent des instances, leurs modèles de permission, et mécanismes de stockage pour gérer l'état on-chain."
+sidebar:
+  label: "Ressources"
+---
+
+Sur Aptos, l'état on-chain est organisé en ressources et modules. Ceux-ci sont ensuite stockés dans les comptes individuels. Cela est différent d'autres blockchains, telles qu'Ethereum, où chaque contrat intelligent maintient son propre espace de stockage. Voir [Comptes](/network/blockchain/accounts) pour plus de détails sur les comptes.
+
+## Ressources vs Instances
+
+Les modules Move définissent les définitions de struct. Les définitions de struct peuvent inclure les capacités telles que `key` ou `store`. Les ressources sont des instances de struct avec la capacité `key` qui sont stockées dans le stockage global ou directement dans un compte. La capacité `store` permet aux instances de struct d'être stockées dans les ressources. Un exemple ici est comment la pièce APT est stockée : CoinStore est la ressource qui contient la pièce APT, tandis que la Coin elle-même est une instance :
+
+```move
+/// Un détenteur d'un type de pièce spécifique et des gestionnaires d'événements associés.
+/// Ceux-ci sont gardés dans une seule ressource pour assurer la localité des données.
+struct CoinStore<phantom CoinType> has key {
+    coin: Coin<CoinType>,
+}
+
+/// Structure principale représentant une pièce/jeton dans la garde d'un compte.
+struct Coin<phantom CoinType> has store {
+    /// Montant de pièce que cette adresse possède.
+    value: u64,
+}
+```
+
+L'instance Coin peut être retirée de CoinStore avec la permission du compte propriétaire et facilement transférée vers une autre ressource CoinStore. Elle peut aussi être gardée dans toute autre ressource personnalisée, si la définition le permet, par exemple :
+
+```move
+struct CustomCoinBox<phantom CoinType> has key {
+    coin: Coin<CoinType>,
+}
+```
+
+## Définir les ressources et objets
+
+Toutes les instances et ressources sont définies dans un module qui est stocké à une adresse. Par exemple `0x1234::coin::CoinStore<0x1234::coin::SomeCoin>` serait représenté comme :
+
+```move
+module 0x1234::coin {
+    struct CoinStore<phantom CoinType> has key {
+        coin: Coin<CoinType>,
+    }
+
+    struct SomeCoin { }
+}
+```
+
+Dans cet exemple, `0x1234` est l'adresse, `coin` est le module, `CoinStore` est une struct qui peut être stockée comme une ressource, et `SomeCoin` est une struct qui n'est probablement jamais représentée comme une instance. L'utilisation du type fantôme permet qu'il existe de nombreux types distincts de ressources `CoinStore` avec différents paramètres `CoinType`.
+
+## Permissions des Instances incluant les Ressources
+
+Les permissions des ressources et autres instances sont dictées par le module où la struct est définie. Par exemple, une instance dans une ressource peut être accédée et même supprimée de la ressource, mais l'état interne ne peut pas être changé sans permission du module où la struct de l'instance est définie.
+
+La propriété, d'autre part, est signifiée soit en stockant une ressource sous un compte, soit par la logique dans le module qui définit la struct.
+
+## Voir une ressource
+
+Les ressources sont stockées dans les comptes. Les ressources peuvent être localisées en cherchant dans le compte du propriétaire pour la ressource à son chemin de requête complet incluant le compte où elle est stockée ainsi que son adresse et module. Les ressources peuvent être vues sur l'[Explorateur Aptos](https://explorer.aptoslabs.com/) en cherchant le compte propriétaire ou récupérées directement depuis l'API d'un fullnode.
+
+## Comment les ressources sont stockées
+
+Le module qui définit une struct spécifie comment les instances peuvent être stockées. Par exemple, les événements pour déposer un jeton peuvent être stockés dans le compte récepteur où le dépôt se produit ou dans le compte où le module de jeton est déployé. En général, stocker les données dans les comptes utilisateur individuels permet un niveau plus élevé d'efficacité d'exécution car il n'y aurait pas de conflits de lecture/écriture d'état parmi les transactions de différents comptes, permettant une exécution parallèle transparente.

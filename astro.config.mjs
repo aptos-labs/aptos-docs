@@ -28,6 +28,7 @@ import { remarkClientOnly } from "./src/plugins";
 import { devServerFileWatcher } from "./src/integrations/dev-server-file-watcher";
 import onDemandDirective from "./src/integrations/client-on-demand/register.js";
 import { cspConfig } from "./src/config/csp";
+import { monacoEditorIntegration } from "./src/integrations/monacoEditor";
 // import { isMoveReferenceEnabled } from "./src/utils/isMoveReferenceEnabled";
 // import { rehypeAddDebug } from "./src/plugins";
 
@@ -51,6 +52,7 @@ export default defineConfig({
         : "http://localhost:4321",
   trailingSlash: "never",
   integrations: [
+    monacoEditorIntegration(),
     // Custom client directive for on-demand loading
     onDemandDirective(),
     // Mermaid diagram support

@@ -149,6 +149,7 @@ export default defineConfig({
           },
         }),
         starlightLlmsTxt({
+          rawContent: true,
           promote: ["index*", "get-started"],
           demote: ["404"],
           exclude: ["404"],

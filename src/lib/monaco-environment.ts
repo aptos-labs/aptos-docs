@@ -30,7 +30,7 @@ if (typeof window !== "undefined" && !window.MonacoEnvironment) {
   // Match the plugin's publicPath configuration
   const importMeta = import.meta as { env?: { BASE_URL?: string } };
   const base = importMeta.env?.BASE_URL ?? "/";
-  const workerPath = `${String(base)}monaco`;
+  const workerPath = `${base}monaco`;
 
   const workerMap: Record<string, string> = {
     // Core editor worker

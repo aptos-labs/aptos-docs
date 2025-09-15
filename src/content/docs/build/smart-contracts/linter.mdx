@@ -421,3 +421,26 @@ public fun get_data(): (u64, signer) {
 ### `zero_address`
 
 This security check detects the use of `address` parameters in external functions that are not checked for being zero before being used. This could lead to loss of funds or other security issues.⏎
+
+### `return_constructor_ref`
+
+Checks for public functions that return an `ConstructorRef`. Constructor references confer the authority to create an object, and returning them from functions can leak privileged capability. This lint helps prevent accidental exposure of sensitive object creation authority.
+
+**Examples of patterns caught by this lint:**
+
+```move
+// Public function returning ConstructorRef - security risk
+public fun create_object_ref(): ConstructorRef {
+    // ... code that returns ConstructorRef
+}
+
+// Public function returning a struct containing ConstructorRef
+public fun get_authority(): MyStruct<ConstructorRef> {
+    // ... code that returns struct with ConstructorRef
+}
+
+// Public function returning vector containing ConstructorRef
+public fun get_refs(): vector<ConstructorRef> {
+    // ... code that returns vector with ConstructorRef
+}
+```

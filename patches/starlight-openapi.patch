@@ -1,8 +1,8 @@
 diff --git a/index.ts b/index.ts
-index df4f67b89bf15cfd1b2d7a4184a295f7001a1757..63e49debd4477cc4bd6bb63781098753d2e5b37e 100644
+index 9405a9f453a727f816428385911ffc6ee1850290..46b503900c5a1ae5961f1cc3a4ab87b1410ab902 100644
 --- a/index.ts
-+++ b/index.ts
-@@ -7,7 +7,11 @@ import { getSidebarFromSchemas, getSidebarGroupsPlaceholder } from './libs/starl
++++ b/index.ts	
+@@ -9,7 +9,11 @@ import { getSidebarGroupPlaceholder, getSidebarGroupsPlaceholder } from './libs/
  
  export const openAPISidebarGroups = getSidebarGroupsPlaceholder()
  
@@ -15,7 +15,7 @@ index df4f67b89bf15cfd1b2d7a4184a295f7001a1757..63e49debd4477cc4bd6bb63781098753
    return {
      name: 'starlight-openapi-plugin',
      hooks: {
-@@ -16,10 +20,10 @@ export default function starlightOpenAPIPlugin(userConfig: StarlightOpenAPIUserC
+@@ -25,11 +29,11 @@ export default function starlightOpenAPIPlugin(userConfig: StarlightOpenAPIUserC
            return
          }
  
@@ -23,25 +23,26 @@ index df4f67b89bf15cfd1b2d7a4184a295f7001a1757..63e49debd4477cc4bd6bb63781098753
 +        const config = validateConfig(logger, schemaConfigs)
          const schemas = await Promise.all(config.map((schemaConfig) => parseSchema(logger, schemaConfig)))
  
+         addRouteMiddleware({ entrypoint: 'starlight-openapi/middleware', order: 'post' })
 -        addIntegration(starlightOpenAPIIntegration(schemas))
 +        addIntegration(starlightOpenAPIIntegration(schemas, options?.routeEntrypoint))
  
-         const sidebar = getSidebarFromSchemas(starlightConfig.sidebar, schemas)
- 
+         const updatedConfig: Parameters<typeof updateConfig>[0] = {
+           customCss: [...(starlightConfig.customCss ?? []), 'starlight-openapi/styles'],
 diff --git a/libs/integration.ts b/libs/integration.ts
-index 9d8f0839108aafd6df38052baf3a39e01cabc142..32b288519713a349681cadbe690ec38589d30c0e 100644
+index d647301e157800211add2343f03b1e4baf36e731..cfa303dd0ebd68f2899b06d2b142152bce94d409 100644
 --- a/libs/integration.ts
-+++ b/libs/integration.ts
++++ b/libs/integration.ts	
 @@ -3,13 +3,14 @@ import type { AstroIntegration } from 'astro'
  import type { Schema } from './schema'
- import { vitePluginStarlightOpenAPISchemas } from './vite'
+ import { vitePluginStarlightOpenAPI } from './vite'
  
 -export function starlightOpenAPIIntegration(schemas: Schema[]): AstroIntegration {
 +export function starlightOpenAPIIntegration(schemas: Schema[], entrypoint?: string): AstroIntegration {
    const starlightOpenAPI: AstroIntegration = {
      name: 'starlight-openapi',
      hooks: {
-       'astro:config:setup': ({ injectRoute, updateConfig }) => {
+       'astro:config:setup': ({ config, injectRoute, updateConfig }) => {
 +        // pageComponent
          injectRoute({
 -          entrypoint: 'starlight-openapi/route',
@@ -50,9 +51,9 @@ index 9d8f0839108aafd6df38052baf3a39e01cabc142..32b288519713a349681cadbe690ec385
            prerender: true,
          })
 diff --git a/libs/route.ts b/libs/route.ts
-index 0523e35827706420b820790f4e1755ec98d7d6cd..4337ec37db75931537b14ddf48de00e3b9281ed5 100644
+index 182b92fa1ac6dd13130ec6d8311938ff6f3792c9..6bc06f2dfea3959029d19bf54e269675880785a3 100644
 --- a/libs/route.ts
-+++ b/libs/route.ts
++++ b/libs/route.ts	
 @@ -1,4 +1,5 @@
 -import schemas from 'virtual:starlight-openapi-schemas'
 +import schemas from "virtual:starlight-openapi-schemas";
@@ -126,9 +127,9 @@ index 0523e35827706420b820790f4e1755ec98d7d6cd..4337ec37db75931537b14ddf48de00e3
  
  function getPathItemStaticPaths(schema: Schema): StarlighOpenAPIRoute[] {
 -  const baseLink = getBasePath(schema.config)
--  const operations = getOperationsByTag(schema.document)
+-  const operations = getOperationsByTag(schema)
 +  const baseLink = getBasePath(schema.config);
-+  const operations = getOperationsByTag(schema.document);
++  const operations = getOperationsByTag(schema);
  
    return [...operations.entries()].flatMap(([, operations]) => {
      const paths: StarlighOpenAPIRoute[] = operations.entries.map((operation) => {
@@ -172,9 +173,9 @@ index 0523e35827706420b820790f4e1755ec98d7d6cd..4337ec37db75931537b14ddf48de00e3
  
  function getWebhooksStaticPaths(schema: Schema): StarlighOpenAPIRoute[] {
 -  const baseLink = getBasePath(schema.config)
--  const operations = getWebhooksOperations(schema.document)
+-  const operations = getWebhooksOperations(schema)
 +  const baseLink = getBasePath(schema.config);
-+  const operations = getWebhooksOperations(schema.document);
++  const operations = getWebhooksOperations(schema);
  
    return operations.map((operation) => ({
      params: {
@@ -233,15 +234,37 @@ index 0523e35827706420b820790f4e1755ec98d7d6cd..4337ec37db75931537b14ddf48de00e3
 +  isFallback?: true;
 +  type: "operation-tag";
  }
+diff --git a/libs/security.ts b/libs/security.ts
+index 1287aa84257dd4d9b3ee944ea59d3e42916575e7..50616aaac23181c8f7afe881c6e995e7490b3da4 100644
+--- a/libs/security.ts
++++ b/libs/security.ts	
+@@ -7,7 +7,7 @@ import type { Schema } from './schema'
+ export function getSecurityRequirements(operation: Operation, schema?: Schema): SecurityRequirement[] | undefined {
+   if ('security' in operation) {
+     return operation.security
+-  } else if (schema && 'security' in schema.document) {
++  } else if (schema && schema.document && 'security' in schema.document) {
+     return schema.document.security
+   }
+ 
+@@ -17,7 +17,7 @@ export function getSecurityRequirements(operation: Operation, schema?: Schema):
+ export function getSecurityDefinitions(document: Document): SecurityDefinitions | undefined {
+   if ('securityDefinitions' in document) {
+     return document.securityDefinitions
+-  } else if ('components' in document && 'securitySchemes' in document.components) {
++  } else if ('components' in document && document.components && 'securitySchemes' in document.components) {
+     return document.components.securitySchemes as SecurityDefinitions
+   }
+ 
 diff --git a/package.json b/package.json
-index becd80b6014c1a6227d69e4ae8328fe1b9099e6b..a17bedc22881ec71f710e744d016c545bfc3c0af 100644
+index 50aa61d3acda0f553f5b93199b69be8f5e15c4d6..2cb798f707cd7fc35ae449fe03f5c9131d27fcc8 100644
 --- a/package.json
-+++ b/package.json
++++ b/package.json	
 @@ -7,6 +7,7 @@
    "type": "module",
    "exports": {
      ".": "./index.ts",
 +    "./libs/*": "./libs/*.ts",
+     "./middleware": "./middleware.ts",
      "./route": "./components/Route.astro",
      "./styles": "./styles.css",
-     "./package.json": "./package.json"

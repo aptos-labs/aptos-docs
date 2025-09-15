@@ -330,17 +330,17 @@ export default defineConfig({
         cssVariable: "--font-atkinson-hyperlegible-next",
         variants: [
           {
-            weight: "100 900",
+            weight: "200 800",
             style: "normal",
             src: ["./src/assets/fonts/AtkinsonHyperlegibleNext-VariableFont_wght.woff2"],
-            variationSettings: "'wght' 400",
+            variationSettings: "normal",
             display: "swap",
           },
           {
-            weight: "100 900",
+            weight: "200 800",
             style: "italic",
             src: ["./src/assets/fonts/AtkinsonHyperlegibleNext-Italic-VariableFont_wght.woff2"],
-            variationSettings: "'wght' 400",
+            variationSettings: "normal",
             display: "swap",
           },
         ],

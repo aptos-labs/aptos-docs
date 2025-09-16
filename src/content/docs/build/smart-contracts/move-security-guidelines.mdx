@@ -832,3 +832,236 @@ There are different ways to secure the code:
 3. Ensure entry functions work regardless of random outcomes. This can be handled by committing the random result, then using the random result to provide the action in a different transaction. Avoid immediate actions based on randomness for consistent gas use.
 
 > We will be providing more functionality in the future, to allow for more complex code to be able to be safe against undergasing attacks.
+
+## Reentrancy
+
+A **reentrancy attack** occurs when a contract performs an external call that can invoke the original contract again _before it finishes updating its state_. This can let an attacker repeat state-dependent actions (e.g., multiple withdrawals) against **stale state**.
+
+Historically, Move prevented reentrancy. With the introduction of **function values**, certain forms of reentrancy are now possible under specific conditions. By contrast, **dispatchable fungible assets** remain protected against reentrancy.
+
+***
+
+### Dispatchable Fungible Assets
+
+**No reentrancy permitted.** All native dispatchable functions are **locked against re-entering an active module** (a module already invoked within the current transaction).
+In practice: **Dispatchable Fungible Assets do not allow reentrancy.**
+
+***
+
+### Function Values
+
+Since language version **2.2**, Move supports **function values** (first-class functions). Function values can be stored, passed around, and invoked like any other value.
+
+> **Important:** Function values are **not** locked against reentrancy. Callbacks via function values can re-enter the original module.
+
+```mermaid
+graph LR
+  %% Stable: no quotes, no parentheses, no double colons, no special edge labels.
+
+  %% Left (no function values)
+  A[Without Function Values]
+  m1a[m1]
+  m2a[m2]
+  noteA[acyclic usage -> no reentrancy]
+  A --- m1a
+  m1a --> m2a
+  m2a --- noteA
+
+  %% Right (with function values)
+  B[With Function Values]
+  m1b[m1]
+  call1[call m2.f passing FV]
+  m2b[m2]
+  cb1[callback to m1 via FV]
+  noteB[closure dynamic dispatch -> reentrancy possible]
+  B --- m1b
+  m1b --> call1 --> m2b
+  m2b -.-> cb1 -.-> m1b
+  m2b --- noteB
+```
+
+#### Resource Locking
+
+To preserve Move’s reference semantics and suppress side effects from reentrancy, **re-entered modules cannot access their own resources** during dynamic dispatch through a closure. Attempts to borrow or move such resources **abort**.
+
+Examples that will abort on re-entry:
+
+- `borrow_global<m::R>(addr)`
+- `move_from<m::R>(addr)`
+
+[Read more](/build/smart-contracts/book/functions/#reentrancy-check) about the function-value reentrancy checks.
+
+#### Time-of-Check vs Time-of-Use (TOCTOU)
+
+Function values (FVs) can be stored inside wrapper structs and moved to global storage. Because FVs can **capture local variables**, scenarios arise where a value is **checked now** but **used later** (after state changes), leading to TOCTOU bugs.
+
+```move
+struct S {
+  fn: |u64| u64,
+}
+```
+
+**Guidance:**
+
+- If an **amount** (or any state-derived value) is validated before creating the FV, **re-validate it at invocation time**—especially if the FV (or a struct containing it) is stored in global storage and called later.
+- There is **no guarantee** that the state captured by an FV remains unchanged by the time the FV executes (or that it executes at all).
+
+**Safer pattern—capture a concrete resource:**
+
+Capturing a concrete, immutable resource is generally safer because the captured object itself cannot be silently mutated by unrelated state changes.
+
+For example, capturing a concrete `FungibleAsset` object:
+
+```move
+struct FungibleAsset {
+    metadata: Object<Metadata>,
+    amount: u64,
+}
+```
+
+Once captured, this concrete resource, FA, is already **represented** and its identity cannot change, which makes later use safe.
+
+#### Immutable Parameters
+
+if a Function Value has captured arguments, those arguments are not going to be overridden at the time of invocation.
+The following example demonstrates this, intended, behavior.
+
+```move
+module example::example {
+    use std::signer;
+    use std::debug;
+
+    fun foo(x: u64){
+      debug::print(&x);
+    }
+
+    public fun invoke(f: |u64|) {
+      f(1); // 10 is not overridden at the time of invocation.
+    }
+
+    #[test(_att=@0x1337)]
+    fun run(_att: &signer){
+      invoke(|_x| foo(10));
+    }
+}
+```
+
+##### Arbitrary Function Value
+
+Passing one or a chain of functions as a parameter to another function, or storing FVs in a table, e.g. to be used as custom hooks, are patterns that can lead to reentrancy.
+
+**Example Vulnerable code:**
+
+In this example, the `withdraw_operations` act as proxy to call into a series of functions.
+As `Grant` is not part of `0x42::example` Module any operation on it is **allowed** during closure dynamic dispatch.
+
+```move filename="reentrancy_example.move"
+module example::account {
+    use std::signer;
+    friend example::example;
+
+    const ENOT_ENOUGH_BALANCE: u64 = 1;
+
+    public struct Grant has drop {}
+
+    public(friend) fun grant(): Grant { Grant {} }
+
+    public(friend)  fun balance(_account: address): u64 { 1_000 }
+
+    public(friend)  fun transfer(_from: address, _to: address, _amount: u64) { }
+
+    public(friend)  fun has_grant(_g: &Grant): bool { true }
+}
+
+module example::example {
+    use std::signer::address_of;
+    use std::option::{Self as option, Option};
+    use example::account;
+
+    const EGRANT_NOT_FOUND: u64 = 2;
+    const ENOT_ENOUGH_BALANCE: u64 = 3;
+
+    public fun withdraw_operations(user: &signer, recipient: Option<address>, amount: u64, f: |address, Option<address>, &account::Grant, u64|) {
+        let account_addr = address_of(user);
+        let bal = account::balance(account_addr);
+        assert!(bal >= amount, ENOT_ENOUGH_BALANCE);
+        let g = account::grant();
+        f(account_addr, recipient, &g, amount);
+    }
+
+    public fun withdraw(account_addr: address, recipient: Option<address>, grant: &account::Grant, amount: u64) {
+        assert!(account::has_grant(grant), EGRANT_NOT_FOUND);
+        let r = recipient;
+        if (option::is_some(&r)) {
+            account::transfer(account_addr, option::destroy_some(r), amount);
+        } else {
+            option::destroy_none(r);
+        };
+        account::transfer(account_addr, account_addr, amount);
+    }
+}
+```
+
+An attacker can exploit this by calling `withdraw_operations` with a function value that calls `withdraw` and passes the `Grant` as a parameter.
+Altering, or prefixing via capture, the amount of the transfer which if pulled from a shared pool of founds allows the attacker overdraw the balance of the account.
+
+```move filename="attacker.move"
+module attacker::exploit {
+  use 0x42::example;
+  entry fun start(attacker: &signer) {
+    example::withdraw_operations(attacker, None, |account, recipient, grant, amount| example::withdraw(attacker, recipient, grant, 100_000_000), 10);
+  }
+}
+```
+
+**Example Secure code:**
+
+We’ve introduced the amount field into the grant structure to fix the amount at a specific moment. At the same time, we’ve finalized the status update. This can be thought as a bank transfer that the bank is simply waiting to execute but has already recorded.
+
+```move filename="reentrancy_secure.move"
+module example::account {
+    use std::signer;
+    friend example::example;
+
+    const ENOT_ENOUGH_BALANCE: u64 = 1;
+
+    // Notice that the grant is not droppable to ensure it used, but we can allow it to be stored.
+    public struct Grant {account: address, amount: u64} //might capture other information like the asset type.
+
+    public(friend) fun grant(account: address, amount: u64): Grant { update_balance_withdraw(account, amount); Grant { account, amount } }
+
+    fun update_balance_withdraw(account: address, amount: u64) { /* retrive the account and update the balance */} // the state update is done here.
+
+    public(friend)  fun balance(_account: address): u64 { 1_000 }
+
+    public(friend)  fun transfer(_to: address, _grant: Grant) { /* transfer the amount of the grant to the recipient and destroy the grant */}
+
+    public(friend)  fun has_grant(_g: &Grant): bool { true }
+}
+
+module example::example {
+    use std::signer::address_of;
+    use std::option::{Self as option, Option};
+    use example::account;
+
+    const EGRANT_NOT_FOUND: u64 = 2;
+    const ENOT_ENOUGH_BALANCE: u64 = 3;
+
+    public fun withdraw_operations(user: &signer, recipient: Option<address>, amount: u64, f: |address, account::Grant|) {
+        let account_addr = address_of(user);
+        let bal = account::balance(account_addr);
+        assert!(bal >= amount, ENOT_ENOUGH_BALANCE);
+        let g = account::grant(account_addr, amount); // when the grant is created, the amount is fixed and verified to be available.
+        if (option::is_some(&recipient)) {
+          f(option::destroy_some(recipient), g); // by the time the function value is invoked, the state update is done so re-entrancy is not a problem.
+        } else {
+          f(account_addr, g);
+        };
+    }
+
+    public fun withdraw(recipient: address, grant: account::Grant) {
+        assert!(account::has_grant(&grant), EGRANT_NOT_FOUND);
+        account::transfer(recipient, grant);
+    }
+}
+```

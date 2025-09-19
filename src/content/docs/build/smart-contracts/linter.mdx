@@ -444,3 +444,22 @@ public fun get_refs(): vector<ConstructorRef> {
     // ... code that returns vector with ConstructorRef
 }
 ```
+
+## Experimental Checks
+
+### `cyclomatic_complexity`
+
+Cyclomatic complexity measures the number of linearly independent execution paths through a function. A high value generally correlates with code that is harder to test and maintain.
+
+This linter performs an approximation while traversing the Move expression tree:
+
+1. The complexity score starts at **1**.
+2. The score is incremented for each control-flow decision point found:
+   - +1 for each `if`
+   - +1 for each `else if`
+   - +1 for each `loop`, `while`, or `for`
+   - +1 for each `break` or `continue`
+   - +1 for each `return` statement that is not the final expression in the function
+   - +n where n = (number of match arms - 1)
+
+When the accumulated score exceeds the default threshold (currently **10**), the linter emits a diagnostic suggesting that the function be simplified or decomposed.

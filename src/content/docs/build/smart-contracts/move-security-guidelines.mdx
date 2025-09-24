@@ -6,6 +6,8 @@ sidebar:
   label: "Security Guidelines"
 ---
 
+import { Aside } from '@astrojs/starlight/components';
+
 The Move language is designed with security and inherently offers several features including a type system and a linear logic. Despite this, its novelty and the intricacies of some business logic mean that developers might not always be familiar with Move's secure coding patterns, potentially leading to bugs.
 
 This guide addresses this gap by detailing common anti-patterns and their secure alternatives. It provides practical examples to illustrate how security issues can arise and recommends best practices for secure coding. This guide aims to sharpen developers' understanding of Move's security mechanisms and ensure the robust development of smart contracts.
@@ -43,7 +45,7 @@ module 0x42::example {
     ) acquires Subscription {
         let object_address = object::object_address(&obj);
         let subscription = borrow_global<Subscription>(object_address);
-        assert!(subscription.end_subscription >= aptos_framework::timestamp::now_seconds(),1);
+        assert!(subscription.end_subscription >= aptos_framework::timestamp::now_seconds(), 1);
         // Use the subscription
         [...]
     }
@@ -77,10 +79,10 @@ module 0x42::example {
         user: &signer, obj: Object<Subscription>
     ) acquires Subscription {
         //ensure that the signer owns the object.
-        assert!(object::owner(&obj)==address_of(user),ENOT_OWNWER);
+        assert!(object::owner(&obj) == address_of(user), ENOT_OWNWER);
         let object_address = object::object_address(&obj);
         let subscription = borrow_global<Subscription>(object_address);
-        assert!(subscription.end_subscription >= aptos_framework::timestamp::now_seconds(),1);
+        assert!(subscription.end_subscription >= aptos_framework::timestamp::now_seconds(), 1);
         // Use the subscription
         [...]
     }
@@ -97,7 +99,7 @@ Users without proper authorization can execute privileged actions.
 
 This code snippet allows any user invoking the `delete` function to remove an `Object`, without verifying that the caller has the necessary permissions.
 
-```move
+```move filename="global_storage_insecure.move"
 module 0x42::example {
   struct Object has key{
     data: vector<u8>
@@ -113,7 +115,7 @@ module 0x42::example {
 
 A better alternative is to use the global storage provided by Move, by directly borrowing data off of `signer::address_of(signer)`. This approach ensures robust access control, as it exclusively accesses data contained within the address of the signer of the transaction. This method minimizes the risk of access control errors, ensuring that only the data owned by the `signer` can be manipulated.
 
-```move
+```move filename="global_storage_secure.move"
 module 0x42::example {
   struct Object has key{
     data: vector<u8>
@@ -138,7 +140,7 @@ Function visibility determines who can call a function. It's a way to enforce ac
 
 - private functions are only callable within the module they are defined in. They're not accessible from other modules or from the CLI/SDK, which prevents unintended interactions with contract internals.
 
-```move
+```move filename="private_function.move"
 module 0x42::example {
   fun sample_function() { /* ... */ }
 }
@@ -146,7 +148,7 @@ module 0x42::example {
 
 - `public(friend)` functions expand on this by allowing specified _friends_ modules to call the function, enabling controlled interaction between different contracts while still restricting general access.
 
-```move
+```move filename="friend_function.move"
 module 0x42::example {
   friend package::mod;
 
@@ -156,7 +158,7 @@ module 0x42::example {
 
 - `public` functions are callable by any published module or script.
 
-```move
+```move filename="public_function.move"
 module 0x42::example {
   public fun sample_function() { /* ... */ }
 }
@@ -164,7 +166,7 @@ module 0x42::example {
 
 - `#[view]` decorated functions cannot alter storage; they only read data, providing a safe way to access information without risking state modification.
 
-```move
+```move filename="view_function.move"
 module 0x42::example {
   #[view]
   public fun read_only() { /* ... */ }
@@ -173,7 +175,7 @@ module 0x42::example {
 
 - The `entry` modifier in Move is used to indicate entry points for transactions. Functions with the `entry` modifier serve as the starting point of execution when a transaction is submitted to the blockchain.
 
-```move
+```move filename="entry_function.move"
 module 0x42::example {
   entry fun f(){}
 }
@@ -192,7 +194,7 @@ This layered visibility ensures that only authorized entities can execute certai
 
 Note that it’s possible to combine `entry` with `public` or `public(friend)`
 
-```move
+```move filename="friend_entry_function.move"
 module 0x42::example {
   public(friend) entry fun sample_function() { /* ... */ }
 }
@@ -220,7 +222,7 @@ In the `flash_loan<T>` function, a user can borrow a given amount of coins type 
 
 The `repay_flash_loan<T>` function accepts a `Receipt` and a `Coin<T>` as parameters. The function extracts the repayment amount from the `Receipt` and asserts that the value of the returned `Coin<T>` is greater than or equal to the amount specified in the `Receipt`, however there’s no check to ensure that the `Coin<T>` returned is the same as the `Coin<T>`that was initially loaned out, giving the ability to repay the loan with a coin of lesser value.
 
-```move
+```move filename="flash_loan_insecure.move"
 module 0x42::example {
   struct Coin<T> {
     amount: u64
@@ -237,8 +239,8 @@ module 0x42::example {
 
   public fun repay_flash_loan<T>(rec: Receipt, coins: Coin<T>) {
     let Receipt{ amount } = rec;
-    assert!(coin::value<T>(&coin) >= rec.amount, 0);
-    deposit(coin);
+    assert!(coin::value<T>(&coins) >= rec.amount, 0);
+    deposit(coins);
   }
 }
 ```
@@ -247,7 +249,7 @@ module 0x42::example {
 
 The Aptos Framework sample below creates a key-value table consisting of two generic types `K` and `V` . Its related `add` functions accepts as parameters a `Table<K, V>` object, a `key`, and a `value` of types `K` and `V` . The `phantom` syntax ensures that the key and value types cannot be different than those in the table, preventing type mismatches. [Read more](/build/smart-contracts/book/generics#phantom-type-parameters) about `phantom` type parameters.
 
-```move
+```move filename="table_secure.move"
 module 0x42::example {
   struct Table<phantom K: copy + drop, phantom V> has store {
     handle: address,
@@ -261,7 +263,7 @@ module 0x42::example {
 
 Given the by-design type checking provided by the Move language, we can refine the code of our flash loan protocol. The code below ensures that the coins passed to `repay_flash_loan` match the originally-loaned coins.
 
-```move
+```move filename="flash_loan_secure.move"
 module 0x42::example {
   struct Coin<T> {
     amount: u64
@@ -271,14 +273,14 @@ module 0x42::example {
   }
 
   public fun flash_loan<T>(_user: &signer, amount:u64): (Coin<T>, Receipt<T>) {
-    let (coin, fee) = withdraw(user, amount);
+    let (coin, fee) = withdraw(_user, amount);
     (coin,Receipt { amount: amount + fee})
   }
 
   public fun repay_flash_loan<T>(rec: Receipt<T>, coins: Coin<T>) {
     let Receipt{ amount } = rec;
-    assert!(coin::value<T>(&coin) >= rec.amount, 0);
-    deposit(coin);
+    assert!(coin::value<T>(&coins) >= rec.amount, 0);
+    deposit(coins);
   }
 }
 ```
@@ -300,7 +302,7 @@ The negligence of these aspects allowing an attacker to deplete the gas and abor
 
 The code below shows a loop iterating over every open order and could potentially be blocked by registering many orders:
 
-```move
+```move filename="order_insecure.move"
 module 0x42::example {
   public fun get_order_by_id(order_id: u64): Option<Order> acquires OrderStore {
     let order_store = borrow_global_mut<OrderStore>(@admin);
@@ -324,7 +326,7 @@ module 0x42::example {
 
 It's recommended to structure the order management system in a way that each user's orders are stored in their respective account rather than in a single global order store. This approach not only enhances security by isolating user data but also improves scalability by distributing the data load. Instead of using **`borrow_global_mut<OrderStore>(@admin)`** which accesses a global store, the orders should be accessed through the individual user's account.
 
-```move
+```move filename="order_secure.move"
 module 0x42::example {
   public fun get_order_by_id(user: &signer, order_id: u64): Option<Order> acquires OrderStore {
     let order_store = borrow_global_mut<OrderStore>(signer::address_of(user));
@@ -357,7 +359,7 @@ Incorrect usage of abilities can lead to security issues such as unauthorized co
 
 #### Example Insecure Code
 
-```move
+```move filename="abilities_insecure.move"
 module 0x42::example {
   struct Token has copy { }
   struct FlashLoan has drop { }
@@ -381,7 +383,7 @@ Rounding errors in calculations can have wide-ranging impacts, potentially causi
 
 #### Example Insecure Code
 
-```move
+```move filename="division_insecure.move"
 module 0x42::example {
   public fun calculate_protocol_fees(size: u64): (u64) {
     return size * PROTOCOL_FEE_BPS / 10000
@@ -397,7 +399,7 @@ The following examples outlines two distinct strategies to mitigate the issue in
 
 - Set a minimum order size threshold that is greater than `10000 / PROTOCOL_FEE_BPS`, ensuring that the fee will never round down to zero.
 
-```move
+```move filename="division_secure_min.move"
 module 0x42::example {
   const MIN_ORDER_SIZE: u64 = 10000 / PROTOCOL_FEE_BPS + 1;
 
@@ -410,7 +412,7 @@ module 0x42::example {
 
 - Check that fees are non-zero and handle the situation specifically, for example by set a minimum fee or rejecting the transaction.
 
-```move
+```move filename="division_secure_check.move"
 module 0x42::example {
   public fun calculate_protocol_fees(size: u64): (u64) {
     let fee = size * PROTOCOL_FEE_BPS / 10000;
@@ -445,7 +447,7 @@ When creating objects ensure to never expose the object’s `ConstructorRef` as 
 
 For example, if a `mint` function returns the `ConstructorRef` for an NFT, it can be transformed to a `TransferRef`, stored in global storage, and can allow the original owner to transfer the NFT back after it’s being sold.
 
-```move
+```move filename="constructor_ref_vulnerable.move"
 module 0x42::example {
   use std::string::utf8;
 
@@ -467,7 +469,7 @@ module 0x42::example {
 
 Don’t return `CostructorRef` in the `mint` function:
 
-```move
+```move filename="constructor_ref_secure.move"
 module 0x42::example {
   use std::string::utf8;
 
@@ -500,7 +502,7 @@ The `mint_two` function lets `sender` create a `Monkey` for themselves and send 
 
 As `Monkey` and `Toad` belong to the same object account the result is that both objects’ are now owned by the `recipient`.
 
-```move
+```move filename="object_accounts_insecure.move"
 module 0x42::example {
   #[resource_group(scope = global)]
   struct ObjectGroup { }
@@ -528,7 +530,7 @@ module 0x42::example {
 
 In this example, objects should be stored at separate object accounts:
 
-```move
+```move filename="object_accounts_secure.move"
 module 0x42::example {
   #[resource_group(scope = global)]
   struct ObjectGroup { }
@@ -572,7 +574,7 @@ In a lottery scenario, users participate by selecting a number from 1 to 100. At
 
 A front-runner observing the winning number set by `set_winner_number` could attempt to submit a late bet or modify an existing bet to match the winning number before `evaluate_bets_and_determine_winners` executes.
 
-```move
+```move filename="front_running_insecure.move"
 module 0x42::example {
   struct LotteryInfo {
     winning_number: u8,
@@ -583,7 +585,7 @@ module 0x42::example {
 
   public fun set_winning_number(admin: &signer, winning_number: u8) {
     assert!(signer::address_of(admin) == @admin, 0);
-    assert!(winning_number < 10,0);
+    assert!(winning_number < 10, 0);
     let lottery_info = LotteryInfo { winning_number, is_winner_set: true };
     move_to<LotteryInfo>(admin, lottery_info);
   }
@@ -610,7 +612,7 @@ module 0x42::example {
 
 An effective strategy to avoid front-running could be implementing a `finalize_lottery` function that reveals the answer and concludes the game within a single transaction, and making the other functions private. This approach guarantees that as soon as the answer is disclosed, the system no longer accepts any new answers, thereby eliminating the chance for front-running.
 
-```move
+```move filename="front_running_secure.move"
 module 0x42::example {
   public fun finalize_lottery(admin: &signer, winning_number: u64) {
     set_winner_number(admin, winning_number);
@@ -647,7 +649,7 @@ The `get_pool_address` function creates a unique address for a liquidity pool as
 
 However, users have the freedom to create an `Object<Metadata>` with any symbol they choose. This flexibility could lead to the creation of `Object<Metadata>` instances that mimic other existing instances. This issue might result in a seed collision, which in turn could cause a collision in the generation of the pool address.
 
-```move
+```move filename="token_collision_insecure.move"
 module 0x42::example {
   public fun get_pool_address(token_1: Object<Metadata>, token_2: Object<Metadata>): address {
     let token_symbol = string::utf8(b"LP-");
@@ -664,13 +666,13 @@ module 0x42::example {
 
 `object::object_address` returns an unique identifier for each `Object<Metadata>`
 
-```move
+```move filename="token_collision_secure.move"
 module 0x42::example {
   public fun get_pool_address(token_1: Object<Metadata>, token_2: Object<Metadata>): address {
     let seeds = vector[];
     vector::append(&mut seeds, bcs::to_bytes(&object::object_address(&token_1)));
     vector::append(&mut seeds, bcs::to_bytes(&object::object_address(&token_2)));
-    object::create_object_address(&@swap, seed)
+    object::create_object_address(&@swap, seeds)
   }
 }
 ```
@@ -689,20 +691,20 @@ The absence of a pausing mechanism can lead to prolonged exposure to vulnerabili
 
 Example of how to integrate a pause functionality
 
-```move
+```move filename="pause_functionality.move"
 module 0x42::example {
   struct State {
     is_paused: bool,
   }
 
   public entry fun pause_protocol(admin: &signer) {
-    assert!(signer::address_of(admin)==@protocol_address, ERR_NOT_ADMIN);
+    assert!(signer::address_of(admin) == @protocol_address, ERR_NOT_ADMIN);
     let state = borrow_global_mut<State>(@protocol_address);
     state.is_paused = true;
   }
 
   public entry fun resume_protocol(admin: &signer) {
-    assert!(signer::address_of(admin)==@protocol_address, ERR_NOT_ADMIN);
+    assert!(signer::address_of(admin) == @protocol_address, ERR_NOT_ADMIN);
     let state = borrow_global_mut<State>(@protocol_address);
     state.is_paused = false;
   }
@@ -832,3 +834,329 @@ There are different ways to secure the code:
 3. Ensure entry functions work regardless of random outcomes. This can be handled by committing the random result, then using the random result to provide the action in a different transaction. Avoid immediate actions based on randomness for consistent gas use.
 
 > We will be providing more functionality in the future, to allow for more complex code to be able to be safe against undergasing attacks.
+
+## Reentrancy
+
+A **reentrancy attack** occurs when a contract performs an external call that can invoke the original contract again _before it finishes updating its state_. This can let an attacker repeat state-dependent actions (e.g., multiple withdrawals) against **stale state**.
+
+Historically, Move prevented reentrancy. With the introduction of **function values**, certain forms of reentrancy are now possible under specific conditions. By contrast, **dispatchable fungible assets** remain protected against reentrancy.
+
+<Aside type="note" emoji="ℹ️" title="Dispatchable Fungible Assets">
+  **No reentrancy permitted.** All native dispatchable functions are **locked against re-entering an active module** (a module already invoked within the current transaction).
+</Aside>
+
+***
+
+## Function Values
+
+Since language version **2.2**, Move supports **function values** (first-class functions). Function values can be stored, and passed around like any other value.
+
+<Aside type="caution" emoji="🚨">
+  Function values are **not** locked against reentrancy. Callbacks via function values can re-enter the original module.
+</Aside>
+
+```mermaid
+graph LR
+  %% Stable: no quotes, no parentheses, no double colons, no special edge labels.
+
+  %% Left (no function values)
+  A[Without Function Values]
+  m1a[m1]
+  m2a[m2]
+  noteA[acyclic usage -> no reentrancy]
+  A --- m1a
+  m1a --> m2a
+  m2a --- noteA
+
+  %% Right (with function values)
+  B[With Function Values]
+  m1b[m1]
+  call1[call m2.f passing FV]
+  m2b[m2]
+  cb1[callback to m1 via FV]
+  noteB[closure dynamic dispatch -> reentrancy possible]
+  B --- m1b
+  m1b --> call1 --> m2b
+  m2b -.-> cb1 -.-> m1b
+  m2b --- noteB
+```
+
+***
+
+### Resource Locking
+
+To preserve Move’s reference semantics and suppress side effects from reentrancy, **re-entered modules cannot access their own resources** during dynamic dispatch through a closure. Attempts to borrow or move such resources **abort**.
+
+Examples that will abort on re-entry:
+
+- `borrow_global<m::R>(addr)`
+- `move_from<m::R>(addr)`
+
+[Read more](/build/smart-contracts/book/functions#reentrancy-check) about the function-value reentrancy checks.
+
+### Time-of-Check vs Time-of-Use (TOCTOU)
+
+Function values (FVs) can be stored inside wrapper structs and moved to global storage. Because FVs can **capture local variables**, scenarios arise where a value is **checked now** but **used later** (after state changes), leading to TOCTOU bugs.
+
+```move filename="function_value_struct.move"
+module example::function_value_struct {
+    struct S {
+        fn: |u64| u64
+    }
+}
+```
+
+**Guidance:**
+
+- If an **amount** (or any state-derived value) is validated before creating the FV, **re-validate it at invocation time**—especially if the FV (or a struct containing it) is stored in global storage and called later.
+- There is **no guarantee** that the state captured by an FV remains unchanged by the time the FV executes (or that it executes at all).
+
+**Safer pattern—capture a concrete resource:**
+
+Capturing a concrete value whose identity is stable and which has the `store` ability is generally safer for long-lived function values—especially when the function value must be stored in global storage. This avoids relying on state-derived values that can change between time-of-check and time-of-use.
+
+Important: `FungibleAsset` does not have the `store` ability. Any function value that captures a `FungibleAsset` therefore cannot itself be storable. If you need a storable function value, capture a separate, concrete resource that records the intended action (for example, a voucher/grant) and then perform the FA operation at invocation time.
+
+This approach assumes that the FA is acquired and stored under a controlled FungibleStore without any state changes. Only at the time of voucher use and destruction are state changes or operations performed.
+
+Example: capturing a storable voucher resource, then currying a persistent function so the resulting function value is storable:
+
+```move filename="voucher_example.move"
+module example::vouchers {
+    use std::signer;
+
+    // Concrete resource with store ability; identity and contents are fixed at capture time
+    struct Voucher has store {
+        metadata: Object<Metadata>,
+        amount: u64
+    }
+
+    // Persistent, via public, function so the resulting FV can have `store`
+    public fun redeem(to: address, v: Voucher) {
+        // Redeem using the fixed metadata/amount in the voucher
+        // e.g., withdraw/deposit at this point
+    }
+
+    // Produces a storable FV that closes over a concrete Voucher
+    public fun build_redeemer(v: Voucher): |address| {
+        |to| redeem(to, v)
+    }
+}
+```
+
+Case: `FungibleAsset` (non-storable capture). If you capture a `FungibleAsset`, the function value cannot be stored, it must be invoked immediately in the same transaction. For persistence, capture a storable description (such as a voucher) instead of the FA itself.
+
+```move filename="fungible_asset_case.move"
+module example::fa_case {
+    // Pattern B: Pass FA as an argument to a function value (no capture)
+    public fun with_handler(
+        owner: &signer,
+        token: Object<Metadata>,
+        amount: u64,
+        handle: |FungibleAsset|
+    ) {
+        let fa = primary_fungible_store::withdraw(owner, token, amount);
+        handle(fa);
+    }
+}
+```
+
+### Immutable Parameters
+
+If a function value has captured or lifted arguments, those arguments are not going to be overridden at the time of invocation.
+The following example demonstrates this intended behavior.
+
+```move filename="immutable_parameters.move"
+module example::example {
+    use std::signer;
+    use std::debug;
+
+    fun foo(x: u64) {
+        debug::print(&x);
+    }
+
+    public fun invoke(f: |u64|) {
+        f(1); // The captured value (10) is not overridden at the time of invocation.
+    }
+
+    #[test(_att = @0x1337)]
+    fun run(_att: &signer) {
+        invoke(|_x| foo(10));
+    }
+}
+```
+
+To understand this behavior, we need to look at how closures are lifted into functions.
+
+```text filename="lambda_assembly.masm"
+__lambda__1__run(_x: u64) /* def_idx: 3 */ {
+B0:
+	0: LdU64(10) // load the value 10 into the stack
+	1: Call foo(u64)
+	2: Ret
+}
+```
+
+You can see that the resulting function fixes the first argument to 10. So `x` is not overridden at the time of invocation.
+
+### Arbitrary Function Value
+
+Passing one or a chain of functions as a parameter to another function, or storing FVs in a table, e.g. to be used as custom hooks, are patterns that can lead to reentrancy.
+
+**Example Vulnerable code:**
+
+In this example, the `withdraw_operations` acts as a proxy to call into a series of functions.
+As `Grant` is not part of `0x42::example`, any operation on it is **allowed** during closure dynamic dispatch.
+
+```move filename="reentrancy_example.move"
+module example::account {
+    use std::signer;
+    friend example::example;
+
+    const ENOT_ENOUGH_BALANCE: u64 = 1;
+
+    public struct Grant has drop {}
+
+    public(friend) fun grant(): Grant {
+        Grant {}
+    }
+
+    public(friend) fun balance(_account: address): u64 {
+        1_000
+    }
+
+    public(friend) fun transfer(
+        _from: address, _to: address, _amount: u64
+    ) {}
+
+    public(friend) fun has_grant(_g: &Grant): bool {
+        true
+    }
+}
+
+module example::example {
+    use std::signer::address_of;
+    use std::option::{Self as option, Option};
+    use example::account;
+
+    const EGRANT_NOT_FOUND: u64 = 2;
+    const ENOT_ENOUGH_BALANCE: u64 = 3;
+
+    public fun withdraw_operations(
+        user: &signer,
+        recipient: Option<address>,
+        amount: u64,
+        f: |address, Option<address>, &account::Grant, u64|
+    ) {
+        let account_addr = address_of(user);
+        let bal = account::balance(account_addr);
+        assert!(bal >= amount, ENOT_ENOUGH_BALANCE);
+        let g = account::grant();
+        f(account_addr, recipient, &g, amount);
+    }
+
+    public fun withdraw(
+        account_addr: address,
+        recipient: Option<address>,
+        grant: &account::Grant,
+        amount: u64
+    ) {
+        assert!(account::has_grant(grant), EGRANT_NOT_FOUND);
+        let r = recipient;
+        if (option::is_some(&r)) {
+            account::transfer(account_addr, option::destroy_some(r), amount);
+        } else {
+            option::destroy_none(r);
+        };
+        account::transfer(account_addr, account_addr, amount);
+    }
+}
+```
+
+An attacker can exploit this by calling `withdraw_operations` with a function value that calls `withdraw` and passes the `Grant` as a parameter.
+By altering, or [prefixing](/build/smart-contracts/move-security-guidelines#immutable-parameters), the amount of the transfer, which if pulled from a shared pool of funds, allows the attacker to overdraw the balance of the account.
+
+```move filename="attacker.move"
+module attacker::exploit {
+    use 0x42::example;
+    entry fun start(attacker: &signer) {
+        example::withdraw_operations(
+            attacker,
+            None,
+            10,
+            |account, recipient, grant, amount| example::withdraw(
+                attacker, recipient, grant, 100_000_000
+            )
+        );
+    }
+}
+```
+
+**Example Secure code:**
+
+We've introduced the amount field into the grant structure to fix the amount at a specific moment. At the same time, we've finalized the status update. This can be thought of as a bank transfer that the bank is simply waiting to execute but has already recorded.
+
+```move filename="reentrancy_secure.move"
+module example::account {
+    use std::signer;
+    friend example::example;
+
+    const ENOT_ENOUGH_BALANCE: u64 = 1;
+
+    // Notice that the grant is not droppable to ensure it used, but we can allow it to be stored.
+    public struct Grant {
+        account: address,
+        amount: u64
+    } // might capture other information like the asset type.
+
+    public(friend) fun grant(account: address, amount: u64): Grant {
+        update_balance_withdraw(account, amount);
+        Grant { account, amount }
+    }
+
+    fun update_balance_withdraw(account: address, amount: u64) { /* retrieve the account and update the balance */ } // The state update is done here.
+
+    public(friend) fun balance(_account: address): u64 {
+        1_000
+    }
+
+    public(friend) fun transfer(_to: address, _grant: Grant) {
+        /* transfer the amount of the grant to the recipient and destroy the grant */
+    }
+
+    public(friend) fun has_grant(_g: &Grant): bool {
+        true
+    }
+}
+
+module example::example {
+    use std::signer::address_of;
+    use std::option::{Self as option, Option};
+    use example::account;
+
+    const EGRANT_NOT_FOUND: u64 = 2;
+    const ENOT_ENOUGH_BALANCE: u64 = 3;
+
+    public fun withdraw_operations(
+        user: &signer,
+        recipient: Option<address>,
+        amount: u64,
+        f: |address, account::Grant|
+    ) {
+        let account_addr = address_of(user);
+        let bal = account::balance(account_addr);
+        assert!(bal >= amount, ENOT_ENOUGH_BALANCE);
+        let g = account::grant(account_addr, amount); // When the grant is created, the amount is fixed and verified to be available.
+        if (option::is_some(&recipient)) {
+            f(option::destroy_some(recipient), g); // By the time the function value is invoked, the state update is done, so reentrancy is not a problem.
+        } else {
+            f(account_addr, g);
+        };
+    }
+
+    public fun withdraw(recipient: address, grant: account::Grant) {
+        assert!(account::has_grant(&grant), EGRANT_NOT_FOUND);
+        account::transfer(recipient, grant);
+    }
+}
+```

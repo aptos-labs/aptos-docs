@@ -493,7 +493,11 @@ export const sidebar = [
                 collapsed: true,
                 items: [
                   "build/smart-contracts/fungible-asset",
-                  "build/smart-contracts/aptos-coin",
+                  {
+                    label: "Aptos Coin",
+                    link: "build/smart-contracts/aptos-coin",
+                    badge: { text: "LEGACY", variant: "caution" },
+                  },
                   "build/smart-contracts/confidential-asset",
                 ],
               }),
@@ -502,7 +506,11 @@ export const sidebar = [
                 items: [
                   "build/smart-contracts/tokens",
                   "build/smart-contracts/digital-asset",
-                  "build/smart-contracts/aptos-token",
+                  {
+                    label: "Aptos Token",
+                    link: "build/smart-contracts/aptos-token",
+                    badge: { text: "LEGACY", variant: "caution" },
+                  },
                 ],
               }),
             ],

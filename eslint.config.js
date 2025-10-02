@@ -79,73 +79,71 @@ const config = [
   },
 
   // Typescript
-  ...pluginTypeScript.config(
-    pluginTypeScript.configs.strictTypeChecked,
-    pluginTypeScript.configs.stylisticTypeChecked,
-    {
-      ...pluginImportX.configs.typescript,
-      settings: {
-        ...pluginImportX.configs.typescript.settings,
-        "import/resolver-next": [
-          createTypeScriptImportResolver({
-            alwaysTryTypes: true,
-          }),
-        ],
+  ...pluginTypeScript.configs.strictTypeChecked,
+  ...pluginTypeScript.configs.stylisticTypeChecked,
+  {
+    ...pluginImportX.configs.typescript,
+    settings: {
+      ...pluginImportX.configs.typescript.settings,
+      "import/resolver-next": [
+        createTypeScriptImportResolver({
+          alwaysTryTypes: true,
+        }),
+      ],
+    },
+  },
+  {
+    languageOptions: {
+      parserOptions: {
+        project: ["tsconfig.json"],
+        tsconfigRootDir: process.cwd(),
+        warnOnUnsupportedTypeScriptVersion: false,
       },
     },
-    {
-      languageOptions: {
-        parserOptions: {
-          project: ["tsconfig.json"],
-          tsconfigRootDir: process.cwd(),
-          warnOnUnsupportedTypeScriptVersion: false,
-        },
-      },
-      rules: {
-        "no-use-before-define": "off",
-        "no-dupe-class-members": "off",
-        "no-redeclare": "off",
+    rules: {
+      "no-use-before-define": "off",
+      "no-dupe-class-members": "off",
+      "no-redeclare": "off",
 
-        "@typescript-eslint/consistent-type-imports": [
-          "error",
-          {
-            prefer: "type-imports",
-            disallowTypeAnnotations: false,
-            fixStyle: "inline-type-imports",
-          },
-        ],
-        "@typescript-eslint/no-namespace": [
-          "error",
-          { allowDeclarations: true, allowDefinitionFiles: true },
-        ],
-        // There is a bug when this rule works incorrectly, so disable it till it is fixed
-        // https://github.com/typescript-eslint/typescript-eslint/issues/6314
-        "@typescript-eslint/no-misused-promises": ["error", { checksVoidReturn: false }],
-        // https://www.totaltypescript.com/method-shorthand-syntax-considered-harmful
-        "@typescript-eslint/method-signature-style": ["error", "property"],
-      },
+      "@typescript-eslint/consistent-type-imports": [
+        "error",
+        {
+          prefer: "type-imports",
+          disallowTypeAnnotations: false,
+          fixStyle: "inline-type-imports",
+        },
+      ],
+      "@typescript-eslint/no-namespace": [
+        "error",
+        { allowDeclarations: true, allowDefinitionFiles: true },
+      ],
+      // There is a bug when this rule works incorrectly, so disable it till it is fixed
+      // https://github.com/typescript-eslint/typescript-eslint/issues/6314
+      "@typescript-eslint/no-misused-promises": ["error", { checksVoidReturn: false }],
+      // https://www.totaltypescript.com/method-shorthand-syntax-considered-harmful
+      "@typescript-eslint/method-signature-style": ["error", "property"],
     },
-    {
-      files: ["**/*.d.ts"],
-      rules: {
-        "no-var": "off",
-        "@typescript-eslint/triple-slash-reference": "off",
-        "import-x/no-duplicates": "off",
-      },
+  },
+  {
+    files: ["**/*.d.ts"],
+    rules: {
+      "no-var": "off",
+      "@typescript-eslint/triple-slash-reference": "off",
+      "import-x/no-duplicates": "off",
     },
-    {
-      files: ["**/*.?(c|m)js", "vite.config.ts", "vitest.config.ts"],
-      extends: [pluginTypeScript.configs.disableTypeChecked],
+  },
+  {
+    files: ["**/*.?(c|m)js", "vite.config.ts", "vitest.config.ts"],
+    ...pluginTypeScript.configs.disableTypeChecked,
+  },
+  {
+    files: ["**/*.?(c|m)js"],
+    name: "typescript:javascript-overrides",
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+      "@typescript-eslint/no-var-requires": "off",
     },
-    {
-      files: ["**/*.?(c|m)js"],
-      name: "typescript:javascript-overrides",
-      rules: {
-        "@typescript-eslint/no-require-imports": "off",
-        "@typescript-eslint/no-var-requires": "off",
-      },
-    },
-  ),
+  },
 
   // Astro
   {

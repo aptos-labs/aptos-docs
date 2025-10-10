@@ -231,6 +231,8 @@ export default defineConfig({
           "terminal",
           "globe-simple",
           "robot",
+          "star",
+          "pencil",
         ],
       },
     }),

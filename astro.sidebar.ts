@@ -434,6 +434,7 @@ export const sidebar = [
           "build/smart-contracts/book/tuples",
           "build/smart-contracts/book/abilities",
           "build/smart-contracts/book/equality",
+          "build/smart-contracts/book/comparison",
           "build/smart-contracts/book/abort-and-assert",
           "build/smart-contracts/book/conditionals",
           "build/smart-contracts/book/loops",

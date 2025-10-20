@@ -5,44 +5,46 @@ sidebar:
   label: "Data Providers"
 ---
 
-If you want to access aptos blockchain data but don't need it in real-time.
-We have a few options that will let you access this data using SQL or UIs for building dashboards.
-This type of data is often used for analytics since it allows for aggregations.
+# Data Providers
 
-## Review of data endpoints
+In addition to the API run by Aptos full nodes, we also provide a few different ways to get Aptos blockchain data.
 
-Hitting the full node directly will give the latest data (will be missing historical unless it's an archival full node) using [REST API](/build/apis#aptos-fullnode)
+## Overview of aptos data endpoints
 
-Indexer layer on top of this will provide a [GRPC transaction stream](/build/indexer/txn-stream/aptos-hosted-txn-stream)
+[REST API](/build/apis/fullnode-rest-api) allows you to query the full node directly and will have the latest data (historical data will be missing unless it's an archival full node).
 
-On top of this transaction stream, we've built out some product logic tables that can be queried through [GraphQL](/build/indexer)
+[GRPC transaction stream](/build/indexer/txn-stream/aptos-hosted-txn-stream) is a stream layer we built that serves typed version of above data
 
-Since the logic to parse out transaction is [public](https://github.com/aptos-labs/aptos-indexer-processors-v2), some vendors have implemented similar parsing logic to create a subset of tables and made them available to query.
+[GraphQL](/build/indexer) is an endpoint where we provide product tables (such as transfers and balances) that can be queried
+
+Product tables are parsed out from transaction and logic is [public](https://github.com/aptos-labs/aptos-indexer-processors-v2),
+some vendors have implemented similar parsing logic to create a subset of tables and made them available to query.
 
 ## SQL Tables
 
-Indexer defines several processors that create different database tables.
+Indexer (the stack that powers our GraphQL endpoint) defines several processors that create different product tables in Postgres.
+
+This type of data is often used for analytics since it allows for aggregations.
 
 ### Core tables
 
-These are parsed directly from node API response, one option is to split it out into the following tables:
+These contain raw data very similar to what is found in REST API. Note that (transaction) version is often used instead of transaction hash.
 
 - Blocks - version, block height, epoch, timestamp
-- Transactions - version, sender, entry function, gas
+- Transactions - version, type, sender, entry function, gas
 - Signatures - signature types, signer, fee payer address
 - Events - type and data for events
 
-We store data as table items, resources or modules
+On chain data is stored as: [table items](/build/smart-contracts/table), [resources](/network/blockchain/resources) or [modules](/build/smart-contracts/modules-on-aptos) (executable)
 
-- (write set) changes - change index, change type, resource address
-- Table items - table key, table handle, key (content and type), value (content and type)
+- (write set) changes - change index, change type (write or delete on what type of data), resource address
+- Table items - table key, table handle, decoded key (content and type), value (content and type)
 - (move) resources - resource address, resource type, data
-- (move) modules - bytecode for deployed modules
+- (move) modules - bytecode for deployed modules, friends and exposed functions
 
-## Vendors of off-chain data
+## Vendors for core tables and metrics:
 
-Most of our data vendors only provide core datasets.
-A [subset of vendors](https://aptosfoundation.org/currents/aptos-on-chain-data-capabilities-with-dune-nansen-and-other-providers) is listed below
+We have a few options that will let you access this data using SQL or UIs for building dashboards.
 
 ### Google bigquery public dataset
 
@@ -54,12 +56,12 @@ We also have sample analytics queries [using the above resources](https://github
 
 ### Dune
 
-We have a dashboard here: https://dune.com/aptos/aptos-chain-metrics-overview
+We have a dashboard here: [https://dune.com/aptos/aptos-chain-metrics-overview](https://dune.com/aptos/aptos-chain-metrics-overview)
 
 ### Allium
 
-Data source for many downstream vendors such as defillama and rwa.xyz. Raw data is available: https://docs.allium.so/historical-data/supported-blockchains/move-ecosystem/aptos
-They also have transfers for stablecoins https://docs.allium.so/historical-data/stablecoins#stablecoin-metrics
+Data source for many downstream vendors such as defillama and rwa.xyz. Raw data is available: [https://docs.allium.so/historical-data/supported-blockchains/move-ecosystem/aptos](https://docs.allium.so/historical-data/supported-blockchains/move-ecosystem/aptos)
+They also have transfers for stablecoins [https://docs.allium.so/historical-data/stablecoins#stablecoin-metrics](https://docs.allium.so/historical-data/stablecoins#stablecoin-metrics)
 
 ### Artemis
 
@@ -71,23 +73,44 @@ Provides [topline metrics](https://app.nansen.ai/macro/blockchains?chain=aptos) 
 
 ### Sentio
 
-They have a guide here: https://docs.sentio.xyz/docs/aptos
-Data is found in data source -> external project  -> sentio/aptos-overview
-They also provide stack tracing of transactions
+They have a [guide](https://docs.sentio.xyz/docs/aptos) and
+data is found in data source -> external project  -> sentio/aptos-overview
+They also provide [stack tracing](https://app.sentio.xyz/explorer) of transactions
 
 ### RWA.xyz
 
-Data can be found here: https://app.rwa.xyz/networks/aptos
+High level metrics for RWAs in [dashboard](https://app.rwa.xyz/networks/aptos).
 You'll need to make an account to access stablecoin details.
 
-### Flipside
+### Pangea
 
-Has pivoted from dashboard vendor to more of a vibe coding tool. https://flipsidecrypto.xyz/home/
+Provides [raw data](https://docs.pangea.foundation/api-reference/aptosvm/reference),
+coin/fa transfers, and some dex parsing.
 
-## Other vendors
+### Other vendors
 
 We also have some partners who target more enterprise use cases
 
 - [Token Terminal](https://tokenterminal.com/resources/articles/aptos-data-partnership)
 - [The Tie](https://www.thetie.io/insights/news/introducing-aptos-ecosystem-dashboard-and-on-chain-data/)
 - [Elliptic](https://www.elliptic.co/media-center/elliptic-partners-with-aptos-foundation-as-a-data-integration-provider-to-offer-compliance-screening-and-risk-services-for-aptos-network)
+
+## Vendors for real-time data
+
+- [Geomi](https://geomi.dev/) (prev. Aptos Build)
+  - Provides [API key](https://geomi.dev/docs/start) for higher rate limits on REST API and GRPC transaction stream.
+  - Provides [no code indexing](https://geomi.dev/docs/no-code-indexing) to parse and turn events into tables that can be queried.
+- [NODEREAL](https://nodereal.io/aptos) for REST API endpoint
+- [SHINAMI](https://docs.shinami.com/reference/api-references-overview) for REST API and GraphQL endpoints
+- [QuickNode](https://www.quicknode.com/chains/apt) for REST API endpoint
+
+Additional RPC vendors can be found [here](https://aptosfoundation.org/ecosystem/projects/rpc)
+
+## Tips for analyzing data
+
+- Aptos [data overview](https://medium.com/aptoslabs/data-analyst-guide-to-aptos-pt-1-816367edc1c5) (pt.1)
+- Parsing [Defi Swaps](https://medium.com/aptoslabs/data-analyst-guide-to-aptos-defi-swaps-pt2-e343ac6be84e) (pt.2)
+- Calculating [supply and volume](https://medium.com/aptoslabs/data-analyst-guide-to-aptos-supply-and-volume-pt-3-535e312946ad) (pt.3)
+- [Aptos Explorer analytics queries](https://github.com/aptos-labs/explorer/tree/main/analytics)
+- [Aptos Spellbook on Dune](https://github.com/duneanalytics/spellbook/tree/main/dbt_subprojects/daily_spellbook/models/aptos)
+- Module bytecode can be decompiled with [Revela](https://revela.verichains.io/) or aptos cli with `aptos move decompile --decompiler-version v2`

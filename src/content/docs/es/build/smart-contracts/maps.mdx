@@ -26,12 +26,12 @@ opera en archivos de la misma manera.
 
 ## Diferentes implementaciones de Map
 
-| Implementación    | Límite de Tamaño                          | Estructura de Almacenamiento                                                                                                                               | Características Clave                                                                                                                                                                                                  |
-| ----------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `OrderedMap`      | Limitado (cabe en un solo **slot**) | Almacenado completamente dentro del recurso que lo contiene                                                                                            | Soporta acceso ordenado (frente/atrás, anterior/siguiente), implementado como vector ordenado, pero las operaciones son efectivamente O(log(n)) debido a optimizaciones internas                                                         |
-| `Table`           | Ilimitado                           | Cada (clave, valor) almacenado en un **slot** separado                                                                                                 | Soporta operaciones básicas, como `add`, `remove`, `contains`, pero **no iteración**, y **no puede ser destruido**; útil para claves/valores grandes/ilimitados y donde se necesita alta concurrencia                  |
-| `TableWithLength` | Ilimitado                           | igual que `Table`                                                                                                                                 | Variante de `Table`, con seguimiento adicional de longitud, que agrega métodos `length`, `empty`, y `destroy_empty`; Agregar o remover elementos **no puede** hacerse concurrentemente, modificar elementos existentes sí puede. |
-| `BigOrderedMap`   | Ilimitado                           | Combina múltiples claves en un solo **slot**, inicialmente almacenado dentro del recurso que lo contiene, y crece dinámicamente a múltiples **slots** | Implementado como árbol B+; **oportunísticamente concurrente** para claves no adyacentes; soporta acceso ordenado (frente/atrás, anterior/siguiente); capacidades de nodo configurables para balancear almacenamiento y rendimiento              |
+| Implementación    | Límite de Tamaño                    | Estructura de Almacenamiento                                                                                                                          | Características Clave                                                                                                                                                                                                               |
+| ----------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `OrderedMap`      | Limitado (cabe en un solo **slot**) | Almacenado completamente dentro del recurso que lo contiene                                                                                           | Soporta acceso ordenado (frente/atrás, anterior/siguiente), implementado como vector ordenado, pero las operaciones son efectivamente O(log(n)) debido a optimizaciones internas                                                    |
+| `Table`           | Ilimitado                           | Cada (clave, valor) almacenado en un **slot** separado                                                                                                | Soporta operaciones básicas, como `add`, `remove`, `contains`, pero **no iteración**, y **no puede ser destruido**; útil para claves/valores grandes/ilimitados y donde se necesita alta concurrencia                               |
+| `TableWithLength` | Ilimitado                           | igual que `Table`                                                                                                                                     | Variante de `Table`, con seguimiento adicional de longitud, que agrega métodos `length`, `empty`, y `destroy_empty`; Agregar o remover elementos **no puede** hacerse concurrentemente, modificar elementos existentes sí puede.    |
+| `BigOrderedMap`   | Ilimitado                           | Combina múltiples claves en un solo **slot**, inicialmente almacenado dentro del recurso que lo contiene, y crece dinámicamente a múltiples **slots** | Implementado como árbol B+; **oportunísticamente concurrente** para claves no adyacentes; soporta acceso ordenado (frente/atrás, anterior/siguiente); capacidades de nodo configurables para balancear almacenamiento y rendimiento |
 
 Nota:
 
@@ -43,11 +43,11 @@ Nota:
 Medimos el rendimiento a pequeña escala, midiendo microsegundos tomados para un solo par de operaciones `insert` + `remove`, en un mapa de tamaño variado.
 
 | num elementos | OrderedMap | BigOrderedMap max\_degree>10000 | BigOrderedMap max\_degree=16 |
-| ------------ | ---------- | --------------------------------- | --------------------------- |
-| 10           | 65         | 123                               | 123                         |
-| 100          | 85         | 146                               | 455                         |
-| 1000         | 105        | 168                               | 567                         |
-| 10000        | 142        | 210                               | 656                         |
+| ------------- | ---------- | ------------------------------- | ---------------------------- |
+| 10            | 65         | 123                             | 123                          |
+| 100           | 85         | 146                             | 455                          |
+| 1000          | 105        | 168                             | 567                          |
+| 10000         | 142        | 210                             | 656                          |
 
 Puedes ver que la sobrecarga de `BigOrderedMap` comparada con `OrderedMap`, cuando ambos están en el **slot** único, es alrededor de 1.5-2x.
 Entonces generalmente puedes usar `BigOrdredMap` cuando se desconoce si los datos serán demasiado grandes para ser almacenados en un solo **slot**.

@@ -296,7 +296,7 @@ export function ChatDialog({
                     <div className="chat-disclaimer">
                       By using Ask Aptos, you agree to the Aptos Foundation's{" "}
                       <a
-                        href="https://aptosfoundation.org/terms"
+                        href="https://aptosnetwork.com/terms"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="chat-disclaimer-link"
@@ -305,7 +305,7 @@ export function ChatDialog({
                       </a>{" "}
                       and{" "}
                       <a
-                        href="https://aptosfoundation.org/privacy"
+                        href="https://aptosnetwork.com/privacy"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="chat-disclaimer-link"

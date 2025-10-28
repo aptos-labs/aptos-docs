@@ -243,33 +243,15 @@ Does NOT consider side-effects/short-circuiting in the recommended simplificatio
 
 - `1/0 || true` is logically equivalent to `true`, but applying this simplification affects program semantics.
 
-### `null_effects`
+### `no_op`
 
 Checks for statements that can be removed without changing program behavior. Examples:
 
 - `42;`
 - `*(&mut 0) = /*...*/;`
-- `pure_function(21);`
+- `x << 4;`
 
-It also checks for more complex cases, such as
-
-```move
-{
-    let x = 0;
-    x += 1;
-    x
-};
-```
-
-and
-
-```move
-{
-    let x = 0;
-    function_that_modifies_its_argument(&mut x);
-    x
-};
-```
+Note that the linter does not take into account possible aborts due to arithmetic errors. If a statement is flagged it's almost definitely a programmer mistake, but you should evaluate the code in question to understand the intent. Sometimes the proper fix is to remove the statement, sometimes the statement should be changed.
 
 ### `random_modulo`
 

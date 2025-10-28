@@ -1,0 +1,435 @@
+---
+title: "Java SDK Example Code"
+description: "Comprehensive collection of example code and reference implementations for the Aptos Java SDK"
+sidebar:
+  label: "Examples"
+---
+
+import { Steps } from '@astrojs/starlight/components';
+
+For sample code explaining core concepts of the Java SDK, see:
+
+- [Quickstart](/build/sdks/java-sdk/quickstart)
+- [Managing Accounts](/build/sdks/java-sdk/account)
+- [Building Transactions](/build/sdks/java-sdk/building-transactions)
+
+Below are additional resources for specific use cases.
+
+## SDK Repository Examples
+
+The SDK repository contains comprehensive test suites demonstrating all functionality:
+
+### Test Suites
+
+The SDK includes extensive tests covering:
+
+- **Basic Account Tests** - Account generation, key management, and address derivation
+- **Multi-Signature Tests** - 1-of-2, 1-of-3, and complex multi-signature setups
+- **HD Wallet Tests** - BIP39 mnemonic generation, BIP44 path derivation, and UUID to mnemonic conversion
+- **Transaction Tests** - APT transfers with single and multi-signature accounts
+- **Integration Tests** - End-to-end workflows from account creation to transaction execution
+
+### Running the Tests
+
+<Steps>
+  1. Clone the repository
+
+     ```shellscript filename="Terminal"
+     git clone https://github.com/aptos-labs/japtos.git
+     cd japtos
+     ```
+
+  2. Run all tests
+
+     ```shellscript filename="Terminal"
+     mvn test
+     ```
+
+  3. Run specific test class
+
+     ```shellscript filename="Terminal"
+     mvn test -Dtest=MultiKeyTests
+     ```
+
+  4. Run specific test method
+
+     ```shellscript filename="Terminal"
+     mvn test -Dtest=MultiKeyTests#testMultikeyPathDerivation
+     ```
+</Steps>
+
+## Common Use Cases
+
+### Example 1: Simple APT Transfer
+
+```java
+import com.aptoslabs.japtos.account.Ed25519Account;
+import com.aptoslabs.japtos.api.AptosConfig;
+import com.aptoslabs.japtos.client.AptosClient;
+import com.aptoslabs.japtos.transaction.*;
+import com.aptoslabs.japtos.types.*;
+import java.util.Arrays;
+
+public class SimpleTransfer {
+    public static void main(String[] args) throws Exception {
+        // Connect to devnet
+        AptosConfig config = AptosConfig.builder()
+            .network(AptosConfig.Network.DEVNET)
+            .build();
+        AptosClient client = new AptosClient(config);
+        
+        // Create and fund accounts
+        Ed25519Account alice = Ed25519Account.generate();
+        Ed25519Account bob = Ed25519Account.generate();
+        
+        client.fundAccount(alice.getAccountAddress(), 100_000_000);
+        
+        // Build and submit transfer
+        ModuleId moduleId = new ModuleId(
+            AccountAddress.fromHex("0x1"),
+            new Identifier("aptos_account")
+        );
+        
+        TransactionPayload payload = new EntryFunctionPayload(
+            moduleId,
+            new Identifier("transfer"),
+            Arrays.asList(),
+            Arrays.asList(
+                new TransactionArgument.AccountAddress(bob.getAccountAddress()),
+                new TransactionArgument.U64(1_000_000L)
+            )
+        );
+        
+        RawTransaction rawTx = new RawTransaction(
+            alice.getAccountAddress(),
+            client.getAccountSequenceNumber(alice.getAccountAddress()),
+            payload,
+            200000L,
+            100L,
+            System.currentTimeMillis() / 1000 + 600,
+            client.getChainId()
+        );
+        
+        SignedTransaction signedTx = new SignedTransaction(
+            rawTx,
+            alice.signTransactionWithAuthenticator(rawTx)
+        );
+        
+        PendingTransaction pending = client.submitTransaction(signedTx);
+        Transaction result = client.waitForTransaction(pending.getHash());
+        
+        System.out.println("Transfer complete: " + result.isSuccess());
+    }
+}
+```
+
+### Example 2: Multi-Signature Account Transfer
+
+```java
+import com.aptoslabs.japtos.account.MultiEd25519Account;
+import com.aptoslabs.japtos.core.crypto.Ed25519PrivateKey;
+import java.util.Arrays;
+
+public class MultiSigTransfer {
+    public static void main(String[] args) throws Exception {
+        AptosConfig config = AptosConfig.builder()
+            .network(AptosConfig.Network.DEVNET)
+            .build();
+        AptosClient client = new AptosClient(config);
+        
+        // Create 2-of-3 multi-sig account
+        Ed25519Account acc1 = Ed25519Account.generate();
+        Ed25519Account acc2 = Ed25519Account.generate();
+        Ed25519Account acc3 = Ed25519Account.generate();
+        
+        MultiEd25519Account multiSig = MultiEd25519Account.fromPrivateKeys(
+            Arrays.asList(
+                acc1.getPrivateKey(),
+                acc2.getPrivateKey(),
+                acc3.getPrivateKey()
+            ),
+            2  // threshold: 2 signatures required
+        );
+        
+        // Fund multi-sig account
+        client.fundAccount(multiSig.getAccountAddress(), 100_000_000);
+        
+        // Create recipient
+        Ed25519Account recipient = Ed25519Account.generate();
+        
+        // Build transfer (same as single-key)
+        ModuleId moduleId = new ModuleId(
+            AccountAddress.fromHex("0x1"),
+            new Identifier("aptos_account")
+        );
+        
+        TransactionPayload payload = new EntryFunctionPayload(
+            moduleId,
+            new Identifier("transfer"),
+            Arrays.asList(),
+            Arrays.asList(
+                new TransactionArgument.AccountAddress(recipient.getAccountAddress()),
+                new TransactionArgument.U64(5_000_000L)
+            )
+        );
+        
+        RawTransaction rawTx = new RawTransaction(
+            multiSig.getAccountAddress(),
+            client.getAccountSequenceNumber(multiSig.getAccountAddress()),
+            payload,
+            200000L,
+            100L,
+            System.currentTimeMillis() / 1000 + 600,
+            client.getChainId()
+        );
+        
+        // Sign with multi-sig (uses 2 of 3 keys automatically)
+        SignedTransaction signedTx = new SignedTransaction(
+            rawTx,
+            multiSig.signTransactionWithAuthenticator(rawTx)
+        );
+        
+        PendingTransaction pending = client.submitTransaction(signedTx);
+        Transaction result = client.waitForTransaction(pending.getHash());
+        
+        System.out.println("Multi-sig transfer complete: " + result.isSuccess());
+    }
+}
+```
+
+### Example 3: HD Wallet Account Derivation
+
+```java
+import com.aptoslabs.japtos.account.Account;
+import com.aptoslabs.japtos.utils.Bip39Utils;
+
+public class HDWalletExample {
+    public static void main(String[] args) throws Exception {
+        // Generate mnemonic from entropy
+        String entropy = "9b4c9e83-a06e-4704-bc5f-b6a55d0dbb89";
+        String mnemonic = Bip39Utils.entropyToMnemonic(entropy);
+        
+        System.out.println("Mnemonic: " + mnemonic);
+        
+        // Derive multiple accounts from same mnemonic
+        Ed25519Account account0 = Account.fromDerivationPath(
+            "m/44'/637'/0'/0'/0'",
+            mnemonic
+        );
+        
+        Ed25519Account account1 = Account.fromDerivationPath(
+            "m/44'/637'/1'/0'/0'",
+            mnemonic
+        );
+        
+        Ed25519Account account2 = Account.fromDerivationPath(
+            "m/44'/637'/2'/0'/0'",
+            mnemonic
+        );
+        
+        System.out.println("Account 0: " + account0.getAccountAddress());
+        System.out.println("Account 1: " + account1.getAccountAddress());
+        System.out.println("Account 2: " + account2.getAccountAddress());
+        
+        // All accounts can be recovered from the same mnemonic
+    }
+}
+```
+
+### Example 4: Message Signing and Verification
+
+```java
+import com.aptoslabs.japtos.account.Ed25519Account;
+import com.aptoslabs.japtos.core.crypto.Signature;
+
+public class MessageSigningExample {
+    public static void main(String[] args) throws Exception {
+        // Create account
+        Ed25519Account account = Ed25519Account.generate();
+        
+        // Sign a message
+        String message = "Hello, Aptos Blockchain!";
+        byte[] messageBytes = message.getBytes();
+        Signature signature = account.sign(messageBytes);
+        
+        System.out.println("Message: " + message);
+        System.out.println("Signature: " + signature.toHex());
+        
+        // Verify signature
+        boolean isValid = account.verifySignature(messageBytes, signature);
+        System.out.println("Signature valid: " + isValid);
+        
+        // Verify with wrong message fails
+        byte[] wrongMessage = "Different message".getBytes();
+        boolean isInvalid = account.verifySignature(wrongMessage, signature);
+        System.out.println("Wrong message verified: " + isInvalid); // false
+    }
+}
+```
+
+### Example 5: Checking Account Balance
+
+```java
+import com.aptoslabs.japtos.types.AccountAddress;
+import com.google.gson.JsonObject;
+
+public class BalanceCheck {
+    public static void main(String[] args) throws Exception {
+        AptosConfig config = AptosConfig.builder()
+            .network(AptosConfig.Network.DEVNET)
+            .build();
+        AptosClient client = new AptosClient(config);
+        
+        // Create and fund account
+        Ed25519Account account = Ed25519Account.generate();
+        client.fundAccount(account.getAccountAddress(), 50_000_000);
+        
+        // Check APT balance
+        long balance = getAptBalance(client, account.getAccountAddress());
+        System.out.println("Balance: " + balance + " octas");
+        System.out.println("Balance: " + (balance / 100_000_000.0) + " APT");
+    }
+    
+    private static long getAptBalance(AptosClient client, AccountAddress address) 
+        throws Exception {
+        String resourceType = "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>";
+        JsonObject resource = client.getAccountResource(address, resourceType);
+        return resource.getAsJsonObject("coin")
+                      .get("value")
+                      .getAsLong();
+    }
+}
+```
+
+### Example 6: Transaction Simulation
+
+```java
+public class TransactionSimulation {
+    public static void main(String[] args) throws Exception {
+        AptosConfig config = AptosConfig.builder()
+            .network(AptosConfig.Network.DEVNET)
+            .build();
+        AptosClient client = new AptosClient(config);
+        
+        Ed25519Account sender = Ed25519Account.generate();
+        Ed25519Account receiver = Ed25519Account.generate();
+        
+        client.fundAccount(sender.getAccountAddress(), 100_000_000);
+        
+        // Build transaction
+        ModuleId moduleId = new ModuleId(
+            AccountAddress.fromHex("0x1"),
+            new Identifier("aptos_account")
+        );
+        
+        TransactionPayload payload = new EntryFunctionPayload(
+            moduleId,
+            new Identifier("transfer"),
+            Arrays.asList(),
+            Arrays.asList(
+                new TransactionArgument.AccountAddress(receiver.getAccountAddress()),
+                new TransactionArgument.U64(1_000_000L)
+            )
+        );
+        
+        RawTransaction rawTx = new RawTransaction(
+            sender.getAccountAddress(),
+            client.getAccountSequenceNumber(sender.getAccountAddress()),
+            payload,
+            200000L,
+            100L,
+            System.currentTimeMillis() / 1000 + 600,
+            client.getChainId()
+        );
+        
+        // Simulate before submitting
+        SimulationResult simulation = client.simulateTransaction(rawTx, sender);
+        
+        System.out.println("Simulation results:");
+        System.out.println("Success: " + simulation.isSuccess());
+        System.out.println("Gas used: " + simulation.getGasUsed());
+        System.out.println("VM status: " + simulation.getVmStatus());
+        
+        if (simulation.isSuccess()) {
+            // Safe to submit
+            SignedTransaction signedTx = new SignedTransaction(
+                rawTx,
+                sender.signTransactionWithAuthenticator(rawTx)
+            );
+            PendingTransaction pending = client.submitTransaction(signedTx);
+            System.out.println("Transaction submitted: " + pending.getHash());
+        } else {
+            System.err.println("Simulation failed, not submitting");
+        }
+    }
+}
+```
+
+## Advanced Examples
+
+### Custom Module Interaction
+
+```java
+// Call a custom module function
+ModuleId customModule = new ModuleId(
+    AccountAddress.fromHex("0x123abc..."),  // your module address
+    new Identifier("my_module")
+);
+
+TransactionPayload payload = new EntryFunctionPayload(
+    customModule,
+    new Identifier("my_function"),
+    Arrays.asList(
+        // Type arguments (if function is generic)
+        new TypeTag.U64()
+    ),
+    Arrays.asList(
+        // Function arguments
+        new TransactionArgument.U64(100L),
+        new TransactionArgument.String("parameter")
+    )
+);
+```
+
+### Working with Different Networks
+
+```java
+// Mainnet
+AptosConfig mainnetConfig = AptosConfig.builder()
+    .network(AptosConfig.Network.MAINNET)
+    .build();
+
+// Testnet
+AptosConfig testnetConfig = AptosConfig.builder()
+    .network(AptosConfig.Network.TESTNET)
+    .build();
+
+// Custom node
+AptosConfig customConfig = AptosConfig.builder()
+    .fullNodeUrl("https://your-custom-node.com/v1")
+    .build();
+```
+
+## Testing Best Practices
+
+1. **Always test on Devnet first** before deploying to Mainnet
+2. **Use try-catch blocks** for error handling
+3. **Implement timeouts** for transaction waiting
+4. **Validate inputs** before building transactions
+5. **Check simulation results** before submitting expensive transactions
+6. **Keep private keys secure** - never hardcode them in source files
+
+## Helpful Resources
+
+- [SDK Test Suite](https://github.com/aptos-labs/japtos/tree/main/src/test) - Most comprehensive code examples
+- [SDK Source Code](https://github.com/aptos-labs/japtos) - In-line comments and implementation details
+- [Aptos REST API](https://fullnode.devnet.aptoslabs.com/v1/spec#/) - API endpoints used by the SDK
+- [Move Documentation](/build/smart-contracts) - Understanding smart contracts
+
+## Related Documentation
+
+- [Quickstart](/build/sdks/java-sdk/quickstart)
+- [Managing Accounts](/build/sdks/java-sdk/account)
+- [Building Transactions](/build/sdks/java-sdk/building-transactions)
+- [Java SDK Overview](/build/sdks/java-sdk)
+

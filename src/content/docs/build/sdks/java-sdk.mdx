@@ -1,0 +1,179 @@
+---
+title: "Java SDK"
+description: "Official Java SDK for building applications on Aptos - comprehensive cryptography, multi-signature support, and hierarchical deterministic wallets"
+sidebar:
+  label: "Java SDK Overview"
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+<div className="flex gap-2 mt-6 flex-wrap">
+  <a target="_blank" href="https://github.com/aptos-labs/japtos">
+    ![Github Repo Stars](https://img.shields.io/github/stars/aptos-labs/japtos)
+  </a>
+
+  <a target="_blank" href="https://github.com/aptos-labs/japtos">
+    ![Static Badge](https://img.shields.io/badge/SDK_Reference-Docs)
+  </a>
+</div>
+
+The Java SDK (Japtos) allows you to connect, explore, and interact with the Aptos blockchain from Java applications. It provides comprehensive support for account management, transaction signing, multi-signature accounts, and hierarchical deterministic wallets.
+
+## Installation
+
+### Maven
+
+Add the GitHub Packages repository and dependency to your `pom.xml`:
+
+```xml filename="pom.xml"
+<repositories>
+  <repository>
+    <id>github</id>
+    <url>https://maven.pkg.github.com/aptos-labs/japtos</url>
+  </repository>
+</repositories>
+
+<dependencies>
+  <dependency>
+    <groupId>com.aptos-labs</groupId>
+    <artifactId>japtos</artifactId>
+    <version>1.1.0</version>
+  </dependency>
+</dependencies>
+```
+
+:::note
+GitHub Packages requires authentication. See the [GitHub Packages Maven Registry documentation](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-apache-maven-registry) for setup instructions.
+:::
+
+### Manual Installation
+
+If you prefer to build from source, you can clone the repository and install it locally:
+
+```shellscript filename="Terminal"
+git clone https://github.com/aptos-labs/japtos.git
+cd japtos
+mvn clean install
+```
+
+## Key Features
+
+- **Advanced Cryptography**: Ed25519 and MultiEd25519 signature schemes
+- **Hierarchical Deterministic Wallets**: BIP39/BIP44 support with mnemonic phrases
+- **Multi-Signature Accounts**: Threshold-based multi-signature transactions
+- **BCS Serialization**: Binary Canonical Serialization for Aptos transactions
+- **HTTP Client**: Robust REST client for Aptos API interactions
+- **Comprehensive Testing**: Extensive test suite covering all functionality
+
+## Examples
+
+<CardGrid>
+  <LinkCard href="/build/sdks/java-sdk/quickstart" title="Quickstart" description="Get started with the Java SDK in minutes" />
+
+  <LinkCard href="/build/sdks/java-sdk/account" title="Account Management" description="Learn how to create and manage accounts, including multi-signature and HD wallets" />
+
+  <LinkCard href="/build/sdks/java-sdk/building-transactions" title="Building Transactions" description="Learn how to build, sign, and submit transactions" />
+
+  <LinkCard href="/build/sdks/java-sdk/java-examples" title="Examples" description="Explore comprehensive examples in the SDK repository" target="_blank" />
+</CardGrid>
+
+## Network Support
+
+The SDK supports all Aptos networks:
+
+```java
+import com.aptoslabs.japtos.api.AptosConfig;
+import com.aptoslabs.japtos.client.AptosClient;
+
+// Connect to different networks
+AptosConfig config = AptosConfig.builder()
+    .network(AptosConfig.Network.MAINNET)  // or TESTNET, DEVNET, LOCALNET
+    .build();
+
+AptosClient client = new AptosClient(config);
+```
+
+:::caution
+Account funding via the faucet is only available on **Devnet** and **Localnet**. For Mainnet and Testnet, you'll need to fund accounts through other means (exchanges, faucets, etc.).
+:::
+
+## Transfer APT Example
+
+Here's a quick example of how to transfer APT tokens:
+
+```java
+import com.aptoslabs.japtos.account.Ed25519Account;
+import com.aptoslabs.japtos.client.AptosClient;
+import com.aptoslabs.japtos.api.AptosConfig;
+import com.aptoslabs.japtos.transaction.*;
+import com.aptoslabs.japtos.types.*;
+
+// Setup client
+AptosConfig config = AptosConfig.builder()
+    .network(AptosConfig.Network.DEVNET)
+    .build();
+AptosClient client = new AptosClient(config);
+
+// Create accounts
+Ed25519Account alice = Ed25519Account.generate();
+Ed25519Account bob = Ed25519Account.generate();
+
+// Fund accounts (devnet only)
+client.fundAccount(alice.getAccountAddress(), 100_000_000);
+client.fundAccount(bob.getAccountAddress(), 100_000_000);
+
+// Build transfer transaction
+ModuleId moduleId = new ModuleId(
+    AccountAddress.fromHex("0x1"),
+    new Identifier("coin")
+);
+
+TransactionPayload payload = new EntryFunctionPayload(
+    moduleId,
+    new Identifier("transfer"),
+    Arrays.asList(new TypeTag.Struct(new StructTag(
+        AccountAddress.fromHex("0x1"),
+        new Identifier("aptos_coin"),
+        new Identifier("AptosCoin"),
+        Arrays.asList()
+    ))),
+    Arrays.asList(
+        new TransactionArgument.AccountAddress(bob.getAccountAddress()),
+        new TransactionArgument.U64(1_000_000L)  // 0.01 APT
+    )
+);
+
+// Get account sequence number and chain ID
+long sequenceNumber = client.getAccountSequenceNumber(alice.getAccountAddress());
+int chainId = client.getChainId();
+
+// Build and sign transaction
+RawTransaction rawTx = new RawTransaction(
+    alice.getAccountAddress(),
+    sequenceNumber,
+    payload,
+    1000000L,  // maxGasAmount
+    100L,      // gasUnitPrice
+    System.currentTimeMillis() / 1000 + 3600,  // expiration
+    chainId
+);
+
+SignedTransaction signedTx = new SignedTransaction(
+    rawTx, 
+    alice.signTransactionWithAuthenticator(rawTx)
+);
+
+// Submit and wait for transaction
+PendingTransaction pendingTx = client.submitTransaction(signedTx);
+Transaction tx = client.waitForTransaction(pendingTx.getHash());
+
+System.out.println("Transaction completed: " + tx.isSuccess());
+```
+
+## Resources
+
+- [GitHub Repository](https://github.com/aptos-labs/japtos)
+- [Quickstart Guide](/build/sdks/java-sdk/quickstart)
+- [Account Management](/build/sdks/java-sdk/account)
+- [Building Transactions](/build/sdks/java-sdk/building-transactions)
+

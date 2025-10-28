@@ -25,6 +25,7 @@ const labels = {
   "build.group.sdks.dotnet-sdk.accounts": "Accounts",
   "build.group.sdks.dotnet-sdk.queries": "Queries",
   "build.group.sdks.dotnet-sdk.transactions": "Transactions",
+  "build.group.sdks.java-sdk": "Java SDK",
   "build.group.sdks.python-sdk": "Python SDK",
   "build.group.sdks.unity-sdk": "Unity SDK",
   "build.group.sdks.cpp-sdk": "C++ SDK",

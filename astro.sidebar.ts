@@ -208,6 +208,16 @@ export const sidebar = [
               }),
             ],
           }),
+          group("build.group.sdks.java-sdk", {
+            collapsed: true,
+            items: [
+              "build/sdks/java-sdk",
+              "build/sdks/java-sdk/quickstart",
+              "build/sdks/java-sdk/account",
+              "build/sdks/java-sdk/building-transactions",
+              "build/sdks/java-sdk/java-examples",
+            ],
+          }),
           // Python SDK (no subpages found)
           "build/sdks/python-sdk",
           // Unity SDK (no subpages found)

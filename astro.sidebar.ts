@@ -365,6 +365,7 @@ export const sidebar = [
               "build/cli/install-cli/install-cli-mac",
               "build/cli/install-cli/install-cli-windows",
               "build/cli/install-cli/install-cli-linux",
+              "build/cli/install-cli/install-cli-asdf",
               "build/cli/install-cli/install-cli-specific-version",
             ],
           }),

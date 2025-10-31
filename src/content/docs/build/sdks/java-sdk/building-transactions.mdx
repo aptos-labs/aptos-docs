@@ -1,0 +1,516 @@
+---
+title: "Building Transactions"
+description: "Learn how to build, sign, simulate, and submit transactions using the Aptos Java SDK"
+sidebar:
+  label: "Building Transactions"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Transactions are the primary way to interact with the Aptos blockchain. They allow you to transfer tokens, call smart contract functions, deploy modules, and more.
+
+## Transaction Lifecycle
+
+A typical transaction flow involves:
+
+1. **Build** - Create a `RawTransaction` with the transaction details
+2. **Sign** - Sign the transaction with the sender's private key
+3. **Submit** - Send the signed transaction to the network
+4. **Wait** - Wait for the transaction to be executed
+5. **Verify** - Check the transaction result
+
+## Basic Transaction Structure
+
+Every transaction in Aptos requires:
+
+- **Sender** - The account address sending the transaction
+- **Sequence Number** - The current sequence number of the sender's account
+- **Payload** - The action to perform (transfer, function call, etc.)
+- **Max Gas Amount** - Maximum gas willing to pay
+- **Gas Unit Price** - Price per unit of gas
+- **Expiration Timestamp** - When the transaction expires
+- **Chain ID** - The network chain identifier
+
+## Transferring APT
+
+The most common transaction type is transferring APT tokens between accounts.
+
+### Simple Transfer
+
+```java
+import com.aptoslabs.japtos.account.Ed25519Account;
+import com.aptoslabs.japtos.api.AptosConfig;
+import com.aptoslabs.japtos.client.AptosClient;
+import com.aptoslabs.japtos.transaction.*;
+import com.aptoslabs.japtos.types.*;
+import java.util.Arrays;
+
+// Setup
+AptosConfig config = AptosConfig.builder()
+    .network(AptosConfig.Network.DEVNET)
+    .build();
+AptosClient client = new AptosClient(config);
+
+// Create accounts
+Ed25519Account sender = Ed25519Account.generate();
+Ed25519Account receiver = Ed25519Account.generate();
+
+// Fund sender
+client.fundAccount(sender.getAccountAddress(), 100_000_000);
+
+// Build transfer payload
+ModuleId moduleId = new ModuleId(
+    AccountAddress.fromHex("0x1"),
+    new Identifier("aptos_account")
+);
+
+TransactionPayload payload = new EntryFunctionPayload(
+    moduleId,
+    new Identifier("transfer"),
+    Arrays.asList(), // type arguments (empty for simple transfer)
+    Arrays.asList(
+        new TransactionArgument.AccountAddress(receiver.getAccountAddress()),
+        new TransactionArgument.U64(1_000_000L)  // 0.01 APT
+    )
+);
+
+// Get account info
+long sequenceNumber = client.getAccountSequenceNumber(sender.getAccountAddress());
+int chainId = client.getChainId();
+
+// Build raw transaction
+RawTransaction rawTx = new RawTransaction(
+    sender.getAccountAddress(),
+    sequenceNumber,
+    payload,
+    200000L,  // maxGasAmount
+    100L,     // gasUnitPrice
+    System.currentTimeMillis() / 1000 + 600,  // expires in 10 minutes
+    chainId
+);
+
+// Sign and submit
+SignedTransaction signedTx = new SignedTransaction(
+    rawTx,
+    sender.signTransactionWithAuthenticator(rawTx)
+);
+
+PendingTransaction pendingTx = client.submitTransaction(signedTx);
+System.out.println("Transaction hash: " + pendingTx.getHash());
+
+// Wait for completion
+Transaction completedTx = client.waitForTransaction(pendingTx.getHash());
+System.out.println("Success: " + completedTx.isSuccess());
+```
+
+### Transfer with Coin Type
+
+To transfer other coin types (not just APT), specify the coin type as a type argument:
+
+```java
+// Transfer USDC (example)
+TypeTag coinType = new TypeTag.Struct(new StructTag(
+    AccountAddress.fromHex("0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa"),
+    new Identifier("asset"),
+    new Identifier("USDC"),
+    Arrays.asList()
+));
+
+ModuleId moduleId = new ModuleId(
+    AccountAddress.fromHex("0x1"),
+    new Identifier("coin")
+);
+
+TransactionPayload payload = new EntryFunctionPayload(
+    moduleId,
+    new Identifier("transfer"),
+    Arrays.asList(coinType), // type argument for coin type
+    Arrays.asList(
+        new TransactionArgument.AccountAddress(receiver.getAccountAddress()),
+        new TransactionArgument.U64(1_000_000L)
+    )
+);
+```
+
+## Calling Smart Contract Functions
+
+You can call any public entry function on deployed Move modules.
+
+### Entry Function Call
+
+```java
+// Call a custom module function
+// Format: <account_address>::<module_name>::<function_name>
+
+ModuleId moduleId = new ModuleId(
+    AccountAddress.fromHex("0x123..."),  // module owner address
+    new Identifier("my_module")
+);
+
+TransactionPayload payload = new EntryFunctionPayload(
+    moduleId,
+    new Identifier("my_function"),
+    Arrays.asList(), // type arguments
+    Arrays.asList(
+        new TransactionArgument.U64(100L),
+        new TransactionArgument.Bool(true),
+        new TransactionArgument.String("hello")
+    )
+);
+
+// Build and submit transaction as shown above
+```
+
+### Common Transaction Arguments
+
+The SDK supports various argument types:
+
+```java
+// Numbers
+new TransactionArgument.U8((byte) 42)
+new TransactionArgument.U16((short) 1000)
+new TransactionArgument.U32(100000)
+new TransactionArgument.U64(1000000L)
+new TransactionArgument.U128(new BigInteger("1000000000"))
+new TransactionArgument.U256(new BigInteger("1000000000000"))
+
+// Boolean
+new TransactionArgument.Bool(true)
+
+// String
+new TransactionArgument.String("hello world")
+
+// Address
+new TransactionArgument.AccountAddress(
+    AccountAddress.fromHex("0x1")
+)
+
+// Vectors
+new TransactionArgument.U8Vector(new byte[]{1, 2, 3})
+new TransactionArgument.Vector(Arrays.asList(
+    new TransactionArgument.U64(100L),
+    new TransactionArgument.U64(200L)
+))
+```
+
+## Multi-Signature Transactions
+
+Multi-signature accounts can sign transactions that require multiple approvals.
+
+```java
+import com.aptoslabs.japtos.account.MultiEd25519Account;
+
+// Create multi-sig account (2-of-3)
+Ed25519Account account1 = Ed25519Account.generate();
+Ed25519Account account2 = Ed25519Account.generate();
+Ed25519Account account3 = Ed25519Account.generate();
+
+List<Ed25519PrivateKey> privateKeys = Arrays.asList(
+    account1.getPrivateKey(),
+    account2.getPrivateKey(),
+    account3.getPrivateKey()
+);
+
+MultiEd25519Account multiSigAccount = MultiEd25519Account.fromPrivateKeys(
+    privateKeys,
+    2  // threshold: 2 signatures required
+);
+
+// Fund multi-sig account
+client.fundAccount(multiSigAccount.getAccountAddress(), 100_000_000);
+
+// Build transaction (same as single-key)
+RawTransaction rawTx = new RawTransaction(
+    multiSigAccount.getAccountAddress(),
+    sequenceNumber,
+    payload,
+    200000L,
+    100L,
+    System.currentTimeMillis() / 1000 + 600,
+    chainId
+);
+
+// Sign with multi-sig account (automatically uses threshold signatures)
+SignedTransaction signedTx = new SignedTransaction(
+    rawTx,
+    multiSigAccount.signTransactionWithAuthenticator(rawTx)
+);
+
+// Submit normally
+PendingTransaction pendingTx = client.submitTransaction(signedTx);
+```
+
+## Transaction Simulation
+
+Before submitting a transaction, you can simulate it to estimate gas costs and check for errors.
+
+```java
+// Build raw transaction
+RawTransaction rawTx = new RawTransaction(
+    sender.getAccountAddress(),
+    sequenceNumber,
+    payload,
+    200000L,
+    100L,
+    System.currentTimeMillis() / 1000 + 600,
+    chainId
+);
+
+// Simulate transaction (doesn't require signing)
+SimulationResult simulation = client.simulateTransaction(rawTx, sender);
+
+System.out.println("Gas used: " + simulation.getGasUsed());
+System.out.println("Success: " + simulation.isSuccess());
+
+if (!simulation.isSuccess()) {
+    System.out.println("Error: " + simulation.getVmStatus());
+}
+```
+
+<Aside type="tip">
+  Always simulate complex transactions before submitting them to avoid wasting gas on failed transactions.
+</Aside>
+
+## Binary Canonical Serialization (BCS)
+
+The Java SDK automatically handles BCS serialization for transactions. However, you can also use BCS directly for custom serialization needs.
+
+```java
+import com.aptoslabs.japtos.bcs.Serializer;
+import com.aptoslabs.japtos.bcs.Deserializer;
+
+// Serialize data
+Serializer serializer = new Serializer();
+serializer.serializeU64(123456L);
+serializer.serializeString("hello");
+byte[] bytes = serializer.toBytes();
+
+// Deserialize data
+Deserializer deserializer = new Deserializer(bytes);
+long value = deserializer.deserializeU64();
+String text = deserializer.deserializeString();
+```
+
+## Gas Management
+
+### Estimating Gas
+
+Gas costs depend on:
+- Transaction complexity
+- Storage usage
+- Network congestion
+
+```java
+// Typical gas values for common transactions
+long simpleTransferGas = 200000L;     // ~0.002 APT at 100 gas price
+long functionCallGas = 500000L;       // ~0.005 APT at 100 gas price
+long modulePublishGas = 2000000L;     // ~0.02 APT at 100 gas price
+
+// Gas unit price (in octas)
+long gasUnitPrice = 100L;  // Standard price
+
+// Calculate max fee
+long maxFee = maxGasAmount * gasUnitPrice;
+System.out.println("Max fee: " + maxFee + " octas");
+```
+
+### Setting Gas Parameters
+
+```java
+RawTransaction rawTx = new RawTransaction(
+    sender.getAccountAddress(),
+    sequenceNumber,
+    payload,
+    500000L,   // maxGasAmount - increase for complex transactions
+    150L,      // gasUnitPrice - increase for faster processing
+    System.currentTimeMillis() / 1000 + 600,
+    chainId
+);
+```
+
+<Aside type="caution">
+  Set `maxGasAmount` high enough for your transaction, but not excessively high. You'll only pay for the gas actually used.
+</Aside>
+
+## Transaction Status
+
+After submission, you can check transaction status:
+
+```java
+// Submit transaction
+PendingTransaction pendingTx = client.submitTransaction(signedTx);
+
+// Wait with timeout (blocks until completion)
+Transaction completedTx = client.waitForTransaction(
+    pendingTx.getHash(),
+    30  // timeout in seconds (optional)
+);
+
+// Check status
+if (completedTx.isSuccess()) {
+    System.out.println("Transaction succeeded!");
+    System.out.println("Gas used: " + completedTx.getGasUsed());
+} else {
+    System.out.println("Transaction failed!");
+    System.out.println("Error: " + completedTx.getVmStatus());
+}
+```
+
+## Error Handling
+
+Always implement proper error handling for transactions:
+
+```java
+try {
+    // Build transaction
+    RawTransaction rawTx = new RawTransaction(
+        sender.getAccountAddress(),
+        sequenceNumber,
+        payload,
+        200000L,
+        100L,
+        System.currentTimeMillis() / 1000 + 600,
+        chainId
+    );
+    
+    // Sign and submit
+    SignedTransaction signedTx = new SignedTransaction(
+        rawTx,
+        sender.signTransactionWithAuthenticator(rawTx)
+    );
+    
+    PendingTransaction pendingTx = client.submitTransaction(signedTx);
+    
+    // Wait for completion
+    Transaction completedTx = client.waitForTransaction(pendingTx.getHash());
+    
+    if (!completedTx.isSuccess()) {
+        throw new RuntimeException("Transaction failed: " + completedTx.getVmStatus());
+    }
+    
+    System.out.println("Transaction successful!");
+    
+} catch (SequenceNumberException e) {
+    System.err.println("Incorrect sequence number: " + e.getMessage());
+} catch (InsufficientBalanceException e) {
+    System.err.println("Insufficient balance: " + e.getMessage());
+} catch (TransactionException e) {
+    System.err.println("Transaction error: " + e.getMessage());
+} catch (Exception e) {
+    System.err.println("Unexpected error: " + e.getMessage());
+}
+```
+
+## Complete Transaction Example
+
+Here's a complete, production-ready transaction example:
+
+```java
+import com.aptoslabs.japtos.account.Ed25519Account;
+import com.aptoslabs.japtos.api.AptosConfig;
+import com.aptoslabs.japtos.client.AptosClient;
+import com.aptoslabs.japtos.transaction.*;
+import com.aptoslabs.japtos.types.*;
+import java.util.Arrays;
+
+public class TransactionExample {
+    public static void main(String[] args) {
+        try {
+            // Setup
+            AptosConfig config = AptosConfig.builder()
+                .network(AptosConfig.Network.DEVNET)
+                .build();
+            AptosClient client = new AptosClient(config);
+            
+            // Load or create accounts
+            Ed25519Account sender = Ed25519Account.generate();
+            Ed25519Account receiver = Ed25519Account.generate();
+            
+            // Fund accounts
+            client.fundAccount(sender.getAccountAddress(), 100_000_000);
+            
+            // Build transfer payload
+            ModuleId moduleId = new ModuleId(
+                AccountAddress.fromHex("0x1"),
+                new Identifier("aptos_account")
+            );
+            
+            TransactionPayload payload = new EntryFunctionPayload(
+                moduleId,
+                new Identifier("transfer"),
+                Arrays.asList(),
+                Arrays.asList(
+                    new TransactionArgument.AccountAddress(receiver.getAccountAddress()),
+                    new TransactionArgument.U64(1_000_000L)
+                )
+            );
+            
+            // Get account sequence number and chain ID
+            long sequenceNumber = client.getAccountSequenceNumber(
+                sender.getAccountAddress()
+            );
+            int chainId = client.getChainId();
+            
+            // Build raw transaction
+            RawTransaction rawTx = new RawTransaction(
+                sender.getAccountAddress(),
+                sequenceNumber,
+                payload,
+                200000L,
+                100L,
+                System.currentTimeMillis() / 1000 + 600,
+                chainId
+            );
+            
+            // Simulate before submitting
+            SimulationResult simulation = client.simulateTransaction(rawTx, sender);
+            System.out.println("Estimated gas: " + simulation.getGasUsed());
+            
+            if (!simulation.isSuccess()) {
+                throw new RuntimeException("Simulation failed: " + simulation.getVmStatus());
+            }
+            
+            // Sign transaction
+            SignedTransaction signedTx = new SignedTransaction(
+                rawTx,
+                sender.signTransactionWithAuthenticator(rawTx)
+            );
+            
+            // Submit transaction
+            PendingTransaction pendingTx = client.submitTransaction(signedTx);
+            System.out.println("Transaction submitted: " + pendingTx.getHash());
+            
+            // Wait for completion
+            Transaction completedTx = client.waitForTransaction(pendingTx.getHash());
+            
+            if (completedTx.isSuccess()) {
+                System.out.println("Transaction succeeded!");
+                System.out.println("Gas used: " + completedTx.getGasUsed());
+            } else {
+                System.err.println("Transaction failed: " + completedTx.getVmStatus());
+            }
+            
+        } catch (Exception e) {
+            System.err.println("Error: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+}
+```
+
+## Best Practices
+
+1. **Always simulate transactions** before submitting to check for errors
+2. **Set appropriate gas limits** - not too low (fails) or too high (wastes limits)
+3. **Handle sequence numbers carefully** - use `client.getAccountSequenceNumber()` for each transaction
+4. **Implement retry logic** for network failures
+5. **Check transaction status** after submission
+6. **Set reasonable expiration times** (typically 5-10 minutes)
+7. **Use appropriate network** (devnet for testing, mainnet for production)
+
+## Related Documentation
+
+- [Managing Accounts](/build/sdks/java-sdk/account)
+- [Java SDK Examples](/build/sdks/java-sdk/java-examples)
+- [Aptos Transaction Guide](/build/guides/first-transaction)
+

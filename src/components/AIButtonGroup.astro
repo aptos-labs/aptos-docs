@@ -1,0 +1,30 @@
+---
+import AIServiceButton from "./AIServiceButton.astro";
+
+export interface Props {
+  t: (key: string) => string;
+}
+
+const { t } = Astro.props;
+
+// Generate AI service URLs with current page context
+const currentUrl = Astro.url.href;
+// const simplePrompt = `Please read and help me with this Aptos documentation page: ${currentUrl}`;
+const complexPrompt = `Read from ${currentUrl} so I can ask questions about it. If there are subpages or important links, read those too. Give a very brief yet holistic and concise tldr, then guess at some questions i might have in the form of FAQ (include your answers or what steps you'd need to do to answer them) too. End by asking me what I'd like to know / do re ${currentUrl} specifically, noting key subpages and important links`;
+const prompt = complexPrompt;
+const claudeUrl = `https://claude.ai/new?q=${encodeURIComponent(prompt)}`;
+const chatgptUrl = `https://chat.openai.com/?q=${encodeURIComponent(prompt)}&hints=search`;
+---
+
+<div class="ai-button-group">
+  <AIServiceButton service="claude" url={claudeUrl} label={t("pageSidebar.addToClaude")} t={t} />
+  <AIServiceButton service="chatgpt" url={chatgptUrl} label={t("pageSidebar.addToChatGPT")} t={t} />
+</div>
+
+<style>
+  .ai-button-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+</style>

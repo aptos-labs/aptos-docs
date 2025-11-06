@@ -340,6 +340,7 @@ export const sidebar = [
               "build/indexer/txn-stream/aptos-hosted-txn-stream",
               "build/indexer/txn-stream/local-development",
               "build/indexer/txn-stream/self-hosted",
+              "build/indexer/txn-stream/txn-filtering",
             ],
           }),
           group("build.group.indexer.legacy", {

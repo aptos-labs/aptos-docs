@@ -5,8 +5,6 @@ sidebar:
   label: "Transaction Filtering"
 ---
 
-{/* <IndexerBetaNotice /> */}
-
 ## Overview
 
 With the release of Indexer gRPC v2, we introduce the feature of transaction filtering.
@@ -22,11 +20,11 @@ The source code can be found in [aptos-core](https://github.com/aptos-labs/aptos
 
 ## Protocol Buffers (Proto) Definitions
 
-Transaction filtering are applied by including them in the gRPC request to the transaction stream.
+Transaction filters are applied by including them in the gRPC request to the transaction stream.
 
 ### Filter Proto Structure
 
-The filtering system is defined in `aptos/indexer/v1/filter.proto`:
+The filtering system is defined in [`aptos/indexer/v1/filter.proto`](https://github.com/aptos-labs/aptos-core/blob/main/protos/proto/aptos/indexer/v1/filter.proto):
 
 ```protobuf
 message BooleanTransactionFilter {
@@ -67,6 +65,19 @@ message GetTransactionsRequest {
 }
 ```
 
+**Example:**
+
+We can utilize the transaction filter to get all user transactions from [Geomi](https://geomi.dev/)'s gRPC endpoint:
+
+```bash
+grpcurl \
+  -d'{"transaction_filter":{"api_filter":{"transaction_root_filter":{"transaction_type":"TRANSACTION_TYPE_USER"}}}}' \
+  -max-msg-sz 30000000 \
+  -H "authorization:Bearer <api_key>" \
+  grpc.mainnet.aptoslabs.com:443 \
+  aptos.indexer.v1.RawData/GetTransactions
+```
+
 **Key Points:**
 - The `transaction_filter` field is **optional** - you can stream all transactions by omitting it
 - When supplied, only transactions matching the filter criteria will be returned
@@ -99,6 +110,7 @@ Filters transactions based on top-level transaction properties.
 ```json
 {
   "type": "TransactionRootFilter",
+  "txn_type": "User",
   "success": true
 }
 ```
@@ -142,7 +154,7 @@ Filters transactions based on events they emit.
   - `name` (string): Struct name
 - `data_substring_filter` (string): Filter events by a substring in their data
 
-**Example:**
+**Example 1 - Filter by struct type:**
 
 ```json
 {
@@ -152,6 +164,28 @@ Filters transactions based on events they emit.
     "module": "coin",
     "name": "CoinDeposit"
   }
+}
+```
+
+**Example 2 - Filter by data substring:**
+
+```json
+{
+  "type": "EventFilter",
+  "data_substring_filter": "transfer"
+}
+```
+
+**Example 3 - Combine struct type and data substring:**
+
+```json
+{
+  "type": "EventFilter",
+  "struct_type": {
+    "address": "0x1",
+    "module": "coin"
+  },
+  "data_substring_filter": "0xabc123"
 }
 ```
 
@@ -347,10 +381,8 @@ Get all user transactions except failed ones:
       "sender": "0xabc..."
     },
     {
-      "not": {
-        "type": "TransactionRootFilter",
-        "success": false
-      }
+      "type": "TransactionRootFilter",
+      "success": true
     }
   ]
 }
@@ -498,16 +530,3 @@ For best performance:
 - Use specific filters when possible (e.g., filter by address rather than all transactions)
 - Place more restrictive filters first in AND operations
 - Consider the transaction volume on mainnet when designing filters
-
-## Validation
-
-All filters are validated before use. A filter must have at least one field set:
-
-- **TransactionRootFilter**: Must specify `success` or `txn_type`
-- **UserTransactionFilter**: Must specify `sender` or `payload`
-- **EventFilter**: Must specify `struct_type` or `data_substring_filter`
-- **EntryFunctionFilter**: Must specify `address`, `module`, or `function`
-- **MoveStructTagFilter**: Must specify `address`, `module`, or `name`
-
-Invalid filters will return an error when validated or applied.
-

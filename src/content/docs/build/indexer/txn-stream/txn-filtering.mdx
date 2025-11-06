@@ -1,0 +1,532 @@
+---
+title: "Transaction Filtering"
+description: "Filter transactions in the Transaction Stream Service using our custom DSL"
+sidebar:
+  label: "Transaction Filtering"
+---
+
+## Overview
+
+With the release of Indexer gRPC v2, we introduce the feature of transaction filtering.
+Transaction filtering enables you to selectively process transactions from the Aptos blockchain based on specific criteria.
+This is particularly useful when building indexers or services that only need to process a subset of all transactions, such as:
+
+- Tracking specific smart contract interactions
+- Monitoring wallet activity for certain addresses
+- Indexing events from particular modules
+- Processing only successful transactions
+
+The source code can be found in [aptos-core](https://github.com/aptos-labs/aptos-core/tree/main/ecosystem/indexer-grpc/transaction-filter).
+
+## Protocol Buffers (Proto) Definitions
+
+Transaction filters are applied by including them in the gRPC request to the transaction stream.
+
+### Filter Proto Structure
+
+The filtering system is defined in [`aptos/indexer/v1/filter.proto`](https://github.com/aptos-labs/aptos-core/blob/main/protos/proto/aptos/indexer/v1/filter.proto):
+
+```protobuf
+message BooleanTransactionFilter {
+  oneof filter {
+    APIFilter api_filter = 1;
+    LogicalAndFilters logical_and = 2;
+    LogicalOrFilters logical_or = 3;
+    BooleanTransactionFilter logical_not = 4;
+  }
+}
+
+message APIFilter {
+  oneof filter {
+    TransactionRootFilter transaction_root_filter = 1;
+    UserTransactionFilter user_transaction_filter = 2;
+    EventFilter event_filter = 3;
+  }
+}
+```
+
+### gRPC Request Integration
+
+Filters are supplied as an **optional** parameter in the `GetTransactionsRequest` message:
+
+```protobuf
+message GetTransactionsRequest {
+  // Required; start version of current stream.
+  optional uint64 starting_version = 1;
+
+  // Optional; number of transactions to return in current stream.
+  optional uint64 transactions_count = 2;
+
+  // Optional; number of transactions in each response batch.
+  optional uint64 batch_size = 3;
+
+  // Optional; if provided, only transactions matching the filter are included.
+  optional BooleanTransactionFilter transaction_filter = 4;
+}
+```
+
+**Example:**
+
+We can utilize the transaction filter to get all user transactions from [Geomi](https://geomi.dev/)'s gRPC endpoint:
+
+```bash
+grpcurl \
+  -d'{"transaction_filter":{"api_filter":{"transaction_root_filter":{"transaction_type":"TRANSACTION_TYPE_USER"}}}}' \
+  -max-msg-sz 30000000 \
+  -H "authorization:Bearer <api_key>" \
+  grpc.mainnet.aptoslabs.com:443 \
+  aptos.indexer.v1.RawData/GetTransactions
+```
+
+**Key Points:**
+- The `transaction_filter` field is **optional** - you can stream all transactions by omitting it
+- When supplied, only transactions matching the filter criteria will be returned
+- The filter is applied server-side, reducing bandwidth and processing overhead for clients
+- Filters are validated before being applied; invalid filters will result in an error response
+
+## How It Works
+
+The transaction filter system uses a declarative approach where you specify what you want to match using filters, and then combine them using boolean logic (AND, OR, NOT). 
+Filters can be defined in:
+
+- **Rust code** using builder patterns
+- **JSON** for API-based configuration
+- **YAML** for configuration files
+
+## Filter Types
+
+There are three main types of filters you can use:
+
+### 1. Transaction Root Filter
+
+Filters transactions based on top-level transaction properties.
+
+**Available Fields:**
+- `success` (boolean): Whether the transaction succeeded or failed
+- `txn_type` (enum): The type of transaction (User, Genesis, BlockMetadata, StateCheckpoint, Validator, BlockEpilogue)
+
+**Example:**
+
+```json
+{
+  "type": "TransactionRootFilter",
+  "txn_type": "User",
+  "success": true
+}
+```
+
+### 2. User Transaction Filter
+
+Filters user-submitted transactions based on sender and entry function details.
+
+**Available Fields:**
+- `sender` (string): The account address that submitted the transaction
+- `payload`: Filter on the entry function being called
+  - `function`: Entry function details
+    - `address` (string): Contract address
+    - `module` (string): Module name
+    - `function` (string): Function name
+
+**Example:**
+
+```json
+{
+  "type": "UserTransactionFilter",
+  "sender": "0x1",
+  "payload": {
+    "function": {
+      "address": "0x1",
+      "module": "coin",
+      "function": "transfer"
+    }
+  }
+}
+```
+
+### 3. Event Filter
+
+Filters transactions based on events they emit.
+
+**Available Fields:**
+- `struct_type`: Filter on the event's Move struct type
+  - `address` (string): Contract address
+  - `module` (string): Module name
+  - `name` (string): Struct name
+- `data_substring_filter` (string): Filter events by a substring in their data
+
+**Example 1 - Filter by struct type:**
+
+```json
+{
+  "type": "EventFilter",
+  "struct_type": {
+    "address": "0x1",
+    "module": "coin",
+    "name": "CoinDeposit"
+  }
+}
+```
+
+**Example 2 - Filter by data substring:**
+
+```json
+{
+  "type": "EventFilter",
+  "data_substring_filter": "transfer"
+}
+```
+
+**Example 3 - Combine struct type and data substring:**
+
+```json
+{
+  "type": "EventFilter",
+  "struct_type": {
+    "address": "0x1",
+    "module": "coin"
+  },
+  "data_substring_filter": "0xabc123"
+}
+```
+
+## Combining Filters with Boolean Logic
+
+Filters can be combined using logical operators to create complex queries:
+
+### AND Operator
+
+Matches transactions that satisfy **all** of the specified filters.
+
+```json
+{
+  "and": [
+    {
+      "type": "TransactionRootFilter",
+      "success": true
+    },
+    {
+      "type": "EventFilter",
+      "struct_type": {
+        "address": "0x1",
+        "module": "coin",
+        "name": "CoinDeposit"
+      }
+    }
+  ]
+}
+```
+
+### OR Operator
+
+Matches transactions that satisfy **any** of the specified filters.
+
+```json
+{
+  "or": [
+    {
+      "type": "UserTransactionFilter",
+      "sender": "0xabc..."
+    },
+    {
+      "type": "UserTransactionFilter",
+      "sender": "0xdef..."
+    }
+  ]
+}
+```
+
+### NOT Operator
+
+Matches transactions that **do not** satisfy the specified filter.
+
+```json
+{
+  "not": {
+    "type": "TransactionRootFilter",
+    "success": false
+  }
+}
+```
+
+## Common Use Cases
+
+### Filter Coin Transfer Transactions
+
+Match all successful coin transfer transactions:
+
+```json
+{
+  "and": [
+    {
+      "type": "TransactionRootFilter",
+      "success": true
+    },
+    {
+      "type": "UserTransactionFilter",
+      "payload": {
+        "function": {
+          "address": "0x1",
+          "module": "coin",
+          "function": "transfer"
+        }
+      }
+    }
+  ]
+}
+```
+
+### Filter by Specific Sender
+
+Track all transactions from a specific wallet:
+
+```json
+{
+  "type": "UserTransactionFilter",
+  "sender": "0x806b27f3d7824a1d78c4291b6d0371aa693437f9eb3393c6440519c0ffaa627f"
+}
+```
+
+### Filter by Multiple Senders
+
+Track transactions from multiple wallets:
+
+```json
+{
+  "or": [
+    {
+      "type": "UserTransactionFilter",
+      "sender": "0xabc..."
+    },
+    {
+      "type": "UserTransactionFilter",
+      "sender": "0xdef..."
+    }
+  ]
+}
+```
+
+### Filter NFT Events
+
+Track NFT minting events from a specific collection:
+
+```json
+{
+  "type": "EventFilter",
+  "struct_type": {
+    "address": "0x4",
+    "module": "aptos_token",
+    "name": "MintTokenEvent"
+  }
+}
+```
+
+### Filter Smart Contract Interactions
+
+Track all interactions with a specific smart contract module:
+
+```json
+{
+  "type": "EventFilter",
+  "struct_type": {
+    "address": "0x123abc...",
+    "module": "my_defi_module"
+  }
+}
+```
+
+### Complex Filter: DEX Trading
+
+Track successful swap events from multiple DEX protocols:
+
+```json
+{
+  "and": [
+    {
+      "type": "TransactionRootFilter",
+      "success": true
+    },
+    {
+      "or": [
+        {
+          "type": "EventFilter",
+          "struct_type": {
+            "address": "0xdex1",
+            "module": "swap",
+            "name": "SwapEvent"
+          }
+        },
+        {
+          "type": "EventFilter",
+          "struct_type": {
+            "address": "0xdex2",
+            "module": "pool",
+            "name": "TradeEvent"
+          }
+        }
+      ]
+    }
+  ]
+}
+```
+
+### Exclude Failed Transactions
+
+Get all user transactions except failed ones:
+
+```json
+{
+  "and": [
+    {
+      "type": "UserTransactionFilter",
+      "sender": "0xabc..."
+    },
+    {
+      "type": "TransactionRootFilter",
+      "success": true
+    }
+  ]
+}
+```
+
+## YAML Format
+
+Filters can also be expressed in YAML format, which is often more readable for configuration files:
+
+```yaml
+and:
+  - or:
+      - type: TransactionRootFilter
+        success: true
+      - type: UserTransactionFilter
+        sender: '0x1'
+  - type: EventFilter
+    struct_type:
+      address: '0x1'
+      module: coin
+      name: CoinDeposit
+```
+
+## Using Filters in Rust
+
+If you're building with Rust, you can use the `aptos-transaction-filter` crate with builder patterns:
+
+### Basic Filter
+
+```rust
+use aptos_transaction_filter::{TransactionRootFilterBuilder, BooleanTransactionFilter};
+
+// Create a filter for successful transactions
+let filter = TransactionRootFilterBuilder::default()
+    .success(true)
+    .build()
+    .unwrap();
+
+let boolean_filter = BooleanTransactionFilter::from(filter);
+```
+
+### Event Filter
+
+```rust
+use aptos_transaction_filter::{EventFilterBuilder, MoveStructTagFilterBuilder};
+
+let filter = EventFilterBuilder::default()
+    .struct_type(
+        MoveStructTagFilterBuilder::default()
+            .address("0x1")
+            .module("coin")
+            .name("CoinDeposit")
+            .build()
+            .unwrap()
+    )
+    .build()
+    .unwrap();
+```
+
+### User Transaction Filter
+
+```rust
+use aptos_transaction_filter::{UserTransactionFilterBuilder, EntryFunctionFilterBuilder, UserTransactionPayloadFilterBuilder};
+
+let filter = UserTransactionFilterBuilder::default()
+    .sender("0x1")
+    .payload(
+        UserTransactionPayloadFilterBuilder::default()
+            .function(
+                EntryFunctionFilterBuilder::default()
+                    .address("0x1")
+                    .module("coin")
+                    .function("transfer")
+                    .build()
+                    .unwrap()
+            )
+            .build()
+            .unwrap()
+    )
+    .build()
+    .unwrap();
+```
+
+### Combining Filters
+
+```rust
+use aptos_transaction_filter::BooleanTransactionFilter;
+
+// Create individual filters
+let success_filter = TransactionRootFilterBuilder::default()
+    .success(true)
+    .build()
+    .unwrap();
+
+let sender_filter = UserTransactionFilterBuilder::default()
+    .sender("0x1")
+    .build()
+    .unwrap();
+
+let event_filter = EventFilterBuilder::default()
+    .struct_type(
+        MoveStructTagFilterBuilder::default()
+            .address("0x1")
+            .module("coin")
+            .build()
+            .unwrap()
+    )
+    .build()
+    .unwrap();
+
+// Combine with logical operators
+let combined = BooleanTransactionFilter::from(success_filter)
+    .or(sender_filter)
+    .and(event_filter);
+
+// Use the filter
+if combined.matches(&transaction) {
+    // Process transaction
+}
+```
+
+### Serialization
+
+```rust
+// Serialize to JSON
+let json = serde_json::to_string_pretty(&filter).unwrap();
+
+// Serialize to YAML
+let yaml = serde_yaml::to_string(&filter).unwrap();
+
+// Deserialize from JSON
+let filter: BooleanTransactionFilter = serde_json::from_str(&json).unwrap();
+```
+
+## Performance Considerations
+
+The transaction filter system is optimized for high-throughput processing:
+
+1. **Single Pass**: Filters process each transaction only once
+2. **Minimal Allocations**: Filters avoid clones and unnecessary copies
+3. **Early Exit**: Filters short-circuit as soon as a non-match is found
+4. **Address Caching**: Address standardization is cached for performance
+
+For best performance:
+- Use specific filters when possible (e.g., filter by address rather than all transactions)
+- Place more restrictive filters first in AND operations
+- Consider the transaction volume on mainnet when designing filters

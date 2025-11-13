@@ -1,17 +1,36 @@
 ---
-title: "De Ethereum a Aptos: Migration Guide"
-description: "Guía de migración y comparación detallada para desarrolladores de Ethereum que están haciendo la transición al desarrollo en la blockchain de Aptos"
+title: "Guía de Migración de Ethereum a Aptos"
+description: "Comparación exhaustiva y guía de migración para desarrolladores de Ethereum que están haciendo la transición al desarrollo en la blockchain de Aptos"
 sidebar:
   label: "Ethereum → Aptos"
 ---
 
+Para aprender más sobre las diferencias y similitudes mira [Aptos Learn](https://learn.aptoslabs.com/en/tutorials/ethereum-to-aptos-guide/cheat-sheet?workshop=eth-to-aptos)
 import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
 
 Aptos está diseñado para permitirte prototipar rápidamente y escalar aplicaciones seguras a nivel de producción. Combina una capa de blockchain rápida, estable y de bajo costo con la seguridad en tiempo de compilación de Move, que detecta **exploits** antes del **deploy**. Ofrece **tooling** completo para un desarrollo rápido y un ecosistema sólido de **exchanges** y **bridges** para una integración fluida.
 
+### Resumen de Alto Nivel
 <Aside type="tip" title="Workshop Interactivo">
   Practica con comparaciones de código lado a lado de Solidity y Move en [Aptos Learn](https://learn.aptoslabs.com):
 
+| Feature                    | Ethereum                                                                                                                       | Aptos                                                                                                                                 |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| **Smart Contracts** | Solidity, EVM                                                                                                                  | Move, MoveVM                                                                                                                          |
+| **Beneficios** | Madurez, amplia adopción                                                                                                       | Escalabilidad, baja latencia, fees predecibles                                                                                        |
+| **Transaction Fees** | Variables, pueden ser altos                                                                                                    | Más bajos y predecibles                                                                                                               |
+| **Direcciones de Cuenta** | 160-bit                                                                                                                        | 256-bit                                                                                                                               |
+| **Estructura de Cuenta** | Balance en un solo campo, usa nonce                                                                                            | Módulos y recursos, usa sequence number                                                                                               |
+| **Data Storage** | Patricia Merkle Trees                                                                                                          | Global storage con recursos y módulos                                                                                                 |
+| **Enfoque de Storage** | Storage basado en contrato                                                                                                     | Mentalidad "Account centric" (centrada en la cuenta) para código y datos                                                              |
+| **Código de Ejemplo** | [ERC-20](https://github.com/OpenZeppelin/openzeppelin-contracts/tree/master/contracts/token/ERC20)                             | [Fungible Asset](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/fungible_asset.move) |
+| **Caller ID** | `msg.sender`                                                                                                                   | Referencia `&signer`                                                                                                                  |
+| **Upgradeability** | Patrones de Proxy                                                                                                              | Upgrades directos de módulos                                                                                                          |
+| **Seguridad (Safety)** | Vulnerable a ataques como reentrancy                                                                                           | Mitiga vulnerabilidades comunes                                                                                                       |
+| **Tipo de Dispatch** | Dispatch dinámico                                                                                                              | Dispatch estático                                                                                                                     |
+| **Estándar FT** | [ERC-20](https://docs.openzeppelin.com/contracts/4.x/erc20)                                                                    | [Coin](/build/smart-contracts/aptos-coin) (legacy) y [Fungible Asset](/build/smart-contracts/fungible-asset)                        |
+| **Estándares NFT** | [ERC-721](https://docs.openzeppelin.com/contracts/4.x/erc721), [ERC-1155](https://docs.openzeppelin.com/contracts/4.x/erc1155) | [Digital Asset](/build/smart-contracts/digital-asset)                                                                                 |
+| **Interacción Blockchain** | [Librería Ethers.js](https://docs.ethers.org/v6/)                                                                              | [Aptos Typescript SDK](/build/sdks/ts-sdk)                                                                                            |
   - [Smart contracts en Move](https://learn.aptoslabs.com/en/ethereum-to-aptos-guide/move-contract) para una aplicación descentralizada de "billboard"
   - [Gestión de identidad](https://learn.aptoslabs.com/en/ethereum-to-aptos-guide/identity) para **frontends**
   - [Lectura de **data** on-chain](https://learn.aptoslabs.com/en/ethereum-to-aptos-guide/read-data) en tu **app**
@@ -45,6 +64,7 @@ La documentación del [`Coin`](/es/build/smart-contracts/aptos-coin) legacy aún
 <br />
 
 ### Comparativa Detallada de Estándares de Tokens
+### Comparando Estándares de Token en Detalle
 
 |                                | Solidity                                                                            | Move (Aptos)                                                                                                                                                                             |
 | ------------------------------ | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -52,13 +72,22 @@ La documentación del [`Coin`](/es/build/smart-contracts/aptos-coin) legacy aún
 | **Token Standard**             | Debe cumplir estándares como ERC-20; las implementaciones pueden variar por deploy. | Interfaz e implementación uniformes impuestas por el módulo compartido; los nuevos tokens simplemente registran un nuevo tipo en lugar de redeployar código.                             |
 | **Almacenamiento del Balance** | Balances almacenados en el contrato usando una estructura de **mapping**.           | **Balance Orientado a Resources**: los balances viven en un objeto extensible propiedad de la cuenta del usuario.                                                                        |
 | **Mecanismo de Transferencia** | Los tokens pueden transferirse sin el permiso explícito del receptor.               | Las transferencias pueden omitir el permiso del receptor, pero solo cuando el FA habilita explícitamente la auto-creación de primary-store (visible en el código de creación del token). |
+|                        | Solidity                                                          | Move (Aptos)                                                                                                                                                    |
+| ---------------------- | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Estructura del Token** | Cada token es su propio contrato.                                   | Cada token es un `Coin` tipado o `FungibleAsset` usando un contrato único y reutilizable.                                                                             |
+| **Estándar del Token** | Debe cumplir con estándares como ERC20; las implementaciones pueden variar.   | Interfaz e implementación uniforme para todos los tokens.                                                                                                            |
+| **Almacenamiento del Balance** | Balances guardados en el contrato usando una estructura de mapping.            | **Balance Orientado a Recursos**: Balances guardados como un recurso en la cuenta del usuario. Los recursos no pueden ser creados arbitrariamente, asegurando la integridad del valor del token. |
+| **Mecanismo de Transferencia** | Los tokens se pueden transferir sin permiso explícito del receptor. | Excepto en casos específicos (como AptosCoin), los Tokens generalmente requieren la autoridad del `signer` del receptor para la transferencia.                                                |
 
 <br />
 
 ### Comparativa Detallada: EVM vs. Move VM
+### Comparando la EVM y la Move VM en Detalle
 
 - **EVM**: Conocida por su flexibilidad y **dynamic dispatch**, que permite una amplia gama de comportamientos en los **smart contracts**. Sin embargo, esta flexibilidad puede generar complejidades en la ejecución paralela y las operaciones de red.
 - **Move VM**: Se enfoca en la seguridad y eficiencia con un enfoque más integrado entre la VM y el lenguaje de programación. Su modelo de almacenamiento de **data** permite una mejor paralelización, y su método de **static dispatch** mejora la seguridad y la predictibilidad.
+- **EVM**: Conocida por su flexibilidad y dispatch dinámico, lo que permite una amplia gama de comportamientos en los smart contracts. Esta flexibilidad, sin embargo, puede llevar a complejidades en la ejecución paralela y operaciones de red.
+- **Move VM**: Se enfoca en la seguridad y eficiencia con un enfoque más integrado entre la VM y el lenguaje de programación. Su modelo de data storage permite una mejor paralelización, y su método de dispatch estático mejora la seguridad y la predictibilidad.
 
 <br />
 
@@ -231,3 +260,14 @@ La documentación del [`Coin`](/es/build/smart-contracts/aptos-coin) legacy aún
     Tanto la publicación basada en cuentas como el deploy basado en objects (vía `aptos move deploy-object`) respetan la política de actualización (upgrade policy) del package. Revisa [Your First Move Module](/es/build/guides/first-move-module) para una guía completa y [Objects](/es/build/smart-contracts/objects) para patrones centrados en objects.
   </TabItem>
 </Tabs>
+|                                 | EVM (Ethereum Virtual Machine)                                         | Move VM (Move Virtual Machine)                                                                                     |
+| ------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **Data Storage** | La data se almacena en el espacio de storage del smart contract.                  | La data se almacena a través de smart contracts, cuentas de usuario y objetos.                                                 |
+| **Paralelización** | La ejecución paralela es limitada debido al espacio de storage compartido.             | Mayor ejecución paralela habilitada gracias al diseño flexible de split storage.                                              |
+| **Integración de VM y Lenguaje** | Capas separadas para la EVM y lenguajes de smart contracts (ej. Solidity). | Integración fluida entre la capa de VM y el lenguaje Move, con funciones nativas escritas en Rust ejecutables en Move. |
+| **Operaciones Críticas de Red** | La implementación de operaciones de red puede ser compleja y menos directa.   | Operaciones críticas como la gestión del validator set implementadas nativamente en Move, permitiendo ejecución directa.     |
+| **Llamadas a Funciones** | El dispatch dinámico permite llamadas arbitrarias a smart contracts.            | El dispatch estático se alinea con un enfoque en seguridad y comportamiento predecible.                                          |
+| **Type Safety** | Los tipos de contrato proveen cierto nivel de type safety.                         | Los structs de módulos y genéricos en Move ofrecen un type safety robusto.                                                      |
+| **Transaction Safety** | Usa nonces para el ordenamiento y seguridad de transacciones.                       | Usa sequence numbers para el ordenamiento y seguridad de transacciones.                                                         |
+| **Storage Autenticado** | Sí, con storage de smart contract.                                      | Sí, aprovechando el modelo de recursos de Move.                                                                             |
+| **Accesibilidad de Objetos** | Los objetos no son accesibles globalmente; están atados al scope del smart contract.    | Accesibilidad global garantizada de objetos.                                                                        |

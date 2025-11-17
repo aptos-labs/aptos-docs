@@ -5,7 +5,7 @@ sidebar:
   label: "Ethereum → Aptos"
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
 
 Aptos is built to allow you to quickly prototype and scale secure production applications. It combines a fast, cost-efficient, and stable blockchain layer with Move's compile-time safety that catches exploits before deployment, comprehensive tooling for rapid development, and a strong ecosystem of exchanges and bridges for seamless integration.
 
@@ -68,3 +68,169 @@ Get hands-on with side-by-side Solidity and Move code comparisons on [Aptos Lear
 | **Transaction Safety**          | Uses nonces for transaction ordering and safety.                       | Uses sequence numbers for transaction ordering and safety.                                                         |
 | **Authenticated Storage**       | Yes, with smart contract storage.                                      | Yes, leveraging Move’s resource model.                                                                             |
 | **Object Accessibility**        | Objects are not globally accessible; bound to smart contract scope.    | Guaranteed global accessibility of objects.                                                                        |
+
+
+## Migration Tips for Ethereum Developers
+
+<Tabs>
+<TabItem label="Storage">
+
+Ethereum stores all data in contract storage using mappings. Aptos uses an account-centric model where each account stores their own resources. Instead of a contract maintaining a `mapping(address => T)`, each user stores their own `T` resource at their address.
+
+```move
+module my_hackathon_account::prototype {
+    use std::string;
+    use std::signer;
+
+    // Unlike Solidity's mapping(address => string), each account stores their own resource
+    struct MessageHolder has key, store, drop {
+        message: string::String,
+    }
+
+    public entry fun set_message(account: &signer, message: string::String) acquires MessageHolder {
+        let addr = signer::address_of(account);
+        // Check if resource exists at this account (like checking mapping[addr])
+        if (exists<MessageHolder>(addr)) {
+            move_from<MessageHolder>(addr);  // Remove old resource
+        };
+        // Store resource at user's account (not in contract storage!)
+        move_to(account, MessageHolder { message });
+    }
+
+    #[view]
+    public fun get_message(addr: address): string::String acquires MessageHolder {
+        assert!(exists<MessageHolder>(addr), 0);
+        borrow_global<MessageHolder>(addr).message
+    }
+}
+```
+
+By default, modules deploy to your account address. For production apps, consider deploying to [Objects](/build/smart-contracts/objects), which creates a unique address per deployment and enables transferable code ownership. See [Using Objects](/build/smart-contracts/object/using-objects) for implementation details.
+
+Learn more: [`global storage operators`](/build/smart-contracts/book/global-storage-operators), [`structs and resources`](/build/smart-contracts/book/structs-and-resources)
+
+</TabItem>
+
+<TabItem label="Authentication">
+
+On Ethereum, `msg.sender` is set by the EVM, but many bugs come from using `tx.origin` for auth or trusting user-supplied addresses. Aptos' `&signer` goes further: it's an unforgeable capability created only by the VM for actual transaction signers, so any function that requires `&signer` can't be called with a spoofed identity. In dapps, wallets plus the [Aptos TypeScript SDK](/build/sdks/ts-sdk) and [wallet adapter](/build/sdks/wallet-adapter/wallets) bridge this signer identity from frontend to on-chain.
+
+```move
+module my_hackathon_account::prototype {
+    use std::string;
+    use std::signer;
+
+    struct MessageHolder has key, store, drop {
+        message: string::String,
+    }
+
+    // Only the account owner can provide their &signer (unforgeable authentication)
+    public entry fun set_message(account: &signer, message: string::String) acquires MessageHolder {
+        // Extract address from authenticated signer (no spoofing possible!)
+        let addr = signer::address_of(account);
+        if (exists<MessageHolder>(addr)) {
+            move_from<MessageHolder>(addr);
+        };
+        // account is guaranteed to be authentic
+        move_to(account, MessageHolder { message });
+    }
+
+    #[view]
+    public fun get_message(addr: address): string::String acquires MessageHolder {
+        assert!(exists<MessageHolder>(addr), 0);
+        borrow_global<MessageHolder>(addr).message
+    }
+}
+```
+
+Create and fund an account using the [Aptos CLI](/build/cli):
+
+```bash
+aptos init
+```
+
+Learn more: [`signer`](/build/smart-contracts/book/signer) type, [`functions`](/build/smart-contracts/book/functions)
+
+</TabItem>
+
+<TabItem label="Resources & Abilities">
+
+Move has four abilities: `copy`, `drop`, `store`, and `key`, which control how values can be used. In this example, MessageHolder deliberately omits `copy` so messages stored as resources can't be duplicated; you generally avoid `copy` on any type that represents on-chain state or assets. `key` + `store` allow it to live in global storage at an address, and `drop` lets you destroy the old resource safely when overwriting it.
+
+```move
+module my_hackathon_account::prototype {
+    use std::string;
+    use std::signer;
+
+    // Resources: structs with 'key' ability that live in global storage
+    // key = can be stored at account addresses (makes it a "resource")
+    // store = can be stored inside other structs
+    // drop = can be destroyed/discarded implicitly
+    struct MessageHolder has key, store, drop {
+        message: string::String,
+    }
+
+    public entry fun set_message(account: &signer, message: string::String) acquires MessageHolder {
+        let addr = signer::address_of(account);
+        // The 'drop' ability allows implicit destruction
+        if (exists<MessageHolder>(addr)) {
+            move_from<MessageHolder>(addr);  // Old resource is destroyed (requires 'drop')
+        };
+        move_to(account, MessageHolder { message });
+    }
+
+    #[view]
+    public fun get_message(addr: address): string::String acquires MessageHolder {
+        assert!(exists<MessageHolder>(addr), 0);
+        borrow_global<MessageHolder>(addr).message
+    }
+}
+```
+
+Learn more: [`abilities`](/build/smart-contracts/book/abilities), [`structs and resources`](/build/smart-contracts/book/structs-and-resources)
+
+</TabItem>
+
+<TabItem label="Upgradability">
+
+Aptos packages support two upgrade policies: `compatible` (default; only backward-compatible changes allowed) and `immutable` (no upgrades allowed). By default, packages published with the [Aptos CLI](/build/cli) using `aptos move publish` use the **compatible** policy, which lets you push new versions as long as you don't break struct layouts or public function signatures.
+
+To prevent all future upgrades, set the immutable policy:
+
+```bash
+aptos move publish --upgrade-policy immutable
+```
+
+Or configure in your `Move.toml`:
+
+```toml
+[package]
+name = "MyPackage"
+version = "1.0.0"
+upgrade_policy = "immutable"
+```
+
+See [Package Upgrades](/build/smart-contracts/book/package-upgrades) for the exact compatibility rules.
+
+</TabItem>
+
+<TabItem label="Deploying Modules">
+
+On Ethereum you "deploy a contract to a new address." On Aptos you **publish a package** of Move modules to an account (or object) address using the [Aptos CLI](/build/cli).
+
+Publish your package:
+
+```bash
+aptos move publish
+```
+
+Call a function after deployment:
+
+```bash
+aptos move run --function-id 'your_address::module_name::function_name'
+```
+
+Both account-based publishing and object-based deployment (via `aptos move deploy-object`) respect the package's upgrade policy. See [Your First Move Module](/build/guides/first-move-module) for a complete walkthrough and [Objects](/build/smart-contracts/objects) for object-centric patterns.
+
+</TabItem>
+</Tabs>

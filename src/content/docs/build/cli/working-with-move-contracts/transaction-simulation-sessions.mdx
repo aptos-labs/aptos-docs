@@ -17,13 +17,15 @@ to inspect transaction outputs with ease.
 This makes it possible to test complex workflows — such as contract deployment, resource updates, or multi-step interactions.
 
 <Aside type="note" emoji="ℹ️">
-Before you get started, make sure you have updated your Aptos CLI to the latest version.
+  Before you get started, make sure you have updated your Aptos CLI to the latest version.
 
-Older versions of the Aptos CLI may not support Transaction Simulation Sessions as it's a relatively new feature.
+  Older versions of the Aptos CLI may not support Transaction Simulation Sessions as it's a relatively new feature.
 </Aside>
 
 ## Initializing a Session
+
 You can initialize a session either from:
+
 - **A clean local genesis**, for a completely local, isolated environment, or
 - **A forked network state** (Devnet, Testnet, or Mainnet), allowing you to test your changes against real-world data.
 
@@ -31,37 +33,45 @@ Regardless of which mode you choose, the interface, commands, and how session da
 Just specify your preferred mode when you initialize the session.
 
 ### From a Forked Network State
+
 With network forking, you can test your Move code using **live network data** — balances, resources, and published modules.
 
 To start with a forked network state, run:
+
 ```shellscript filename="Terminal"
 aptos move sim init --path <SESSION_PATH> --network <NETWORK> --api-key <YOUR_API_KEY>
 ```
+
 Here `<NETWORK>` can be one of the following: `devnet`, `testnet`, `mainnet`, or a custom fullnode URL.
 The session will store all its data in the specified `<SESSION_PATH>` directory.
 
 <Aside type="note" emoji="ℹ️">
-You'll need a free Aptos developer account and an API key to use network forking mode.
-Without an API key, you are given a very low rate limit and may run into rate limit errors almost certainly.
+  You'll need a free Aptos developer account and an API key to use network forking mode.
+  Without an API key, you are given a very low rate limit and may run into rate limit errors almost certainly.
 
-You can follow the official instructions here: [Setup an API Key](/build/guides/build-e2e-dapp#setup-api-key).
+  You can follow the official instructions here: [Setup an API Key](/build/guides/build-e2e-dapp#setup-api-key).
 </Aside>
 
 ### From a Clean Local Genesis
+
 For day-to-day development, sometimes you just need a clean slate — no real network data needed.
 This is perfect for ad-hoc simulation,synthetic testing, or continuous integration.
 
 To start with a clean local genesis, run:
+
 ```shellscript filename="Terminal"
 aptos move sim init --path <SESSION_PATH>
 ```
+
 Everything else works the same — except that the simulation won't touch the network at all, as all data is local.
 
 ## Running simulations
+
 Once initialized, you can run transactions against your session using the standard `aptos move` commands,
 adding the `--session` argument to indicate which local session to use.
 
 Supported commands include:
+
 - `run`
 - `run-script`
 - `publish`
@@ -73,6 +83,7 @@ Supported commands include:
 - `create-resource-account-and-publish-package`
 
 There are also additional utilities under `aptos move sim` for managing and inspecting sessions.
+
 - `fund`: fund an account with a given amount of APT
 - `view-resource`: view a Move resource
 - `view-resource-group`: view a resource group
@@ -80,6 +91,7 @@ There are also additional utilities under `aptos move sim` for managing and insp
 For more detailed help, run `aptos move sim --help`.
 
 ### Example Workflow
+
 ```shellscript filename="Terminal"
 # 1. Fund your default account with 1 APT (for demo)
 aptos move sim fund --session sess --account default --amount 100000000
@@ -105,32 +117,37 @@ aptos move sim view-resource-group --session sess \
   --resource-group 0x1::object::ObjectGroup \
   --derived-object-address 0xA
 ```
+
 Again, all state changes are local and are stored under your session directory.
 
 ## Inspecting Session Data
+
 Each Transaction Simulation Session organizes its data in a structured directory tree, making it easy to inspect every step of your simulation.
 
 Here's how the layout looks like for the sample session:
+
 <FileTree>
   - sess/
-    - [0] fund (fungible)/
+    - \[0] fund (fungible)/
       - summary.json
-    - [1] execute 0x1::aptos_account::transfer/
+    - \[1] execute 0x1::aptos\_account::transfer/
       - events.json
       - summary.json
-      - write_set.json
-    - [2] view 0x1::account::get_sequence_number/
+      - write\_set.json
+    - \[2] view 0x1::account::get\_sequence\_number/
       - summary.json
-    - [3] view resource 0xdbcb...::0x1::account::Account/
+    - \[3] view resource 0xdbcb...::0x1::account::Account/
       - summary.json
-    - [4] view resource group 0x20ce...::0x1::object::ObjectGroup/
+    - \[4] view resource group 0x20ce...::0x1::object::ObjectGroup/
       - summary.json
     - config.json
     - delta.json
 </FileTree>
 
 ### Sample Outputs
+
 `[1] execute 0x1::aptos_account::transfer/summary.json`
+
 ```json
 {
   "execute_transaction": {
@@ -148,7 +165,9 @@ Here's how the layout looks like for the sample session:
   }
 }
 ```
+
 `[1] execute 0x1::aptos_account::transfer/events.json`
+
 ```json
 [
   {
@@ -185,7 +204,9 @@ Here's how the layout looks like for the sample session:
 ```
 
 ## Future Plans
+
 We are working on adding more features to Transaction Simulation Sessions, such as:
+
 - Gas Profiler integration
 - Better performance
 - Snapshot and rollback support

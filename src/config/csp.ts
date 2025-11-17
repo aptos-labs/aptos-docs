@@ -35,6 +35,7 @@ const GOOGLE_FONTS_HOSTS = withHttps(["fonts.googleapis.com", "fonts.gstatic.com
  * Content Security Policy configuration for Astro
  */
 export const cspConfig = {
+  // ALLOWED_DIRECTIVES: readonly ["base-uri", "child-src", "connect-src", "default-src", "fenced-frame-src", "font-src", "form-action", "frame-ancestors", "frame-src", "img-src", "manifest-src", "media-src", "object-src", "referrer", "report-to", "report-uri", "require-trusted-types-for", "sandbox", "trusted-types", "upgrade-insecure-requests", "worker-src"];
   directives: [
     "default-src 'self'",
     `img-src 'self' ${TWITTER_HOSTS} ${GOOGLE_HOSTS} ${GTM_HOST} ${GA_HOSTS} ${VERCEL_HOSTS} data: blob:`,
@@ -43,9 +44,10 @@ export const cspConfig = {
     `connect-src 'self' ${APTOS_HOSTS} ${ALGOLIA_HOSTS} ${GOOGLE_HOSTS} ${GTM_HOST} ${GA_HOSTS} ${VERCEL_HOSTS} ${PUSHER_HOSTS} ${VERCEL_ANALYTICS_HOSTS}`,
     `frame-src 'self' ${FIREBASE_HOSTS} ${VERCEL_HOSTS} ${VIDEO_HOSTS} ${STACKBLITZ_HOST}`,
     `media-src 'self' ${TWITTER_HOSTS}`,
-    "style-src-attr 'unsafe-inline'",
-    `script-src-elem 'self' 'unsafe-inline' ${CDN_HOSTS} ${GOOGLE_HOSTS} ${GTM_HOST} ${VERCEL_HOSTS}`,
-    `style-src-elem 'self' 'unsafe-inline' ${VERCEL_HOSTS} ${GOOGLE_FONTS_HOSTS}`,
+    // TODO: These are currently disabled by Astro, if this changes, we would want to re-enable them.
+    //"style-src-attr 'unsafe-inline'",
+    //`script-src-elem 'self' 'unsafe-inline' ${CDN_HOSTS} ${GOOGLE_HOSTS} ${GTM_HOST} ${VERCEL_HOSTS}`,
+    //`style-src-elem 'self' 'unsafe-inline' ${VERCEL_HOSTS} ${GOOGLE_FONTS_HOSTS}`,
   ] as CspDirective[],
   styleDirective: {
     resources: ["'self'", VERCEL_HOSTS, "'unsafe-inline'"],

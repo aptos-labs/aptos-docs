@@ -34,8 +34,12 @@ Practica con comparaciones de código lado a lado de Solidity y Move en [Aptos L
 | **Dispatch Type**          | **Dynamic dispatch**                                                                                                           | **Static dispatch**                                                                                                                   |
 | **Frontend SDK**           | [Librería Ethers.js](https://docs.ethers.org/v6/)                                                                              | [Aptos Typescript SDK](/es/build/sdks/ts-sdk)                                                                                            |
 | **NFT Standards**          | [ERC-721](https://docs.openzeppelin.com/contracts/4.x/erc721), [ERC-1155](https://docs.openzeppelin.com/contracts/4.x/erc1155) | [Digital Asset](/es/build/smart-contracts/digital-asset)                                                                                 |
-| **FT Standard**            | [ERC-20](https://docs.openzeppelin.com/contracts/4.x/erc20)                                                                    | [Fungible Asset](/es/build/smart-contracts/fungible-asset) y [Coin](/es/build/smart-contracts/aptos-coin) (legacy)                         |
-| **Código de Ejemplo**      | [ERC-20](https://github.com/OpenZeppelin/openzeppelin-contracts/tree/master/contracts/token/ERC20)                             | [Fungible Asset](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/fungible_asset.move) |
+| **FT Standard**            | [ERC-20](https://docs.openzeppelin.com/contracts/4.x/erc20), factory pattern                                                    | Ver [Fungible Asset](/es/build/smart-contracts/fungible-asset), copia y pega en tu módulo: `use aptos_framework::fungible_asset...`      |
+| **Código de Ejemplo**      | [ERC-20](https://github.com/OpenZeppelin/openzeppelin-contracts/tree/master/contracts/token/ERC20) (nuevo contrato por deploy)   | [Fungible Asset](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/fungible_asset.move) (módulo único reutilizable) |
+
+<br />
+
+La documentación del [`Coin`](/es/build/smart-contracts/aptos-coin) legacy aún cubre el estándar original; la mayoría de los nuevos deployments deberían preferir el módulo Fungible Asset referenciado arriba.
 
 <br />
 
@@ -43,10 +47,10 @@ Practica con comparaciones de código lado a lado de Solidity y Move en [Aptos L
 
 |                            | Solidity                                                                      | Move (Aptos)                                                                                                                                                                                       |
 | -------------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Estructura del Token**   | Cada token es su propio contrato.                                             | Cada token es un `Coin` o `FungibleAsset` tipado que usa un único contrato reutilizable.                                                                                                          |
-| **Token Standard**         | Debe cumplir estándares como ERC20; las implementaciones pueden variar.      | Interfaz e implementación uniformes para todos los tokens.                                                                                                                                        |
-| **Almacenamiento del Balance** | Balances almacenados en el contrato usando una estructura de **mapping**.    | **Balance Orientado a Resources**: Balances almacenados como un **resource** en la cuenta del usuario. Los **resources** no se pueden crear arbitrariamente, asegurando la integridad del valor del token. |
-| **Mecanismo de Transferencia** | Los tokens pueden transferirse sin el permiso explícito del receptor.        | Excepto en casos específicos (como AptosCoin), los tokens generalmente requieren la autoridad del `signer` del receptor para la transferencia.                                                    |
+| **Estructura del Token**   | Cada token es su propio contrato.                                             | Cada token es una instanciación tipada de `FungibleAsset` que reutiliza el mismo módulo publicado.                                                                               |
+| **Token Standard**         | Debe cumplir estándares como ERC-20; las implementaciones pueden variar por deploy. | Interfaz e implementación uniformes impuestas por el módulo compartido; los nuevos tokens simplemente registran un nuevo tipo en lugar de redeployar código.                                    |
+| **Almacenamiento del Balance** | Balances almacenados en el contrato usando una estructura de **mapping**.    | **Balance Orientado a Resources**: los balances viven en un objeto extensible propiedad de la cuenta del usuario.   |
+| **Mecanismo de Transferencia** | Los tokens pueden transferirse sin el permiso explícito del receptor.        | Las transferencias pueden omitir el permiso del receptor, pero solo cuando el FA habilita explícitamente la auto-creación de primary-store (visible en el código de creación del token). |
 
 <br />
 
@@ -87,32 +91,33 @@ module my_hackathon_account::prototype {
         message: string::String,
     }
 
-    public entry fun set_message(account: &signer, message: string::String) acquires MessageHolder {
+    entry fun set_message(account: &signer, message: string::String) acquires MessageHolder {
         let addr = signer::address_of(account);
         // Check if resource exists at this account (like checking mapping[addr])
         if (exists<MessageHolder>(addr)) {
             move_from<MessageHolder>(addr);  // Remove old resource
         };
-        // Store resource at user's account (not in contract storage!)
+        // Store resource at the user's address (in their account, not in contract storage!)
         move_to(account, MessageHolder { message });
     }
 
     #[view]
     public fun get_message(addr: address): string::String acquires MessageHolder {
         assert!(exists<MessageHolder>(addr), 0);
+        // Read message stored at the user's address
         borrow_global<MessageHolder>(addr).message
     }
 }
 ```
 
-Por defecto, los módulos se deployean en la dirección de tu cuenta. Para apps en producción, considera hacer deploy en Objects, lo que crea una dirección única por cada deploy y permite la propiedad transferible del código. Revisa [Using Objects](/es/build/smart-contracts/objects) para detalles de implementación.
+Por defecto, los módulos se deployean en la dirección de tu cuenta. Para apps en producción, considera hacer deploy en Objects, lo que crea una dirección única por cada deploy y permite la propiedad transferible del código. Revisa [Using Objects](/es/build/smart-contracts/object/using-objects) para detalles de implementación.
 
-Aprende más: [global storage operators](/es/build/smart-contracts/book/global-storage-operators), [structs and resources](/es/build/smart-contracts/book/structs-and-resources)
+Aprende más: [`global storage operators`](/es/build/smart-contracts/book/global-storage-operators), [`structs and resources`](/es/build/smart-contracts/book/structs-and-resources)
 
 </TabItem>
 <TabItem label="Authentication">
 
-En Ethereum, `msg.sender` es establecido por la EVM, pero muchos bugs provienen de usar `tx.origin` para autenticación (auth) o de confiar en direcciones proveídas por el usuario. El `&signer` de Aptos va más allá: es una capability infalsificable creada únicamente por la VM para los signers reales de la transacción. Por lo tanto, cualquier función que requiera `&signer` no puede ser llamada con una identidad falsificada (spoofed). En las dapps, las wallets, junto con el [Aptos TypeScript SDK](/es/build/sdks/ts-sdk) y el [wallet adapter](/es/build/sdks/wallet-adapter), conectan esta identidad del signer desde el frontend hasta el on-chain.
+En Ethereum, `msg.sender` es establecido por la EVM, pero muchos bugs provienen de usar `tx.origin` para autenticación (auth) o de confiar en direcciones proveídas por el usuario. El `&signer` de Aptos va más allá: es una capability infalsificable creada únicamente por la VM para los signers reales de la transacción. Por lo tanto, cualquier función que requiera `&signer` no puede ser llamada con una identidad falsificada (spoofed). En las dapps, las wallets, junto con el [Aptos TypeScript SDK](/es/build/sdks/ts-sdk) y el [wallet adapter](/es/build/sdks/wallet-adapter/wallets), conectan esta identidad del signer desde el frontend hasta el on-chain.
 
 ```move
 module my_hackathon_account::prototype {
@@ -124,7 +129,7 @@ module my_hackathon_account::prototype {
     }
 
     // Only the account owner can provide their &signer (unforgeable authentication)
-    public entry fun set_message(account: &signer, message: string::String) acquires MessageHolder {
+    entry fun set_message(account: &signer, message: string::String) acquires MessageHolder {
         // Extract address from authenticated signer (no spoofing possible!)
         let addr = signer::address_of(account);
         if (exists<MessageHolder>(addr)) {
@@ -137,6 +142,7 @@ module my_hackathon_account::prototype {
     #[view]
     public fun get_message(addr: address): string::String acquires MessageHolder {
         assert!(exists<MessageHolder>(addr), 0);
+        // Read message stored at the user's address
         borrow_global<MessageHolder>(addr).message
     }
 }
@@ -148,7 +154,7 @@ Crea y fondea una cuenta usando el Aptos CLI:
 aptos init
 ```
 
-Aprende más: [tipo signer](/es/build/smart-contracts/book/signer), [functions](/es/build/smart-contracts/book/functions)
+Aprende más: [`tipo signer`](/es/build/smart-contracts/book/signer), [`functions`](/es/build/smart-contracts/book/functions)
 
 </TabItem>
 <TabItem label="Resources & Abilities">
@@ -168,7 +174,7 @@ module my_hackathon_account::prototype {
         message: string::String,
     }
 
-    public entry fun set_message(account: &signer, message: string::String) acquires MessageHolder {
+    entry fun set_message(account: &signer, message: string::String) acquires MessageHolder {
         let addr = signer::address_of(account);
         // The 'drop' ability allows implicit destruction
         if (exists<MessageHolder>(addr)) {
@@ -180,12 +186,13 @@ module my_hackathon_account::prototype {
     #[view]
     public fun get_message(addr: address): string::String acquires MessageHolder {
         assert!(exists<MessageHolder>(addr), 0);
+        // Read message stored at the user's address
         borrow_global<MessageHolder>(addr).message
     }
 }
 ```
 
-Aprende más: [abilities](/es/build/smart-contracts/book/abilities), [structs and resources](/es/build/smart-contracts/book/structs-and-resources)
+Aprende más: [`abilities`](/es/build/smart-contracts/book/abilities), [`structs and resources`](/es/build/smart-contracts/book/structs-and-resources)
 
 </TabItem>
 <TabItem label="Upgradeability">
@@ -220,7 +227,7 @@ Publica tu package:
 aptos move publish
 ```
 
-Llama a una función después del deploy:
+Llama a una función `entry` después del deploy:
 
 ```bash
 aptos move run --function-id 'your_address::module_name::function_name'

@@ -34,19 +34,23 @@ Get hands-on with side-by-side Solidity and Move code comparisons on [Aptos Lear
 | **Dispatch Type**          | Dynamic dispatch                                                                                                               | Static dispatch                                                                                                                       |
 | **Frontend SDK**           | [Ethers.js library](https://docs.ethers.org/v6/)                                                                               | [Aptos Typescript SDK](/build/sdks/ts-sdk)                                                                                            |
 | **NFT Standards**          | [ERC-721](https://docs.openzeppelin.com/contracts/4.x/erc721), [ERC-1155](https://docs.openzeppelin.com/contracts/4.x/erc1155) | [Digital Asset](/build/smart-contracts/digital-asset)                                                                                 |
-| **FT Standard**            | [ERC-20](https://docs.openzeppelin.com/contracts/4.x/erc20)                                                                    | [Fungible Asset](/build/smart-contracts/fungible-asset) and [Coin](/build/smart-contracts/aptos-coin) (legacy)                         |
-| **Example Code**           | [ERC-20](https://github.com/OpenZeppelin/openzeppelin-contracts/tree/master/contracts/token/ERC20)                             | [Fungible Asset](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/fungible_asset.move) |
+| **FT Standard**            | [ERC-20](https://docs.openzeppelin.com/contracts/4.x/erc20), factory pattern                                                    | See [Fungible Asset](/build/smart-contracts/fungible-asset), copy paste in your module: `use aptos_framework::fungible_asset...`      |
+| **Example Code**           | [ERC-20](https://github.com/OpenZeppelin/openzeppelin-contracts/tree/master/contracts/token/ERC20) (new contract per deploy)   | [Fungible Asset](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/fungible_asset.move) (single reusable module) |
+
+<br />
+
+Legacy [`Coin`](/build/smart-contracts/aptos-coin) documentation still covers the original standard; most new deployments should prefer the Fungible Asset module referenced above.
 
 <br />
 
 ### Comparing Token Standards in Detail
 
-|                        | Solidity                                                               | Move (Aptos)                                                                                                                                                         |
-| ---------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Token Structure**    | Each token is its own contract.                                        | Every token is a typed `Coin` or `FungibleAsset` using a single, reusable contract.                                                                                  |
-| **Token Standard**     | Must conform to standards like ERC20; implementations can vary.        | Uniform interface and implementation for all tokens.                                                                                                                 |
-| **Balance Storage**    | Balances stored in contract using a mapping structure.                 | **Resource-Oriented Balance**: Balances stored as a resource in the user's account. Resources cannot be arbitrarily created, ensuring integrity of token value. |
-| **Transfer Mechanism** | Tokens can be transferred without receiver's explicit permission. | Except for specific cases (like AptosCoin), Tokens generally require receiver's `signer` authority for transfer.                                                |
+|                        | Solidity                                                               | Move (Aptos)                                                                                                                                                                |
+| ---------------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Token Structure**    | Each token is its own contract.                                        | Every token is a typed `FungibleAsset` instantiation that reuses the same published module.                                                                               |
+| **Token Standard**     | Must conform to standards like ERC-20; implementations can vary per deploy. | Uniform interface and implementation enforced by the shared module; new tokens simply register a new type rather than redeploying code.                                    |
+| **Balance Storage**    | Balances stored in contract using a mapping structure.                 | **Resource-Oriented Balance**: balances live in an extensible object owned by the user's account.   |
+| **Transfer Mechanism** | Tokens can be transferred without receiver's explicit permission.      | Transfers can skip receiver permission, but only when the FA explicitly enables primary-store auto creation (visible in the token's creation code). |
 
 <br />
 
@@ -87,19 +91,20 @@ module my_hackathon_account::prototype {
         message: string::String,
     }
 
-    public entry fun set_message(account: &signer, message: string::String) acquires MessageHolder {
+    entry fun set_message(account: &signer, message: string::String) acquires MessageHolder {
         let addr = signer::address_of(account);
         // Check if resource exists at this account (like checking mapping[addr])
         if (exists<MessageHolder>(addr)) {
             move_from<MessageHolder>(addr);  // Remove old resource
         };
-        // Store resource at user's account (not in contract storage!)
+        // Store resource at the user's address (in their account, not in contract storage!)
         move_to(account, MessageHolder { message });
     }
 
     #[view]
     public fun get_message(addr: address): string::String acquires MessageHolder {
         assert!(exists<MessageHolder>(addr), 0);
+        // Read message stored at the user's address
         borrow_global<MessageHolder>(addr).message
     }
 }
@@ -125,7 +130,7 @@ module my_hackathon_account::prototype {
     }
 
     // Only the account owner can provide their &signer (unforgeable authentication)
-    public entry fun set_message(account: &signer, message: string::String) acquires MessageHolder {
+    entry fun set_message(account: &signer, message: string::String) acquires MessageHolder {
         // Extract address from authenticated signer (no spoofing possible!)
         let addr = signer::address_of(account);
         if (exists<MessageHolder>(addr)) {
@@ -138,6 +143,7 @@ module my_hackathon_account::prototype {
     #[view]
     public fun get_message(addr: address): string::String acquires MessageHolder {
         assert!(exists<MessageHolder>(addr), 0);
+        // Read message stored at the user's address
         borrow_global<MessageHolder>(addr).message
     }
 }
@@ -170,7 +176,7 @@ module my_hackathon_account::prototype {
         message: string::String,
     }
 
-    public entry fun set_message(account: &signer, message: string::String) acquires MessageHolder {
+    entry fun set_message(account: &signer, message: string::String) acquires MessageHolder {
         let addr = signer::address_of(account);
         // The 'drop' ability allows implicit destruction
         if (exists<MessageHolder>(addr)) {
@@ -182,6 +188,7 @@ module my_hackathon_account::prototype {
     #[view]
     public fun get_message(addr: address): string::String acquires MessageHolder {
         assert!(exists<MessageHolder>(addr), 0);
+        // Read message stored at the user's address
         borrow_global<MessageHolder>(addr).message
     }
 }
@@ -224,7 +231,7 @@ Publish your package:
 aptos move publish
 ```
 
-Call a function after deployment:
+Call an `entry` function after deployment:
 
 ```bash
 aptos move run --function-id 'your_address::module_name::function_name'

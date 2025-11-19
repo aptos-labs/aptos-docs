@@ -10,32 +10,33 @@ import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
 Aptos 旨在帮助您快速原型开发并扩展安全的生产级应用。它结合了一个快速、低成本且稳定的区块链层，以及 Move 语言的编译时安全特性，可以在部署前捕获潜在漏洞利用（exploit）。此外，Aptos 还提供完善的开发工具（tooling）生态，并与各类交易所和跨链桥深度集成，便于无缝接入。
 
 <Aside type="tip" title="交互式工作坊">
-在 [Aptos Learn](https://learn.aptoslabs.com) 上通过并排比较 Solidity 和 Move 代码进行实践：
-- 用于去中心化 "billboard" 应用的 [Move smart contracts](https://learn.aptoslabs.com/en/ethereum-to-aptos-guide/move-contract)
-- 用于 frontends 的 [身份管理](https://learn.aptoslabs.com/en/ethereum-to-aptos-guide/identity)
-- 在您的 app 中 [读取 on-chain data](https://learn.aptoslabs.com/en/ethereum-to-aptos-guide/read-data)
+  在 [Aptos Learn](https://learn.aptoslabs.com) 上通过并排比较 Solidity 和 Move 代码进行实践：
+
+  - 用于去中心化 "billboard" 应用的 [Move smart contracts](https://learn.aptoslabs.com/en/ethereum-to-aptos-guide/move-contract)
+  - 用于 frontends 的 [身份管理](https://learn.aptoslabs.com/en/ethereum-to-aptos-guide/identity)
+  - 在您的 app 中 [读取 on-chain data](https://learn.aptoslabs.com/en/ethereum-to-aptos-guide/read-data)
 </Aside>
 
 ### 宏观概述
 
-| 功能 | 以太坊 | Aptos |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
-| **账户地址** | 160-bit | 256-bit |
-| **存储模型** | 基于合约的存储 | 以账户为中心的代码和数据模型 |
-| **调用者 ID** | `msg.sender` | `&signer` 引用 |
-| **智能合约** | Solidity, EVM | Move, MoveVM |
-| **优势** | 成熟，应用广泛 | 可扩展性、低延迟、可预测的费用 |
-| **交易费用（gas 费用）** | 可变，可能很高 | 更低且更可预测 |
-| **Sponsored Transactions** | 需要第三方服务或 EIP-7702 wallet 支持 (2025+) | 通过 fee payer 字段 [原生支持](/zh/build/guides/sponsored-transactions)。[Geomi Gas Stations](https://geomi.dev/docs/gas-stations) 提供生产级基础设施 |
-| **账户结构** | 余额在单个字段中，使用 `nonce` 计数 | 模块和 resources，使用 `sequence_number` 序列号 |
-| **数据存储** | Patricia Merkle 树 | 带有 resources 和模块的全局存储 |
-| **可升级性** | Proxy 模式 | 直接模块升级 |
-| **安全性** | 易受 reentrancy 等攻击 | 减轻常见漏洞 |
-| **Dispatch 类型** | Dynamic dispatch | Static dispatch |
-| **Frontend SDK** | [Ethers.js 库](https://docs.ethers.org/v6/) | [Aptos Typescript SDK](/zh/build/sdks/ts-sdk) |
-| **NFT 标准** | [ERC-721](https://docs.openzeppelin.com/contracts/4.x/erc721), [ERC-1155](https://docs.openzeppelin.com/contracts/4.x/erc1155) | [Digital Asset](/zh/build/smart-contracts/digital-asset) |
-| **FT 标准** | [ERC-20](https://docs.openzeppelin.com/contracts/4.x/erc20), factory pattern | 查看 [Fungible Asset](/zh/build/smart-contracts/fungible-asset)，在您的模块中复制粘贴：`use aptos_framework::fungible_asset...`      |
-| **示例代码** | [ERC-20](https://github.com/OpenZeppelin/openzeppelin-contracts/tree/master/contracts/token/ERC20) (每次部署新合约)   | [Fungible Asset](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/fungible_asset.move) (单一可重用模块) |
+| 功能                         | 以太坊                                                                                                                            | Aptos                                                                                                                                           |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| **账户地址**                   | 160-bit                                                                                                                        | 256-bit                                                                                                                                         |
+| **存储模型**                   | 基于合约的存储                                                                                                                        | 以账户为中心的代码和数据模型                                                                                                                                  |
+| **调用者 ID**                 | `msg.sender`                                                                                                                   | `&signer` 引用                                                                                                                                    |
+| **智能合约**                   | Solidity, EVM                                                                                                                  | Move, MoveVM                                                                                                                                    |
+| **优势**                     | 成熟，应用广泛                                                                                                                        | 可扩展性、低延迟、可预测的费用                                                                                                                                 |
+| **交易费用（gas 费用）**           | 可变，可能很高                                                                                                                        | 更低且更可预测                                                                                                                                         |
+| **Sponsored Transactions** | 需要第三方服务或 EIP-7702 wallet 支持 (2025+)                                                                                            | 通过 fee payer 字段 [原生支持](/zh/build/guides/sponsored-transactions)。[Geomi Gas Stations](https://geomi.dev/docs/gas-stations) 提供生产级基础设施             |
+| **账户结构**                   | 余额在单个字段中，使用 `nonce` 计数                                                                                                         | 模块和 resources，使用 `sequence_number` 序列号                                                                                                          |
+| **数据存储**                   | Patricia Merkle 树                                                                                                              | 带有 resources 和模块的全局存储                                                                                                                           |
+| **可升级性**                   | Proxy 模式                                                                                                                       | 直接模块升级                                                                                                                                          |
+| **安全性**                    | 易受 reentrancy 等攻击                                                                                                              | 减轻常见漏洞                                                                                                                                          |
+| **Dispatch 类型**            | Dynamic dispatch                                                                                                               | Static dispatch                                                                                                                                 |
+| **Frontend SDK**           | [Ethers.js 库](https://docs.ethers.org/v6/)                                                                                     | [Aptos Typescript SDK](/zh/build/sdks/ts-sdk)                                                                                                   |
+| **NFT 标准**                 | [ERC-721](https://docs.openzeppelin.com/contracts/4.x/erc721), [ERC-1155](https://docs.openzeppelin.com/contracts/4.x/erc1155) | [Digital Asset](/zh/build/smart-contracts/digital-asset)                                                                                        |
+| **FT 标准**                  | [ERC-20](https://docs.openzeppelin.com/contracts/4.x/erc20), factory pattern                                                   | 查看 [Fungible Asset](/zh/build/smart-contracts/fungible-asset)，在您的模块中复制粘贴：`use aptos_framework::fungible_asset...`                               |
+| **示例代码**                   | [ERC-20](https://github.com/OpenZeppelin/openzeppelin-contracts/tree/master/contracts/token/ERC20) (每次部署新合约)                   | [Fungible Asset](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/fungible_asset.move) (单一可重用模块) |
 
 <br />
 
@@ -45,199 +46,188 @@ Aptos 旨在帮助您快速原型开发并扩展安全的生产级应用。它�
 
 ### 代币标准详细对比
 
-| | Solidity | Move (Aptos) |
-| ---------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **代币结构** | 每个代币都是独立的合约。 | 每个代币是类型化的 `FungibleAsset` 实例化，重用相同的已发布模块。                                                                               |
-| **代币标准** | 必须符合 ERC-20 等标准；每次部署的实现可能不同。 | 由共享模块强制执行的统一接口和实现；新代币只需注册新类型，而不是重新部署代码。                                    |
-| **余额存储** | 余额使用 `mapping`（映射）结构存储在合约中。 | **面向 Resource 的余额**：余额存在于用户账户拥有的可扩展对象中。   |
-| **转账机制** | Token 可以在没有接收方明确许可的情况下转移。 | 转账可以跳过接收方权限，但前提是 FA 明确启用 primary-store 自动创建（在代币的创建代码中可见）。 |
+|          | Solidity                     | Move (Aptos)                                              |
+| -------- | ---------------------------- | --------------------------------------------------------- |
+| **代币结构** | 每个代币都是独立的合约。                 | 每个代币是类型化的 `FungibleAsset` 实例化，重用相同的已发布模块。                 |
+| **代币标准** | 必须符合 ERC-20 等标准；每次部署的实现可能不同。 | 由共享模块强制执行的统一接口和实现；新代币只需注册新类型，而不是重新部署代码。                   |
+| **余额存储** | 余额使用 `mapping`（映射）结构存储在合约中。  | **面向 Resource 的余额**：余额存在于用户账户拥有的可扩展对象中。                   |
+| **转账机制** | Token 可以在没有接收方明确许可的情况下转移。    | 转账可以跳过接收方权限，但前提是 FA 明确启用 primary-store 自动创建（在代币的创建代码中可见）。 |
 
 <br />
 
 ### EVM 与 Move VM 详细对比
 
-- **EVM**：以其灵活性和**动态分发（dynamic dispatch）**而闻名，这使得智能合约能够实现广泛的行为。然而，这种灵活性可能会导致并行执行和网络操作的复杂性。
-- **Move VM**：专注于安全性和效率，在 VM 和编程语言之间采用了更高集成度的设计。其**数据存储模型**支持更好的并行化，而**静态分发（static dispatch）**提升了安全性和可预测性。
+- **EVM**：以其灵活性和\*\*动态分发（dynamic dispatch）\*\*而闻名，这使得智能合约能够实现广泛的行为。然而，这种灵活性可能会导致并行执行和网络操作的复杂性。
+- **Move VM**：专注于安全性和效率，在 VM 和编程语言之间采用了更高集成度的设计。其**数据存储模型**支持更好的并行化，而\*\*静态分发（static dispatch）\*\*提升了安全性和可预测性。
 
 <br />
 
-| | EVM (Ethereum Virtual Machine) | Move VM (Move Virtual Machine) |
-| ------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| **数据存储** | 数据存储在智能合约的 storage 空间中。 | 数据存储在智能合约、用户账户和对象（Objects）之间。 |
-| **并行化** | 由于共享 storage 空间，并行执行受限。 | 灵活的分割存储设计支持更多的并行执行。 |
-| **VM 与语言集成** | EVM 和智能合约语言（例如 Solidity）是分离的层次。 | VM 层和 Move 语言之间无缝集成，用 Rust 编写的原生函数可以在 Move 中执行。 |
-| **关键网络操作** | 网络操作的实现可能复杂且不直接。 | 验证者集管理等关键操作在 Move 中原生实现，允许直接执行。 |
-| **函数调用** | Dynamic dispatch 允许任意的智能合约调用。 | Static dispatch 符合对安全性和可预测行为的关注。 |
-| **类型安全** | 合约类型提供了一定程度的类型安全。 | Move 中的模块 structs 和泛型提供了强大的类型安全。 |
-| **交易安全** | 使用 nonces 来保证交易顺序和安全。 | 使用 sequence numbers 来保证交易顺序和安全。 |
-| **认证存储** | 支持，通过智能合约 storage。 | 支持，利用 Move 的 resource 模型。 |
-| **对象可访问性** | Objects 不是全局可访问的；受限于智能合约的 scope。 | 保证 objects 的全局可访问性。 |
-
+|              | EVM (Ethereum Virtual Machine)   | Move VM (Move Virtual Machine)                  |
+| ------------ | -------------------------------- | ----------------------------------------------- |
+| **数据存储**     | 数据存储在智能合约的 storage 空间中。          | 数据存储在智能合约、用户账户和对象（Objects）之间。                   |
+| **并行化**      | 由于共享 storage 空间，并行执行受限。          | 灵活的分割存储设计支持更多的并行执行。                             |
+| **VM 与语言集成** | EVM 和智能合约语言（例如 Solidity）是分离的层次。  | VM 层和 Move 语言之间无缝集成，用 Rust 编写的原生函数可以在 Move 中执行。 |
+| **关键网络操作**   | 网络操作的实现可能复杂且不直接。                 | 验证者集管理等关键操作在 Move 中原生实现，允许直接执行。                 |
+| **函数调用**     | Dynamic dispatch 允许任意的智能合约调用。    | Static dispatch 符合对安全性和可预测行为的关注。                |
+| **类型安全**     | 合约类型提供了一定程度的类型安全。                | Move 中的模块 structs 和泛型提供了强大的类型安全。                |
+| **交易安全**     | 使用 nonces 来保证交易顺序和安全。            | 使用 sequence numbers 来保证交易顺序和安全。                 |
+| **认证存储**     | 支持，通过智能合约 storage。               | 支持，利用 Move 的 resource 模型。                       |
+| **对象可访问性**   | Objects 不是全局可访问的；受限于智能合约的 scope。 | 保证 objects 的全局可访问性。                             |
 
 ## 为以太坊开发者准备的迁移技巧
 
 <Tabs>
-<TabItem label="Storage">
+  <TabItem label="Storage">
+    以太坊使用 `mapping`（映射）将所有数据存储在合约的存储（storage）中。Aptos 采用以账户为中心的模型，每个账户存储自己的 resources。不是由一个合约维护一个 `mapping(address => T)`，而是每个用户在自己的地址存储自己的 `T` resource。
 
-以太坊使用 `mapping`（映射）将所有数据存储在合约的存储（storage）中。Aptos 采用以账户为中心的模型，每个账户存储自己的 resources。不是由一个合约维护一个 `mapping(address => T)`，而是每个用户在自己的地址存储自己的 `T` resource。
+    ```move
+    module my_hackathon_account::prototype {
+        use std::string;
+        use std::signer;
 
-```move
-module my_hackathon_account::prototype {
-    use std::string;
-    use std::signer;
+        // Unlike Solidity's mapping(address => string), each account stores their own resource
+        struct MessageHolder has key, store, drop {
+            message: string::String,
+        }
 
-    // Unlike Solidity's mapping(address => string), each account stores their own resource
-    struct MessageHolder has key, store, drop {
-        message: string::String,
+        entry fun set_message(account: &signer, message: string::String) acquires MessageHolder {
+            let addr = signer::address_of(account);
+            // Check if resource exists at this account (like checking mapping[addr])
+            if (exists<MessageHolder>(addr)) {
+                move_from<MessageHolder>(addr);  // Remove old resource
+            };
+            // Store resource at the user's address (in their account, not in contract storage!)
+            move_to(account, MessageHolder { message });
+        }
+
+        #[view]
+        public fun get_message(addr: address): string::String acquires MessageHolder {
+            assert!(exists<MessageHolder>(addr), 0);
+            // Read message stored at the user's address
+            borrow_global<MessageHolder>(addr).message
+        }
     }
+    ```
 
-    entry fun set_message(account: &signer, message: string::String) acquires MessageHolder {
-        let addr = signer::address_of(account);
-        // Check if resource exists at this account (like checking mapping[addr])
-        if (exists<MessageHolder>(addr)) {
-            move_from<MessageHolder>(addr);  // Remove old resource
-        };
-        // Store resource at the user's address (in their account, not in contract storage!)
-        move_to(account, MessageHolder { message });
+    默认情况下，模块会部署到您的账户地址。对于生产级应用，请考虑部署到 [对象（Objects）](/zh/build/smart-contracts/objects)，这会为每次部署创建一个唯一的地址，并实现可转移的代码所有权。有关实现细节，请参阅 [使用 Objects](/zh/build/smart-contracts/object/using-objects)。
+
+    了解更多: [全局存储（global storage）操作符](/zh/build/smart-contracts/book/global-storage-operators), [`structs and resources`](/zh/build/smart-contracts/book/structs-and-resources)
+  </TabItem>
+
+  <TabItem label="Authentication">
+    在以太坊上，`msg.sender` 由 EVM 设置，但许多 bug 源于使用 `tx.origin` 进行身份验证或信任用户提供的地址。Aptos 的 `&signer` 更进一步：它是一个不可伪造的凭证，仅由 VM 为实际的交易签名者创建，因此任何需要 `&signer` 的函数都不能使用伪造的身份调用。在 dapps 中，wallets 加上 [Aptos TypeScript SDK](/zh/build/sdks/ts-sdk) 和 [wallet adapter](/zh/build/sdks/wallet-adapter/wallets) 将签名者身份从前端桥接到 on-chain。
+
+    ```move
+    module my_hackathon_account::prototype {
+        use std::string;
+        use std::signer;
+
+        struct MessageHolder has key, store, drop {
+            message: string::String,
+        }
+
+        // Only the account owner can provide their &signer (unforgeable authentication)
+        entry fun set_message(account: &signer, message: string::String) acquires MessageHolder {
+            // Extract address from authenticated signer (no spoofing possible!)
+            let addr = signer::address_of(account);
+            if (exists<MessageHolder>(addr)) {
+                move_from<MessageHolder>(addr);
+            };
+            // account is guaranteed to be authentic
+            move_to(account, MessageHolder { message });
+        }
+
+        #[view]
+        public fun get_message(addr: address): string::String acquires MessageHolder {
+            assert!(exists<MessageHolder>(addr), 0);
+            // Read message stored at the user's address
+            borrow_global<MessageHolder>(addr).message
+        }
     }
+    ```
 
-    #[view]
-    public fun get_message(addr: address): string::String acquires MessageHolder {
-        assert!(exists<MessageHolder>(addr), 0);
-        // Read message stored at the user's address
-        borrow_global<MessageHolder>(addr).message
+    使用 [Aptos CLI](/zh/build/cli) 创建并资助一个账户：
+
+    ```bash
+    aptos init
+    ```
+
+    了解更多: [`signer` 类型](/zh/build/smart-contracts/book/signer), [`functions`](/zh/build/smart-contracts/book/functions)
+  </TabItem>
+
+  <TabItem label="Resources & Abilities">
+    Move 有四种 abilities：`copy`、`drop`、`store` 和 `key`，它们控制了值的使用方式。在此示例中，MessageHolder 故意省略了 `copy`，因此作为 resource 存储的消息不能被复制；您通常会避免在任何代表 on-chain 状态或资产的类型上使用 `copy`。`key` + `store` 使其能够存在于地址的全局 storage 中，而 `drop` 允许您在覆盖旧 resource 时安全地销毁它。
+
+    ```move
+    module my_hackathon_account::prototype {
+        use std::string;
+        use std::signer;
+
+        // Resources: structs with 'key' ability that live in global storage
+        // key = can be stored at account addresses (makes it a "resource")
+        // store = can be stored inside other structs
+        // drop = can be destroyed/discarded implicitly
+        struct MessageHolder has key, store, drop {
+            message: string::String,
+        }
+
+        entry fun set_message(account: &signer, message: string::String) acquires MessageHolder {
+            let addr = signer::address_of(account);
+            // The 'drop' ability allows implicit destruction
+            if (exists<MessageHolder>(addr)) {
+                move_from<MessageHolder>(addr);  // Old resource is destroyed (requires 'drop')
+            };
+            move_to(account, MessageHolder { message });
+        }
+
+        #[view]
+        public fun get_message(addr: address): string::String acquires MessageHolder {
+            assert!(exists<MessageHolder>(addr), 0);
+            // Read message stored at the user's address
+            borrow_global<MessageHolder>(addr).message
+        }
     }
-}
-```
+    ```
 
-默认情况下，模块会部署到您的账户地址。对于生产级应用，请考虑部署到 [对象（Objects）](/zh/build/smart-contracts/objects)，这会为每次部署创建一个唯一的地址，并实现可转移的代码所有权。有关实现细节，请参阅 [使用 Objects](/zh/build/smart-contracts/object/using-objects)。
+    了解更多: [`abilities`](/zh/build/smart-contracts/book/abilities), [`structs and resources`](/zh/build/smart-contracts/book/structs-and-resources)
+  </TabItem>
 
-了解更多: [全局存储（global storage）操作符](/zh/build/smart-contracts/book/global-storage-operators), [`structs and resources`](/zh/build/smart-contracts/book/structs-and-resources)
+  <TabItem label="Upgradability">
+    Aptos packages 支持两种升级策略：`compatible` (默认；只允许向后兼容的更改) 和 `immutable` (不允许升级)。默认情况下，使用 [Aptos CLI](/zh/build/cli) 通过 `aptos move publish` 发布的 packages 使用 **compatible** 策略，只要不破坏 struct 布局或公共函数签名，您就可以推送新版本。
 
-</TabItem>
+    要阻止所有未来的升级，请设置 immutable 策略：
 
-<TabItem label="Authentication">
+    ```bash
+    aptos move publish --upgrade-policy immutable
+    ```
 
-在以太坊上，`msg.sender` 由 EVM 设置，但许多 bug 源于使用 `tx.origin` 进行身份验证或信任用户提供的地址。Aptos 的 `&signer` 更进一步：它是一个不可伪造的凭证，仅由 VM 为实际的交易签名者创建，因此任何需要 `&signer` 的函数都不能使用伪造的身份调用。在 dapps 中，wallets 加上 [Aptos TypeScript SDK](/zh/build/sdks/ts-sdk) 和 [wallet adapter](/zh/build/sdks/wallet-adapter/wallets) 将签名者身份从前端桥接到 on-chain。
+    或在您的 `Move.toml` 中配置：
 
-```move
-module my_hackathon_account::prototype {
-    use std::string;
-    use std::signer;
+    ```toml
+    [package]
+    name = "MyPackage"
+    version = "1.0.0"
+    upgrade_policy = "immutable"
+    ```
 
-    struct MessageHolder has key, store, drop {
-        message: string::String,
-    }
+    有关确切的兼容性规则，请参阅 [Package Upgrades](/zh/build/smart-contracts/book/package-upgrades)。
+  </TabItem>
 
-    // Only the account owner can provide their &signer (unforgeable authentication)
-    entry fun set_message(account: &signer, message: string::String) acquires MessageHolder {
-        // Extract address from authenticated signer (no spoofing possible!)
-        let addr = signer::address_of(account);
-        if (exists<MessageHolder>(addr)) {
-            move_from<MessageHolder>(addr);
-        };
-        // account is guaranteed to be authentic
-        move_to(account, MessageHolder { message });
-    }
+  <TabItem label="Deploying Modules">
+    在以太坊上，您"将合约部署到一个新地址"。在 Aptos 上，您使用 [Aptos CLI](/zh/build/cli) **发布一个 package** of Move 模块到一个账户 (或 object) 地址。
 
-    #[view]
-    public fun get_message(addr: address): string::String acquires MessageHolder {
-        assert!(exists<MessageHolder>(addr), 0);
-        // Read message stored at the user's address
-        borrow_global<MessageHolder>(addr).message
-    }
-}
-```
+    发布您的 package：
 
-使用 [Aptos CLI](/zh/build/cli) 创建并资助一个账户：
+    ```bash
+    aptos move publish
+    ```
 
-```bash
-aptos init
-```
+    部署后调用 `entry` 函数：
 
-了解更多: [`signer` 类型](/zh/build/smart-contracts/book/signer), [`functions`](/zh/build/smart-contracts/book/functions)
+    ```bash
+    aptos move run --function-id 'your_address::module_name::function_name'
+    ```
 
-</TabItem>
-
-<TabItem label="Resources & Abilities">
-
-Move 有四种 abilities：`copy`、`drop`、`store` 和 `key`，它们控制了值的使用方式。在此示例中，MessageHolder 故意省略了 `copy`，因此作为 resource 存储的消息不能被复制；您通常会避免在任何代表 on-chain 状态或资产的类型上使用 `copy`。`key` + `store` 使其能够存在于地址的全局 storage 中，而 `drop` 允许您在覆盖旧 resource 时安全地销毁它。
-
-```move
-module my_hackathon_account::prototype {
-    use std::string;
-    use std::signer;
-
-    // Resources: structs with 'key' ability that live in global storage
-    // key = can be stored at account addresses (makes it a "resource")
-    // store = can be stored inside other structs
-    // drop = can be destroyed/discarded implicitly
-    struct MessageHolder has key, store, drop {
-        message: string::String,
-    }
-
-    entry fun set_message(account: &signer, message: string::String) acquires MessageHolder {
-        let addr = signer::address_of(account);
-        // The 'drop' ability allows implicit destruction
-        if (exists<MessageHolder>(addr)) {
-            move_from<MessageHolder>(addr);  // Old resource is destroyed (requires 'drop')
-        };
-        move_to(account, MessageHolder { message });
-    }
-
-    #[view]
-    public fun get_message(addr: address): string::String acquires MessageHolder {
-        assert!(exists<MessageHolder>(addr), 0);
-        // Read message stored at the user's address
-        borrow_global<MessageHolder>(addr).message
-    }
-}
-```
-
-了解更多: [`abilities`](/zh/build/smart-contracts/book/abilities), [`structs and resources`](/zh/build/smart-contracts/book/structs-and-resources)
-
-</TabItem>
-
-<TabItem label="Upgradability">
-
-Aptos packages 支持两种升级策略：`compatible` (默认；只允许向后兼容的更改) 和 `immutable` (不允许升级)。默认情况下，使用 [Aptos CLI](/zh/build/cli) 通过 `aptos move publish` 发布的 packages 使用 **compatible** 策略，只要不破坏 struct 布局或公共函数签名，您就可以推送新版本。
-
-要阻止所有未来的升级，请设置 immutable 策略：
-
-```bash
-aptos move publish --upgrade-policy immutable
-```
-
-或在您的 `Move.toml` 中配置：
-
-```toml
-[package]
-name = "MyPackage"
-version = "1.0.0"
-upgrade_policy = "immutable"
-```
-
-有关确切的兼容性规则，请参阅 [Package Upgrades](/zh/build/smart-contracts/book/package-upgrades)。
-
-</TabItem>
-
-<TabItem label="Deploying Modules">
-
-在以太坊上，您"将合约部署到一个新地址"。在 Aptos 上，您使用 [Aptos CLI](/zh/build/cli) **发布一个 package** of Move 模块到一个账户 (或 object) 地址。
-
-发布您的 package：
-
-```bash
-aptos move publish
-```
-
-部署后调用 `entry` 函数：
-
-```bash
-aptos move run --function-id 'your_address::module_name::function_name'
-```
-
-无论是基于账户的发布还是基于 object 的部署（通过 `aptos move deploy-object`）都遵循 package 的升级策略。有关完整演练，请参阅 [Your First Move Module](/zh/build/guides/first-move-module)，有关以 object 为中心的模式，请参阅 [Objects](/zh/build/smart-contracts/objects)。
-
-</TabItem>
+    无论是基于账户的发布还是基于 object 的部署（通过 `aptos move deploy-object`）都遵循 package 的升级策略。有关完整演练，请参阅 [Your First Move Module](/zh/build/guides/first-move-module)，有关以 object 为中心的模式，请参阅 [Objects](/zh/build/smart-contracts/objects)。
+  </TabItem>
 </Tabs>

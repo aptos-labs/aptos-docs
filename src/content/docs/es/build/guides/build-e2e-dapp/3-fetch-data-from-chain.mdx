@@ -1,130 +1,131 @@
 ---
-title: "3. Obtener Datos de la Cadena"
-description: "Aprende a recuperar datos en cadena verificando recursos TodoList e implementando lógica de interfaz de usuario condicional."
+title: "3. Obtener Data de la Chain"
+description: "Aprende a recuperar data on-chain verificando los recursos de TodoList e implementando lógica condicional en la UI."
 sidebar:
-  label: "3. Obtener Datos"
+  label: "3. Fetch Data"
 ---
 
-En el tercer capítulo del tutorial sobre [construir una dapp de extremo a extremo en Aptos](/es/build/guides/build-e2e-dapp), aprenderás a obtener datos de la cadena.
+import { Steps } from '@astrojs/starlight/components';
 
-Nuestra lógica de interfaz de usuario depende de si la cuenta conectada ha creado una lista de tareas. Si la cuenta ha creado una lista de tareas, nuestra aplicación debería mostrar esa lista; si no, la aplicación debería mostrar un botón ofreciendo la opción de crear una nueva lista.
+En el tercer capítulo del tutorial sobre [cómo construir una dapp end-to-end en Aptos](/es/build/guides/build-e2e-dapp), aprenderás a hacer fetch de la data desde la chain.
 
-Para eso, primero necesitamos verificar si la cuenta conectada tiene un recurso `TodoList`. En nuestro contrato inteligente, cada vez que alguien crea una lista de tareas creamos y asignamos un recurso `TodoList` a su cuenta.
+Nuestra lógica de UI depende de si la cuenta conectada ha creado una lista de tareas (todo list). Si la cuenta ya creó una, nuestra app debería mostrar esa lista; si no, la app debería mostrar un botón ofreciendo la opción de crear una nueva.
 
-Para obtener datos de la cadena, podemos usar el [SDK de TypeScript de Aptos](/es/build/sdks/ts-sdk). El SDK proporciona clases y funciones para que podamos interactuar y consultar fácilmente la cadena de Aptos.
+Para lograr esto, primero necesitamos verificar si la cuenta conectada tiene un recurso `TodoList`. En nuestro smart contract, cada vez que alguien crea una lista, generamos y asignamos un recurso `TodoList` a su cuenta.
 
-Para comenzar:
+Para traer data de la chain, podemos usar el [Aptos TypeScript SDK](/es/build/sdks/ts-sdk). El SDK nos provee clases y funciones para interactuar y hacer queries a la chain de Aptos fácilmente.
 
-1. Detén el servidor local si está ejecutándose.
-2. Importa wallet del proveedor React del adaptador de billetera:
+Para empezar:
 
-```tsx filename="App.tsx"
-import { useWallet } from "@aptos-labs/wallet-adapter-react";
-```
+<Steps>
+  1. **Detén el servidor local** si está corriendo y ve al archivo `App.tsx`.
 
-2. Extrae el objeto account del adaptador de billetera:
+  2. **Importa la wallet desde el provider del wallet adapter de React**:
+     ```tsx filename="App.tsx"
+     import { useWallet } from "@aptos-labs/wallet-adapter-react";
+     ```
 
-```tsx filename="App.tsx"
-function App() {
-	const { account } = useWallet();
-}
-```
+  3. **Extrae el objeto account del wallet adapter**:
 
-El objeto `account` es `null` si no hay una cuenta conectada; cuando una cuenta está conectada, el objeto `account` contiene la información de la cuenta, incluyendo la dirección de la cuenta.
+     ```tsx filename="App.tsx"
+     function App() {
+       const { account } = useWallet();
+     }
+     ```
 
-3. A continuación, queremos obtener el recurso TodoList de la cuenta.
-   Comienza importando `useEffect` usando `import { useEffect } from "react";`
-   Agreguemos un hook `useEffect` a nuestro archivo que llamaría a una función para obtener el recurso cada vez que cambie nuestra dirección de cuenta:
+     El objeto `account` es `null` si no hay ninguna cuenta conectada; cuando se conecta una cuenta, el objeto `account` contiene la información de la misma, incluyendo su address.
 
-```tsx filename="App.tsx"
-function App() {
-  import { useEffect } from "react"
-  ...
-  useEffect(() => {
-    fetchList();
-  }, [account?.address]);
-  ...
-}
-```
+  4. **Configura los hooks y el state de React**:
 
-4. Antes de crear nuestra función `fetchList`, también creemos un estado local para almacenar si la cuenta tiene una lista:
+     - Importa `useEffect` y `useState` usando:
 
-```tsx filename="App.tsx"
-function App() {
-  ...
-  const [accountHasList, setAccountHasList] = useState<boolean>(false);
-  ...
-}
-```
+     ```tsx filename="App.tsx"
+     import { useState, useEffect } from "react";
+     ```
 
-también importa `useState` usando
-`import { useState, useEffect } from "react";`
+     - Crea un state local para rastrear si la cuenta tiene una todo list y añade un hook `useEffect` para hacer fetch de la data cuando la cuenta cambie:
 
-5. Importa la variable `MODULE_ADDRESS` usando `import { MODULE_ADDRESS } from "./constants";`. Esta es la dirección del módulo que publicamos en el capítulo anterior.
-6. Importa `aptosClient` usando `import { aptosClient } from "./utils/aptosClient";`. Este es un cliente que `create-aptos-dapp` creó para nosotros para interactuar con la cadena.
-7. Nuestro hook `useEffect` está llamando a una función `fetchList`; vamos a crearla:
+     ```tsx filename="App.tsx"
+     function App() {
+       const [accountHasList, setAccountHasList] = useState<boolean>(false);
+       useEffect(() => {
+         fetchList();
+       }, [account?.address]);
+     }
+     ```
 
-```tsx filename="App.tsx"
-const fetchList = async () => {
-  if (!account) return [];
-  const moduleAddress = MODULE_ADDRESS;
-  try {
-    const todoListResource = await aptosClient().getAccountResource(
-      {
-        accountAddress:account?.address,
-        resourceType:`${moduleAddress}::todolist::TodoList`
-      }
-    );
-    setAccountHasList(true);
-  } catch (e: any) {
-    setAccountHasList(false);
-  }
-};
-```
+  5. **Importa las dependencias requeridas**:
 
-**Repasemos el código de la función `fetchList`.**
+     - Importa la variable `MODULE_ADDRESS` usando:
 
-Primero, usamos la propiedad `account` de nuestro proveedor de billetera para asegurarnos de que hay una cuenta conectada a nuestra aplicación.
+     ```tsx filename="App.tsx"
+     import { MODULE_ADDRESS } from "./constants";
+     ```
 
-Luego, usamos el método `getAccountResource` de `aptosClient` para obtener el recurso de la cuenta. Esta función toma la dirección de la cuenta y el tipo de recurso que queremos obtener.
+     - Importa `aptosClient` usando:
 
-Si la función se ejecuta exitosamente, significa que la cuenta tiene un recurso `TodoList`, así que establecemos `accountHasList` a `true`.
+     ```tsx filename="App.tsx"
+     import { aptosClient } from "./utils/aptosClient";
+     ```
 
-Si la función falla (i.e., arroja un error), significa que la cuenta no tiene un recurso `TodoList`, así que establecemos `accountHasList` a `false`.
+  6. **Crea la función `fetchList`**:
+     ```tsx filename="App.tsx"
+     const fetchList = async () => {
+       if (!account) return [];
+       const moduleAddress = MODULE_ADDRESS;
+       try {
+         const todoListResource = await aptosClient().getAccountResource(
+           {
+             accountAddress:account?.address,
+             resourceType:`${moduleAddress}::todolist::TodoList`
+           }
+         );
+         setAccountHasList(true);
+       } catch (e: any) {
+         setAccountHasList(false);
+       }
+     };
+     ```
 
-8. Ahora, actualicemos nuestra interfaz de usuario para mostrar contenido diferente basado en el estado `accountHasList`:
+  7. **Actualiza la UI basada en el state `accountHasList`**:
 
-```tsx filename="App.tsx"
-function App() {
-  ...
-  return (
-    <>
-      <TopBanner />
-      <Header />
-      <div className="flex items-center justify-center flex-col">
-        {!accountHasList ? (
-          <div>
-            <h2>Crear una nueva lista</h2>
-            <Button>Agregar nueva lista</Button>
-          </div>
-        ) : (
-          <div>
-            <h2>Mi Lista de Tareas</h2>
-            <p>Aquí estarán tus tareas...</p>
-          </div>
-        )}
-      </div>
-    </>
-  );
-}
-```
+     - Importa el componente `Button` usando:
 
-9. No olvides importar el componente `Button`. Agrégalo a tus importaciones:
+     ```tsx filename="App.tsx"
+     import { Button } from "./components/ui/button";
+     ```
 
-```tsx filename="App.tsx"
-import { Button } from "@/components/ui/button";
-```
+     - Actualiza la UI basándote en el state `accountHasList`:
 
-¡Excelente! Ahora nuestra aplicación puede verificar si una cuenta conectada tiene una lista de tareas y mostrar contenido diferente basado en eso.
+     ```tsx filename="App.tsx"
+     return (
+       <>
+         <TopBanner />
+         <Header />
+         <div className="flex items-center justify-center flex-col">
+           {!accountHasList && (
+             <div className="flex items-center justify-center flex-col">
+               <Button>Add new list</Button>
+             </div>
+           )}
+         </div>
+       </>
+     );
+     ```
 
-En el siguiente capítulo, aprenderemos cómo enviar datos a la cadena para crear una nueva lista de tareas.
+     La función `aptosClient().getAccountResource()` espera una _account address_ que contenga el recurso que estamos buscando y una representación en string de un _tipo de struct de Move_ on-chain:
+
+     - **account address** - es la cuenta conectada actualmente (la obtenemos del objeto account de la wallet).
+     - **Sintaxis del string del tipo de struct de Move**:
+       - La address de la cuenta que posee el módulo Move
+       - El nombre del módulo donde vive el recurso = `todolist`
+       - El nombre del recurso = `TodoList`
+
+     Si el request es exitoso y existe un recurso para esa cuenta, queremos setear nuestro state local a `true`; de lo contrario, lo seteamos a `false`.
+
+     Ahora tenemos un botón **Add new list** que aparece solo si la cuenta no tiene una lista creada.
+
+  8. Inicia el servidor local con `npm run dev`. Deberías ver el botón **Add new list**.
+</Steps>
+
+A continuación, entendamos cómo crear una nueva lista [enviando data a la chain](/es/build/guides/build-e2e-dapp/4-submit-data-to-chain) en el capítulo 4.

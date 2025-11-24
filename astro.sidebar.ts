@@ -350,6 +350,7 @@ export const sidebar = [
               "build/indexer/txn-stream/aptos-hosted-txn-stream",
               "build/indexer/txn-stream/local-development",
               "build/indexer/txn-stream/self-hosted",
+              "build/indexer/txn-stream/txn-filtering",
             ],
           }),
           group("build.group.indexer.legacy", {
@@ -375,8 +376,7 @@ export const sidebar = [
               "build/cli/install-cli/install-cli-mac",
               "build/cli/install-cli/install-cli-windows",
               "build/cli/install-cli/install-cli-linux",
-              // TODO: this has to be added afterwards because of the link checker
-              //  "build/cli/install-cli/install-cli-asdf",
+              "build/cli/install-cli/install-cli-asdf",
               "build/cli/install-cli/install-cli-specific-version",
             ],
           }),
@@ -813,6 +813,7 @@ export const sidebar = [
         items: ["build/aips", "build/aips/aip-88", "build/aips/aip-115"],
       }),
       "network/glossary",
+      "build/external-resources",
       "build/indexer/indexer-api/indexer-reference",
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       ...(openAPISidebarGroups as never[]),

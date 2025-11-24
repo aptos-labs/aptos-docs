@@ -15,6 +15,7 @@ export default navDictionary({
   reference: "参考", // Reference
   ai: "AI 和 LLMs",
   contribute: "贡献", // Contribute
+  resources: "外部资源",
 
   // Build Sub-Groups
   "build.group.sdks": "SDK",

@@ -12,6 +12,7 @@ const labels = {
   reference: "Reference",
   ai: "AI and LLMs",
   contribute: "Contribute",
+  resources: "External Resources",
 
   // Build Sub-Groups
   "build.group.sdks": "SDKs",

@@ -19,6 +19,7 @@ import react from "@astrojs/react";
 import starlightLlmsTxt from "starlight-llms-txt";
 import favicons from "astro-favicons";
 import icon from "astro-icon";
+import starlightImageZoom from "starlight-image-zoom";
 import { sidebar } from "./astro.sidebar.ts";
 import { ENV } from "./src/lib/env";
 import { ogImagesIntegration } from "./src/integrations/ogImages";
@@ -128,6 +129,7 @@ export default defineConfig({
         TwoColumnContent: "./src/starlight-overrides/TwoColumnContent.astro",
       },
       plugins: [
+        starlightImageZoom(),
         starlightLinksValidator({
           errorOnFallbackPages: false,
           errorOnInconsistentLocale: true,

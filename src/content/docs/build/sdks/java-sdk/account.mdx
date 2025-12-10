@@ -1,0 +1,297 @@
+---
+title: "Creating and Managing Accounts"
+description: "Learn how to generate, fund, and manage Aptos accounts using the Java SDK with Ed25519, multi-signature, and hierarchical deterministic wallets"
+sidebar:
+  label: "Managing Accounts"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+The Java SDK provides comprehensive support for various account types and key management schemes. You can create single-key accounts, multi-signature accounts, and derive accounts from hierarchical deterministic (HD) wallets.
+
+## Single-Key Accounts (Ed25519)
+
+The most common way to create an account is using the Ed25519 signature scheme.
+
+### Generate a New Account
+
+```java
+import com.aptoslabs.japtos.account.Ed25519Account;
+
+// Generate a new Ed25519 account
+Ed25519Account account = Ed25519Account.generate();
+
+// Access account properties
+System.out.println("Address: " + account.getAccountAddress());
+System.out.println("Public Key: " + account.getPublicKey());
+System.out.println("Private Key: " + account.getPrivateKey());
+```
+
+### Create Account from Private Key
+
+If you already have a private key, you can create an account from it:
+
+```java
+import com.aptoslabs.japtos.core.crypto.Ed25519PrivateKey;
+
+// Create account from existing private key
+Ed25519PrivateKey privateKey = Ed25519PrivateKey.fromHex("your_private_key_hex");
+Ed25519Account account = new Ed25519Account(privateKey, null);
+```
+
+### Funding Accounts
+
+Once you have generated credentials, you must fund the account for the network to recognize it.
+
+On **devnet** or **localnet**, you can use the faucet:
+
+```java
+import com.aptoslabs.japtos.client.AptosClient;
+import com.aptoslabs.japtos.api.AptosConfig;
+
+AptosConfig config = AptosConfig.builder()
+    .network(AptosConfig.Network.DEVNET)
+    .build();
+AptosClient client = new AptosClient(config);
+
+// Fund account with 1 APT (100_000_000 octas)
+client.fundAccount(account.getAccountAddress(), 100_000_000);
+```
+
+<Aside type="caution">
+  Faucet funding is only available on **Devnet** and **Localnet**. For Testnet and Mainnet, you'll need to acquire APT through other means.
+</Aside>
+
+## Hierarchical Deterministic (HD) Wallets
+
+The Java SDK supports BIP39 mnemonic phrases and BIP44 derivation paths for creating deterministic wallets.
+
+### Derive Account from Mnemonic
+
+```java
+import com.aptoslabs.japtos.account.Account;
+
+// Standard BIP39 mnemonic phrase
+String mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+
+// BIP44 derivation path for Aptos (coin type: 637)
+String derivationPath = "m/44'/637'/0'/0'/0'";
+
+// Derive account
+Ed25519Account account = Account.fromDerivationPath(derivationPath, mnemonic);
+System.out.println("Derived address: " + account.getAccountAddress());
+```
+
+### Derive Multiple Accounts
+
+You can derive multiple accounts from the same mnemonic by changing the account index:
+
+```java
+String mnemonic = "your mnemonic phrase here";
+
+// First account
+Ed25519Account account0 = Account.fromDerivationPath(
+    "m/44'/637'/0'/0'/0'", 
+    mnemonic
+);
+
+// Second account
+Ed25519Account account1 = Account.fromDerivationPath(
+    "m/44'/637'/1'/0'/0'", 
+    mnemonic
+);
+
+// Third account
+Ed25519Account account2 = Account.fromDerivationPath(
+    "m/44'/637'/2'/0'/0'", 
+    mnemonic
+);
+```
+
+### Convert Entropy to Mnemonic
+
+You can generate a mnemonic phrase from entropy (such as a UUID):
+
+```java
+import com.aptoslabs.japtos.utils.Bip39Utils;
+
+// Convert UUID/entropy to mnemonic phrase
+String entropy = "9b4c9e83-a06e-4704-bc5f-b6a55d0dbb89";
+String mnemonic = Bip39Utils.entropyToMnemonic(entropy);
+
+System.out.println("Mnemonic: " + mnemonic);
+// Output: "defense balance boat index fatal book remain champion cushion city escape huge"
+```
+
+## Multi-Signature Accounts
+
+Multi-signature accounts allow multiple parties to control an account. Transactions require a minimum threshold of signatures to be valid.
+
+### Create a 1-of-2 Multi-Signature Account
+
+```java
+import com.aptoslabs.japtos.account.MultiEd25519Account;
+import com.aptoslabs.japtos.core.crypto.Ed25519PrivateKey;
+import java.util.Arrays;
+import java.util.List;
+
+// Create two individual accounts
+Ed25519Account account1 = Ed25519Account.generate();
+Ed25519Account account2 = Ed25519Account.generate();
+
+// Create multi-signature account with 1-of-2 threshold
+List<Ed25519PrivateKey> privateKeys = Arrays.asList(
+    account1.getPrivateKey(),
+    account2.getPrivateKey()
+);
+
+MultiEd25519Account multiAccount = MultiEd25519Account.fromPrivateKeys(
+    privateKeys, 
+    1  // threshold: only 1 signature required
+);
+
+System.out.println("Multi-sig address: " + multiAccount.getAccountAddress());
+```
+
+### Create a 2-of-3 Multi-Signature Account
+
+For higher security, you can require multiple signatures:
+
+```java
+// Create three individual accounts
+Ed25519Account account1 = Ed25519Account.generate();
+Ed25519Account account2 = Ed25519Account.generate();
+Ed25519Account account3 = Ed25519Account.generate();
+
+// Create multi-signature account with 2-of-3 threshold
+List<Ed25519PrivateKey> privateKeys = Arrays.asList(
+    account1.getPrivateKey(),
+    account2.getPrivateKey(),
+    account3.getPrivateKey()
+);
+
+MultiEd25519Account multiAccount = MultiEd25519Account.fromPrivateKeys(
+    privateKeys, 
+    2  // threshold: 2 signatures required
+);
+```
+
+### Multi-Signature with Specific Signers
+
+You can create a multi-signature account where only specific keys can sign:
+
+```java
+import com.aptoslabs.japtos.core.crypto.Ed25519PublicKey;
+
+// Create accounts
+Ed25519Account account1 = Ed25519Account.generate();
+Ed25519Account account2 = Ed25519Account.generate();
+Ed25519Account account3 = Ed25519Account.generate();
+
+// Only account1 and account2 can sign
+List<Account> signers = Arrays.asList(account1, account2);
+
+// But all three public keys are part of the multi-sig
+List<Ed25519PublicKey> publicKeys = Arrays.asList(
+    account1.getPublicKey(),
+    account2.getPublicKey(),
+    account3.getPublicKey()
+);
+
+// Create multi-sig account (2-of-3, but only first 2 can actually sign)
+MultiEd25519Account multiAccount = MultiEd25519Account.from(
+    signers, 
+    publicKeys, 
+    2  // threshold
+);
+```
+
+## Signing Messages
+
+All account types support message signing and verification:
+
+```java
+// Sign a message
+String message = "Hello, Aptos!";
+byte[] messageBytes = message.getBytes();
+Signature signature = account.sign(messageBytes);
+
+// Verify signature
+boolean isValid = account.verifySignature(messageBytes, signature);
+System.out.println("Signature valid: " + isValid);
+```
+
+## Account Address Formats
+
+Aptos account addresses are 32-byte values typically represented as hexadecimal strings:
+
+```java
+import com.aptoslabs.japtos.types.AccountAddress;
+
+// Create from hex string (with or without 0x prefix)
+AccountAddress address1 = AccountAddress.fromHex("0x1");
+AccountAddress address2 = AccountAddress.fromHex("0000000000000000000000000000000000000000000000000000000000000001");
+
+// Both represent the same address (0x1)
+System.out.println(address1.toString()); // 0x1
+System.out.println(address2.toString()); // 0x1
+```
+
+## Best Practices
+
+1. **Never expose private keys**: Store private keys securely and never commit them to version control
+2. **Use HD wallets for multiple accounts**: Derive multiple accounts from a single mnemonic for easier backup
+3. **Secure mnemonic phrases**: Treat mnemonic phrases like passwords - they can recover all derived accounts
+4. **Test on devnet first**: Always test your account management code on devnet before using it on mainnet
+5. **Multi-sig for high-value accounts**: Use multi-signature accounts for enhanced security on important accounts
+
+## Example: Complete Account Workflow
+
+Here's a complete example showing account creation, funding, and balance checking:
+
+```java
+import com.aptoslabs.japtos.account.Ed25519Account;
+import com.aptoslabs.japtos.api.AptosConfig;
+import com.aptoslabs.japtos.client.AptosClient;
+import com.aptoslabs.japtos.types.AccountAddress;
+import com.google.gson.JsonObject;
+
+public class AccountWorkflow {
+    public static void main(String[] args) throws Exception {
+        // Setup client
+        AptosConfig config = AptosConfig.builder()
+            .network(AptosConfig.Network.DEVNET)
+            .build();
+        AptosClient client = new AptosClient(config);
+        
+        // Generate account
+        Ed25519Account account = Ed25519Account.generate();
+        System.out.println("Generated address: " + account.getAccountAddress());
+        
+        // Fund account
+        client.fundAccount(account.getAccountAddress(), 100_000_000);
+        System.out.println("Account funded!");
+        
+        // Check balance
+        String resourceType = "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>";
+        JsonObject resource = client.getAccountResource(
+            account.getAccountAddress(), 
+            resourceType
+        );
+        long balance = resource.getAsJsonObject("coin")
+                              .get("value")
+                              .getAsLong();
+        
+        System.out.println("Balance: " + balance + " octas");
+        System.out.println("Balance: " + (balance / 100_000_000.0) + " APT");
+    }
+}
+```
+
+## Related Documentation
+
+- [Building Transactions](/build/sdks/java-sdk/building-transactions)
+- [Java SDK Examples](/build/sdks/java-sdk/java-examples)
+- [BIP39 Specification](https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki)
+- [BIP44 Specification](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki)
+

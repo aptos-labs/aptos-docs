@@ -206,6 +206,116 @@ In this case `sample_function` can be called by both the Aptos CLI/SDK by any mo
 
 Adhering to this principle ensures that functions are not over-exposed, restricting the scope of function access to only what is necessary for the business logic.
 
+### Mutable References (`&mut`) passed to untrusted code (`mem::swap`)
+
+Passing `&mut T` across a trust boundary should be treated as an **access control decision**: `&mut` is a capability that grants the callee write-access to `T`.
+
+With `mem::swap` now public, untrusted code holding `&mut T` can sometimes do more than “mutate fields”: it can **replace the entire value** behind the reference by swapping it with another value of the same type. This can invalidate invariants that were previously assumed to be stable across an external call. This risk exists for normal cross-module calls and is **more likely with function values (callbacks)** because they make it easy for callers to supply untrusted code. See the [`mem::swap` discussion in AIP-105](https://github.com/aptos-foundation/AIPs/issues/529#issuecomment-2605266224).
+
+Note: this does **not** break module encapsulation. Outside code still can’t access `T`’s private fields or pack/unpack `T`. The issue is **whole-value replacement**: if an attacker can obtain _another_ `T` value (e.g. a different `FungibleAsset`), `mem::swap` lets them exchange the entire value behind your `&mut T`, changing private fields “indirectly” without ever reading or writing them.
+
+#### Impact
+
+If you validate an invariant (e.g. “this `FungibleAsset` is the token I expect”) and then pass `&mut` to untrusted code, you must assume the invariant may no longer hold afterward. This can enable **token substitution** attacks: the callee swaps a “good” asset out for a “worthless” one and tricks the caller into thinking it is the original asset.
+
+#### Example Insecure Code
+
+```move filename="mem_swap_insecure.move"
+module example::payments {
+  use aptos_framework::fungible_asset::{Self as fungible_asset, FungibleAsset};
+  use aptos_framework::primary_fungible_store;
+
+  const EUSED_TOO_MUCH: u64 = 1;
+  const EUNEXPECTED_ASSET: u64 = 2;
+
+  fun check_metadata(asset: &FungibleAsset) {
+    // Check it is the asset class the protocol expects.
+    // e.g. assert!(fungible_asset::metadata(asset) == expected, EUNEXPECTED_ASSET);
+  }
+
+  public fun do_with_fa(user: address, asset: FungibleAsset, hook: |&mut FungibleAsset|) {
+    check_metadata(&asset); // check it is type we expect
+
+    // Attacker-supplied function value receives `&mut FungibleAsset`.
+    hook(&mut asset);
+
+    // Previously, protocols sometimes assumed the asset "identity" (metadata) couldn't change here.
+    // With `mem::swap` (or any future whole-value replacement API), that is not a safe assumption:
+    // `asset` may now be a different asset class.
+
+    assert!(fungible_asset::amount(&asset) > 10, EUSED_TOO_MUCH);
+    // Get asset value
+    let value = fungible_asset::amount(&asset);
+    // BUG: without re-checking metadata here, this could now be a worthless asset.
+    primary_fungible_store::deposit(@treasury, asset);
+    // Mint the pool tokens to the user
+    mint_to(user, value);
+  }
+
+  fun mint_to(_user: address, _value: u64) { /* ... */ }
+}
+
+module attacker::exploit {
+  use std::mem;
+  use aptos_framework::fungible_asset::FungibleAsset;
+  use aptos_framework::primary_fungible_store;
+  use example::payments;
+
+  // In practice this would come from attacker-controlled state / a withdraw.
+  fun worthless_asset(): FungibleAsset { /* ... */ }
+
+  public fun exploit(good: FungibleAsset) {
+    let junk = worthless_asset();
+    payments::do_with_fa(
+      @attacker,
+      good,
+      |asset| {
+        let kept = junk;
+        mem::swap(asset, &mut kept); // replace the entire value behind `asset`
+        // `kept` now holds the original ("good") asset; deposit it back to the attacker.
+        // `asset` now holds the worthless replacement.
+        primary_fungible_store::deposit(@attacker, kept);
+      },
+    );
+  }
+}
+```
+
+#### Example Secure Code
+
+- Don't pass `&mut` references to untrusted code.
+- If you must cross a trust boundary, **re-validate invariants after the call** (or snapshot and enforce that critical fields did not change).
+- Prefer restricting mutation-heavy APIs to trusted modules (`public(friend)`) instead of exposing them as `public`.
+
+```move filename="mem_swap_secure.move"
+module example::payments {
+  use aptos_framework::fungible_asset::{Self as fungible_asset, FungibleAsset};
+  use aptos_framework::primary_fungible_store;
+
+  const EUSED_TOO_MUCH: u64 = 1;
+  const EUNEXPECTED_ASSET: u64 = 2;
+
+  fun check_metadata(asset: &FungibleAsset) {
+    // Check it is the asset class the protocol expects.
+    // e.g. assert!(fungible_asset::metadata(asset) == expected, EUNEXPECTED_ASSET);
+  }
+
+  public fun do_with_fa(user: address, asset: FungibleAsset, hook: |&mut FungibleAsset|) {
+    check_metadata(&asset);
+    hook(&mut asset);
+    check_metadata(&asset); // re-check after untrusted mutation (catches `mem::swap` substitution)
+
+    assert!(fungible_asset::amount(&asset) > 10, EUSED_TOO_MUCH);
+    // Get asset value
+    let value = fungible_asset::amount(&asset);
+    primary_fungible_store::deposit(@treasury, asset);
+    mint_to(user, value);
+  }
+
+  fun mint_to(_user: address, _value: u64) { /* ... */ }
+}
+```
+
 ## Types and Data Structures
 
 ### Generics type check

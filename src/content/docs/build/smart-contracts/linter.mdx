@@ -102,10 +102,6 @@ let x: u64 = 42;
 let y = x; // cast removed
 ```
 
-### `infinite_recursion`
-
-Checks for functions or groups of functions that recurse infinitely. Note that the linter cannot detect _conditional_ infinite recursion, only inconditional, so a flag is a definite error in the program.
-
 ### `known_to_abort`
 
 Checks for expressions that will always abort at runtime due to known constant values that violate runtime constraints. This lint helps identify code that will deterministically fail before it reaches production.
@@ -253,10 +249,6 @@ Checks for statements that can be removed without changing program behavior. Exa
 
 Note that the linter does not take into account possible aborts due to arithmetic errors. If a statement is flagged it's almost definitely a programmer mistake, but you should evaluate the code in question to understand the intent. Sometimes the proper fix is to remove the statement, sometimes the statement should be changed.
 
-### `random_modulo`
-
-Checks for expressions of the form `u{8|16|32|64|128|256}_integer() % x`. Getting the remainder of a division where the dividend is a random number results in a non-uniform distribution, which could affect the fairness of a contract's behavior, depending on how the value is used. For example, the result of `u8_integer() % 255` is twice as likely to be 0 than 1. Instead of wrapping with modulo, `u{8|16|32|64|128|256}_range(0, x)` can be used, which produces a uniform distribution.
-
 ### `self_assignment`
 
 Checks for patterns where a variable or a field of a struct is assigned to itself and suggests removing the assignment. These assignments do not affect the state of the program. Examples include:
@@ -314,19 +306,6 @@ Consider the following example expressions that are caught by the lint, and the 
 - `x <= 0`, `0 >= x`, `x >= MAX`, `MAX <= x`, can all be simplified to use `==` instead
 - `x > 0`, `0 < x`, `x < MAX`, `MAX > x`, can all be clarified to use `!=` instead
 
-### `redundant_comparison`
-
-Checks for redundant, contradictory, and tautological numerical comparisons over the same variable in boolean expressions combined with `&&` and `||`. This lint identifies logic errors in conditional statements that can lead to unreachable code or always-true/false conditions.
-
-Examples of patterns caught by this lint:
-
-- **Redundant with `&&`**: `x <= 400 && x < 500` - the second condition is redundant since it's always satisfied when the first is true
-- **Contradictory with `&&`**: `x <= 400 && x > 500` - these conditions can never both be true, making the expression always false
-- **Redundant with `||`**: `x > 10 || x >= 5` - the first condition is redundant since the second covers more cases
-- **Tautology with `||`**: `x < 5 || x >= 5` - this expression is always true for any value of x
-
-The lint only triggers when comparisons are on the same variable and can detect constants on either side of the comparison operator.
-
 ### `while_true`
 
 Checks for `while (true) { .... }` patterns and suggests using the more explicit `loop { .... }` construct instead.
@@ -341,93 +320,6 @@ For example, the function below would usually get a warning from the linter abou
 #[lint::skip(needless_bool)]
 fun violation(): bool {
     if (foo()) true else false
-}
-```
-
-## Security Checks
-
-### `contains_in_table`
-
-Checks for unsafe usage of table operations that could lead to runtime errors. This lint helps prevent common mistakes when working with tables by detecting:
-
-1. **Unsafe `table::borrow` calls**: Borrowing from a table without first checking if the key exists using `table::contains`. This can cause runtime errors if the key doesn't exist.
-
-2. **Unsafe `table::add` calls**: Adding to a table without ensuring the key doesn't already exist. This can cause runtime errors if the key already exists.
-
-The lint analyzes control flow to understand when keys are known to exist or not exist based on `table::contains` checks.
-
-**Examples of patterns caught by this lint:**
-
-```move
-// Unsafe borrow - no contains check
-table::borrow(&table, key); // Error: might fail if key doesn't exist
-
-// Unsafe add - no contains check
-table::add(&mut table, key, value); // Error: might fail if key already exists
-
-// Wrong key check
-if (table::contains(&table, key1)) {
-    table::borrow(&table, key2); // Error: checked key1 but borrowing key2
-}
-
-// Wrong branch usage
-if (!table::contains(&table, key)) {
-    table::borrow(&table, key); // Error: key is known NOT to exist
-}
-```
-
-**Recommended solutions:**
-
-- For `table::borrow`: Use `table::contains` first to check if the key exists
-- For `table::add`: Use `table::upsert` instead, or check with `table::contains` that the key doesn't exist first
-
-### `return_signer`
-
-This security check detects when a public function returns a `signer` value, which can leak authority and is usually a security risk. Returning a `signer` from a public function allows callers to obtain signer capabilities that they shouldn't have access to, potentially leading to unauthorized operations.
-
-**Examples of patterns caught by this lint:**
-
-```move
-// Direct signer return - security risk
-public fun get_signer(): signer {
-    // ... code that returns a signer
-}
-
-// Signer in vector - security risk
-public fun get_signers(): vector<signer> {
-    // ... code that returns signers
-}
-
-// Signer in tuple - security risk
-public fun get_data(): (u64, signer) {
-    // ... code that returns a tuple with signer
-}
-```
-
-### `zero_address`
-
-This security check detects the use of `address` parameters in external functions that are not checked for being zero before being used. This could lead to loss of funds or other security issues.⏎
-
-### `return_constructor_ref`
-
-Checks for public functions that return an `ConstructorRef`. Constructor references confer the authority to create an object, and returning them from functions can leak privileged capability. This lint helps prevent accidental exposure of sensitive object creation authority.
-
-**Examples of patterns caught by this lint:**
-
-```move
-// Public function returning ConstructorRef - security risk
-public fun create_object_ref(): ConstructorRef {
-    // ... code that returns ConstructorRef
-}
-
-// Public function returning a struct containing ConstructorRef
-public fun get_authority(): MyStruct<ConstructorRef> {
-    // ... code that returns struct with ConstructorRef
-}
-
-// Public function returning vector containing ConstructorRef
-public fun get_refs(): vector<ConstructorRef> {
-    // ... code that returns vector with ConstructorRef
 }
 ```
 

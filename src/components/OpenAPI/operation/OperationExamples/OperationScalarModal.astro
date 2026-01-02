@@ -49,11 +49,22 @@ import "@scalar/api-client/style.css";
     scalarContainer.classList.add(starlightThemeClassMap[theme]);
   });
 
-  // Initialize modal router
-  document.addEventListener(
-    "scalarModal:open",
-    async function (e: ScalarModalOpenEvent) {
-      const { open } = await createApiClientModal({
+  // Initialize modal - create once and reuse
+  interface ModalInstance {
+    client?: {
+      open?: (options: { path: string; method: string }) => void;
+    };
+    router?: {
+      navigate?: (options: { path: string; method: string }) => void;
+    };
+  }
+
+  let modalInstance: ModalInstance | null = null;
+
+  // Initialize modal on first use
+  function getModalInstance(): ModalInstance {
+    if (!modalInstance) {
+      modalInstance = createApiClientModal({
         el: scalarContainer,
         configuration: {
           url: "/aptos-spec.json",
@@ -61,9 +72,22 @@ import "@scalar/api-client/style.css";
           showSidebar: false,
           hideClientButton: true,
         },
-      });
+      }) as ModalInstance;
+    }
+    return modalInstance;
+  }
 
-      open({ path: e.detail.operationPath, method: e.detail.method });
+  // Initialize modal router
+  document.addEventListener(
+    "scalarModal:open",
+    function (e: ScalarModalOpenEvent) {
+      const instance = getModalInstance();
+      // Try using router.navigate or client methods
+      if (instance.router?.navigate) {
+        instance.router.navigate({ path: e.detail.operationPath, method: e.detail.method });
+      } else if (instance.client?.open) {
+        instance.client.open({ path: e.detail.operationPath, method: e.detail.method });
+      }
     },
     { passive: true },
   );

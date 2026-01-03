@@ -1,9 +1,10 @@
+/* eslint-disable */
 /** @type {import("prettier").Config} */
-module.exports = {
+export default {
   singleQuote: false,
   trailingComma: "all",
   printWidth: 100,
-  plugins: [require.resolve("prettier-plugin-astro")],
+  plugins: ["prettier-plugin-astro"],
   endOfLine: "lf",
   overrides: [
     {

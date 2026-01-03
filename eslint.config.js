@@ -60,7 +60,7 @@ const config = [
       globals: {
         ...globals.browser,
         ...globals.node,
-        ...globals.es2021,
+        ...globals.es2024,
         document: "readonly",
         navigator: "readonly",
         window: "readonly",

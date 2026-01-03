@@ -22,15 +22,13 @@ import icon from "astro-icon";
 import { sidebar } from "./astro.sidebar.ts";
 import { ENV } from "./src/lib/env";
 import { ogImagesIntegration } from "./src/integrations/ogImages";
-import { SUPPORTED_LANGUAGES, SITE_TITLES } from "./src/config/18n";
+import { SUPPORTED_LANGUAGES, SITE_TITLES } from "./src/config/i18n";
 import { firebaseIntegration } from "./src/integrations/firebase";
 import { remarkClientOnly } from "./src/plugins";
 import { devServerFileWatcher } from "./src/integrations/dev-server-file-watcher";
 import onDemandDirective from "./src/integrations/client-on-demand/register.js";
 import { cspConfig } from "./src/config/csp";
 import { monacoEditorIntegration } from "./src/integrations/monacoEditor";
-// import { isMoveReferenceEnabled } from "./src/utils/isMoveReferenceEnabled";
-// import { rehypeAddDebug } from "./src/plugins";
 
 const ALGOLIA_APP_ID = ENV.ALGOLIA_APP_ID;
 const ALGOLIA_SEARCH_API_KEY = ENV.ALGOLIA_SEARCH_API_KEY;

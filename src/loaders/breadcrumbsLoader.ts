@@ -1,5 +1,5 @@
 import { getCollection } from "astro:content";
-import { SUPPORTED_LANGUAGES } from "~/config/18n";
+import { SUPPORTED_LANGUAGES } from "~/config/i18n";
 
 // Define the return type for the path maps
 export interface PathMaps {

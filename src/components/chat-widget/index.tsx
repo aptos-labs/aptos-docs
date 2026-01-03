@@ -4,14 +4,14 @@ import { ChatDialog } from "./chat-dialog";
 
 function ChatDialogContainer() {
   const {
-    messages = [],
+    messages,
     sendMessage,
-    isLoading = false,
-    isGenerating = false,
-    isTyping = false,
-    hasMoreMessages = false,
-    fastMode = false,
-    chats = [],
+    isLoading,
+    isGenerating,
+    isTyping,
+    hasMoreMessages,
+    fastMode,
+    chats,
     currentChatId,
     stopGenerating,
     loadPreviousMessages,

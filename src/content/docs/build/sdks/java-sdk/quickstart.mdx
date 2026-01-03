@@ -1,0 +1,291 @@
+---
+title: "Java SDK Quickstart"
+description: "Get started with the Aptos Java SDK by creating accounts, funding them, and transferring APT tokens"
+sidebar:
+  label: "Quickstart"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+<Aside type="note">
+  The complete example code can be found in the [SDK repository](https://github.com/aptos-labs/japtos/tree/main/src/test).
+</Aside>
+
+This quickstart guide will walk you through setting up a Java project with the Aptos Java SDK and performing a simple APT token transfer.
+
+<Steps>
+  1. **Create a new Maven project**
+
+     Create a new directory and initialize a Maven project:
+
+     ```shellscript filename="Terminal"
+     mkdir aptos-java-quickstart
+     cd aptos-java-quickstart
+     ```
+
+     Create a `pom.xml` file with the following content:
+
+     ```xml filename="pom.xml"
+     <?xml version="1.0" encoding="UTF-8"?>
+     <project xmlns="http://maven.apache.org/POM/4.0.0"
+              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 
+              http://maven.apache.org/xsd/maven-4.0.0.xsd">
+         <modelVersion>4.0.0</modelVersion>
+         
+         <groupId>com.example</groupId>
+         <artifactId>aptos-quickstart</artifactId>
+         <version>1.0-SNAPSHOT</version>
+         
+         <properties>
+             <maven.compiler.source>11</maven.compiler.source>
+             <maven.compiler.target>11</maven.compiler.target>
+             <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+         </properties>
+         
+         <repositories>
+             <repository>
+                 <id>github</id>
+                 <url>https://maven.pkg.github.com/aptos-labs/japtos</url>
+             </repository>
+         </repositories>
+         
+         <dependencies>
+             <dependency>
+                 <groupId>com.aptos-labs</groupId>
+                 <artifactId>japtos</artifactId>
+                 <version>1.1.0</version>
+             </dependency>
+         </dependencies>
+     </project>
+     ```
+
+  2. **Set up GitHub Packages authentication**
+
+     Create or edit `~/.m2/settings.xml` and add your GitHub credentials:
+
+     ```xml filename="~/.m2/settings.xml"
+     <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+               xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+               xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
+               http://maven.apache.org/xsd/settings-1.0.0.xsd">
+         <servers>
+             <server>
+                 <id>github</id>
+                 <username>YOUR_GITHUB_USERNAME</username>
+                 <password>YOUR_GITHUB_TOKEN</password>
+             </server>
+         </servers>
+     </settings>
+     ```
+
+     <Aside type="tip">
+       You can create a GitHub Personal Access Token (PAT) at [github.com/settings/tokens](https://github.com/settings/tokens). The token needs `read:packages` permission.
+     </Aside>
+
+  3. **Create the quickstart example**
+
+     Create the directory structure and main file:
+
+     ```shellscript filename="Terminal"
+     mkdir -p src/main/java/com/example
+     ```
+
+     Create `src/main/java/com/example/Quickstart.java`:
+
+     ```java filename="src/main/java/com/example/Quickstart.java"
+     package com.example;
+
+     import com.aptoslabs.japtos.account.Ed25519Account;
+     import com.aptoslabs.japtos.api.AptosConfig;
+     import com.aptoslabs.japtos.client.AptosClient;
+     import com.aptoslabs.japtos.transaction.*;
+     import com.aptoslabs.japtos.types.*;
+     import com.google.gson.JsonObject;
+
+     import java.util.Arrays;
+
+     public class Quickstart {
+         
+         public static void main(String[] args) {
+             try {
+                 System.out.println("=== Aptos Java SDK Quickstart ===\n");
+                 
+                 // 1. Set up the Aptos client
+                 System.out.println("Setting up Aptos client...");
+                 AptosConfig config = AptosConfig.builder()
+                     .network(AptosConfig.Network.DEVNET)
+                     .build();
+                 AptosClient client = new AptosClient(config);
+                 
+                 // 2. Create accounts
+                 System.out.println("\n=== Creating Accounts ===");
+                 Ed25519Account alice = Ed25519Account.generate();
+                 Ed25519Account bob = Ed25519Account.generate();
+                 
+                 System.out.println("Alice's address: " + alice.getAccountAddress());
+                 System.out.println("Bob's address: " + bob.getAccountAddress());
+                 
+                 // 3. Fund accounts
+                 System.out.println("\n=== Funding Accounts ===");
+                 client.fundAccount(alice.getAccountAddress(), 100_000_000);
+                 client.fundAccount(bob.getAccountAddress(), 1_000);
+                 System.out.println("Accounts funded!");
+                 
+                 // 4. Check initial balances
+                 System.out.println("\n=== Initial Balances ===");
+                 long aliceBalance = getBalance(client, alice.getAccountAddress());
+                 long bobBalance = getBalance(client, bob.getAccountAddress());
+                 System.out.println("Alice's balance: " + aliceBalance + " octas");
+                 System.out.println("Bob's balance: " + bobBalance + " octas");
+                 
+                 // 5. Build transfer transaction
+                 System.out.println("\n=== Building Transaction ===");
+                 long transferAmount = 1_000_000L; // 0.01 APT
+                 
+                 ModuleId moduleId = new ModuleId(
+                     AccountAddress.fromHex("0x1"),
+                     new Identifier("aptos_account")
+                 );
+                 
+                 TransactionPayload payload = new EntryFunctionPayload(
+                     moduleId,
+                     new Identifier("transfer"),
+                     Arrays.asList(),
+                     Arrays.asList(
+                         new TransactionArgument.AccountAddress(bob.getAccountAddress()),
+                         new TransactionArgument.U64(transferAmount)
+                     )
+                 );
+                 
+                 // Get sequence number and chain ID
+                 long sequenceNumber = client.getAccountSequenceNumber(
+                     alice.getAccountAddress()
+                 );
+                 int chainId = client.getChainId();
+                 
+                 // Build raw transaction
+                 RawTransaction rawTx = new RawTransaction(
+                     alice.getAccountAddress(),
+                     sequenceNumber,
+                     payload,
+                     200000L,  // maxGasAmount
+                     100L,     // gasUnitPrice
+                     System.currentTimeMillis() / 1000 + 3600,  // expiration (1 hour)
+                     chainId
+                 );
+                 
+                 // 6. Sign and submit transaction
+                 System.out.println("Signing and submitting transaction...");
+                 SignedTransaction signedTx = new SignedTransaction(
+                     rawTx,
+                     alice.signTransactionWithAuthenticator(rawTx)
+                 );
+                 
+                 PendingTransaction pendingTx = client.submitTransaction(signedTx);
+                 System.out.println("Transaction hash: " + pendingTx.getHash());
+                 
+                 // 7. Wait for transaction to complete
+                 System.out.println("Waiting for transaction...");
+                 Transaction completedTx = client.waitForTransaction(pendingTx.getHash());
+                 System.out.println("Transaction completed: " + completedTx.isSuccess());
+                 
+                 // 8. Check final balances
+                 System.out.println("\n=== Final Balances ===");
+                 long aliceFinalBalance = getBalance(client, alice.getAccountAddress());
+                 long bobFinalBalance = getBalance(client, bob.getAccountAddress());
+                 System.out.println("Alice's balance: " + aliceFinalBalance + " octas");
+                 System.out.println("Bob's balance: " + bobFinalBalance + " octas");
+                 
+                 // Verify the transfer
+                 System.out.println("\n=== Verification ===");
+                 System.out.println("Expected Bob's balance increase: " + transferAmount);
+                 System.out.println("Actual Bob's balance increase: " + 
+                     (bobFinalBalance - bobBalance));
+                 System.out.println("Alice paid gas: " + 
+                     (aliceBalance - aliceFinalBalance - transferAmount) + " octas");
+                 
+             } catch (Exception e) {
+                 System.err.println("Error: " + e.getMessage());
+                 e.printStackTrace();
+             }
+         }
+         
+         private static long getBalance(AptosClient client, AccountAddress address) 
+             throws Exception {
+             String resourceType = "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>";
+             JsonObject resource = client.getAccountResource(address, resourceType);
+             return resource.getAsJsonObject("coin")
+                          .get("value")
+                          .getAsLong();
+         }
+     }
+     ```
+
+  4. **Run the quickstart**
+
+     Compile and run the example:
+
+     ```shellscript filename="Terminal"
+     mvn compile
+     mvn exec:java -Dexec.mainClass="com.example.Quickstart"
+     ```
+
+     You should see output similar to:
+
+     ```
+     === Aptos Java SDK Quickstart ===
+
+     Setting up Aptos client...
+
+     === Creating Accounts ===
+     Alice's address: 0x1234...
+     Bob's address: 0x5678...
+
+     === Funding Accounts ===
+     Accounts funded!
+
+     === Initial Balances ===
+     Alice's balance: 100000000 octas
+     Bob's balance: 1000 octas
+
+     === Building Transaction ===
+     Signing and submitting transaction...
+     Transaction hash: 0xabc...
+     Waiting for transaction...
+     Transaction completed: true
+
+     === Final Balances ===
+     Alice's balance: 98998900 octas
+     Bob's balance: 1001000 octas
+
+     === Verification ===
+     Expected Bob's balance increase: 1000000
+     Actual Bob's balance increase: 1000000
+     Alice paid gas: 1100 octas
+     ```
+</Steps>
+
+## Summary
+
+You just learned how to:
+
+1. Set up a Java project with the Aptos Java SDK
+2. Connect to the Aptos network using `AptosClient`
+3. Create accounts using `Ed25519Account.generate()`
+4. Fund accounts on devnet using the faucet
+5. Build a transaction with `RawTransaction`
+6. Sign and submit a transaction
+7. Wait for transaction completion
+8. Query account resources and balances
+
+## Next Steps
+
+- Learn about [account management](/build/sdks/java-sdk/account) including multi-signature and HD wallets
+- Explore [building transactions](/build/sdks/java-sdk/building-transactions) in depth
+- Check out more [examples](/build/sdks/java-sdk/java-examples) in the SDK repository
+
+<Aside type="tip">
+  For production applications, make sure to implement proper error handling and use appropriate gas limits and prices.
+</Aside>
+

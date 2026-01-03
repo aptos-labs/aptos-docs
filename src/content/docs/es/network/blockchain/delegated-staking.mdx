@@ -1,0 +1,149 @@
+---
+title: "Staking Delegado"
+description: "Aprende sobre el staking delegado en Aptos, pools de delegación, el modelo owner-operator-voter-delegator, y cómo participar en staking sin ejecutar un validator."
+sidebar:
+  label: "Staking Delegado"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="note">
+  Recomendamos encarecidamente que leas sobre [Staking](/es/network/blockchain/staking) primero.
+</Aside>
+
+El staking delegado es una extensión del protocolo de staking. Un pool de delegación abstrae al propietario del stake a una entidad capaz de recolectar stake de delegadores y agregarlo en su nombre al pool de stake nativo adjunto al validator. Esto permite que múltiples entidades formen un pool de stake que alcance los requisitos mínimos para que el validator se una al conjunto de validators. Aunque los delegadores pueden agregar stake a un pool inactivo, el pool de delegación no ganará recompensas hasta que esté activo.
+
+<Aside type="caution">
+  Los pools de delegación son sin permisos y cualquiera puede agregar stake. Los pools de delegación
+  no pueden cambiarse a pools de stake una vez creados o viceversa, aunque
+  pueden ser removidos del conjunto de validators y los activos retirados. Para detalles completos
+  del pool de stake, ver [Staking](/es/network/blockchain/staking)
+</Aside>
+
+Para el contrato inteligente completo del pool de delegación, ver [delegation\_pool.move](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/delegation_pool.move)
+
+A diferencia de un pool de stake, un pool de delegación puede inicializarse con cero stake. Cuando se inicializa, el pool de stake delegado es propiedad indirectamente vía una cuenta de recurso. Esta cuenta gestionará el stake del pool de stake subyacente en nombre de los delegadores reenviando sus operaciones de gestión de stake (agregar, desbloquear, reactivar, retirar) mientras que la cuenta de recurso no puede ser accedida directamente ni ser propiedad externa.
+
+Ver lista completa de [Operaciones de Pool de Delegación](/es/network/nodes/validator-node/connect-nodes/delegation-pool-operations)
+
+![Staking Delegado](~/images/delegated-staking/delegated-staking.png)
+
+Hay cinco tipos de entidades:
+
+- Owner (Propietario)
+- Operator (Operador)
+- Voter (Votante)
+- Delegator (Delegador)
+- Beneficiary (Beneficiario)
+
+Usando este modelo, el propietario no tiene que hacer stake en la blockchain de Aptos para ejecutar un validator.
+
+[Cómo funciona la Validación en la blockchain de Aptos](/es/network/blockchain/staking#validation-on-the-aptos-blockchain)
+
+### Owner (Propietario)
+
+El propietario del pool de delegación tiene las siguientes capacidades:
+
+1. Crea el pool de delegación
+2. Asigna el operador para el pool de delegación
+3. Establece el porcentaje de comisión del operador para el pool de delegación
+4. Asigna el votante para el pool de delegación
+
+### Operator (Operador)
+
+Un operador de nodo es asignado por el propietario del pool para ejecutar el nodo validator. El operador tiene las siguientes capacidades:
+
+1. Unirse o dejar el conjunto de validators una vez que el pool de delegación alcance 1M APT
+2. Realizar funciones de validación
+3. Cambiar la clave de consenso y direcciones de red. La clave de consenso se usa para participar en el proceso de consenso del validator, es decir, para votar y proponer un bloque. El operador puede cambiar ("rotar") esta clave en caso de que esté comprometida.
+
+El operador recibe comisión que se distribuye automáticamente al final de cada época como recompensas.
+
+### Voter (Votante)
+
+Un propietario puede designar un votante. Esto permite al votante participar en la gobernanza. El votante usará la clave de votante para firmar los votos de gobernanza en las transacciones.
+
+<Aside type="note">
+  Este documento describe el staking. Ver [Gobernanza](/es/network/blockchain/governance) para cómo
+  participar en la gobernanza on-chain de Aptos usando el modelo owner-voter.
+</Aside>
+
+### Delegator (Delegador)
+
+Un delegador es cualquiera que tenga stake en el pool de delegación. Los delegadores ganan recompensas en su stake menos cualquier comisión para el operador. Los delegadores pueden realizar las siguientes operaciones de delegador:
+
+1. Agregar stake
+2. Desbloquear stake
+3. Reactivar stake
+4. Retirar stake
+
+### Beneficiary (Beneficiario)
+
+Un beneficiario es una dirección designada por el operador para recibir recompensas de comisión del operador. Aspectos clave del rol de beneficiario:
+
+1. Cada operador puede establecer solo una dirección de beneficiario a través de todos sus pools de delegación
+2. El beneficiario puede realizar operaciones como desbloquear y retirar para comisión ganada
+3. Al cambiar beneficiarios, cualquier recompensa de comisión no pagada irá al nuevo beneficiario
+4. El operador puede establecer o cambiar el beneficiario usando la función `set_beneficiary_for_operator`
+
+## Flujo de validator
+
+<Aside type="note">
+  Ver [Operaciones de pool de
+  delegación](/es/network/nodes/validator-node/connect-nodes/delegation-pool-operations)
+  para la secuencia correcta de comandos a ejecutar para el flujo siguiente.
+</Aside>
+
+1. [El operador despliega el nodo validator](/es/network/nodes/validator-node)
+2. [Ejecutar comando para obtener la dirección del pool de delegación](/es/network/nodes/validator-node/connect-nodes/delegation-pool-operations#prerequisites)
+3. [El operador se conecta a la red usando la dirección del pool derivada en el paso 2](/es/network/nodes/validator-node/connect-nodes/connect-to-aptos-network)
+4. [El propietario inicializa el pool de delegación y establece el operador](/es/network/nodes/validator-node/connect-nodes/delegation-pool-operations#initialize-a-delegation-pool)
+5. Los delegadores pueden agregar stake en cualquier momento
+6. Cuando el pool de delegación alcanza 1M APT, el operador puede llamar aptos node join-validator-set para unirse al conjunto de validators activos. Los cambios serán efectivos en la siguiente época.
+7. El validator valida (propone bloques como validator líder) y gana recompensas. Las recompensas se distribuyen a los delegadores proporcionalmente al monto de stake. El stake se bloqueará automáticamente por una duración fija (establecida por la gobernanza) y se renovará automáticamente al expirar.
+8. En cualquier punto, si el operador quiere actualizar la clave de consenso o direcciones de red del validator, puede llamar aptos node update-consensus-key o aptos node update-validator-network-addresses. Similar a los cambios en stake, los cambios a la clave de consenso o direcciones de red del validator solo son efectivos en la siguiente época.
+9. Los delegadores pueden solicitar desbloquear su stake en cualquier momento. Sin embargo, su stake solo se volverá retirable cuando expire el bloqueo del pool de delegación.
+10. El validator puede explícitamente dejar el conjunto de validators llamando aptos node leave-validator-set o si su stake cae por debajo del mínimo requerido, serían removidos al final de la época.
+
+## Unirse al conjunto de validators
+
+Participar como nodo validator de delegación en la red de Aptos funciona así:
+
+1. El operador ejecuta un nodo validator y configura las direcciones de red del validator on-chain y rota la clave de consenso.
+2. El propietario inicializa el pool de delegación.
+3. El nodo validator no puede sincronizar hasta que el pool de delegación se vuelva activo. El pool de delegación se vuelve activo cuando alcanza 1M APT.
+4. El operador valida y gana recompensas.
+5. El pool de stake se bloquea automáticamente por una duración fija (establecida por la gobernanza de Aptos) y se renovará automáticamente al expirar. Las comisiones se distribuyen automáticamente al operador como recompensas. El operador puede desbloquear stake en cualquier momento, pero no puede retirar hasta que expire el período de bloqueo del pool de delegación.
+6. El operador debe esperar hasta que comience la nueva época antes de que su validator se vuelva activo.
+
+<Aside type="note">
+  Para instrucciones paso a paso sobre cómo unirse al conjunto de validators, ver: [Unirse al
+  Conjunto de
+  Validators](/es/network/nodes/validator-node/connect-nodes/connect-to-aptos-network#join-the-validator-set).
+</Aside>
+
+### Duración de bloqueo automático
+
+Cuando el operador se une al conjunto de validators, el stake del pool de delegación se bloqueará automáticamente por una duración fija establecida por la gobernanza de Aptos. Los delegadores seguirán el ciclo de bloqueo del pool de delegación.
+
+### Renovación automática de bloqueo
+
+Cuando el período de bloqueo expire, se renovará automáticamente, para que el validator pueda continuar validando y recibiendo las recompensas.
+
+### Desbloqueando tu stake
+
+Los delegadores pueden desbloquear stake en cualquier momento. Sin embargo, el stake solo se volverá retirable después de que expire el período de bloqueo del pool de delegación. El stake desbloqueado continuará ganando recompensas hasta que el stake se vuelva retirable.
+
+### Reiniciando el bloqueo
+
+El bloqueo no puede reiniciarse.
+
+## Recompensas
+
+Las recompensas para el staking delegado se calculan usando:
+
+1. La rewards\_rate, un rendimiento porcentual anual (APY), es decir, las recompensas se acumulan como interés compuesto en tu monto de stake actual.
+2. Stake del delegador
+3. [Rendimiento de recompensas del validator](/es/network/blockchain/staking#rewards-formula)
+
+Ver [Calculando recompensas del pool de delegación](/es/network/nodes/validator-node/connect-nodes/delegation-pool-operations#compute-delegation-pool-rewards-earned)

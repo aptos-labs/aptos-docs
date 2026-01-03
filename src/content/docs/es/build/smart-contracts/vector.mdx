@@ -1,0 +1,192 @@
+---
+title: "Vector"
+description: "Domina las operaciones de vector en Move para arrays dinámicos, colecciones y manipulación de listas en contratos inteligentes."
+sidebar:
+  label: "Vector"
+---
+
+El Vector en Move proporciona una estructura de datos dinámica similar a un array que es flexible y soporta varias operaciones como
+indexación, agregar y remover elementos. Los vectores en Move son expandibles y soportan indexación basada en 0.
+
+## Características Core de Vector
+
+### Estructura
+
+El módulo `vector` proporciona varias funciones nativas y de Move para gestionar arrays dinámicos:
+
+- `empty`: Crea un vector vacío.
+- `length`: Retorna la longitud del vector.
+- `borrow`: Retorna una referencia inmutable a un elemento en un índice dado.
+- `push_back`: Agrega un elemento al final del vector.
+- `borrow_mut`: Retorna una referencia mutable a un elemento en un índice dado.
+- `pop_back`: Remueve y retorna el último elemento del vector.
+- `destroy_empty`: Destruye un vector vacío.
+- `swap`: Intercambia elementos en dos índices dados.
+
+### Constantes
+
+Las siguientes constantes definen varios códigos de error usados dentro del módulo:
+
+- `EINDEX_OUT_OF_BOUNDS`: 0x20000
+
+### Resumen de la API
+
+#### Creando Vectores
+
+- `empty<Element>(): vector<Element>`: Crea un vector vacío.
+- `singleton<Element>(e: Element): vector<Element>`: Crea un vector con un solo elemento.
+
+#### Gestionando Elementos
+
+- `push_back<Element>(v: &mut vector<Element>, e: Element)`: Agrega un elemento al final del vector.
+- `pop_back<Element>(v: &mut vector<Element>): Element`: Remueve y retorna el último elemento del vector.
+- `remove<Element>(v: &mut vector<Element>, i: u64): Element`: Remueve un elemento en un índice específico y desplaza los elementos subsiguientes.
+- `swap_remove<Element>(v: &mut vector<Element>, i: u64): Element`: Intercambia el elemento en el índice dado con el último elemento y lo remueve.
+
+#### Recuperando Elementos
+
+- `borrow<Element>(v: &vector<Element>, i: u64): &Element`: Retorna una referencia inmutable a un elemento en un índice dado.
+- `borrow_with_default<Element>(v: &vector<Element>, i: u64, default: &Element): &Element`: Retorna una referencia a un elemento o un valor por defecto si el índice está fuera de límites.
+- `borrow_mut<Element>(v: &mut vector<Element>, i: u64): &mut Element`: Retorna una referencia mutable a un elemento en un índice dado.
+
+#### Funciones de Utilidad
+
+- `length<Element>(v: &vector<Element>): u64`: Retorna el número de elementos en el vector.
+- `is_empty<Element>(v: &vector<Element>): bool`: Verifica si el vector está vacío.
+- `contains<Element>(v: &vector<Element>, e: &Element): bool`: Verifica si el vector contiene un elemento dado.
+- `index_of<Element>(v: &vector<Element>, e: &Element): (bool, u64)`: Retorna el índice de un elemento dado si se encuentra.
+- `reverse<Element>(v: &mut vector<Element>)`: Invierte el orden de los elementos en el vector.
+- `append<Element>(lhs: &mut vector<Element>, other: vector<Element>)`: Agrega todos los elementos de un vector a otro.
+- `for_each<Element>(v: vector<Element>, f: |Element|)`: Aplica una función a cada elemento en el vector.
+- `for_each_ref<Element>(v: &vector<Element>, f: |&Element|)`: Aplica una función a una referencia de cada elemento en el vector.
+- `for_each_mut<Element>(v: &mut vector<Element>, f: |&mut Element|)`: Aplica una función a una referencia mutable de cada elemento en el vector.
+- `fold<Accumulator, Element>(v: vector<Element>, init: Accumulator, f: |Accumulator, Element|Accumulator): Accumulator`: Aplica una función para acumular un valor sobre los elementos del vector.
+- `map<Element, NewElement>(v: vector<Element>, f: |Element|NewElement): vector<NewElement>`: Mapea una función sobre los elementos del vector, produciendo un nuevo vector.
+- `filter<Element: drop>(v: vector<Element>, p: |&Element|bool): vector<Element>`: Filtra el vector usando una función predicado.
+
+## Ejemplo de Uso
+
+### Creando y Usando un Vector
+
+```move filename="vector.move"
+module 0x42::vector_usage {
+    use std::vector;
+
+    public entry fun main() {
+        let v = vector::empty<u64>();
+        vector::push_back(&mut v, 10);
+        vector::push_back(&mut v, 20);
+
+        let length = vector::length(&v);
+        assert!(length == 2, 0);
+
+        let first_elem = vector::borrow(&v, 0);
+        assert!(*first_elem == 10, 0);
+
+        let second_elem = vector::borrow(&v, 1);
+        assert!(*second_elem == 20, 0);
+
+        let last_elem = vector::pop_back(&mut v);
+        assert!(last_elem == 20, 0);
+
+        vector::destroy_empty(v);
+    }
+}
+```
+
+### Agregando Vectores
+
+```move filename="vector.move"
+module 0x42::vector_usage {
+    use std::vector;
+
+    public fun append_vectors() {
+        let v1 = vector::empty<u64>();
+        let v2 = vector::empty<u64>();
+
+        vector::push_back(&mut v1, 1);
+        vector::push_back(&mut v1, 2);
+
+        vector::push_back(&mut v2, 3);
+        vector::push_back(&mut v2, 4);
+
+        vector::append(&mut v1, v2);
+
+        let length = vector::length(&v1);
+        assert!(length == 4, 0);
+
+        let first_elem = vector::borrow(&v1, 0);
+        assert!(*first_elem == 1, 0);
+
+        let second_elem = vector::borrow(&v1, 1);
+        assert!(*second_elem == 2, 0);
+
+        let third_elem = vector::borrow(&v1, 2);
+        assert!(*third_elem == 3, 0);
+
+        let fourth_elem = vector::borrow(&v1, 3);
+        assert!(*fourth_elem == 4, 0);
+    }
+}
+```
+
+### Removiendo Elementos
+
+```move filename="vector.move"
+module 0x42::vector_usage {
+    use std::vector;
+
+    public fun remove_elements() {
+        let v = vector::empty<u64>();
+
+        vector::push_back(&mut v, 1);
+        vector::push_back(&mut v, 2);
+        vector::push_back(&mut v, 3);
+
+        let removed_elem = vector::remove(&mut v, 1);
+        assert!(removed_elem == 2, 0);
+
+        let length = vector::length(&v);
+        assert!(length == 2, 0);
+
+        let first_elem = vector::borrow(&v, 0);
+        assert!(*first_elem == 1, 0);
+
+        let second_elem = vector::borrow(&v, 1);
+        assert!(*second_elem == 3, 0);
+    }
+}
+```
+
+### Intercambiando Elementos
+
+```move filename="vector.move"
+module 0x42::vector_usage {
+    use std::vector;
+
+    public fun swap_elements() {
+        let v = vector::empty<u64>();
+
+        vector::push_back(&mut v, 1);
+        vector::push_back(&mut v, 2);
+        vector::push_back(&mut v, 3);
+
+        vector::swap(&mut v, 0, 2);
+
+        let first_elem = vector::borrow(&v, 0);
+        assert!(*first_elem == 3, 0);
+
+        let third_elem = vector::borrow(&v, 2);
+        assert!(*third_elem == 1, 0);
+    }
+}
+```
+
+## Código Fuente
+
+- [vector.move](https://github.com/aptos-labs/aptos-core/blob/main/third_party/move/move-stdlib/sources/vector.move)
+
+## Otros Ejemplos
+
+- [Tutorial de Vector de Move Spiders](https://movespiders.com/courses/modules/datastructures/lessonId/1)
+- [Tutorial de Vector de Move Spiders 2](https://movespiders.com/courses/modules/basics/lessonId/7)

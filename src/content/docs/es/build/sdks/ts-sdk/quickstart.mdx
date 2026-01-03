@@ -1,0 +1,347 @@
+---
+title: "Inicio Rápido del SDK de TypeScript"
+description: "Comienza con el SDK de TypeScript de Aptos creando cuentas, financiándolas y transfiriendo tokens APT entre cuentas"
+sidebar:
+  label: "Quickstart"
+---
+
+import { Aside, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
+
+<Aside type="note">
+  El código de ejemplo completo se puede encontrar en [Código Completo de Inicio Rápido](#full-quickstart-code) al final de la página.
+</Aside>
+
+<Steps>
+  1. Inicializar un Proyecto
+
+     Esto inicializará un paquete de typescript con `quickstart.ts`
+
+     <Tabs>
+       <TabItem label="npm">
+         ```shellscript
+         npm init && npm add -D typescript @types/node ts-node && npx tsc --init && mkdir src && echo 'async function example() { console.log("Running example!")}; example()' > src/quickstart.ts
+         ```
+       </TabItem>
+
+       <TabItem label="pnpm">
+         ```shellscript
+         pnpm init && pnpm add -D typescript @types/node ts-node && pnpx tsc --init && mkdir src && echo 'async function example() { console.log("Running example!")}; example()' > src/quickstart.ts
+         ```
+       </TabItem>
+
+       <TabItem label="yarn">
+         ```shellscript
+         yarn init -y && yarn add -D typescript @types/node ts-node && npx tsc --init && mkdir src && echo 'async function example() { console.log("Running example!")}; example()' > src/quickstart.ts
+         ```
+       </TabItem>
+     </Tabs>
+
+  2. Probar la Inicialización
+
+     Para probar si has inicializado el paquete correctamente ejecuta:
+
+     <Tabs>
+       <TabItem label="npm">
+         ```shellscript
+         npx ts-node src/quickstart.ts
+         ```
+       </TabItem>
+
+       <TabItem label="pnpm">
+         ```shellscript
+         pnpx ts-node src/quickstart.ts
+         ```
+       </TabItem>
+
+       <TabItem label="yarn">
+         ```shellscript
+         yarn ts-node src/quickstart.ts
+         ```
+       </TabItem>
+     </Tabs>
+
+  3. Instalar el SDK de TypeScript usando el gestor de paquetes de tu elección:
+
+     ```shellscript npm2yarn
+     npm i @aptos-labs/ts-sdk
+     ```
+
+  4. Configurar el cliente de Aptos
+
+     Puedes usar el objeto `Aptos` para manejar todo lo que requiere una conexión a la red de Aptos. Una conexión se establece tan pronto como creas el objeto.
+
+     ```typescript filename="quickstart.ts"
+     import { Account, Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
+
+     // Especificar a qué red conectarse via AptosConfig
+     async function example() {
+       console.log(
+         "Este ejemplo creará dos cuentas (Alice y Bob), las financiará y transferirá entre ellas.",
+       );
+
+       // Configurar el cliente
+       const config = new AptosConfig({ network: Network.DEVNET });
+       const aptos = new Aptos(config);
+     }
+
+     example()
+     ```
+
+     <Aside type="note">
+       (Avanzado) Si necesitas conectarte a un nodo específico, puedes establecerlo en el `AptosConfig` especificando la url del `fullnode`. Ej. `fullnode: http://localhost:8080/v1`.
+     </Aside>
+
+  5. Obtener datos de la cadena
+
+     Puedes usar el cliente `Aptos` para obtener todo tipo de datos de la cadena como información sobre la red misma o información específica de la cuenta.
+
+     ```typescript filename="quickstart.ts"
+     ...
+     const ledgerInfo = await aptos.getLedgerInfo();
+     const modules = await aptos.getAccountModules({ accountAddress: "0x123" });
+     const tokens = await aptos.getAccountOwnedTokens({ accountAddress: "0x123" });
+     ...
+     ```
+
+  6. Enviar Transacciones
+
+     Puedes enviar transacciones para cambiar el estado de la cadena. Las transacciones te permiten enviar tokens como APT, activar módulos Move, negociar NFTs, y más. Puedes encontrar un tutorial detallado sobre transacciones [aquí](/es/build/sdks/ts-sdk/building-transactions).
+
+     Para comenzar, aquí está cómo puedes enviar una transacción básica para transferir APT.
+
+     #### 1. Crear una Cuenta
+
+     Para crear una nueva cuenta, primero generas nuevas credenciales y luego financias la cuenta. En localnet / devnet puedes financiar una cuenta programáticamente preguntando a un "faucet" que tiene mucha APT para enviar algo a tu nueva cuenta.
+
+     ```typescript filename="quickstart.ts"
+     ...
+     // Generar un par de claves de cuenta nuevo
+     const alice: Account = Account.generate();
+
+     // Financiar la cuenta en la cadena. Financiar una cuenta la crea en la cadena.
+     await aptos.fundAccount({
+       accountAddress: alice.accountAddress,
+       amount: 100000000,
+     });
+
+     // También crear una segunda cuenta para transferir tokens
+     const bob: Account = Account.generate();
+
+     // Financiar la cuenta en la cadena
+     await aptos.fundAccount({
+       accountAddress: bob.accountAddress,
+       amount: 100000000,
+     });
+     ...
+     ```
+
+     #### 2. Construir la Transacción
+
+     Puedes construir transacciones con `aptos.transaction.build.simple({...})` especificando:
+
+     1. `sender` - La cuenta que está enviando la transacción. Esta cuenta pagará las tarifas de gas.
+     2. `data` - La información necesaria para que Aptos identifique qué transacción ejecutar.
+        1. `function` - Qué contrato inteligente en la cadena llamar. Esto tiene el formato `<address_account>::<module_move>::<function>`.
+        2. `functionArguments` - Estos son específicos para la función que se está llamando. Puedes buscar qué parámetros necesita una función buscando la cuenta y el módulo en la cadena con un explorador [como este](https://explorer.aptoslabs.com/account/0x0000000000000000000000000000000000000000000000000000000000000001/modules/code/aptos_account?network=mainnet).
+
+     Por ejemplo:
+
+     ```typescript filename="quickstart.ts"
+     ...
+     const transaction = await aptos.transaction.build.simple({
+       sender: alice.accountAddress,
+       data: {
+     	  // La función de entrada de Move
+         function: "0x1::aptos_account::transfer",
+         functionArguments: [bob.accountAddress, 100],
+       },
+     });
+     ...
+     ```
+
+     <Aside type="note">
+       Para algunas situaciones, también puedes usar funciones simplificadas en el SDK como [`transferCoinTransaction`](https://explorer.aptoslabs.com/account/0x0000000000000000000000000000000000000000000000000000000000000001/modules/code/aptos_account?network=mainnet).
+     </Aside>
+
+     #### 3. Firmar y Enviar
+
+     Firmar prueba que eres el propietario o el administrador de la cuenta que está ejecutando la transacción. Esto es importante ya que el remitente debe pagar las tarifas de gas por el trabajo que la red hace para ejecutar la transacción.
+
+     Una vez firmado, puedes enviarlo a la red para su verificación y ejecución en la cadena.
+
+     Puedes usar `aptos.signAndSubmitTransaction` que combina estos dos pasos en uno:
+
+     ```typescript filename="quickstart.ts"
+     ...
+     // Ambos firman y envían (aunque también se pueden hacer por separado)
+     const pendingTransaction = await aptos.signAndSubmitTransaction({
+       signer: alice,
+       transaction,
+     });
+     ...
+     ```
+
+     #### 4. Esperar la Completación
+
+     Puedes ejecutar `aptos.waitForTransaction` para garantizar que tu código se ejecuta después de que la transacción haya sido procesada y aplicada.
+
+     Esto también te ayuda a obtener cualquier error que pueda ocurrir después de enviar, como la transacción ser rechazada.
+
+     ```typescript filename="quickstart.ts"
+     ...
+     const executedTransaction = await aptos.waitForTransaction({ transactionHash: pendingTransaction.hash });
+     ...
+     ```
+</Steps>
+
+## Código Completo de Inicio Rápido
+
+### Ejecutar Inicio Rápido
+
+<Tabs>
+  <TabItem label="npm">
+    ```shellscript
+    npx ts-node src/quickstart.ts
+    ```
+  </TabItem>
+
+  <TabItem label="pnpm">
+    ```shellscript
+    pnpx ts-node src/quickstart.ts
+    ```
+  </TabItem>
+
+  <TabItem label="yarn">
+    ```shellscript
+    yarn ts-node src/quickstart.ts
+    ```
+  </TabItem>
+</Tabs>
+
+```typescript filename="quickstart.ts"
+/**
+ * Este ejemplo muestra cómo usar el cliente de Aptos para crear cuentas, financiarlas y transferir entre ellas.
+ */
+
+import { Account, Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
+
+const APTOS_COIN = "0x1::aptos_coin::AptosCoin";
+const COIN_STORE = `0x1::coin::CoinStore<${APTOS_COIN}>`;
+const ALICE_INITIAL_BALANCE = 100_000_000;
+const BOB_INITIAL_BALANCE = 100;
+const TRANSFER_AMOUNT = 100;
+
+async function example() {
+  console.log(
+    "Este ejemplo creará dos cuentas (Alice y Bob), las financiará y transferirá entre ellas.",
+  );
+
+  // Configurar el cliente
+  const config = new AptosConfig({ network: Network.DEVNET });
+  const aptos = new Aptos(config);
+
+  // Generar credenciales de dos cuentas
+  // Cada cuenta tiene una clave privada, una clave pública y una dirección
+  const alice = Account.generate();
+  const bob = Account.generate();
+
+  console.log("=== Direcciones ===\n");
+  console.log(`La dirección de Alice es: ${alice.accountAddress}`);
+  console.log(`La dirección de Bob es: ${bob.accountAddress}`);
+
+  // Financiar las cuentas usando un faucet
+  console.log("\n=== Financiando cuentas ===\n");
+
+  await aptos.fundAccount({
+    accountAddress: alice.accountAddress,
+    amount: ALICE_INITIAL_BALANCE,
+  });
+
+  await aptos.fundAccount({
+    accountAddress: bob.accountAddress,
+    amount: BOB_INITIAL_BALANCE,
+  });
+  console.log("Las cuentas de Alice y Bob han sido financiadas!");
+
+  // Buscar el saldo de la cuenta recién financiada
+  console.log("\n=== Saldos ===\n");
+  const aliceAccountBalance = await aptos.getAccountResource({
+    accountAddress: alice.accountAddress,
+    resourceType: COIN_STORE,
+  });
+  const aliceBalance = Number(aliceAccountBalance.coin.value);
+  console.log(`El saldo de Alice es: ${aliceBalance}`);
+
+  const bobAccountBalance = await aptos.getAccountResource({
+    accountAddress: bob.accountAddress,
+    resourceType: COIN_STORE,
+  });
+  const bobBalance = Number(bobAccountBalance.coin.value);
+  console.log(`El saldo de Bob es: ${bobBalance}`);
+
+  // Enviar una transacción desde la cuenta de Alice a la cuenta de Bob
+  const txn = await aptos.transaction.build.simple({
+    sender: alice.accountAddress,
+    data: {
+      // Todas las transacciones en Aptos se implementan a través de contratos inteligentes.
+      function: "0x1::aptos_account::transfer",
+      functionArguments: [bob.accountAddress, 100],
+    },
+  });
+
+  console.log("\n=== Transacción de transferencia ===\n");
+  // Ambos firman y envían
+  const committedTxn = await aptos.signAndSubmitTransaction({
+    signer: alice,
+    transaction: txn,
+  });
+  // Espera a que Aptos verifique y ejecute la transacción
+  const executedTransaction = await aptos.waitForTransaction({
+    transactionHash: committedTxn.hash,
+  });
+  console.log("Hash de la transacción:", executedTransaction.hash);
+
+  console.log("\n=== Saldos después de la transferencia ===\n");
+  const newAliceAccountBalance = await aptos.getAccountResource({
+    accountAddress: alice.accountAddress,
+    resourceType: COIN_STORE,
+  });
+  const newAliceBalance = Number(newAliceAccountBalance.coin.value);
+  console.log(`El saldo de Alice es: ${newAliceBalance}`);
+
+  const newBobAccountBalance = await aptos.getAccountResource({
+    accountAddress: bob.accountAddress,
+    resourceType: COIN_STORE,
+  });
+  const newBobBalance = Number(newBobAccountBalance.coin.value);
+  console.log(`El saldo de Bob es: ${newBobBalance}`);
+
+  // Bob debería tener la cantidad transferida
+  if (newBobBalance !== TRANSFER_AMOUNT + BOB_INITIAL_BALANCE)
+    throw new Error("El saldo de Bob después de la transferencia es incorrecto");
+
+  // Alice debería tener el resto menos gas
+  if (newAliceBalance >= ALICE_INITIAL_BALANCE - TRANSFER_AMOUNT)
+    throw new Error("El saldo de Alice después de la transferencia es incorrecto");
+}
+
+example();
+```
+
+## Resumen
+
+En resumen, acabas de aprender a transferir APT a través de una transacción enviando:
+
+1. Conectándote a la red usando el cliente de `Aptos`.
+2. Creando una cuenta.
+3. Buscando datos de la cadena usando funciones de ayuda del cliente como [`aptos.getAccountModules`](https://aptos-labs.github.io/aptos-ts-sdk/@aptos-labs/ts-sdk-1.35.0/classes/Aptos.html#getAccountModules).
+4. Firmando y enviando una transacción a la red.
+5. Esperando que Aptos ejecute la transacción.
+
+Para ver todo esto en acción, puedes copiar y ejecutar el fragmento de código de inicio rápido completo de arriba.
+
+<Aside type="note">
+  Para el desarrollo futuro, asegúrate de marcar la [documentación de referencia](https://aptos-labs.github.io/aptos-ts-sdk/) para buscar las firmas de funciones específicas.
+
+  Ten en cuenta que la mayoría de las funciones de ayuda están listadas en el objeto [`Aptos` cliente](https://aptos-labs.github.io/aptos-ts-sdk/@aptos-labs/ts-sdk-1.35.0/classes/Aptos.html).
+</Aside>

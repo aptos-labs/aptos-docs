@@ -1,0 +1,107 @@
+---
+title: "Localnet desde código fuente"
+description: "Ejecuta una red local de Aptos desde el código fuente aptos-core para probar modificaciones a la base de código o Framework de Aptos con configuración de validator único."
+sidebar:
+  label: "Con Código Fuente"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Puedes ejecutar una localnet usando el código fuente [aptos-core](https://github.com/aptos-labs/aptos-core). Este enfoque es útil para probar modificaciones a la base de código aptos-core o al Framework de Aptos.
+
+<Aside type="note">
+  Es más fácil ejecutar una localnet usando el [CLI de Aptos](/es/network/nodes/localnet/local-development-network) que ejecutarla desde código fuente. El CLI también proporciona una experiencia más amigable al usuario y características adicionales.
+  Aprende cómo siguiendo esta guía: [Localnet usando el CLI de Aptos](/es/network/nodes/localnet/local-development-network).
+</Aside>
+
+El resto de este documento describe:
+
+- Cómo iniciar tu localnet con un solo nodo validator.
+- Cómo iniciar un servicio Faucet y adjuntarlo a tu localnet.
+
+## Usar el código fuente Aptos-core
+
+1. Sigue los pasos en [Construir Aptos Desde Código Fuente](/es/network/nodes/building-from-source)
+
+2. Con tu entorno de desarrollo listo, puedes iniciar tu localnet.
+
+   <Aside type="note">
+     - Cuando ejecutes el comando abajo para iniciar la localnet, tu terminal entrará en un modo interactivo, con un mensaje `Aptos is running, press ctrl-c to exit`. Por lo tanto, necesitarás abrir otra terminal shell para los pasos subsecuentes descritos en esta sección.
+     - Después de que el comando abajo se ejecute, copia la información `Test dir` de la salida del terminal para el siguiente paso.
+   </Aside>
+
+   Para iniciar tu localnet, ejecuta el siguiente comando:
+
+   ```shellscript filename="Terminal"
+   CARGO_NET_GIT_FETCH_WITH_CLI=true cargo run -p aptos-node -- --test
+   ```
+
+   Ver abajo para un ejemplo de la salida parcial. Toma nota del `Test dir` de la salida.
+
+   ```shellscript filename="Terminal"
+   ...
+   ...
+   ...
+
+   Completed generating configuration:
+       Log file: "/private/var/folders/gn/m74t8ylx55z935q8wx035qn80000gn/T/b3adc18c144bfcc78a1541953893bc1c/validator.log"
+       Test dir: "/private/var/folders/gn/m74t8ylx55z935q8wx035qn80000gn/T/b3adc18c144bfcc78a1541953893bc1c/0/node.yaml"
+       Aptos root key path: "/private/var/folders/gn/m74t8ylx55z935q8wx035qn80000gn/T/b3adc18c144bfcc78a1541953893bc1c/mint.key"
+       Waypoint: 0:47e676b5fe38ebe2aec6053db7b3daa0b805693d6422e3475e46e89499464ecf
+       ChainId: TESTING
+       REST API endpoint: 0.0.0.0:8080
+       Fullnode network: /ip4/0.0.0.0/tcp/7180
+   Aptos is running, press ctrl-c to exit
+   ```
+
+<Aside type="tip">
+  El comando anterior inicia una localnet con un solo nodo validator. El comando ejecuta `aptos-node` desde un estado de ledger solo génesis. Si quieres reutilizar el estado del ledger producido por una ejecución anterior de `aptos-node`, entonces usa:
+
+  ```shellscript filename="Terminal"
+  cargo run -p aptos-node -- --test --config <config-path>
+  ```
+</Aside>
+
+### Adjuntar un Faucet a tu localnet
+
+Los Faucets son servicios sin estado que pueden ejecutarse en paralelo con la localnet. Un Faucet es una forma de crear monedas de prueba Aptos sin valor del mundo real. Puedes usar el Faucet enviando una solicitud para crear monedas y transferirlas a una cuenta dada en tu nombre.
+
+1. Asegúrate de haber iniciado tu localnet como se describe en el Paso 5 arriba.
+2. Abre una nueva terminal shell.
+3. Copia la _ruta de clave raíz Aptos_ de tu terminal donde iniciaste la localnet, y úsala para reemplazar el `mint-key-file-path` en el comando abajo.
+4. Ejecuta el siguiente comando para iniciar un Faucet:
+
+```shellscript filename="Terminal"
+cargo run --package aptos-faucet-service -- run-simple --key-file-path "/tmp/694173aa3bbe019499bbd5cf3fe0e2fc/mint.key" --node-url http://127.0.0.1:8080 --chain-id TESTING
+```
+
+Esto iniciará un Faucet ejecutándose localmente sin restricciones a tokens que pueden ser reclamados y acuñados. Este servicio Faucet será tan accesible como la localnet que iniciaste arriba.
+
+## Interactuar con la localnet
+
+Después de iniciar tu localnet, verás lo siguiente:
+
+```shellscript filename="Terminal"
+Entering test mode, this should never be used in production!
+Completed generating configuration:
+        Log file: "/tmp/694173aa3bbe019499bbd5cf3fe0e2fc/validator.log"
+        Test dir: "/tmp/694173aa3bbe019499bbd5cf3fe0e2fc/0/node.yaml"
+        Aptos root key path: "/tmp/694173aa3bbe019499bbd5cf3fe0e2fc/mint.key"
+        Waypoint: 0:197bc8b76761622c2d2054d8bf93c1802fa0eb4bc55f0f3d4442878fdecc297f
+        ChainId: TESTING
+        REST API endpoint: 0.0.0.0:8080
+        Fullnode network: /ip4/0.0.0.0/tcp/7180
+
+Aptos is running, press ctrl-c to exit
+```
+
+Usa la [herramienta CLI de Aptos](/es/build/cli) para interactuar con tu localnet. La salida anterior contiene información que usarás para iniciar la [herramienta CLI de Aptos](/es/build/cli):
+
+- `Aptos root key path`: La clave raíz (también conocida como la clave mint o faucet) controla la cuenta que puede acuñar tokens. Disponible en la carpeta docker compose bajo `aptos_root_key`.
+- `Waypoint`: Un checkpoint verificable de la blockchain (disponible en la carpeta docker compose bajo waypoint.txt)
+- `REST endpoint`: El endpoint para el servicio REST, ej., `http://127.0.0.1:8080`.
+- `ChainId`: El ID de cadena distingue únicamente esta red de otras redes blockchain.
+
+## Siguientes pasos
+
+En este punto, tendrás una cuenta raíz especial en `0x1` que puede realizar la operación mint. Continúa con algunos tutoriales como en [talleres de Aptos Learn](https://learn.aptoslabs.com/en/workshops)

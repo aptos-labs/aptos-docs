@@ -1,0 +1,116 @@
+---
+title: "Address"
+description: "Aprende sobre los tipos address en Move para identificación de cuentas, autenticación y ubicación de recursos en Aptos."
+sidebar:
+  label: "Dirección"
+---
+
+`address` es un tipo integrado en Move que se usa para representar ubicaciones (a veces llamadas cuentas) en el almacenamiento global. Un valor `address` es un identificador de 256 bits (32 bytes). En una dirección dada, se pueden almacenar dos cosas: [Módulos](/es/build/smart-contracts/book/modules-and-scripts) y [Resources](/es/build/smart-contracts/book/structs-and-resources).
+
+Aunque un `address` es un entero de 256 bits internamente, las direcciones de Move son intencionalmente opacas: no se pueden crear a partir de enteros, no soportan operaciones aritméticas, y no se pueden modificar. Aunque podrían existir programas interesantes que usen tal característica (por ejemplo, la aritmética de punteros en C llena un nicho similar), Move no permite este comportamiento dinámico porque ha sido diseñado desde cero para soportar verificación estática.
+
+Puedes usar valores de dirección en tiempo de ejecución (valores de tipo `address`) para acceder a recursos en esa dirección. _No puedes_ acceder a módulos en tiempo de ejecución a través de valores de dirección.
+
+## Direcciones y Su Sintaxis
+
+Las direcciones vienen en dos sabores: nombradas o numéricas. La sintaxis para una dirección nombrada sigue las mismas reglas que cualquier identificador nombrado en Move. La sintaxis de una dirección numérica no está restringida a valores codificados en hexadecimal, y cualquier valor numérico [`u256`](/es/build/smart-contracts/book/integers) válido puede usarse como valor de dirección, por ejemplo, `42`, `0xCAFE`, y `2021` son todos literales de dirección numérica válidos.
+
+Para distinguir cuándo se está usando una dirección en un contexto de expresión o no, la sintaxis cuando se usa una dirección difiere dependiendo del contexto donde se use:
+
+- Cuando una dirección se usa como expresión, la dirección debe ser prefijada por el carácter `@`, es decir, [`@<valor_numérico>`](/es/build/smart-contracts/book/integers) o `@<identificador_dirección_nombrada>`.
+- Fuera de contextos de expresión, la dirección puede escribirse sin el carácter `@` inicial, es decir, [`<valor_numérico>`](/es/build/smart-contracts/book/integers) o `<identificador_dirección_nombrada>`.
+
+En general, puedes pensar en `@` como un operador que toma una dirección de ser un elemento de espacio de nombres a ser un elemento de expresión.
+
+## Direcciones Nombradas
+
+Las direcciones nombradas son una característica que permite que los identificadores se usen en lugar de valores numéricos en cualquier lugar donde se usen direcciones, y no solo a nivel de valor. Las direcciones nombradas se declaran y vinculan como elementos de nivel superior (fuera de módulos y scripts) en Paquetes de Move, o se pasan como argumentos al compilador de Move.
+
+Las direcciones nombradas solo existen a nivel del lenguaje fuente y serán completamente sustituidas por su valor a nivel de bytecode. Debido a esto, los módulos y miembros de módulos _deben_ ser accedidos a través de la dirección nombrada del módulo y no a través del valor numérico asignado a la dirección nombrada durante la compilación, por ejemplo, `use mi_addr::foo` _no_ es equivalente a `use 0x2::foo` incluso si el programa Move se compila con `mi_addr` establecido a `0x2`. Esta distinción se discute en más detalle en la sección sobre [Módulos y Scripts](/es/build/smart-contracts/book/modules-and-scripts).
+
+### Ejemplos
+
+```move
+script {
+  fun example() {
+    let a1: address = @0x1; // abreviatura para 0x0000000000000000000000000000000000000000000000000000000000000001
+    let a2: address = @0x42; // abreviatura para 0x0000000000000000000000000000000000000000000000000000000000000042
+    let a3: address = @0xDEADBEEF; // abreviatura para 0x00000000000000000000000000000000000000000000000000000000DEADBEEF
+    let a4: address = @0x000000000000000000000000000000000000000000000000000000000000000A;
+    let a5: address = @std; // Asigna a `a5` el valor de la dirección nombrada `std`
+    let a6: address = @66;
+    let a7: address = @0x42;
+  }
+}
+
+module 66::some_module {   // No en contexto de expresión, por lo que no se necesita @
+    use 0x1::other_module; // No en contexto de expresión por lo que no se necesita @
+    use std::vector;       // Puede usar una dirección nombrada como elemento de espacio de nombres al usar otros módulos
+    ...
+}
+
+module std::other_module {  // Puede usar una dirección nombrada como elemento de espacio de nombres para declarar un módulo
+    ...
+}
+```
+
+## Operaciones de Almacenamiento Global
+
+El propósito principal de los valores `address` es interactuar con las operaciones de almacenamiento global.
+
+Los valores `address` se usan con las [operaciones](/es/build/smart-contracts/book/global-storage-operators) `exists`, `borrow_global`, `borrow_global_mut`, y `move_from`.
+
+La única operación de almacenamiento global que _no_ usa `address` es `move_to`, que usa [`signer`](/es/build/smart-contracts/book/signer).
+
+## Propiedad
+
+Al igual que con los otros valores escalares integrados en el lenguaje, los valores `address` son implícitamente copiables, lo que significa que se pueden copiar sin una instrucción explícita como [`copy`](/es/build/smart-contracts/book/variables#move-and-copy).
+
+## Conversiones
+
+Move proporciona operaciones nativas para convertir valores `address` a otros tipos:
+
+### Conversión a Bytes
+
+```move
+// Convertir address a vector<u8>
+let addr: address = @0x42;
+let bytes: vector<u8> = std::bcs::to_bytes(&addr);
+```
+
+### Conversión desde Bytes
+
+```move
+// Convertir vector<u8> a address (debe ser exactamente 32 bytes)
+let bytes: vector<u8> = vector[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 66];
+let addr: address = std::from_bcs::to_address(bytes);
+```
+
+## Buenas Prácticas
+
+1. **Usa direcciones nombradas**: Para mejor legibilidad y mantenimiento, usa direcciones nombradas en lugar de valores literales:
+
+```move
+// ✓ Bueno
+module my_project::token { ... }
+
+// ✗ Menos legible
+module 0x123456789::token { ... }
+```
+
+2. **Validación de direcciones**: Siempre valida las direcciones de entrada en funciones públicas:
+
+```move
+public fun transfer(to: address, amount: u64) {
+    assert!(to != @0x0, E_INVALID_ADDRESS);
+    // ... lógica de transferencia
+}
+```
+
+3. **Documentación**: Documenta qué direcciones se esperan en tu código:
+
+```move
+/// Transfiere tokens a la dirección especificada
+/// @param to: La dirección del destinatario (no puede ser 0x0)
+public fun transfer(to: address, amount: u64) { ... }
+```

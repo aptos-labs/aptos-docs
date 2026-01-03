@@ -1,0 +1,90 @@
+---
+title: "Actualizar Nodos"
+description: "Mantén tu validator y VFN actualizados con actualizaciones simples y técnicas de failover de VFN para minimizar el tiempo de inactividad durante actualizaciones de software."
+sidebar:
+  label: "Actualizar"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Esta sección contiene tutoriales para actualizar tu validator y validator fullnode (VFN). Las actualizaciones son una
+operación común para mantener tus nodos. Aptos Labs frecuentemente lanza nuevas versiones del
+software del nodo Aptos, y deberías mantener tus nodos actualizados para asegurar que sean seguros y confiables.
+
+<Aside type="caution">
+  Ejecutar versiones antiguas de nodos y fallar en actualizar tus nodos puede llevar a vulnerabilidades de seguridad, degradación de rendimiento,
+  e inestabilidad de red. Es importante mantener tus nodos actualizados.
+</Aside>
+
+Hay dos formas principales de actualizar tus nodos. La primera es una **actualización** **simple** del software del nodo, y la
+segunda es un proceso de **failover** más **complejo** entre tu validator y VFN. El proceso de failover es útil para
+minimizar el tiempo de inactividad del validator cuando necesitas actualizar.
+
+## Actualización Simple
+
+Para realizar una actualización simple de nodo, puedes actualizar el validator y VFN individualmente, uno a la vez.
+Este proceso es directo y puede repetirse para cada nodo. Los pasos son los siguientes:
+
+1. Primero, detén el nodo manualmente (ej., el validator o VFN). Para detener el nodo, dependerá de tu método de despliegue.
+2. Siguiente, actualiza el software del nodo a la última versión. Esto puede requerir descargar el último binario o imagen Docker,
+   o recompilar el código fuente. Dependiendo de tu método de despliegue, puedes realizar este paso en el fondo mientras el nodo aún está ejecutándose.
+   Esto debería ayudar a minimizar el tiempo de inactividad.
+3. Finalmente, una vez que hayas actualizado el software del nodo, reinicia el nodo usando la última versión del software y los comandos originales
+   que usaste para iniciar el nodo.
+
+   <Aside type="note">
+     **REPETIR PARA CADA NODO**<br />
+     Necesitarás realizar el proceso de actualización simple para cada nodo individualmente. Esto significa que necesitarás actualizar
+     el validator y VFN por separado.
+   </Aside>
+
+<br />
+
+## Actualización vía Failover de VFN
+
+Para minimizar el tiempo de inactividad del validator, puedes realizar un proceso de failover entre tu validator y VFN. Este proceso involucra
+actualizar el VFN a la última versión y convertirlo al validator. Una vez que el VFN ha sido convertido al nuevo
+validator, puedes entonces actualizar el validator original y convertirlo en el nuevo VFN.
+
+El beneficio de este enfoque es que minimiza el tiempo de inactividad del validator permitiéndote preparar el nuevo
+validator mientras el validator original aún está ejecutándose.
+
+<Aside type="caution">
+  **Diferencias de nodos**<br />
+  Antes de comenzar el proceso de failover, es importante entender que los datos mantenidos por los dos nodos
+  (es decir, validator y VFN) no son idénticos. Al VFN le falta el `consensus_db` y el archivo `secure-data.json`,
+  y ambos nodos usan archivos de configuración diferentes (incluyendo identidades).
+
+  Si no te sientes cómodo con el proceso de failover, deberías considerar realizar una actualización simple en su lugar.
+</Aside>
+
+Para realizar una actualización de failover de VFN, deberías seguir estos pasos:
+
+1. Actualiza tu DNS para intercambiar las [direcciones de red](/es/network/nodes/validator-node/connect-nodes/connect-to-aptos-network#3-update-on-chain-network-addresses) entre el validator y VFN.
+
+2. Detén el VFN y actualiza el software del nodo a la última versión. Esto puede requerir descargar el último binario o imagen Docker,
+   o recompilar el código fuente. Además, necesitarás copiar el `consensus_db` y el archivo `secure-data.json` del validator al VFN,
+   así como el archivo de configuración del validator (incluyendo identidades del validator).
+
+3. Una vez que el VFN esté preparado para convertirse en el nuevo validator, puedes detener el validator antiguo, e iniciar el nuevo validator
+   inmediatamente. Esto minimizará el tiempo de inactividad del validator.
+
+   <Aside type="caution">
+     **SOLO UN VALIDATOR A LA VEZ** <br />
+     Es importante asegurar que solo un validator esté ejecutándose en cualquier momento dado. Si fallas en detener
+     el validator original antes de iniciar el nuevo validator, tendrás dos validators ejecutándose al mismo tiempo,
+     y esto llevará a fallas de consenso y problemas de rendimiento en tus nodos.
+   </Aside>
+
+4. Ahora, tendrás un validator ejecutando la nueva versión de código. Observa que antes de que los cambios DNS tomen efecto tu nuevo
+   validator solo tendrá conexiones salientes.
+
+5. Siguiente, prepara el validator original para convertirse en el nuevo VFN. Esto involucrará actualizar el software del nodo a la última
+   versión, y copiar el archivo de configuración del VFN (incluyendo identidades del VFN).
+
+6. Una vez que el validator original esté listo para convertirse en el nuevo VFN, puedes iniciar el nuevo VFN.
+
+<Aside type="note">
+  Una vez que hayas completado el proceso de failover, deberías monitorear el nuevo validator y VFN para asegurar que estén ejecutándose
+  correctamente, y que tu validator aún esté participando en consenso.
+</Aside>

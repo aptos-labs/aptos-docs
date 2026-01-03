@@ -1,0 +1,136 @@
+---
+title: "Resumen del Estándar de Token de Aptos"
+description: "Aprende sobre los tokens y estándares de tokenización en Move para el desarrollo de contratos inteligentes en Aptos."
+sidebar:
+  label: "Tokens"
+---
+
+El [Estándar de Activo Digital de Aptos](/es/build/smart-contracts/digital-asset) define el
+Token No Fungible canónico en Aptos. Aptos aprovecha la composabilidad para extender
+el estándar de activo digital con características como fungibilidad via
+el [estándar de Activo Fungible](/es/build/smart-contracts/fungible-asset). El concepto de
+composabilidad viene del modelo de datos subyacente para estas construcciones:
+el modelo de datos de [Objeto Move](/es/build/smart-contracts/objects).
+
+El resto de este documento discute cómo los estándares de token de Aptos se comparan con los
+estándares en Ethereum y Solana.
+
+## Modelos de datos
+
+Para entender los tokens, comenzamos comparando los modelos de datos a través de diferentes
+blockchains.
+
+### Ethereum
+
+Ethereum tiene dos tipos de cuentas:
+
+- Cuentas de propiedad externa que almacenan un balance de Ether.
+- Cuentas de contrato que gestionan sus contratos inteligentes subyacentes y tienen un
+  almacenamiento asociado para estado persistente, que solo puede ser mutado por el
+  contrato asociado.
+
+Para crear una nueva colección NFT, un creador debe desplegar su propio
+contrato a la blockchain, que a su vez creará una colección y un conjunto de
+NFTs dentro de su almacenamiento.
+
+### Solana
+
+A diferencia de Ethereum o Aptos donde los datos y código coexisten, Solana almacena datos y
+programas en cuentas separadas. Hay dos tipos de cuentas en la blockchain de Solana:
+
+- Cuentas ejecutables solo almacenan código de contrato
+- Cuentas no ejecutables almacenan datos asociados con y poseídos por cuentas
+  ejecutables.
+
+Para crear una nueva colección NFT, un creador llama a un programa existente desplegado
+para poblar una nueva colección y conjunto de NFTs.
+
+### Aptos
+
+Las [cuentas](/es/network/blockchain/accounts) en Aptos almacenan tanto contratos inteligentes
+como datos. A diferencia de Ethereum, los datos asociados de un contrato inteligente están
+distribuidos a través del espacio de todas las cuentas
+en [recursos](/es/network/blockchain/resources)
+dentro de [cuentas](/es/network/blockchain/accounts)
+o [objetos](/es/build/smart-contracts/objects). Por ejemplo, una colección y un
+NFT dentro de esa colección están almacenados en objetos distintos en diferentes direcciones
+con el contrato inteligente definiéndolos en otra dirección. Un desarrollador de contrato inteligente
+también podría almacenar datos asociados con el NFT y colección en la
+misma dirección que el contrato inteligente o en otros objetos.
+
+Hay dos medios para crear NFTs en Aptos:
+
+- El [estándar sin código](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-22.md)
+  permite a los creadores llamar al contrato para crear nuevas colecciones y tokens
+  sin desplegar un nuevo contrato.
+- Los contratos NFT personalizados permiten a los creadores personalizar sus NFTs extendiendo el
+  modelo de objeto que puede gestionar todos los aspectos de su colección.
+
+Aptos logra un balance entre la personalización ofrecida por Ethereum con la
+simplicidad de crear nuevas colecciones como Solana.
+
+Como Ethereum, Aptos requiere indexación para determinar el conjunto de todos los NFTs poseídos por
+una cuenta, mientras que Solana no tiene necesidad.
+
+## Comparación de estándares de token
+
+El Token Fungible (FT) fue inicialmente introducido
+por [EIP-20](https://eips.ethereum.org/EIPS/eip-20), y el Token No Fungible (NFT)
+fue definido en [EIP-721](https://eips.ethereum.org/EIPS/eip-721).
+Más tarde, [EIP-1155](https://eips.ethereum.org/EIPS/eip-1155) combinó FT y NFT
+o incluso Token Semi-Fungible (SFT) en un estándar.
+
+Los estándares de token de Ethereum requieren que cada token despliegue su propio código de contrato individual
+para distinguir colección de tokens. El modelo de cuenta de Solana habilita
+otro patrón donde el código puede ser reutilizado para que un programa genérico opere en
+varios datos. Para crear un nuevo token, podrías crear una cuenta que puede acuñar
+tokens y más cuentas que pueden recibirlos. La cuenta de acuñación misma determina únicamente
+el tipo de token en lugar de la cuenta de contrato, y estos son todos pasados
+como argumentos al único contrato desplegado en alguna cuenta ejecutable.
+
+La colección de estándares de token de Aptos comparte algunas similitudes con Solana,
+especialmente cómo cubre FT, NFT y SFT en un código común en la cadena. En lugar de
+desplegar un nuevo contrato inteligente para cada nuevo token, un creador llama a una función en
+el contrato con los argumentos necesarios. Dependiendo de qué función llames,
+el contrato de token acuñará/transferirá/quemará/... tokens.
+
+### Identificación de token
+
+Aptos identifica un token por su `Address` o `ObjectId`, una ubicación dentro del
+almacenamiento global. Las colecciones están almacenadas en una ubicación determinada por la dirección
+del creador y el nombre de la colección.
+
+En Ethereum, los contratos están desplegados en cuentas determinadas por la cuenta que
+está desplegando el contrato. Los NFTs están entonces almacenados como índices en tablas de datos
+dentro del contrato.
+
+En Solana, los datos NFT están almacenados bajo una cuenta de acuñación, independiente de la cuenta
+del programa.
+
+### Metadatos de token
+
+El token de Aptos tiene metadatos en su recurso `Token` con los datos más comúnmente
+requeridos por dapps para interactuar con tokens. Algunos ejemplos incluyen:
+
+- `name`: El nombre del token. Debe ser único dentro de una colección.
+- `description`: La descripción del token.
+- `uri`: Un puntero URL a fuera de la cadena para más información sobre el token. El
+  activo podría ser medios como una imagen o video o más metadatos en un archivo
+  JSON.
+- `collection`: Un puntero al ObjectId de la colección.
+
+Campos adicionales pueden ser almacenados en recursos definidos por el creador o
+el recurso `PropertyMap` que define un mapa clave-valor generalizable.
+
+En Ethereum, solo una pequeña porción de tales propiedades están definidas como métodos,
+como `name()`, `symbol()`, `decimals()`, `totalSupply()` de ERC-20;
+o `name()` y `symbol()` y `tokenURI()` de la extensión de metadatos opcional
+para ERC-721; ERC-1155 también tiene un método similar `uri()` en su propia extensión
+de metadatos opcional. Los metadatos de token no están estandarizados para que las dapps tengan que
+tomar tratamiento especial caso por caso.
+
+En Solana, el programa de Metadatos de Token ofrece una Cuenta de Metadatos definiendo
+numerosos campos de metadatos asociados con un token también, incluyendo `collection`
+que está definido en `TokenDataId` en Aptos. Solana, sin embargo, no ofrece
+mutabilidad para activos, a diferencia de Aptos. Como Aptos, Metadatos de Token v1.1.0 ofrece
+un contenedor `attribute` para propiedades personalizadas.

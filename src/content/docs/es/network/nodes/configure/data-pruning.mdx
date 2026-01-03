@@ -1,0 +1,60 @@
+---
+title: "Poda de Datos"
+description: "Configura la poda de datos de blockchain en nodos Aptos para gestionar espacio de almacenamiento controlando la retención del historial del ledger con ventanas de poda personalizables."
+sidebar:
+  label: "Poda de Datos"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Todos los nodos Aptos (ej., validators, VFNs y PFNs) procesan transacciones y confirman nuevos datos a la blockchain.
+A medida que la blockchain crece (indefinidamente), los nodos pueden gestionar la cantidad de espacio de disco de almacenamiento requerido podando datos antiguos
+de blockchain. Para lograr esto, los nodos Aptos podan el **historial del ledger** de blockchain en su base de datos, que
+contiene el historial de todas las transacciones. El historial del ledger puede estar **completo** (ej., si estás operando un nodo
+archival), o **podado** a cierta ventana de transacciones (para reducir requisitos de almacenamiento).
+
+Por defecto, la poda del ledger está habilitada en todos los nodos, y la ventana de poda puede configurarse. Este documento
+describe cómo puedes configurar el comportamiento del podador del ledger.
+
+<Aside type="tip">
+  **Ventana de poda por defecto**<br />
+  La configuración por defecto del podador del ledger es mantener solo las 150 millones de transacciones más recientes.
+  Casi todos los nodos Aptos en Mainnet y Testnet usan la configuración por defecto. Si deseas ejecutar un nodo
+  archival, sigue las instrucciones [aquí](/es/network/nodes/configure/state-sync#archival-pfns).
+</Aside>
+
+## Deshabilitar el podador del ledger
+
+Si deseas deshabilitar el podador del ledger completamente, puedes hacerlo agregando lo siguiente a tu archivo de
+configuración de nodo.
+
+```yaml filename="fullnode.yaml"
+storage:
+  storage_pruner_config:
+    ledger_pruner_config:
+      enable: false
+```
+
+<Aside type="danger">
+  **Crecimiento de almacenamiento sin límites**<br />
+  Ten en cuenta que deshabilitar el podador del ledger resultará en crecimiento de almacenamiento sin límites. Esto puede
+  llevar a que el disco de almacenamiento se llene muy rápidamente. No se recomienda deshabilitar el podador del ledger.
+</Aside>
+
+## Configurar el podador del ledger
+
+Puedes configurar el tamaño de la ventana de poda del ledger (es decir, el número de transacciones más recientes
+a retener en almacenamiento). Para hacer esto, agrega lo siguiente a tu archivo de configuración de nodo.
+
+```yaml filename="fullnode.yaml"
+storage:
+  storage_pruner_config:
+    ledger_pruner_config:
+      prune_window: 100000000 # 100 millones de transacciones
+```
+
+<Aside type="caution">
+  **Ventana de poda mínima**<br />
+  Establecer la ventana de poda menor a 100 millones de transacciones puede llevar a errores de tiempo de ejecución y dañar la
+  salud del nodo.
+</Aside>

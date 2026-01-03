@@ -1,0 +1,176 @@
+---
+title: "Requisitos del Nodo"
+description: "Requisitos de hardware, redes y software para ejecutar validator de Aptos y validator fullnode (VFN) para asegurar rendimiento y estabilidad óptimos."
+sidebar:
+  label: "Requisitos"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Para asegurar que tu validator y validator fullnode (VFN) operen sin problemas, ambos nodos deben cumplir los
+requisitos especificados en este documento.
+
+<Aside type="caution">
+  **Falla al cumplir requisitos**<br />
+  Fallar en cumplir los requisitos delineados en este documento resultará en que tus nodos experimenten degradación bajo carga,
+  fallas de consenso, pérdidas de recompensas, e inestabilidad general.
+</Aside>
+
+## Aislamiento de recursos
+
+Cuando ejecutes un validator de Aptos y VFN, recomendamos encarecidamente que los nodos se ejecuten en dos máquinas separadas e
+independientes. Estas máquinas deben estar bien provistas, cumplir los requisitos delineados abajo y
+estar aisladas entre sí. Mantener aislamiento de recursos entre el validator y el VFN es importante
+para seguridad y para asegurar que los nodos no encuentren degradación de rendimiento, inestabilidad o fallas cuando
+estén bajo carga.
+
+<Aside type="note">
+  Para desplegar el validator y VFN en la nube, proporcionamos soporte de Terraform en dos proveedores de nube: **GCP** y **AWS**.
+  Ver [**Ejecutar Nodo Validator**](/es/network/nodes/validator-node/deploy-nodes).
+</Aside>
+
+## Requisitos de hardware
+
+Para ejecutar un validator de Aptos y VFN en mainnet, recomendamos que tu hardware sea lo suficientemente performante para mantener
+\~30,000 transacciones por segundo (TPS). Hay dos formas de evaluar si tu hardware cumple este requisito:
+
+1. Usar las especificaciones de referencia proporcionadas abajo.
+2. Ejecutar la herramienta de benchmarking de rendimiento proporcionada por Aptos.
+
+Nota que tanto el validator como el VFN requieren hardware suficiente por separado (es decir, dos máquinas separadas que
+satisfagan los requisitos delineados abajo).
+
+### Especificaciones de referencia
+
+**Especificaciones para Ejecutar un Validator de Aptos y VFN en Mainnet**
+
+| Componente            | Especificación                                                        |
+| --------------------- | --------------------------------------------------------------------- |
+| CPU                   | 32 núcleos, 2.8GHz o más rápido, AMD Milan EPYC o Intel Xeon Platinum |
+| Memoria               | 64GB RAM                                                              |
+| Almacenamiento        | 3.0 TB SSD con al menos 60K IOPS y 200MiB/s de ancho de banda         |
+| Ancho de Banda de Red | 1Gbps                                                                 |
+
+**Tipos de Máquina de Ejemplo en Varias Nubes**
+
+| Proveedor de Nube | Tipo de Máquina                  | Notas               |
+| ----------------- | -------------------------------- | ------------------- |
+| AWS               | c6id.16xlarge                    | Si usa un SSD local |
+| AWS               | c6i.16xlarge + volumen io2 EBS   | Con 60K IOPS        |
+| GCP               | t2d-standard-60 + pd-ssd         | Con 60K IOPS        |
+| Azure             | Standard\_D64\_v5                | Con 64K IOPS        |
+| Latitude.sh       | m4.large, rs4.large o rs4.xlarge | Con 64K IOPS        |
+
+### Benchmarking de rendimiento
+
+Si prefieres evaluar tu hardware para rendimiento suficiente, puedes usar la herramienta de benchmarking de rendimiento. Primero, clona el repositorio `aptos-core` e instala las dependencias requeridas (ver la
+sección [**Clonar aptos-core**](/es/network/nodes/building-from-source#clone-the-aptos-core-repo)).
+Luego, ejecuta los siguientes comandos para ejecutar el benchmark:
+
+```shellscript filename="Terminal"
+TABULATE_INSTALL=lib-only pip install tabulate
+
+./testsuite/performance_benchmark.sh --short
+```
+
+Una vez que termine el benchmark, imprimirá una tabla, con una columna `"t/s"`, que muestra el TPS logrado por tu
+hardware. Los criterios de evaluación están codificados en la herramienta, y la herramienta mostrará una advertencia si tu hardware no
+cumple los requisitos.
+
+**SSD local vs. almacenamiento de red**
+
+Los despliegues en nube requieren elegir entre almacenamiento local o almacenamiento de red, como AWS EBS y GCP PD.
+Hablando en general, un SSD local a menudo proporciona menor latencia y costo, especialmente relativo a IOPS (operaciones de entrada/salida
+por segundo), mientras que el almacenamiento de red requiere soporte de CPU para escalar IOPS. Sin embargo, el almacenamiento de red
+proporciona mejor soporte para backups y ofrece confiabilidad mejorada para nodos que se detienen o fallan, así habilitando
+mayor disponibilidad. La elección entre SSD local y almacenamiento de red depende de tus requisitos específicos y
+restricciones.
+
+### Motivando requisitos de hardware
+
+Los requisitos de hardware para nodos Aptos dependen de: (i) la carga de trabajo de transacciones siendo ejecutada; y (ii) el tamaño de la
+base de datos en cada máquina. Los requisitos actuales de hardware han sido establecidos usando una carga de trabajo de transacciones estimada
+(ej., 30,000 TPS) y una tasa de crecimiento de base de datos estimada para 2024. Estas pueden estar sujetas a cambio. También vale la pena
+notar que las cargas de trabajo de transacciones pueden cambiar frecuentemente, y así es necesario provisionar tu hardware para cumplir los
+requisitos de las cargas de trabajo de transacciones más demandantes. Esto asegurará que tus nodos puedan rendir bien bajo
+carga y permanecer estables.
+
+Generalmente, el tamaño de la base de datos en cada máquina es una función del historial del ledger (es decir, el número
+de transacciones en el historial de blockchain) y el número de estados on-chain (ej., cuentas y recursos).
+Tanto el historial del ledger como el número de estados on-chain dependen de varios factores adicionales, incluyendo la edad
+del blockchain, la tasa promedio de transacciones a lo largo del tiempo, y la configuración del podador de base de datos del ledger.
+Al momento de escribir, estimamos que testnet y mainnet requieren varios 100's de GB de almacenamiento.
+
+Nota que porque los nodos archivales almacenan toda la historia del blockchain, el tamaño de la base de datos en nodos archivales
+continuará creciendo sin límites. Como resultado, no podemos proporcionar una recomendación para tamaños de almacenamiento de nodos archivales.
+
+## Requisitos de red y puertos
+
+Cuando estés ejecutando un validator y un VFN, se te requiere abrir puertos de red en tus nodos para permitir que otros
+nodos (es decir, pares) se conecten a ti. Hay diferentes tipos de redes Aptos, y cada tipo de red usa un puerto diferente (ver abajo).
+
+### Tipos de red
+
+Hay tres tipos de redes Aptos:
+
+1. **Red de validators:** Los validators se conectan entre sí sobre esta red. Los validator fullnodes (VFNs) y public fullnodes (PFNs) no usan esta red.
+2. **Red VFN:** La red de validator fullnode (VFN) permite que un par validator y VFN se conecten entre sí. Esta red es privada entre el validator y el VFN.
+3. **Red pública:** La red pública permite que VFNs y public fullnodes (PFNs) se conecten a otros VFNs y PFNs. Esto permite a operadores de nodos públicos acceder al blockchain.
+
+Tu nodo puede configurarse para que cada una de estas redes pueda operar usando un puerto diferente en tu nodo. Puedes configurar
+las configuraciones de puerto usando el archivo YAML de configuración del nodo. Aquí hay un [archivo de
+configuración de ejemplo](https://github.com/aptos-labs/aptos-core/blob/4ce85456853c7b19b0a751fb645abd2971cc4c0c/docker/compose/aptos-node/fullnode.yaml#L10) para un nodo VFN
+que configura la red VFN para usar el puerto `6181` y la red pública para usar el puerto `6182`.
+
+### Configuraciones de puerto
+
+Las recomendaciones descritas abajo asumen las configuraciones de puerto por defecto usadas por validators, VFNs y PFNs. Si has
+cambiado las configuraciones de puerto por defecto en tu archivo de configuración, entonces deberías ajustar las recomendaciones en consecuencia.
+
+<Aside type="caution">
+  **Exponiendo puertos**<br />
+  A menos que se requiera explícitamente, recomendamos que no expongas ningún otro puerto mientras operas un nodo. Esto es porque
+  exponer puertos adicionales puede aumentar la superficie de ataque de tu nodo y hacerlo más vulnerable a adversarios.
+</Aside>
+
+#### Ejecutando un validator:
+
+Asumiendo que se usan puertos por defecto, lo siguiente debería configurarse para nodos validator:
+
+- Abrir los siguientes puertos TCP:
+  - `6180` - **Red de validators**: Abre este puerto públicamente para habilitar al validator a conectarse a otros validators en la red.
+  - `6181` – **Red VFN**: Abre este puerto privadamente para ser accesible solo por tu VFN.
+- Cerrar los siguientes puertos TCP:
+  - `6182` – **Red pública**: Cierra este puerto para prevenir conexiones PFN.
+  - `9101` – **Servicio de inspección**: Cierra este puerto para prevenir inspección de métricas no autorizada.
+  - `9102` – **Servicio admin**: Cierra este puerto para prevenir interacción de servicio admin no autorizada.
+  - `80/8080` **API REST**: Cierra este puerto para prevenir acceso a API REST no autorizado.
+
+#### Ejecutando un VFN:
+
+Asumiendo que se usan puertos por defecto, lo siguiente debería configurarse para nodos VFN:
+
+- Abrir los siguientes puertos TCP:
+  - `6181` – **Red VFN**: Abre este puerto privadamente para ser accesible solo por tu validator.
+  - `6182` – **Red pública**: Abre este puerto públicamente para habilitar a PFNs a conectarse a tu VFN.
+- Cerrar los siguientes puertos TCP:
+  - `9101` – **Servicio de inspección**: Cierra este puerto para prevenir inspección de métricas no autorizada.
+  - `9102` – **Servicio admin**: Cierra este puerto para prevenir interacción de servicio admin no autorizada.
+  - `80/8080` **API REST**: Cierra este puerto para prevenir acceso a API REST no autorizado.
+
+<Aside type="caution">
+  **Exponiendo servicios**<br />
+  El puerto del servicio de inspección (`9101`), puerto del servicio admin (`9102`) y el puerto de la API REST (`80` o `8080`)
+  son probablemente útiles para tu red interna, ej., desarrollo de aplicaciones y debugging. Sin embargo, el puerto del servicio de inspección
+  y el puerto del servicio admin nunca deberían exponerse públicamente ya que pueden ser fácilmente abusados. Similarmente, si eliges
+  exponer el endpoint de la API REST públicamente, deberías desplegar un mecanismo adicional de autenticación o limitación de tasa para
+  prevenir abuso.
+</Aside>
+
+## Requisitos de Software
+
+### Servicio de Tiempo
+
+Es altamente recomendado habilitar la sincronización del reloj del sistema usando un servicio de Protocolo de Tiempo de Red (NTP).
+El mantenimiento preciso del tiempo asegura que los nodos participen en consenso prontamente y permanezcan sincronizados con el resto de la red.
+Fallar en mantener tiempo de sistema consistente puede causar que los nodos se retrasen y los validators pueden incluso fallar en proponer bloques.

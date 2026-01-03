@@ -1,0 +1,53 @@
+---
+title: "Documentación"
+description: "Documentación completa para la arquitectura del SDK de Indexer de Aptos, desarrollo de procesadores e implementación de pipeline de datos personalizado"
+sidebar:
+  label: "Documentación"
+---
+
+import { ThemedImage } from '~/components/ThemedImage';
+
+## Arquitectura del SDK de Indexer
+
+En la pila de indexación de Aptos, un procesador indexa un subconjunto específico de datos de la blockchain y escribe los datos en una base de datos externa.
+
+Cada procesador sigue este flujo general:
+
+1. Recibir un flujo de transacciones de [Transaction Stream](/es/build/indexer/txn-stream)
+2. Extraer los datos relevantes de las transacciones y transformarlos en un esquema estandarizado
+3. Almacenar los datos transformados en una base de datos
+4. Hacer seguimiento de las versiones de transacciones que han sido procesadas
+
+El SDK de Indexer te permite escribir un procesador como un grafo dirigido de pasos independientes.
+Cada `Step` tiene una entrada y salida, y la salida de cada `Step` está conectada a la entrada del siguiente `Step` por un [canal Kanal](https://github.com/fereidani/kanal).
+
+<center>
+  <ThemedImage
+    alt="Arquitectura de Procesador Personalizado del SDK de Indexer"
+    sources={{
+light: '~/images/indexer-custom-processor-light.svg',
+dark: '~/images/indexer-custom-processor-dark.svg',
+}}
+  />
+</center>
+
+## Cuándo usar el SDK de Indexer
+
+El SDK de Indexer es útil cuando quieres indexar un contrato personalizado o te das cuenta de que necesitas un nuevo tipo de datos que no está disponible en la [API de Indexer](/es/build/indexer/indexer-api).
+
+El flujo general para escribir un procesador personalizado con el SDK de Indexer es:
+
+1. Definir tu esquema de base de datos
+2. Crear un nuevo procesador
+3. Crear `Step`s que extraigan y transformen datos en tu esquema de almacenamiento
+4. Personalizar tu procesador agregando y conectando pasos
+5. Ejecutar tu procesador y ver los datos indexados en tu base de datos
+
+## Beneficios del SDK de Indexer
+
+La arquitectura del SDK de Indexer simplifica escribir procesadores personalizados de varias maneras:
+
+1. Puedes reutilizar implementaciones de `Step` a través de procesadores lo que reduce la duplicación de lógica común de extracción de datos.
+2. El SDK recolecta métricas básicas de rendimiento, como el número de transacciones procesadas, para cada `Step`, lo que habilita observabilidad en subcomponentes del procesador.
+3. Como cada `Step` es independiente, puedes personalizar partes del procesador de forma segura sin romper las otras piezas.
+   Por ejemplo, puedes agregar `Step`'s adicionales para pre/post-procesar datos o escribir datos por lotes. Cada `Step` también puede ser probado de forma aislada del resto del procesador.

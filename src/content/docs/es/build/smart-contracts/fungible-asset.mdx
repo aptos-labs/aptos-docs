@@ -1,0 +1,561 @@
+---
+id: "fungible-asset"
+title: "Estándar de Activo Fungible (FA) de Aptos"
+description: "Aprende sobre el estándar de activos fungibles (FA) de Aptos para el desarrollo de contratos inteligentes Move."
+sidebar:
+  label: "Activo Fungible"
+---
+
+import { ThemedImage } from '~/components/ThemedImage';
+
+import { Aside } from '@astrojs/starlight/components';
+
+El Estándar de Activo Fungible de Aptos (también conocido como "Activo Fungible" o "FA") proporciona una forma estándar y segura de tipos para definir activos fungibles en el ecosistema Move. Es un reemplazo moderno para el módulo `coin` que permite acuñación, transferencia y personalización sin problemas de activos fungibles para cualquier caso de uso.
+
+Este estándar es importante porque permite que los activos fungibles en Aptos (como Monedas y Activos del Mundo Real (RWAs)) representen y transfieran propiedad de una manera consistente que las dApps pueden reconocer. Este estándar también permite personalización más extensa que el módulo `coin` al aprovechar [Objetos Move](/es/build/smart-contracts/objects) para representar datos de activos fungibles.
+
+El estándar FA proporciona toda la funcionalidad que necesitas para crear, acuñar, transferir y quemar activos fungibles (así como permitir automáticamente que los destinatarios del activo fungible almacenen y gestionen cualquier activo fungible que reciban).
+
+Lo hace usando dos Objetos Move:
+
+1. `Object<Metadata>` - Esto representa detalles sobre el activo fungible mismo, incluyendo información como el `name`, `symbol`, y `decimals`.
+2. `Object<FungibleStore>` - Esto almacena un conteo de unidades de activo fungible poseídas por esta cuenta. Los activos fungibles son intercambiables con cualquier otro activo fungible que tenga los mismos metadatos. Una cuenta _puede_ poseer más de un `FungibleStore` para un solo Activo Fungible, pero eso es solo para casos de uso avanzados.
+
+El diagrama abajo muestra la relación entre estos Objetos. El Objeto `Metadata` es poseído por el creador del Activo Fungible, luego referenciado en los `FungibleStore`s de los tenedores de FA para indicar qué FA está siendo rastreado:
+
+<ThemedImage
+  alt="Relación de Objetos FA"
+  sources={{
+light: '~/images/fa-diagram-light.png',
+dark: '~/images/fa-diagram-dark.png',
+}}
+/>
+
+[Esta implementación](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/fungible_asset.move) es una mejora sobre el estándar `coin` porque los Objetos Move son más personalizables y extensibles via contrato inteligente. Ve las guías avanzadas sobre escribir [Objetos Move](/es/build/smart-contracts/objects) para más detalles.
+El estándar FA también maneja automáticamente el rastreo de cuánto de un activo fungible posee una cuenta, en lugar de requerir que el destinatario registre un recurso `CoinStore` separado de la transferencia.
+
+## Crear un nuevo Activo Fungible (FA)
+
+A alto nivel, esto se hace por:
+
+1. Crear un Objeto no eliminable para poseer el `Metadata` del Activo Fungible recién creado.
+2. Generar `Ref`s para habilitar cualquier permiso deseado.
+3. Acuñar Activos Fungibles y transferirlos a cualquier cuenta que quieras.
+
+Para comenzar, el estándar de Activo Fungible está implementado usando Objetos Move. Los Objetos por defecto son transferibles, pueden poseer múltiples recursos, y pueden ser personalizados via contrato inteligente. Para detalles completos sobre Objetos y cómo funcionan, por favor lee [esta guía](/es/build/smart-contracts/objects).
+
+Para crear un FA, primero necesitas crear un **Objeto no eliminable** ya que destruir los metadatos para un Activo Fungible mientras hay balances activos no tendría sentido. Puedes hacer eso llamando `object::create_named_object(caller_address, NAME)` o `object::create_sticky_object(caller_address)` para crear el Objeto en la cadena.
+
+Cuando llames estas funciones, devolverán un `ConstructorRef`. Los `Ref`s permiten que los Objetos sean personalizados inmediatamente después de ser creados. Puedes usar el `ConstructorRef` para generar otros permisos que pueden ser necesarios basado en tu caso de uso.
+
+<Aside type="note">
+  Nota que el `ConstructorRef` no puede ser almacenado y es destruido al final de la transacción usada para crear este Objeto, así que cualquier `Ref` debe ser generado durante la creación del Objeto.
+</Aside>
+
+Un uso para el `ConstructorRef` es generar el Objeto `Metadata` del FA. El estándar proporciona una función generadora llamada `primary_fungible_store::create_primary_store_enabled_fungible_asset` que permitirá que tu activo fungible sea transferido a cualquier cuenta. Este método hace que el `FungibleStore` primario para destinatarios sea automáticamente creado o reutilizado así que no necesitas crear o indexar el store directamente.
+
+Esto es lo que `create_primary_store_enabled_fungible_asset` se ve así:
+
+```move filename="example.move"
+public fun create_primary_store_enabled_fungible_asset(
+    constructor_ref: &ConstructorRef,
+    // Esto asegura que la oferta total no supere este límite - sin embargo,
+    // Establecer esto prevendrá cualquier ejecución paralela de acuñación y quema.
+    maximum_supply: Option<u128>,
+    // Los campos abajo aquí son puramente metadatos y no tienen impacto en la cadena.
+    name: String,
+    symbol: String,
+    decimals: u8,
+    icon_uri: String,
+    project_uri: String,
+)
+```
+
+<Aside type="note">
+  Alternativamente, puedes usar `add_fungibility` que usa los mismos parámetros, pero requiere que los destinatarios mantengan un registro de sus direcciones `FungibleStore` para mantener un registro de cuántas unidades de tu FA tienen.
+</Aside>
+
+Una vez que hayas creado los Metadatos, también puedes usar el `ConstructorRef` para generar `Ref`s adicionales. Además de los [Refs de Objeto](/es/build/smart-contracts/object/creating-objects) usuales, los FAs definen tres permisos adicionales que puedes generar:
+
+1. `MintRef` ofrece la capacidad de acuñar nuevas unidades FA.
+2. `TransferRef` ofrece la capacidad de congelar cuentas de transferir este FA, o de evitar un congelamiento existente. (Esto puede ser importante cuando tratas de ser compatible con algunas regulaciones).
+3. `BurnRef` ofrece la capacidad de quemar o eliminar unidades FA.
+
+<Aside type="caution">
+  Nota: Todos los `Ref`s deben ser generados cuando el Objeto es creado ya que ese es el único momento en que puedes generar el `ConstructorRef` de un Objeto.
+</Aside>
+
+Para generar un Objeto con todos los permisos FA, podrías desplegar un contrato como este:
+
+```move filename="example.move"
+module my_addr::my_fungible_asset_example {
+    use aptos_framework::fungible_asset::{Self, MintRef, TransferRef, BurnRef, Metadata, FungibleAsset};
+    use aptos_framework::object::{Self, Object};
+    use aptos_framework::primary_fungible_store;
+    use std::error;
+    use std::signer;
+    use std::string::utf8;
+    use std::option;
+
+  const ASSET_SYMBOL: vector<u8> = b"FA";
+
+	// Asegúrate de que el `signer` que pasas sea una dirección que posees.
+	// De lo contrario perderás acceso al Activo Fungible después de la creación.
+  entry fun initialize(admin: &signer) {
+    // Crea un objeto no eliminable con una dirección nombrada basada en nuestro ASSET_SYMBOL
+    let constructor_ref = &object::create_named_object(admin, ASSET_SYMBOL);
+
+    // Crea los Metadatos del FA con tu nombre, símbolo, icono, etc.
+    primary_fungible_store::create_primary_store_enabled_fungible_asset(
+        constructor_ref,
+        option::none(),
+        utf8(b"FA Coin"), /* name */
+        utf8(ASSET_SYMBOL), /* symbol */
+        8, /* decimals */
+        utf8(b"http://example.com/favicon.ico"), /* icon */
+        utf8(b"http://example.com"), /* project */
+    );
+
+    // Genera el MintRef para este objeto
+    // Usado por fungible_asset::mint() y fungible_asset::mint_to()
+    let mint_ref = fungible_asset::generate_mint_ref(constructor_ref);
+
+    // Genera el TransferRef para este objeto
+    // Usado por fungible_asset::set_frozen_flag(), fungible_asset::withdraw_with_ref(),
+    // fungible_asset::deposit_with_ref(), y fungible_asset::transfer_with_ref().
+    let transfer_ref = fungible_asset::generate_transfer_ref(constructor_ref);
+
+    // Genera el BurnRef para este objeto
+    // Usado por fungible_asset::burn() y fungible_asset::burn_from()
+    let burn_ref = fungible_asset::generate_burn_ref(constructor_ref);
+
+    // Agrega cualquier otra lógica requerida para tu caso de uso.
+    // ...
+  }
+}
+```
+
+<Aside type="note">
+  Para un ejemplo completo de cómo crear tu propio módulo de Activo Fungible, por favor ve [fa\_coin.move](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/move-examples/fungible_asset/fa_coin/sources/FACoin.move).
+  Alternativamente, puedes explorar la colección de [código de ejemplo FA aquí](https://github.com/aptos-labs/aptos-core/tree/main/aptos-move/move-examples/fungible_asset).
+</Aside>
+
+Ahora puedes usar el `MintRef` para acuñar via:
+
+```move filename="example.move"
+public fun mint(ref: &MintRef, amount:u64): FungibleAsset
+```
+
+O quemar unidades FA usando el `BurnRef` así:
+
+```move filename="example.move"
+public fun burn(ref: &BurnRef, fa: FungibleAsset)
+```
+
+En este punto, puedes acuñar, transferir y quemar Activos Fungibles usando los `Ref`s que generaste. Ve los scripts Move de ejemplo arriba para cómo implementar esas funciones de entrada.
+
+## Documentación de Referencia
+
+Puedes encontrar el conjunto completo de funciones que el Estándar de Activo Fungible proporciona [aquí](/es/move-reference/mainnet/aptos-framework/fungible_asset).
+
+Las características básicas que los propietarios de Activos Fungibles pueden usar incluyen lo siguiente.
+
+### Retirar
+
+Un propietario puede retirar FA de su store primario llamando:
+
+```move filename="withdraw"
+public fun primary_fungible_store::withdraw<T: key>(owner: &signer, metadata: Object<T>, amount:u64): FungibleAsset
+```
+
+Esta función emitirá un `WithdrawEvent`.
+
+### Depositar
+
+Un propietario puede depositar FA a su store primario llamando:
+
+```move filename="deposit"
+public fun primary_fungible_store::deposit(owner: address, fa: FungibleAsset)
+```
+
+Esta función emitirá un `DepositEvent`.
+
+### Transferir
+
+Un propietario puede depositar FA de su store primario al de otra cuenta llamando:
+
+```move filename="transfer"
+public entry fun primary_fungible_store::transfer<T: key>(sender: &signer, metadata: Object<T>, recipient: address, amount:u64)
+```
+
+Esto emitirá tanto `WithdrawEvent` como `DepositEvent` en los `FungibleStore`s respectivos.
+
+### Verificar Balance
+
+Para verificar el balance de un store primario, llama:
+
+```move filename="check_balances"
+public fun primary_fungible_store::balance<T: key>(account: address, metadata: Object<T>): u64
+```
+
+### Verificar Estado Congelado
+
+Para verificar si el store primario de la cuenta dada está congelado, llama:
+
+```move filename="is_frozen"
+public primary_fungible_store::fun is_frozen<T: key>(account: address, metadata: Object<T>): bool
+```
+
+### Eventos
+
+Los FAs tienen tres eventos emitidos de las funciones básicas arriba:
+
+1. `Deposit`: Emitido cuando FAs son depositados en un store.
+
+```move filename="deposit_event"
+struct Deposit has drop, store {
+    store: address,
+    amount: u64,
+}
+```
+
+2. `Withdraw`: Emitido cuando FAs son retirados de un store.
+
+```move filename="withdraw_event"
+struct Withdraw has drop, store {
+    store: address,
+    amount: u64,
+}
+```
+
+3. `Frozen`: Emitido cuando el estado congelado de un store fungible es actualizado.
+
+```move filename="frozen_event"
+struct Frozen has drop, store {
+    store: address,
+    frozen: bool,
+}
+```
+
+## Activo Fungible Despachable (Avanzado)
+
+Aparte de la funcionalidad de activo fungible gestionado por defecto proporcionada por el Framework de Aptos, los emisores de activos fungibles pueden implementar su propia lógica de depósito/retiro usando el estándar de activo fungible despachable. Esto se hace registrando funciones hook personalizadas para ser invocadas en tiempo de retiro/depósito. Estas funciones hook están almacenadas en los metadatos de una clase de activo fungible, y el Framework de Aptos las invocará automáticamente en lugar de la lógica por defecto. Esto permite a los emisores implementar lógica compleja, como control de acceso personalizado. Para más detalles, refiere al [AIP](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-73.md) correspondiente.
+
+### Implementar la Función Hook
+
+Para implementar una función hook personalizada, construye un módulo con funciones que tengan la siguiente firma:
+
+```move filename="example.move"
+module my_addr::my_fungible_asset_example {
+    // ...
+    public fun withdraw<T: key>(
+        store: Object<T>,
+        amount: u64,
+        transfer_ref: &TransferRef,
+    ): FungibleAsset {
+        // Tu lógica personalizada aquí
+    }
+
+    public fun deposit<T: key>(
+        store: Object<T>,
+        fa: FungibleAsset,
+        transfer_ref: &TransferRef,
+    ) {
+        // Tu lógica personalizada aquí
+    }
+    // ...
+}
+```
+
+### Limitaciones
+
+- **Prevención de Reentrancy**: Solo llama APIs `with_ref` en tus hooks personalizados para operaciones de depósito/retiro.
+  - Usa `fungible_asset::deposit_with_ref` en lugar de `fungible_asset::deposit`.
+  - Usa `fungible_asset::withdraw_with_ref` en lugar de `fungible_asset::withdraw`.
+- Evita llamar funciones definidas en `dispatchable_fungible_asset` y `primary_fungible_store`, _excepto_ para funciones inline, para prevenir errores durante transferencias.
+- Nota que llamar `fungible_asset::withdraw` y `fungible_asset::deposit` NO funcionará para activos con hooks registrados. Ve más información en Interactuar con activo fungible despachable.
+
+Para más detalles sobre estas limitaciones, refiere al [AIP](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-73.md).
+
+### Registrar la Función Hook
+
+Una vez que las funciones están implementadas, usa la API definida en `dispatchable_fungible_asset::register_dispatch_functions` para vincular las funciones con tu activo fungible.
+
+```move filename="register_dispatch"
+module 0x1::dispatchable_fungible_asset {
+    public fun register_dispatch_functions(
+        constructor_ref: &ConstructorRef,
+        withdraw_function: Option<FunctionInfo>,
+        deposit_function: Option<FunctionInfo>,
+        derived_balance_function: Option<FunctionInfo>,
+    )
+}
+```
+
+<Aside type="note">
+  La función `register_dispatch_functions` toma `Option<FunctionInfo>` como entrada para especificar si usar lógica personalizada o por defecto para operaciones de retiro/depósito/balance. Si se pasa `option::none()`, se usa la lógica por defecto.
+  Un `FunctionInfo` identifica la función a ser usada como hook personalizado.
+  El `constructor_ref` es una referencia para el objeto de metadatos de tu activo fungible.
+</Aside>
+
+Para construir un `FunctionInfo`, usa cualquiera de:
+
+```move filename="new_function_info"
+module 0x1::function_info {
+    public fun new_function_info(module_signer: &signer, module_name: String, function_name: String): FunctionInfo
+    // o si no tienes el signer:
+    public fun new_function_info_from_address(module_address: address, module_name: String, function_name: String): FunctionInfo
+}
+```
+
+El registro puede verse así:
+
+```move filename="example.move"
+module my_addr::my_fungible_asset_example {
+    use aptos_framework::string;
+    use aptos_framework::object;
+    use aptos_framework::primary_fungible_store;
+    use aptos_framework::dispatchable_fungible_asset;
+    use aptos_framework::function_info;
+
+    fun create_fungible_asset(module_signer: &signer, /* ... */) {
+        // Hacer la información de función de override de depósito
+        let deposit_override = function_info::new_function_info(
+            module_signer,
+            string::utf8(b"my_fungible_asset_example"),
+            string::utf8("deposit")
+        );
+
+        // Crear el activo fungible
+        let constructor_ref = object::create_sticky_object( /* ... */);
+
+        primary_fungible_store::create_primary_store_enabled_fungible_asset(&constructor_ref, ...);
+        // o abajo si no tienes stores primarios
+        // fungible_asset::add_fungibility(&constructor_ref, /* ... */);
+
+        // Override funcionalidad por defecto para depósito
+        dispatchable_fungible_asset::register_dispatch_functions(
+            &constructor_ref,
+            option::none(),
+            option::some(deposit_override),
+            option::none()
+        );
+
+        // ...
+    }
+
+    // ...
+}
+```
+
+### Interactuar con activo fungible despachable
+
+Para usuarios usando `primary_fungible_store` para gestionar activos, no se requieren cambios para interactuar con activos con hooks despachables. El Framework de Aptos invoca automáticamente la lógica de despacho si un hook está configurado.
+
+Para usuarios usando `FungibleStore` secundario para interactuar con activos, usa `dispatchable_fungible_asset::withdraw/deposit` en lugar de `fungible_asset::withdraw/deposit` para manejar activos con hooks registrados.
+
+Las funciones `dispatchable_fungible_asset::withdraw/deposit` son reemplazos, y también funcionan con funciones que no tienen hooks registrados.
+
+## Gestionar Stores (Avanzado)
+
+Detrás de escenas, el Estándar de Activo Fungible necesita gestionar cómo los balances de activos están almacenados en cada cuenta. En la vasta mayoría de circunstancias, los usuarios almacenarán todos los balances FA en su `FungibleStore` Primario. A veces sin embargo, se pueden crear "Stores Secundarios" adicionales para aplicaciones DeFi avanzadas.
+
+- Cada cuenta posee solo un store primario no eliminable para cada tipo de FA, la dirección del cual es derivada de manera determinística de la dirección de la cuenta y dirección del objeto de metadatos. Si el store primario no existe, será creado si FA va a ser depositado llamando funciones definidas en `primary_fungible_store.move`
+- Los stores secundarios no tienen direcciones determinísticas y son eliminables cuando están vacíos. Los usuarios pueden crear tantos stores secundarios como quieran usando las funciones proporcionadas pero hay una advertencia de que direccionar stores secundarios en la cadena puede ser más complejo.
+
+Puedes buscar un store primario via la siguiente función:
+
+```move filename="primary_store"
+public fun primary_store<T: key>(owner: address, metadata: Object<T>): Object<FungibleStore>
+```
+
+Y si quieres crear un store primario manualmente puedes usar esta función:
+
+```move filename="create_primary_store"
+public fun create_primary_store<T: key>(owner_addr: address, metadata: Object<T>): Object<FungibleStore>
+```
+
+La razón principal para usar un store secundario es para activos gestionados por un contrato inteligente. Por ejemplo, un pool de activos puede tener que gestionar múltiples stores fungibles para uno o más tipos de FA.
+
+Para crear un store secundario, debes:
+
+1. Crear un Objeto para obtener su `ConstructorRef`.
+2. Llamar:
+
+```move filename="create_store"
+public fun create_store<T: key>(constructor_ref: &ConstructorRef, metadata: Object<T>): Object<FungibleStore>
+```
+
+Esto creará un store secundario poseído por el Objeto recién creado. A veces un objeto puede ser reutilizado como store. Por ejemplo, un objeto de metadatos también puede ser un store para mantener algo de FA de su propio tipo o un objeto de pool de liquidez puede ser un store de la moneda del pool de liquidez emitida.
+
+Es crucial establecer el propietario correcto de un objeto `FungibleStore` para gestionar el FA almacenado dentro. Por defecto, el propietario de un objeto recién creado es el creador cuyo `signer` es pasado a la función de creación. Para objetos `FungibleStore` gestionados por el contrato inteligente mismo, el propietario debería usualmente ser una dirección de Objeto controlada por el contrato. Para esos casos, esos objetos deberían mantener su `ExtendRef` en el lugar apropiado para crear `signer` según sea necesario para modificar el `FungibleStore` via lógica de contrato.
+
+## Migración de `Coin` al Estándar de Activo Fungible
+
+### Migración de Contrato Inteligente
+
+**Los proyectos utilizando el módulo `coin` no necesitan modificar sus contratos.** El módulo `coin` ha sido mejorado para manejar la migración automáticamente. Siempre que se requiera un FA emparejado para un `coin`, será automáticamente creado si no existe ya. El mapeo entre coins y FAs es inmutable y almacenado en una tabla en la cadena:
+
+```move filename="coin_conversion"
+struct CoinConversionMap has key {
+    coin_to_fungible_asset_map: Table<TypeInfo, address>,
+}
+```
+
+Una función `#[view]` está disponible para recuperar metadatos para el FA emparejado si existe:
+
+```move filename="paired_metadata"
+#[view]
+public fun paired_metadata<CoinType>(): Option<Object<Metadata>>
+```
+
+Similarmente, existe una función para búsqueda inversa:
+
+```move filename="paired_coin"
+#[view]
+public fun paired_coin(metadata: Object<Metadata>): Option<TypeInfo>
+```
+
+### Migración Fuera de la Cadena
+
+Hay dos cambios necesarios para servicios fuera de la cadena:
+
+1. Los balances deberían reflejar que un usuario puede tener **tanto** un balance `coin` como un balance FA emparejado.
+2. Los escuchadores de eventos deberían escuchar tanto eventos `coin` como FA.
+
+Ya que un usuario puede poseer **tanto** un balance `coin` como un balance FA emparejado, las aplicaciones fuera de la cadena deberían ser actualizadas para reflejar la **suma** de tanto el balance `coin` como su balance FA emparejado.
+
+- Para usuarios del Indexador de Aptos, puedes utilizar la tabla llamada `current_fungible_asset_balances` para obtener la suma más reciente del balance de coin y balance FA representando el mismo tipo de activo. Si el FA tiene un tipo de coin emparejado, el tipo de activo sería establecido al tipo de coin, como `0x1::aptos_coin::AptosCoin`. De lo contrario, para FA no emparejado de un coin, el tipo de activo sería la dirección de metadatos. Los usuarios podrían filtrar por este campo para obtener el balance FA de su interés.
+- Para usuarios empleando Node API u otra indexación personalizada, deberían agregar el balance del FA emparejado en los `FungibleStore` de usuarios y `ConcurrentFungibleBalance` si alguno de ellos existe al balance de coin.
+
+Para recuperar el balance del `PrimaryFungibleStore` para un FA emparejado a un `coin` existente de tipo `CoinType`:
+
+1. Llama `paired_metadata<CoinType>()` para obtener la dirección del objeto de metadatos FA emparejado (la dirección es inmutable).
+2. Recupera el balance del FA emparejado:
+   - Llama [getCurrentFungibleAssetBalances](https://github.com/aptos-labs/aptos-ts-sdk/blob/c01a26ff899235fac1c31c6cc3fe504b764e5b91/src/api/fungibleAsset.ts#L115).
+   - Alternativamente, determina la dirección del `FungibleStore` primario, que puede ser calculada determinísticamente con la siguiente fórmula:
+     - `sha3_256(32-byte account address | 32-byte metadata object address | 0xFC)`
+   - Luego usa esa dirección para obtener el recurso `FungibleStore` para obtener el balance.
+     - Si el balance es no-cero, este es el balance final de este FA.
+     - De lo contrario, trata de obtener el recurso `ConcurrentFungibleBalance` en la misma dirección y obtener el balance ahí en su lugar.
+     - Si ninguno existe, el balance FA para esta cuenta es 0.
+
+**Post-migración, tanto eventos de coin como eventos FA podrían ser emitidos para una actividad, dependiendo de si el usuario ha migrado o no.** Las dapps que dependen de eventos deberían actualizar su lógica de negocio en consecuencia.
+
+### FAQs de Migración
+
+<details>
+  <summary><span className="font-bold">¿Qué es el estándar de Activo Fungible (FA) de Aptos?</span></summary>
+
+  <div className="p-8">
+    El estándar FA introduce una nueva forma de representar tokens fungibles como [objetos Move](/es/build/smart-contracts/objects), reemplazando el modelo de recurso Coin legacy. Los Activos Fungibles son más componibles y amigables para desarrolladores comparados con Coins legacy.
+
+    APT será migrado comenzando el 30 de junio de 2025.
+  </div>
+</details>
+
+<details>
+  <summary><span className="font-bold">¿Cómo exactamente difiere el nuevo estándar FA de los Coins legacy?</span></summary>
+
+  <div className="p-8">
+    Con Coins legacy, cada cuenta directamente mantiene un recurso `CoinStore\<CoinType>` que rastrea balances (en u64), incluye flags como "frozen," y emite eventos básicos en depósitos o retiros. Las transferencias, acuñaciones y quemas se realizan via funciones del módulo `0x1::coin`.
+
+    Bajo el Estándar FA, los balances de tokens están mantenidos en objetos FungibleStore (en lugar de cada cuenta directamente manteniendo un recurso CoinStore). Cada activo tiene metadatos que definen sus propiedades (nombre, símbolo, etc.). Para cualquier cuenta que posea ese token, el balance vive en un objeto FungibleStore perteneciente a esa cuenta y vinculado al Objeto Metadata.
+
+    La forma primaria en que una cuenta mantiene un activo fungible es via un store fungible primario; la dirección de este objeto es derivada determinísticamente de la dirección de cuenta del usuario y la dirección de metadatos del token.
+
+    Los FAs vienen en dos sabores:
+
+    1. **FA Vanilla**: Tokens que principalmente gestionan actualizaciones de balance simples.
+
+    2. **FA Despachable (DFA)**: Tokens que embeben lógica Move personalizada automáticamente ejecutada durante transferencias.
+  </div>
+</details>
+
+<details>
+  <summary><span className="font-bold">¿Cómo impactará esta migración en mí?</span></summary>
+
+  <div className="p-8">
+    Como usuario final, no necesitas hacer nada. Tus tokens permanecen seguros, exactamente donde deberían estar en su nueva forma. La migración no afecta la propiedad o usabilidad de ninguna manera.
+
+    Si eres un desarrollador, tu código de contrato inteligente existente permanece funcional, pero deberías inmediatamente comenzar a usar el SDK FA para todo trabajo nuevo. Las llamadas API de coin existentes continuarán funcionando enrutando silenciosamente a FA. Después de la migración, el módulo coin será mantenido como está, con mantenimiento mínimo. Por favor nota que ya no podrás buscar balance de coin por recurso. Muévete a la función view `0x1::coin::balance`, o la API REST de balance en su lugar.
+  </div>
+</details>
+
+<details>
+  <summary><span className="font-bold">¿Cuál es la línea de tiempo de migración?</span></summary>
+
+  <div className="p-8">
+    Todos los tokens en Aptos comenzarán a migrar automáticamente del Coin v1 al estándar FA.
+    Todas las monedas excepto APT serán migradas del 23 al 30 de junio. APT hará la transición del 30 de junio al 8 de julio de 2025.
+    El proceso involucra ejecutar continuamente transacciones en lotes hasta que cada CoinStore válido haya sido completamente convertido al nuevo FungibleStore.
+  </div>
+</details>
+
+<details>
+  <summary><span className="font-bold">¿Por qué es necesaria la actualización al estándar de Activo Fungible?</span></summary>
+
+  <div className="p-8">
+    Respuesta corta: Desbloquea funcionalidades poderosas que el módulo Coin legacy simplemente no puede soportar.
+
+    Las apps DeFi y RWA modernas demandan cada vez más características sofisticadas como reclamaciones de yield automatizadas, estructuras de tarifas personalizadas, y verificaciones de cumplimiento integradas. Estas son difíciles de implementar en Coins legacy. Intentar agregar estas capacidades al estándar viejo rápidamente crea problemas de componibilidad, dolores de cabeza de integración y complejidad creciente.
+
+    Más allá de la funcionalidad, los constructores también pueden usar un estándar de activo unificado a través de todos los tokens, incluyendo stablecoins. Imagina diseñar un kiosko de pago: si acepta solo pagos digitales, evitas la complejidad de ranuras de efectivo, dispensadores de monedas, y mecanismos de cambio por completo. Similarmente, adoptar un solo estándar de token simplificado reduce la complejidad en el desarrollo de plataforma. Mejora la productividad del desarrollador y entrega una experiencia de usuario más consistente.
+
+    En resumen, el estándar FA es limpio y elegante. Los desarrolladores pueden lanzar tokens que inmediatamente se integran sin problemas a través de wallets, exploradores, y aplicaciones DeFi desde el día uno.
+  </div>
+</details>
+
+<details>
+  <summary><span className="font-bold">¿Cuáles son algunas funcionalidades nuevas y únicas que puedo construir con Activos Fungibles?</span></summary>
+
+  <div className="p-8">
+    Los Activos Fungibles abren la puerta a un rango de características avanzadas que no eran posibles con el modelo Coin legacy. Algunas capacidades notables incluyen:
+
+    - Tokens que automáticamente cobran tarifas (como un cargo porcentual en transferencias).
+
+    - Tokens que generan interés que acumulan yield directamente a los tenedores sin reclamaciones manuales.
+
+    - Tokens con vesting integrado o time-locks que automáticamente liberan fondos cuando se cumplen ciertas condiciones, al estilo escrow.
+
+    - Tokens que dispensan puntos de lealtad en la cadena cuando son gastados.
+
+    - Tokens que pueden ajustar dinámicamente la oferta; quemando o acuñando basado en patrones de uso.
+
+    Las posibilidades son infinitas.
+
+    Un gran ejemplo del mundo real es xLPT de [Thala Labs](https://www.thalalabs.xyz/), que usa hooks DFA integrados para automatizar staking & unstaking de tokens LP, actualizando posiciones y recompensas automáticamente durante cada transferencia, sin ninguna intervención del usuario.
+  </div>
+</details>
+
+<details>
+  <summary><span className="font-bold">Sabemos que siempre hay un FA emparejado de un tipo de coin. ¿Cómo podemos consultar la oferta y balance de este activo después de la migración?</span></summary>
+
+  <div className="p-8">
+    Después de la migración, consultar el recurso `0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>` en la dirección de cuenta no estará disponible. En su lugar, puedes consultar el balance de cuenta por las siguientes tres formas:
+
+    1. [Balance Node API](/es/build/apis/fullnode-rest-api), el asset\_type puede ser tanto coin\_type, como 0x1::aptos\_coin::AptosCoin o dirección de metadatos FA como 0xa, de cualquier manera debería devolver el mismo valor.
+
+    2. `#[view] function primary_fungible_store::balance<T: key>(account: address, metadata: Object<T>): u64`
+
+    3. `#[view] function balance<CoinType>(owner: address): u64`. Este método está deprecado y no aplicable a tokens FA puros (ej., USDt); aplica solo a coins migrados como APT. Debido a sus limitaciones y costos de gas más altos, no es recomendado.
+  </div>
+</details>
+
+<details>
+  <summary><span className="font-bold">Antes de la migración, podía consultar todos los activos que un usuario tiene obteniendo todos los recursos en su dirección usando API. ¿Cómo lo hago después de la migración?</span></summary>
+
+  <div className="p-8">
+    Puedes [usar la API del Indexador](/es/build/indexer/indexer-api/indexer-reference#current_fungible_asset_balances) para consultar todos los activos fungibles que el usuario posee.
+
+    Consultar recursos raw para obtener el balance y tipos de activos no es recomendado y no será bien soportado por la API de fullnode.
+  </div>
+</details>
+
+<details>
+  <summary><span className="font-bold">¿Qué si tengo más preguntas?</span></summary>
+
+  <div className="p-8">
+    ¡Únete al [Discord de Aptos](https://discord.com/invite/aptosnetwork)! Los ingenieros de Aptos Labs estarán disponibles durante toda la semana de migración para responder preguntas y ofrecer soporte.
+  </div>
+</details>

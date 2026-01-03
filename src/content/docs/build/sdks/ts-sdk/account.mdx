@@ -1,0 +1,105 @@
+---
+title: "Creating and Managing Accounts"
+description: "Learn how to generate, fund, and manage Aptos accounts using the TypeScript SDK with different signing schemes"
+sidebar:
+  label: "Managing Accounts"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+There are several ways to generate account credentials using the TypeScript SDK. You can use:
+
+- `Account.generate()`
+- `Account.fromPrivateKey()`
+- `Account.fromDerivationPath()`
+
+`Account.generate()` is the most commonly used method to create keys for a new account.
+It defaults to `ED25519` key encodings, but you can also manually specify which signing scheme you would prefer like so:
+
+```typescript
+const account = Account.generate(); // defaults to Legacy Ed25519
+const account = Account.generate({ scheme: SigningSchemeInput.Secp256k1Ecdsa }); // Single Sender Secp256k1
+const account = Account.generate({
+  scheme: SigningSchemeInput.Ed25519,
+  legacy: false,
+}); // Single Sender Ed25519
+```
+
+<Aside type="note">
+  Following [AIP-55](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-55.md) the SDK supports `Legacy` and `Unified` authentications. `Legacy` includes `ED25519` and `MultiED25519` and `Unified` includes `SingleSender` and `MultiSender` authenticators.
+</Aside>
+
+Once you have generated credentials, you **must** fund it for the network to know it exists.
+
+In localnet / devnet this can be done with a faucet by running the following command:
+
+```typescript filename="fund.ts"
+const transaction = await aptos.fundAccount({
+  accountAddress: account.accountAddress,
+  amount: 100,
+});
+```
+
+For testnet you can use the mint page [here](/network/faucet).
+
+## Other Ways To Represent Accounts
+
+If you have a private key, or equivalent representation, you can use that to create an `Account` object to manage those credentials while using the TypeScript SDK.
+
+Here are several examples that show how to do so with specific encoding schemes.
+
+### Derive an account from private key
+
+The SDK supports deriving an account from a private key with `fromPrivateKey()` static method.
+In addition, this method supports deriving an account from a private key and account address.
+This method uses a local calculation and therefore is used to derive an `Account` that has not had its authentication key rotated.
+
+```typescript
+// to derive an account with a legacy Ed25519 key scheme
+const privateKey = new Ed25519PrivateKey(privateKeyBytes);
+const account = Account.fromPrivateKey({ privateKey });
+
+// to derive an account with a Single Sender Ed25519 key scheme
+const privateKey = new Ed25519PrivateKey(privateKeyBytes);
+const account = Account.fromPrivateKey({ privateKey, legacy: false });
+
+// to derive an account with a Single Sender Secp256k1 key scheme
+const privateKey = new Secp256k1PrivateKey(privateKeyBytes);
+const account = Account.fromPrivateKey({ privateKey });
+
+// to derive an account with a private key and account address
+const privateKey = new Ed25519PrivateKey(privateKeyBytes);
+const address = AccountAddress.from(address);
+const account = Account.fromPrivateKey({ privateKey, address });
+```
+
+### Derive an account from derivation path
+
+The SDK supports deriving an account from derivation path with `fromDerivationPath()` static method.
+
+```typescript
+// to derive an account with a legacy Ed25519 key scheme
+const { mnemonic, address, path } = wallet;
+const account = Account.fromDerivationPath({
+  path,
+  mnemonic,
+  scheme: SigningSchemeInput.Ed25519,
+});
+
+// to derive an account with a Single Sender Ed25519 key scheme
+const { mnemonic, address, path } = wallet;
+const account = Account.fromDerivationPath({
+  path,
+  mnemonic,
+  scheme: SigningSchemeInput.Ed25519,
+  legacy: false,
+});
+
+// to derive an account with a Single Sender Secp256k1 key scheme
+const { mnemonic, address, path } = wallet;
+const account = Account.fromDerivationPath({
+  path,
+  mnemonic,
+  scheme: SigningSchemeInput.Secp256k1Ecdsa,
+});
+```

@@ -1,0 +1,155 @@
+---
+title: "Funciones de Vista"
+description: "Consulta contratos inteligentes en la blockchain usando funciones de vista con enfoques dinámicos y fuertemente tipados en el SDK .NET"
+sidebar:
+  label: "Funciones de Vista"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="caution" emoji="❗">
+  Este SDK está actualmente en beta. Por favor reporta cualquier problema que encuentres
+  creando un issue en el repositorio
+  [aptos-labs/aptos-dotnet-sdk](https://github.com/aptos-labs/aptos-dotnet-sdk).
+</Aside>
+
+Las funciones de vista te permiten consultar contratos inteligentes en la blockchain. Se definen en contratos inteligentes como funciones de entrada con el modificador `view`.
+En esta guía, proporcionaremos fragmentos de funciones de vista y cómo se tipifican y usan.
+
+## Funciones de Vista Tipadas Dinámicamente
+
+Cuando no te importa el tipo de retorno de una función de vista, puedes usar la función `View` sin argumentos de tipo.
+
+La función Move que llamaremos:
+
+```move
+public fun balance<CoinType>(owner: address): u64
+```
+
+Y para llamar la función de vista, usaremos la función `View` del `ContractClient`.
+
+```csharp {9-16}
+using Aptos;
+
+class Program
+{
+    static void Main(string[] args)
+    {
+        var client = new AptosClient(Networks.Mainnet);
+
+        // Llama la función de vista especificando el nombre de función, argumentos y argumentos de tipo
+        var values = await client.Contract.View(
+            new GenerateViewFunctionPayloadData(
+                function: "0x1::coin::balance",
+                functionArguments: ["0x1"],
+                typeArguments: ["0x1::aptos_coin::AptosCoin"]
+            )
+        );
+
+        // Devuelve una lista de valores de retorno: ["100"]
+        ulong balance = ulong.Parse(values[0]);
+    }
+}
+```
+
+## Funciones de Vista Tipadas Simples
+
+Para funciones de vista con tipos de retorno comunes, puedes tipar los valores de retorno pasando un argumento de tipo.
+
+La función Move que llamaremos:
+
+```move
+public fun get_current_epoch_proposal_counts(validator_index: u64): (u64, u64)
+```
+
+Y para llamar la función de vista, usaremos la función `View` del `ContractClient` con los argumentos de tipo.
+
+```csharp {9-16}
+using Aptos;
+
+class Program
+{
+    static void Main(string[] args)
+    {
+        var client = new AptosClient(Networks.Mainnet);
+
+        // Llama la función de vista especificando el nombre de función, argumentos y argumentos de tipo
+        var values = await client.Contract.View<List<ulong>>(
+            new GenerateViewFunctionPayloadData(
+                function: "0x1::stake::get_current_epoch_proposal_counts",
+                functionArguments: [(ulong)0],
+                typeArguments: []
+            )
+        );
+
+        // Devuelve una lista de valores de retorno: ["100", "100"]
+        ulong successfulProposals = values[0];
+        ulong failedProposals = values[1];
+    }
+}
+```
+
+## Funciones de Vista Tipadas Complejas
+
+Para funciones de vista con tipos de retorno complejos, puedes aprovechar `Newtonson.Json` para deserializar los valores de retorno. Por defecto,
+todos los tipos pasados a la función View aprovechan `JsonConvert.DeserializeObject<T>()` de `Newtonson.Json` para deserializar
+los valores de retorno. Puedes sobrescribir el comportamiento de deserialización creando un `JsonConverter` personalizado.
+
+La función Move que llamaremos:
+
+```move
+public fun supply<CoinType>(): Option<u128>
+```
+
+Crea tu propio `JsonConverter` para deserializar los valores de retorno.
+
+```csharp {9-26}
+using Aptos;
+using Newtonsoft.Json;
+
+[JsonConverter(typeof(CoinSupplyConverter))]
+class CoinSupply(ulong value) {
+    public ulong Value;
+}
+
+class CoinSupplyConverter : JsonConverter<CoinSupply> {
+    public override CoinSupply ReadJson(JsonReader reader, Type objectType, CoinSupply existingValue, bool hasExistingValue, JsonSerializer serializer) {
+        // El tipo de retorno de la función de vista es un Option<u128> -> [{ "vec": [] }] o [{ "vec": ["100"] }]
+        JArray array = JArray.Load(reader);
+        var option = array[0];
+
+        // Si la Option es None
+        if (option["vec"].Count == 0) return null;
+
+        // Si la Option es Some
+        ulong value = ulong.Parse(option["vec"][0]);
+        return new CoinSupply(value);
+    }
+}
+```
+
+Y para llamar la función de vista, usaremos la función `View` del `ContractClient` con los argumentos de tipo.
+
+```csharp {10-17}
+using Aptos;
+using Newtonsoft.Json;
+
+class Program
+{
+    static void Main(string[] args)
+    {
+        var client = new AptosClient(Networks.Mainnet);
+
+        // Llama la función de vista especificando el nombre de función, argumentos y argumentos de tipo
+        CoinSupply coinSupply = await client.Contract.View<CoinSupply>(
+            new GenerateViewFunctionPayloadData(
+                function: "0x1::coin::supply",
+                functionArguments: [],
+                typeArguments: ["0x1::aptos_coin::AptosCoin"]
+            )
+        );
+
+        ulong coinSupply = coinSupply.Value;
+    }
+}
+```

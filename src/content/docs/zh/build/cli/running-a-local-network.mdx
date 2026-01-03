@@ -1,0 +1,199 @@
+---
+title: "通过 Aptos CLI 运行本地网络"
+description: "使用 Docker 设置和运行本地 Aptos 网络进行测试和开发，包括 Node API、索引器 API 和水龙头服务。"
+sidebar:
+  label: "运行本地网络"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+本地网络在测试代码时很有帮助.它们不会连接到任何生产 Aptos 网络(如主网),但由于以下三个主要原因,它们很有用:
+
+1. **无速率限制:** 你可以与托管服务(如节点 API,索引器 API 和水龙头)交互,而不受速率限制,从而加快测试速度.
+2. **可重现性:** 你可以设置特定的链上场景,并随时从头开始重启网络以返回到干净的状态.
+3. **高可用性:** Aptos 开发网和测试网会定期升级,在此期间它们可能不可用.本地开发网络即使在你没有互联网连接的情况下也始终可用.
+
+<br />
+
+# 启动本地网络
+
+<Steps>
+  1. 确保你已安装 .
+
+  2. 确保你已安装 .
+
+     1. 这仅用于通过运行索引器 API 来创建类似生产的环境.许多下游工具(如 Aptos SDK)都依赖于索引器 API.
+     2. Docker 建议你通过 [Docker Desktop](https://www.docker.com/products/docker-desktop/) 安装以获取自动更新.
+
+  3. 启动 Docker.
+
+  4. 在新终端中运行以下命令来启动私有网络:
+
+     ```shellscript filename="Terminal"
+     aptos node run-local-testnet --with-indexer-api
+     ```
+
+     <Aside type="caution">
+       注意:尽管名称为(`local-testnet`),但这与 Aptos 测试网无关,它将在你的机器上运行一个完全本地的网络.
+     </Aside>
+
+     你应该看到类似这样的输出:
+
+     ```shellscript filename="Terminal"
+     就绪端点：http://0.0.0.0:8070/
+
+     索引器 API 正在启动，请稍候...
+     节点 API 正在启动，请稍候...
+     交易流正在启动，请稍候...
+     Postgres 正在启动，请稍候...
+     水龙头正在启动，请稍候...
+
+     已完成生成配置：
+             日志文件："/Users/dport/.aptos/testnet/validator.log"
+             测试目录："/Users/dport/.aptos/testnet"
+             Aptos 根密钥路径："/Users/dport/.aptos/testnet/mint.key"
+             检查点：0:397412c0f96b10fa3daa24bfda962671c3c3ae484e2d67ed60534750e2311f3d
+             链 ID：4
+             REST API 端点：http://0.0.0.0:8080
+             指标端点：http://0.0.0.0:9101/metrics
+             Aptosnet 全节点网络端点：/ip4/0.0.0.0/tcp/6181
+             索引器 gRPC 节点流端点：0.0.0.0:50051
+
+     Aptos 正在运行，按 ctrl-c 退出
+
+     节点 API 已就绪。端点：http://0.0.0.0:8080/
+     Postgres 已就绪。端点：postgres://postgres@127.0.0.1:5433/local_testnet
+     交易流已就绪。端点：http://0.0.0.0:50051/
+     索引器 API 已就绪。端点：http://127.0.0.1:8090
+     水龙头已就绪。端点：http://127.0.0.1:8081/
+
+     正在应用启动后步骤...
+
+     设置完成，你现在可以使用本地测试网了！
+     ```
+
+  5. 等待网络启动
+
+     当终端显示 `设置完成，你现在可以使用本地测试网了！` 时,本地网络就会运行.
+
+     <Aside type="caution">
+       如果遇到错误,请查看下面的常见错误进行调试.
+     </Aside>
+
+     <details>
+       <summary>网络启动时的常见错误</summary>
+
+       ### 地址已被使用
+
+       ```shellscript filename="Terminal"
+       在 0.0.0.0:8080 绑定时出现错误：创建服务器监听器时出错：地址已被使用（操作系统错误 48）
+       ```
+
+       这意味着本地网络需要的某个端口已被另一个进程使用.
+
+       要在 Unix 系统上修复此问题,你可以:
+
+       1. 通过运行 `lsof -i :8080` 识别进程的名称和 PID.
+       2. 一旦知道 PID,运行 `kill <pid>` 释放该端口.
+
+       ### 打开的文件太多错误
+
+       ```shellscript filename="Terminal"
+       在 crates/aptos/src/node/local_testnet/logging.rs:64:10 处出现错误：
+       调用 `Result::unwrap()` 时出现 `Err` 值：Os { code: 24, kind: Uncategorized, message: "打开的文件太多" }
+       ```
+
+       这意味着你的系统上打开的文件太多.在许多 Unix 系统上,你可以通过在 `.zshrc` 中添加以下内容来增加打开文件的最大数量:
+
+       ```shellscript filename="Terminal"
+       ulimit -n 1048576
+       ```
+
+       ### Docker 不可用
+
+       ```shellscript filename="Terminal"
+       意外错误：为 Postgres 应用预运行步骤失败：Docker 不可用，确认它已安装并正在运行。在 Linux 上你可能需要使用 sudo
+       ```
+
+       要调试此问题,请尝试以下修复方法:
+
+       1. 通过运行 `docker --version` 确保已安装 docker.
+       2. 通过运行 `docker info` 确保 Docker 守护进程正在运行(如果出现错误说 `无法连接到 Docker 守护进程`,则 Docker 未运行)
+       3. 确保 Docker 连接的套接字在你机器上的默认位置存在.例如,在 Unix 系统上 `/var/run/docker.sock` 应该存在.
+          1. 如果该文件不存在,打开 Docker Desktop 并启用 `设置 -> 高级 -> 允许使用默认 Docker 套接字`.
+          2. 或者,你可以通过运行 `docker context inspect | grep Host` 找到 Docker 套接字的位置,然后通过运行 `sudo ln -s /Users/dport/.docker/run/docker.sock /var/run/docker.sock` 将该位置符号链接到默认位置
+     </details>
+
+     从步骤 4 的示例输出中可以看到,一旦本地网络运行,你就可以访问以下服务:
+
+     - [节点 API](/zh/rest-api):这是直接在节点上运行的 REST API.它支持核心写功能(如交易提交)和有限的读功能,如读取账户资源或 Move 模块信息.
+     - [索引器 API](/zh/build/indexer/indexer-api/self-hosted):这是一个 [GraphQL](https://graphql.org/) API,提供对索引区块链数据的丰富读取访问.如果你点击上面的索引器 API URL(默认为 [http://127.0.0.1:8090](http://127.0.0.1:8090)),它将打开 Hasura Console,这是一个帮助你查询索引器 GraphQL API 的 Web UI.
+     - [交易流服务](/zh/build/indexer/txn-stream):这是索引器 API 和 SDK 使用的交易 gRPC 流.这仅与你开发 [索引器 SDK](/zh/build/indexer/indexer-sdk) 自定义处理器有关.
+     - [Postgres](https://www.postgresql.org/):这是索引器处理器写入的数据库.索引器 API 从这个数据库读取.
+     - [水龙头](/zh/build/apis/faucet-api):你可以使用它在本地网络上为账户提供资金.
+
+     如果你不想运行网络的任何这些子组件,有标志可以禁用它们.
+
+     如果你正在编写脚本并希望等待本地网络启动所有服务,你可以向 `http://127.0.0.1:8070` 发出 GET 请求.最初这将返回 http 代码 [503](https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/503).当它返回 [200](https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/200) 时,这意味着所有服务都已就绪.
+
+     要了解启动本地网络时可以传递的不同标志,或配置设置(如更改某些服务运行的端口),请运行帮助命令:
+
+     ```shellscript filename="Terminal"
+     aptos node run-local-testnet --help
+     ```
+</Steps>
+
+## 使用本地网络
+
+现在网络正在运行,你可以像使用任何其他网络一样使用它.
+
+所以,你可以像这样创建一个本地配置文件:
+
+```shellscript filename="Terminal"
+aptos init --profile <你的配置文件名称> --network local
+```
+
+然后你可以在以后使用该配置文件执行任何命令.例如,如果你想将 [`hello_blockchain`](https://github.com/aptos-labs/aptos-core/tree/main/aptos-move/move-examples/hello_blockchain) 包发布到你的本地网络,你可以运行:
+
+```shellscript filename="Terminal"
+aptos move publish --profile <你的配置文件名称> --package-dir /opt/git/aptos-core/aptos-move/move-examples/hello_blockchain --named-addresses HelloBlockchain=local
+```
+
+### 配置 TypeScript SDK
+
+如果你想将本地网络与 TypeScript SDK 一起使用,你可以在初始化客户端对象(`Aptos`)时使用本地网络 URL:
+
+```tsx
+import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
+
+const network = Network.LOCAL;
+const config = new AptosConfig({ network });
+const client = new Aptos(config);
+```
+
+### 重置本地网络
+
+有时在开发过程中重置本地网络回到初始状态很有帮助,例如:
+
+- 你对 Move 模块进行了向后不兼容的更改,你想重新部署它而不重命名它或使用新账户.
+- 你正在构建 [索引器 SDK](/zh/build/indexer/indexer-sdk) 自定义处理器,想要使用全新的网络进行索引.
+- 你想清除所有链上状态,例如账户,对象等.
+
+要从全新的本地网络开始,使用 `--force-restart` 标志:
+
+```shellscript filename="Terminal"
+aptos node run-local-testnet --force-restart
+```
+
+然后它会提示你是否真的要重启链,以确保你不会意外删除你的工作.
+
+```shellscript filename="Terminal"
+你确定要删除现有的链吗？[yes/no]
+> yes
+```
+
+如果你不想被提示,也可以包含 `--assume-yes`:
+
+```shellscript filename="Terminal"
+aptos node run-local-testnet --force-restart --assume-yes
+```

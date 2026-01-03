@@ -1,0 +1,273 @@
+---
+title: "Move VSCode Extension"
+label: "VSCode Extension"
+description: "Learn about move vscode extension for Move smart contract development on Aptos blockchain."
+sidebar:
+  label: "VSCode Extension"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Move on Aptos Language Extension
+
+This is the official Visual Studio Code (and Cursor) extension for [developing smart contracts in the Move language on the Aptos blockchain](/build/smart-contracts).
+
+Built from the ground up, it delivers a modern and performant development experience, offering essential features like semantic highlighting, real-time diagnostics, auto-formatting and seamless integration with the rest of the Aptos toolchain - all designed to help developers build and test Move contracts with ease and confidence.
+
+Actively maintained by the Aptos team, this extension is designed to evolve alongside the Move language and supports both developers who are new to Move, and those building more complex applications.
+
+## Features
+
+- Semantic Highlighting
+- Go to Definition
+- Find All References & Symbol Renaming
+- Type and Documentation on Hover
+- Contextual Auto-Completion
+- Inlay Hints for Types and Function Parameters
+
+![Inlay hints](~/images/move-vscode-extension/inlay_hints.png)
+
+- Real-Time Diagnostics
+- [Code suggestions](#code-suggestions-with-fixes)
+- `movefmt` Integration
+
+![Formatting with movefmt](~/images/move-vscode-extension/format.gif)
+
+- Run `#[test]` functions
+- Check modules and functions with Move Prover
+
+## Installation
+
+We publish releases both on [VSCode Marketplace](https://marketplace.visualstudio.com/items?itemName=AptosLabs.move-on-aptos) and [OpenVSX](https://open-vsx.org/extension/aptoslabs/move-on-aptos).
+
+We also publish `nightly` pre-releases, which are built from `main` branch every night. To use those, select **Switch to Pre-Release Version** from your editor's Extensions View.
+
+![Pre-releases selection](~/images/move-vscode-extension/pre-releases.png)
+
+### Build from sources
+
+Clone the repo, then run:
+
+```
+cargo run -p xtask -- install --server --client
+```
+
+(or just `cargo xtask install --server --client`, see [https://github.com/matklad/cargo-xtask](https://github.com/matklad/cargo-xtask))
+
+The command builds `move-on-aptos.vsix` extension file and installs it into your VSCode.
+Then it runs `cargo install` to build and install language server.
+
+Put
+
+```
+"move-on-aptos.server.path": "~/.cargo/bin/aptos-language-server",
+```
+
+to your `settings.json` to point the extension to your locally built language server.
+
+### Build from sources: Cursor AI editor
+
+If you use [https://www.cursor.com/](https://www.cursor.com/) AI editor, you need to do a bit more work.
+
+Run the installation command above. The result would be a `./editors/code/move-on-aptos.vsix` vscode extension package.
+Then install it from the editor using the `"Install from VSIX..."` command.
+
+## Configuration
+
+<Aside type="note">
+  Extension by itself won't download your dependencies from the network.
+
+  If you see `unresolved reference` errors on the `AptosFramework` imports -
+  try running `aptos move compile` once on your project to download your remote dependencies.
+</Aside>
+
+This extension provides configurations through VSCode's configuration settings.
+All configurations are under `move-on-aptos.*`.
+
+### Recommended configuration for the Move package directories
+
+LSP is somewhat limited in what it can actually do, so some of the settings need to be specified manually.
+
+#### Mark Move Library sources read-only
+
+Add the following to your `settings.json`:
+
+```json5
+    "files.readonlyInclude": {
+        "**/build/*/sources/**/*.move": true,
+        "**/.move/**/*.move": true,
+    }
+```
+
+#### Auto-close `b"` and `x"` properly
+
+```json5
+    "[move]": {
+        "editor.wordSeparators": "`~!@#$%^&*()-=+[{]}\\|;:'\",.<>/?bx",
+    },
+```
+
+A bunch of symbols in the config value are the defaults, we're adding `b` and `x` symbols for the string prefixes.
+
+#### Set `Organize Imports` command to a keyboard shortcut
+
+```json5
+    {
+        "key": "ctrl+alt+o",
+        "command": "move-on-aptos.organizeImports",
+        "when": "editorTextFocus && !editorReadonly"
+    }
+```
+
+## AdvancedConfiguration
+
+### Diagnostics
+
+Extension provides a number of diagnostics, from hard errors like "unresolved reference" to style lints.
+Some of those might be less useful than others for different coding styles, so there's an escape hatch to disable those:
+
+```json5
+{
+    "move-on-aptos.diagnostics.disabled": [],
+}
+```
+
+where values are diagnostic codes from the error messages, like `unused-variable` here:
+
+![Diagnostic code example](~/images/move-vscode-extension/diag_code.png)
+
+### Inlay hints
+
+Type hints for the let statements and lambda parameters are supported.
+
+```move
+module 0x1::m {
+    fun main() {
+        let a/*: integer*/ = 1;
+        let f: |u8| u8 = |e/*: u8*/| e;
+    }
+}
+```
+
+To disable those, use:
+
+```json5
+{
+    "move-on-aptos.inlayHints.typeHints.enable": false,
+}
+```
+
+### Formatting (works with `movefmt` >= 1.2.1)
+
+Specify a path to the `movefmt` executable and extra args (like a `--config-path`) if necessary:
+
+```json5
+{
+    "move-on-aptos.movefmt.path": "~/code/movefmt/target/release/movefmt",
+    "move-on-aptos.movefmt.extraArgs": [],
+}
+```
+
+Formatting on Save can be enabled in VSCode with
+
+```json5
+{
+    "editor.formatOnSave": true,
+}
+```
+
+## Debugging
+
+It's useful to enable INFO logging level, it's not very chatty and could provide with a valuable information to debug:
+
+```
+    "move-on-aptos.server.extraEnv": { "RA_LOG": "info" },
+```
+
+## Additional commands
+
+### `aptos-language-server diagnostics`
+
+Run server diagnostics on the file (or package directory). If `--apply-fixes` is provided, automatically applies available autofixes:
+
+[See available diagnostics with auto-fixes](#code-suggestions-with-fixes)
+
+```shell
+  $ aptos-language-server diagnostics --apply-fixes replace-with-method-call ./aptos-stdlib/sources/cryptography/keyless.move 
+processing package 'aptos-stdlib', file: /home/mkurnikov/code/aptos-core/aptos-move/framework/aptos-stdlib/sources/cryptography/keyless.move
+note[replace-with-method-call]: Can be replaced with method call
+   ┌─ /home/mkurnikov/code/aptos-core/aptos-move/framework/aptos-stdlib/sources/cryptography/keyless.move:67:17
+   │
+67 │         assert!(string::bytes(&iss).length() <= MAX_ISSUER_UTF8_BYTES_LENGTH, error::invalid_argument(E_INVALID_ISSUER_UTF8_BYTES_LENGTH));
+   │                 ^^^^^^^^^^^^^^^^^^^
+   │
+   ┌─ /home/mkurnikov/code/aptos-core/aptos-move/framework/aptos-stdlib/sources/cryptography/keyless.move:67:17
+   │
+67 │         assert!(iss.bytes().length() <= MAX_ISSUER_UTF8_BYTES_LENGTH, error::invalid_argument(E_INVALID_ISSUER_UTF8_BYTES_LENGTH));
+   │                 ^^^^^^^^^^^ after fix
+
+
+```
+
+## Code suggestions (with fixes)
+
+### Use method call notation
+
+**Code**: `replace-with-method-call`
+
+![Replace with method call](~/images/move-vscode-extension/replace_with_method_call.gif)
+
+### Use compound assignment expression
+
+**Code**: `replace-with-compound-expr`
+
+![Compound assignment expression](~/images/move-vscode-extension/compound_expr.gif)
+
+### Use vector index expr
+
+**Code**: `replace-with-index-expr`
+
+Detects expressions of form `*vector::borrow(&some_vector, index)` and `*some_vector.borrow(index)`,
+which can be converted to `some_vector[index]`.
+
+![Vector index expression](~/images/move-vscode-extension/vector_index_expr.gif)
+
+### Use field initialization shorthand
+
+**Code**: `use-struct-lit-field-shorthand`, `use-struct-pat-field-shorthand`, `use-schema-lit-field-shorthand`
+
+Detects struct literal fields which could be written in shorthand form.
+
+![Field initialization shorthand](~/images/move-vscode-extension/field_shorthand.gif)
+
+### Redundant integer type cast
+
+**Code**: `remove-redundant-cast`
+
+Detects expressions like `number as u8`, where `number` is already of type it's being casted to.
+
+![Redundant integer type cast](~/images/move-vscode-extension/redundant_cast.gif)
+
+### Add `_` prefix to the variable name
+
+**Code**: `rename-with-underscore-prefix`
+
+Prefixes unused variable with `_`.
+
+![Rename with underscore prefix](~/images/move-vscode-extension/rename_fix.gif)
+
+## Roadmap
+
+- More error highlighting:
+  - Implement more errors from the Aptos Move compiler (like ability checking)
+  - Implement lints from the `aptos move lint` with extension-provided quickfixes.
+
+- Working with imports:
+  - Detect unused imports and remove them with "Organize Imports" VSCode feature.
+  - Show completion items not imported in the current module, create `use` statements for those automatically.
+
+- Integration with the `aptos-cli` commands: compile packages, publishing modules and executing transactions.
+
+- `Move.toml` support.
+
+- AI integration (via MCP server).

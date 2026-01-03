@@ -1,0 +1,41 @@
+---
+title: "Obtener Información de Activo Fungible"
+description: "Consultar información de activos fungibles incluyendo símbolo, nombre, decimales y tipos de activos con compatibilidad hacia atrás para monedas"
+sidebar:
+  label: "Info de Activos"
+---
+
+import { GraphQLEditor } from '~/components/react/GraphQLEditor';
+
+import { Aside } from '@astrojs/starlight/components';
+
+Al proporcionar una lista de tipos de activos fungibles, `GetFungibleAssetInfo` puede obtener datos como el símbolo, nombre, decimales y el tipo de activo en sí. Esto es particularmente útil para aplicaciones que necesitan mostrar detalles de tokens. Esto es compatible hacia atrás con la búsqueda de información de `Coin`.
+
+<Aside type="note">
+  ¡Pruébalo tú mismo! Puedes personalizar las variables en la parte inferior del editor.
+</Aside>
+
+<GraphQLEditor
+  query={`query GetFungibleAssetInfo($in: [String!], $offset: Int) {
+  fungible_asset_metadata(
+    where: { asset_type: { _in: $in } }
+    offset: $offset
+    limit: 100
+  ) {
+    symbol
+    name
+    decimals
+    asset_type
+    __typename
+  }
+}`}
+  variables={`{
+  "in": ["0x1::aptos_coin::AptosCoin", "0x1::example_coin::ExampleCoin"],
+  "offset": 0
+}`}
+/>
+
+## Variables:
+
+- `$in`: **Lista de String** - Esta variable debe contener una lista de tipos de activos fungibles para los cuales quieres consultar información. Ej. `["0x1::aptos_coin::AptosCoin"]`
+- `$offset`: **Integer** (Opcional) - Esta variable puede ser usada para paginar a través de resultados, especificando cuántos registros saltar antes de comenzar a devolver resultados.

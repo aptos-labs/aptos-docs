@@ -1,0 +1,64 @@
+---
+title: "Compilando Scripts de Move"
+description: "Comprende cómo compilar scripts de Move con configuración adecuada y preparación para despliegue."
+sidebar:
+  label: "Compilando Scripts"
+---
+
+Los scripts de Move pueden ser compilados con el compilador de Move de Aptos ya existente en
+la CLI de Aptos. Para más información sobre cómo instalar y usar la CLI de Aptos con contratos de Move, ve a la página [Trabajando con Contratos de Move](/es/build/cli/working-with-move-contracts).
+
+Una vez que tengas la CLI de Aptos instalada, puedes compilar un script ejecutando el siguiente comando desde dentro del paquete del script:
+
+```shellscript filename="Terminal"
+aptos move compile
+```
+
+Entonces habrá archivos de bytecode compilados bajo `build/` con el mismo nombre que
+la función en Move.
+
+Por ejemplo este script en el paquete `transfer_half`, se compilaría
+a `build/transfer_half/bytecode_scripts/transfer_half.mv`
+
+```move
+script {
+  use std::signer;
+  use aptos_framework::coin;
+  use aptos_framework::aptos_account;
+
+  fun transfer_half<Coin>(caller: &signer, receiver_address: address) {
+    // Recuperar el balance del llamador
+    let caller_address: address = signer::address_of(caller);
+    let balance: u64 = coin::balance<Coin>(caller_address);
+
+    // Enviar la mitad al receptor
+    let half = balance / 2;
+    aptos_account::transfer_coins<Coin>(caller, receiver_address, half);
+  }
+}
+```
+
+Además, hay una función de conveniencia para un paquete con exactamente un
+script con el comando de abajo:
+
+```shellscript filename="Terminal"
+aptos move compile-script
+```
+
+Proporcionando salida como la de abajo devolviendo la ubicación exacta del script y un
+hash por conveniencia
+
+```shellscript filename="Terminal"
+Compiling, may take a little while to download git dependencies...
+UPDATING GIT DEPENDENCY https://github.com/aptos-labs/aptos-framework.git
+INCLUDING DEPENDENCY AptosFramework
+INCLUDING DEPENDENCY AptosStdlib
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING transfer_half
+{
+  "Result": {
+    "script_location": "/opt/git/developer-docs/apps/docusaurus/static/move-examples/scripts/transfer_half/script.mv",
+    "script_hash": "9b57ffa952da2a35438e2cf7e941ef2120bb6c2e4674d4fcefb51d5e8431a148"
+  }
+}
+```

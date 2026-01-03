@@ -1,0 +1,56 @@
+---
+title: "Conectar Pasos"
+description: "Conecta pasos de procesamiento en el SDK de Indexer de Aptos para construir pipelines de datos completos con encadenamiento de pasos y control de flujo"
+sidebar:
+  label: "Conectar Pasos"
+---
+
+## Prerrequisito
+
+A este punto, ya habrías seguido las guías [Crear un Procesador](/es/build/indexer/indexer-sdk/documentation/create-processor) y [Crear un Paso](/es/build/indexer/indexer-sdk/documentation/steps).
+Nuestro siguiente objetivo es juntar esas dos piezas y conectar pasos dentro del procesador.
+
+## Cómo conectar pasos
+
+Ahora que has creado un paso, puedes conectarlo a otros pasos.
+Para hacer esto, usamos una clase builder llamada `ProcessorBuilder` para especificar una secuencia de pasos que componen un procesador.
+
+1. Después de que hayas instanciado tus pasos, necesitas convertirlos en [`RunnableStep`](https://github.com/aptos-labs/aptos-indexer-processor-sdk/blob/main/aptos-indexer-processors-sdk/sdk/src/traits/runnable_step.rs#L6).
+   `RunnableStep` es un trait que envuelve alrededor de un paso.
+   Proporciona los canales de entrada y salida necesarios que alimentan al paso y permite que el paso sea spawneado en una tarea.
+   El SDK proporciona una función helper [`.into_runnable_step`](https://github.com/aptos-labs/aptos-indexer-processor-sdk/blob/main/aptos-indexer-processors-sdk/sdk/src/traits/into_runnable_step.rs#L13) para convertir un paso en un `RunnableStep`.
+2. Configura tu primer paso con [`ProcessorBuilder::new_with_inputless_first_step`](https://github.com/aptos-labs/aptos-indexer-processor-sdk/blob/main/aptos-indexer-processors-sdk/sdk/src/builder/processor_builder.rs#L222).
+   En casi todos los casos, el primer paso debería ser un `TransactionStreamStep`. {/* <!-- Add link --> */}
+3. Conecta el paso anterior al siguiente paso usando [`.connect_to`](https://github.com/aptos-labs/aptos-indexer-processor-sdk/blob/main/aptos-indexer-processors-sdk/sdk/src/builder/processor_builder.rs#L303).
+   `connect_to` usa trait bounds para asegurar en tiempo de compilación que el tipo de salida del paso anterior coincide con el tipo de entrada del siguiente paso.
+   Al llamar `.connect_to`, se crea un canal con tamaño `channel_size` y conecta los pasos anterior y siguiente.
+   También spawnea una tarea que continuamente hace loop del paso anterior -- leyendo datos de su canal de entrada, procesando los datos, y enviando la salida a su canal de salida.
+4. Repite el paso 3 para cada paso en tu procesador.
+5. Para cerrar el `ProcessorBuilder`, usa [`.end_and_return_output_receiver`](https://github.com/aptos-labs/aptos-indexer-processor-sdk/blob/main/aptos-indexer-processors-sdk/sdk/src/builder/processor_builder.rs#L400).
+   Esto devuelve un [`InstrumentedAsyncReceiver`](https://github.com/aptos-labs/aptos-indexer-processor-sdk/blob/main/aptos-indexer-processors-sdk/instrumented-channel/src/lib.rs#L88) que puedes usar para procesar la salida del último paso en el grafo.
+
+Aquí hay un ejemplo simple de conectar dos pasos:
+
+```rust
+let (processor_builder, buffer_receiver) = ProcessorBuilder::new_with_inputless_first_step(
+      transaction_stream_step.into_runnable_step(),
+  )
+  .connect_to(extractor_step.into_runnable_step(), 10)
+  .end_and_return_output_receiver(10);
+```
+
+Aquí hay un [ejemplo completo](https://github.com/aptos-labs/aptos-indexer-processor-example/blob/main/aptos-indexer-processor-example/src/processors/events/events_processor.rs#L75) de `aptos-indexer-processor-example`.
+
+{/* <!-- Add link to common SDK steps --> */}
+
+## Visualizar el procesador
+
+Mientras conectas pasos, `ProcessorBuilder` en el fondo está construyendo una representación gráfica de los pasos en tu procesador usando [`petgraph`](https://docs.rs/petgraph/latest/petgraph/).
+Puedes ver la representación visual del grafo llamando
+
+```rust
+let dot = processor_builder.graph.dot();
+println!("{}", dot);
+```
+
+Esto producirá un grafo en el [lenguaje DOT](https://graphviz.gitlab.io/_pages/doc/info/lang.html) que puedes visualizar usando herramientas como [Graphviz](https://graphviz.org/).

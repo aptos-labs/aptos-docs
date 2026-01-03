@@ -1,0 +1,242 @@
+---
+title: "Criptografía"
+description: "Aprende sobre las funciones criptográficas disponibles para el desarrollo de contratos inteligentes Move en Aptos."
+sidebar:
+  label: "Criptografía"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+La criptografía juega un papel integral en garantizar la seguridad, integridad, confidencialidad e inmutabilidad de los datos en los sistemas blockchain. El adaptador de Aptos para Move proporciona a los desarrolladores una variedad de primitivas criptográficas para satisfacer esta necesidad. Este documento profundiza en las funcionalidades criptográficas ofrecidas por Move en Aptos y explica los principios que impulsan su diseño.
+
+## Primitivas criptográficas
+
+Move, a través del adaptador de Aptos, abarca varias herramientas criptográficas fundamentales:
+
+1. [Funciones Hash Criptográficas](#cryptographic-hash-functions) – Algoritmos que producen una salida de tamaño fijo (hash) a partir de datos de entrada de tamaño variable. Las funciones soportadas incluyen SHA2-256, SHA3-256, Keccak256 y Blake2b-256.
+2. [Verificación de Firmas Digitales](#digital-signature-verification) – Algoritmos para firmar un mensaje y así asegurar su integridad, autenticar al remitente, garantizar la no repudio, o cualquier combinación de estos. Los esquemas de firma soportados incluyen Ed25519, ECDSA y BLS.
+3. [Aritmética de Curvas Elípticas](#elliptic-curve-arithmetic) – Las curvas elípticas son uno de los bloques de construcción de primitivas criptográficas avanzadas, como firmas digitales, cifrado de clave pública o compartición verificable de secretos. Las curvas soportadas incluyen Ristretto255 y BLS12-381.
+4. [Pruebas de Conocimiento Cero (ZKP)](#building-powerful-cryptographic-applications) – Estas técnicas criptográficas permiten a una parte demostrar que una relación $R(x; w)$ se satisface sobre una declaración pública $x$ sin revelar el testigo secreto $w$ que la hace válida. Actualmente, soportamos verificación de ZKP Groth16 y verificación de pruebas de rango ZK Bulletproofs.
+
+Tres principios fundamentales guían el diseño e integración de las extensiones criptográficas de Aptos en Move:
+
+1. **Uso Económico de Gas** – Se busca minimizar los costos de gas para los desarrolladores de Move implementando primitivas clave como [funciones nativas de Move](/es/build/smart-contracts/book/functions#native-functions). Por ejemplo, consulta el módulo para [firmas BLS sobre curvas elípticas BLS12-381](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-stdlib/sources/cryptography/bls12381.move).
+2. **APIs Seguras por Tipo** – Asegurando que las APIs sean resistentes a errores comunes, la seguridad de tipos mejora la confiabilidad del código y promueve un proceso de desarrollo eficiente. Por ejemplo, consulta el [módulo de firmas Ed25519](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-stdlib/sources/cryptography/ed25519.move).
+3. **Empoderamiento de Desarrolladores** – En casos donde no hay funciones nativas disponibles, empoderamos a los desarrolladores para construir sus propias primitivas criptográficas sobre bloques abstractos como _campos finitos_ y _grupos abelianos_. Consulta el módulo [`aptos_std::crypto_algebra`](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-stdlib/sources/cryptography/crypto_algebra.move) para más información.
+
+Continúa leyendo para profundizar un poco más y descubrir algunas de las complejidades detrás de estas extensiones, así como la gama de aplicaciones que habilitan. Para una comprensión más completa de este tema, consulta el [código de los módulos Move de criptografía](https://github.com/aptos-labs/aptos-core/tree/main/aptos-move/framework/aptos-stdlib/sources/cryptography).
+
+## Funciones hash criptográficas
+
+Los desarrolladores ahora pueden usar más funciones hash criptográficas en Move a través del módulo [`aptos_std::aptos_hash`](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-stdlib/sources/hash.move):
+
+| Función hash | Tamaño hash (bits) | Costo por hashear 1KiB (en unidades internas de gas) | Seguridad de resistencia a colisiones (bits) |
+| ------------ | ------------------ | ---------------------------------------------------- | -------------------------------------------- |
+| Keccak256    | 256                | 1,001,600                                            | 128                                          |
+| SHA2-256     | 256                | 1,084,000                                            | 128                                          |
+| SHA2-512     | 512                | 1,293,600                                            | 256                                          |
+| SHA3-256     | 256                | 1,001,600                                            | 128                                          |
+| SHA3-512     | 512                | 1,114,000                                            | 256                                          |
+| RIPEMD160    | 160                | 1,084,000                                            | 80 (**débil**)                               |
+| Blake2b-256  | 256                | 342,200                                              | 128                                          |
+
+Todas las funciones hash tienen las mismas propiedades de seguridad (por ejemplo, unidireccionalidad, resistencia a colisiones, etc.), pero sus niveles de seguridad son diferentes.
+
+<Aside type="caution">
+  RIPEMD160 debe evitarse como función resistente a colisiones debido a su nivel de seguridad de 80 bits. Principalmente se soporta por razones de compatibilidad hacia atrás: por ejemplo, la derivación de direcciones de Bitcoin depende de RIPEMD160.
+</Aside>
+
+Algunas de estas funciones pueden usarse para interoperabilidad con otras cadenas (por ejemplo, verificar pruebas de Merkle de Ethereum vía [`aptos_std::aptos_hash::keccak256`](https://github.com/aptos-labs/aptos-core/blob/137acee4c6dddb1c86398dce25b041d78a3028d3/aptos-move/framework/aptos-stdlib/sources/hash.move#L35)).
+Otras, tienen menores costos de gas, como [`aptos_std::aptos_hash::blake2b_256`](https://github.com/aptos-labs/aptos-core/blob/137acee4c6dddb1c86398dce25b041d78a3028d3/aptos-move/framework/aptos-stdlib/sources/hash.move#L69).
+En general, una mayor variedad de funciones hash da a los desarrolladores libertad adicional tanto en seguridad como en interoperabilidad con otros sistemas criptográficos fuera de la cadena.
+
+## Verificación de firmas digitales
+
+Los desarrolladores ahora pueden usar una API _segura por tipo_ para verificar muchas clases de firmas digitales en Move:
+
+| Esquema de firma                                                                                                                                           | Curva         | Tamaño de firma (bytes) | Tamaño de PK (bytes) | Malleabilidad | Suposiciones | Pros             | Desventajas            |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- | ----------------------- | -------------------- | ------------- | ------------ | ---------------- | ---------------------- |
+| [ECDSA](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-stdlib/sources/cryptography/secp256k1.move)                          | secp256k1     | 64                      | 64                   | Sí            | GGM          | Adopción amplia  | Prueba de seguridad    |
+| [Ed25519](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-stdlib/sources/cryptography/ed25519.move)                          | Edwards 25519 | 64                      | 32                   | No            | DLA, ROM     | Rápido           | Subtleties             |
+| [MultiEd25519](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-stdlib/sources/cryptography/multi_ed25519.move)               | Edwards 25519 | $4 + t \cdot 64$        | $n \cdot 32$         | No            | DLA, ROM     | Fácil de adoptar | Tamaño de firma grande |
+| [MinPK BLS](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-stdlib/sources/cryptography/bls12381.move)                       | BLS12-381     | 96                      | 48                   | No            | CDH, ROM     | Versátil         | Verificación más lenta |
+| [MinSig BLS](https://github.com/aptos-labs/aptos-core/blob/7d4fb98c6604c67e526a96f55668e7add7aaebf6/aptos-move/move-examples/drand/sources/drand.move#L57) | BLS12-381     | 48                      | 96                   | No            | CDH, ROM     | Versátil         | Verificación más lenta |
+
+<Aside type="note">
+  - CDH significa la _"Computational Diffie-Hellman Assumption"_
+  - DLA significa la _"Discrete Log Assumption"_
+  - GGM significa la _"Generic Group Model"_
+  - ROM significa la _"Random Oracle Model"_
+</Aside>
+
+Los módulos de firma digital anterior pueden usarse para construir contratos inteligentes basados en firmas, mecanismos de reclamación de airdrops seguros o cualquier mecanismo de control de acceso basado en firmas digitales para dapps.
+
+La elección correcta de un esquema de firma en tu dapp podría depender de muchos factores:
+
+1. **Compatibilidad hacia atrás**
+   - Si tu dapp's base de usuarios principalmente usa un mecanismo de firma particular, sería prudente apoyar ese mecanismo para facilitar la transición y la adopción.
+     - Ejemplo: Si los usuarios principalmente firman usando Ed25519, sería una elección lógica.
+2. **Facilidad de implementación**
+   - Aunque teóricamente sólido, protocolos complejos pueden ser desafiantes de implementar en la práctica.
+     - Ejemplo: Aunque existen protocolos $t$-de-$n$ de umbral para Ed25519, su intrincidad en el lado del firmante podría impulsar a los desarrolladores a MultiEd25519 debido a su implementación de firma más directa.
+3. **Eficiencia**
+   - Dependiendo de las necesidades de tu dapp, podrías priorizar una eficiencia sobre otra.
+     - Tamaño de firma vs. tamaño de clave pública: Algunas aplicaciones podrían priorizar un pie de firma más pequeño, mientras que otras podrían enfatizar una clave pública compacta.
+     - Velocidad de firma vs. velocidad de verificación: Para ciertas dapps, la velocidad de firma podría ser más crucial, mientras que para otras, la verificación rápida de la firma podría ser la prioridad.
+4. **Análisis de seguridad**
+   - Es esencial considerar las suposiciones subyacentes y posibles vulnerabilidades de un esquema de firma.
+     - Ejemplo: La seguridad de ECDSA está probada bajo suposiciones fuertes como el Modelo de Grupo Genérico (GGM).
+     - Consideraciones de malleabilidad: Algunos esquemas de firma son susceptibles a la malleabilidad, donde una firma válida, $\sigma$, puede ser maullada en una firma diferente pero aún válida, $\sigma$, para el mismo mensaje $m$.
+5. **Versatilidad**
+   - La adaptabilidad y flexibilidad de los esquemas de firma son importantes para considerar, por lo que podrías adecuarte a las necesidades criptográficas de tu dapp.
+     - Ejemplo: Los esquemas de firma de umbral $t$-de-$n$ de BLS son muy simples de implementar.
+
+<Aside type="caution">
+  A pesar de su cuidadosa, fundamentada diseño\[^ed25519], Ed25519 tiene sutilezas de implementación conocidas. Por ejemplo, diferentes implementaciones podrían fácilmente discrepar sobre la validez de las firmas, especialmente cuando la verificación por lotes se emplea\[^devalence]$^,$\[^eddsa].
+</Aside>
+
+<Aside type="note">
+  Nuestro módulo [`aptos_std::bls12381`](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-stdlib/sources/cryptography/bls12381.move) para [MinPK BLS](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-bls-signature-05#name-variants) soporta la verificación de firmas individuales, **multi**-firmas, **agregadas** firmas y **umbrales** firmas.
+</Aside>
+
+## Aritmética de curvas elípticas
+
+Mientras que las [funciones hash](#funciones-hash-criptográficas) y [verificación de firmas](#verificación-de-firmas-digitales) deberían proporcionar suficiente funcionalidad para la mayoría de las aplicaciones, algunas aplicaciones requerirán criptografía más poderosa.
+Normalmente, los desarrolladores de tales aplicaciones tendrían que esperar hasta que su funcionalidad criptográfica deseada se implemente eficientemente como una [función nativa de Move](/es/build/smart-contracts/book/functions#native-functions) en el [marco de Move de Aptos](/es/network/blockchain/move).
+En lugar de eso, exponemos bloques de construcción básicos que los desarrolladores pueden usar para implementar sus propias primitivas criptográficas directamente en el lenguaje Move y lo hacen **eficientemente**.
+
+Específicamente, actualmente exponemos operaciones de aritmética de curva elíptica en dos grupos de curvas elípticas populares y sus campos finitos asociados:
+
+1. Ristretto255, a través de [`aptos_std::ristretto255`](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-stdlib/sources/cryptography/ristretto255.move)
+2. BLS12-381, a través de [`aptos_std::crypto_algebra`](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-stdlib/sources/cryptography/crypto_algebra.move)
+   y [`aptos_std::bls12381_algebra`](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-stdlib/sources/cryptography/bls12381_algebra.move)
+
+Estos módulos soportan operaciones de bajo nivel como:
+
+- multiplicación escalar de puntos de curva elíptica
+- multiplicaciones escalares múltiples (MSMs)
+- emparejamientos
+- suma, multiplicación, inversión escalar
+- hash a un escalar o a un punto
+- y muchas más
+
+Ejemplos de aplicaciones poderosas que se pueden construir encima incluyen:
+
+1. **Rollups de validez** – Consulta el ejemplo del verificador de [`groth16` zkSNARK](#groth16-zksnark-verifier).
+2. **Juegos basados en aleatoriedad** – Consulta el ejemplo del verificador de [`drand`](#verificando-aleatoriedad-desde-el-beacon-drand).
+3. **Aplicaciones de privacidad** – Consulta el ejemplo de `veiled_coin` (#veiled-coins).
+
+### Aritmética de Ristretto255
+
+El módulo [`aptos_std::ristretto255`](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-stdlib/sources/cryptography/ristretto255.move) proporciona soporte para la aritmética de curvas elípticas en la popular [curva Ristretto255](https://ristretto.group/).
+Una de las principales ventajas de Ristretto255 es que es un grupo de orden de primo (a diferencia de la curva Edwards 25519), lo que elimina los ataques de subgrupo pequeño en sistemas criptográficos superiores construidos encima.
+Además, la serialización de Ristretto255 es canónica y la deserialización solo acepta codificaciones canónicas, lo que elimina problemas de malleabilidad en protocolos superiores.
+
+Este módulo ha resultado útil para implementar varias primitivas criptográficas:
+
+1. **Protocolos $\Sigma$-de-conocimiento cero** – Consulta el ejemplo de `veiled_coin` (#veiled-coins).
+2. **Cifrado ElGamal** – Consulta [`aptos_std::ristretto255_elgamal`](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-stdlib/sources/cryptography/ristretto255_elgamal.move)
+3. **Comités de Pedersen** – Consulta [`aptos_std::ristretto255_pedersen`](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-stdlib/sources/cryptography/ristretto255_pedersen.move)
+4. **Pruebas de rango ZK Bulletproofs[^bulletproofs]** – Consulta [`aptos_std::ristretto255_bulletproofs`](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-stdlib/sources/cryptography/ristretto255_bulletproofs.move)
+
+¿Tienes ideas para un sistema criptográfico para construir encima de `ristretto255`?
+Un primitivo popular que podrías construir fácilmente sería el esquema de firma [schnorrkel](https://github.com/w3f/schnorrkel), que es una versión endurecida de firmas de Schnorr sobre grupos Ristretto255.
+
+### Aritmética de curva elíptica genérica
+
+¿Qué es mejor que una curva? Más curvas!
+
+El módulo [`aptos_std::crypto_algebra`](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-stdlib/sources/cryptography/crypto_algebra.move) proporciona operaciones de aritmética de curva elíptica para **cualquier** curva elíptica soportada, incluyendo curvas de emparejamiento.
+Como consecuencia, los desarrolladores de Move pueden implementar un sistema criptográfico de forma genérica sobre **cualquier** curva que sea o que vaya a ser soportada en el futuro.
+Comparado con fijar una curva particular en el código (por ejemplo, implementando contra el [módulo Ristretto255](#aritmética-de-ristretto255)), este enfoque proporciona más flexibilidad y reduce el tiempo de desarrollo al migrar a una curva diferente.
+
+Aunque actualmente el módulo `crypto_algebra` solo soporta aritmética sobre curvas BLS12-381 (a través de los tipos marcadores declarados en [`aptos_std::bls12381_algebra`](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-stdlib/sources/cryptography/bls12381_algebra.move)), más curvas serán soportadas en el futuro (por ejemplo, BN254, Ristretto255, BLS12-377, BW6-761, secp256k1, secp256r1).
+
+Como ejemplo, un desarrollador de Move puede implementar el popular esquema de firma de Boneh-Lynn-Shacham (BLS) de forma genérica sobre **cualquier** curva usando [parámetros de tipo](/es/build/smart-contracts/book/functions#parámetros-de-tipo) para el tipo de curva en su implementación:
+
+```rust
+use std::option;
+use aptos_std::crypto_algebra::{eq, pairing, one, deserialize, hash_to};
+
+/// Ejemplo de una función de verificación de firma BLS que funciona sobre cualquier tripleta de grupos de emparejamiento
+/// `Gr1`, `Gr2`, `GrT` donde las firmas están en `Gr1` y las PKs en `Gr2`.
+/// Los puntos se serializan usando el formato en `FormatG1` y `FormatG2` y el método de hash es `HashMethod`.
+///
+/// ADVERTENCIA: Este ejemplo es de tipo inseguro y probablemente no sea una buena opción para el código de producción.
+public fun bls_verify_sig<Gr1, Gr2, GrT, FormatG1, FormatG2, HashMethod>(
+    dst:        vector<u8>,
+    signature:  vector<u8>,
+    message:    vector<u8>,
+    public_key: vector<u8>): bool
+{
+    let sig  = option::extract(&mut deserialize<Gr1, FormatG1>(&signature));
+    let pk   = option::extract(&mut deserialize<Gr2, FormatG2>(&public_key));
+    let hash = hash_to<Gr1, HashMethod>(&dst, &message);
+
+    // Verifica si $e(H(m), pk) = e(sig, g_2)$, donde $g_2$ genera $\mathbb{G}_2$
+    eq(
+        &pairing<Gr1, Gr2, GrT>(&hash, &pk),
+        &pairing<Gr1, Gr2, GrT>(&sig, &one<Gr2>())
+    )
+}
+```
+
+Usando la función `bls_verify_sig` _genérica_ de arriba, los desarrolladores pueden verificar firmas BLS sobre **cualquier** de las curvas soportadas (de emparejamiento).
+Por ejemplo, uno puede verificar [MinSig BLS](https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-bls-signature-05#name-variants) firmas sobre curvas BLS12-381 llamando a la función anterior con los tipos marcadores BLS12-381 correctos como sus argumentos de tipo:
+
+```rust
+use aptos_std::bls12381_algebra::{
+    G1, G2, Gt, FormatG1Compr, FormatG2Compr, HashG1XmdSha256SswuRo
+};
+
+// Aborta con código 1 si la firma MinSig BLS sobre la curva BLS12-381 falla la verificación.
+assert(
+    bls_verify_sig<G1, G2, Gt, FormatG1Compr, FormatG2Compr, HashG1XmdSha256SswuRo>(
+        dst, signature, message, public_key
+    ),
+    1
+);
+```
+
+Para más casos de uso del módulo `crypto_algebra`, consulta algunos ejemplos de Move:
+
+1. [Verificando pruebas de Groth16 zkSNARK](#groth16-zksnark-verifier) sobre **cualquier** curva
+2. [Verificando aleatoriedad desde el beacon `drand`](#verificando-aleatoriedad-desde-el-beacon-drand)
+
+## Construyendo aplicaciones criptográficas poderosas
+
+### Monedas veladas
+
+El ejemplo de [`veiled_coin`](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-experimental/sources/veiled_coin/) demuestra cómo usar [los módulos Ristretto255 mencionados arriba](#aritmética-de-ristretto255) para agregar una capa razonable de confidencialidad a los saldos y transacciones de monedas.
+
+Específicamente, los usuarios pueden **velar** su saldo, manteniéndolo oculto para todos, incluidos los validadores.
+Además, un usuario puede enviar una **transacción velada** que oculte la cantidad de la transacción para todos, incluidos los validadores.
+Una advertencia importante es que las transacciones veladas **no** ocultan las identidades del remitente o destinatario.
+
+<Aside type="danger">
+  Este módulo es educativo. No está listo para producción. Usar esto podría llevar a la pérdida de fondos.
+</Aside>
+
+### Verificador de Groth16 zkSNARK
+
+El ejemplo de [`groth16`](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/move-examples/groth16_example/sources/groth16.move) demuestra cómo verificar pruebas de Groth16 zkSNARK\[^groth16], que son las pruebas de conocimiento cero más cortas, rápidas de verificar y de propósito general.
+Importante, como se explicó [arriba](#aritmética-de-curva-elíptica-genérica), esta implementación es _genérica_ sobre **cualquier** curva, lo que la hace muy fácil de usar para los desarrolladores de Move con sus curvas favoritas (soportadas).
+
+<Aside type="note">
+  Este código no ha sido auditado por una organización de terceros. Si lo usas en un sistema de producción, procede bajo tu propio riesgo.
+</Aside>
+
+### Verificando aleatoriedad desde el beacon `drand`
+
+El ejemplo de [`drand`](https://github.com/aptos-labs/aptos-core/tree/main/aptos-move/move-examples/drand/sources) muestra cómo verificar aleatoriedad pública desde el [beacon de aleatoriedad de drand](https://drand.love).
+Esta aleatoriedad puede usarse en juegos o cualquier otro contrato inteligente basado en azar.
+Damos un ejemplo simple de una lotería implementada sobre la aleatoriedad de `drand` en [`lottery.move`](https://github.com/aptos-labs/aptos-core/tree/main/aptos-move/move-examples/drand/sources/lottery.move).
+
+<Aside type="note">
+  Este código no ha sido auditado por una organización de terceros. Si lo usas en un sistema de producción, procede bajo tu propio riesgo.
+</Aside>
+
+Otra aplicación que se puede construir encima de `drand` es el cifrado con bloqueo de tiempo\[^tlock], que permite a los usuarios cifrar información de forma que solo pueda ser descifrada en un bloque futuro.
+Actualmente no tenemos una implementación, ¡pero animamos al lector a escribir una!
+
+[^bulletproofs]: _bulletproofs:_ **Bulletproofs: Short Proofs for Confidential Transactions and More**; por B. Bünz y J. Bootle y D. Boneh y A. Poelstra y P. Wuille y G. Maxwell; en 2018 IEEE Symposium on Security and Privacy

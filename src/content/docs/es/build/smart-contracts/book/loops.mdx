@@ -1,0 +1,474 @@
+---
+title: "While, For y Loop"
+description: "Domina las construcciones de bucles en Move incluyendo bucles while, patrones de iteración y flujo de control para contratos inteligentes."
+sidebar:
+  label: "Bucles"
+---
+
+Move ofrece tres construcciones para bucles: `while`, `for` y `loop`.
+
+## Bucles `while`
+
+La construcción `while` repite el cuerpo (una expresión de tipo unit) hasta que la condición (una expresión de tipo `bool`) se evalúe como `false`.
+
+Aquí hay un ejemplo de un bucle `while` simple que calcula la suma de los números del `1` al `n`:
+
+```move
+script {
+  fun sum(n: u64): u64 {
+    let sum = 0;
+    let i = 1;
+    while (i <= n) {
+      sum = sum + i;
+      i = i + 1
+    };
+
+    sum
+  }
+}
+```
+
+Los bucles infinitos están permitidos:
+
+```move
+script {
+  fun foo() {
+    while (true) { }
+  }
+}
+```
+
+### `break`
+
+La expresión `break` puede ser usada para salir de un bucle antes de que la condición se evalúe como `false`. Por ejemplo, este bucle usa `break` para encontrar el factor más pequeño de `n` que sea mayor que 1:
+
+```move
+script {
+  fun smallest_factor(n: u64): u64 {
+    // asumiendo que la entrada no es 0 o 1
+    let i = 2;
+    while (i <= n) {
+      if (n % i == 0) break;
+      i = i + 1
+    };
+
+    i
+  }
+}
+```
+
+La expresión `break` no puede ser usada fuera de un bucle.
+
+### `continue`
+
+La expresión `continue` omite el resto del bucle y continúa a la siguiente iteración. Este bucle usa `continue` para calcular la suma de `1, 2, ..., n`, excepto cuando el número es divisible por 10:
+
+```move
+script {
+  fun sum_intermediate(n: u64): u64 {
+    let sum = 0;
+    let i = 0;
+    while (i < n) {
+      i = i + 1;
+      if (i % 10 == 0) continue;
+      sum = sum + i;
+    };
+
+    sum
+  }
+}
+```
+
+La expresión `continue` no puede ser usada fuera de un bucle.
+
+### El tipo de `break` y `continue`
+
+`break` y `continue`, al igual que `return` y `abort`, pueden tener cualquier tipo. Los siguientes ejemplos ilustran dónde este tipado flexible puede ser útil:
+
+```move
+script {
+  fun pop_smallest_while_not_equal(
+    v1: vector<u64>,
+    v2: vector<u64>,
+  ): vector<u64> {
+    let result = vector::empty();
+    while (!vector::is_empty(&v1) && !vector::is_empty(&v2)) {
+      let u1 = *vector::borrow(&v1, vector::length(&v1) - 1);
+      let u2 = *vector::borrow(&v2, vector::length(&v2) - 1);
+      let popped =
+        if (u1 < u2) vector::pop_back(&mut v1)
+        else if (u2 < u1) vector::pop_back(&mut v2)
+        else break; // Aquí, `break` tiene tipo `u64`
+      vector::push_back(&mut result, popped);
+    };
+
+    result
+  }
+}
+```
+
+## Bucles `for`
+
+_Desde la Versión del Lenguaje 2.0_
+
+Los bucles `for` proporcionan una forma más concisa de iterar sobre rangos o colecciones:
+
+### Iteración sobre Rangos
+
+```move
+script {
+  fun sum_range(start: u64, end: u64): u64 {
+    let sum = 0;
+    for (i in start..end) {
+      sum = sum + i;
+    };
+    sum
+  }
+}
+```
+
+### Iteración sobre Vectores
+
+```move
+script {
+  fun sum_vector(numbers: &vector<u64>): u64 {
+    let sum = 0;
+    for (i in 0..vector::length(numbers)) {
+      sum = sum + *vector::borrow(numbers, i);
+    };
+    sum
+  }
+}
+```
+
+### Con Referencias
+
+```move
+script {
+  fun increment_all(numbers: &mut vector<u64>) {
+    for (i in 0..vector::length(numbers)) {
+      let element = vector::borrow_mut(numbers, i);
+      *element = *element + 1;
+    };
+  }
+}
+```
+
+## Bucles `loop`
+
+Un bucle `loop` es un bucle infinito que debe ser terminado explícitamente con `break`:
+
+```move
+script {
+  fun search_value(values: &vector<u64>, target: u64): u64 {
+    let i = 0;
+    loop {
+      if (i >= vector::length(values)) {
+        abort 1; // valor no encontrado
+      };
+      
+      if (*vector::borrow(values, i) == target) {
+        break i; // devuelve el índice
+      };
+      
+      i = i + 1;
+    }
+  }
+}
+```
+
+### `break` con Valores
+
+Los bucles `loop` pueden devolver valores usando `break`:
+
+```move
+script {
+  fun find_first_even(numbers: &vector<u64>): u64 {
+    let i = 0;
+    loop {
+      if (i >= vector::length(numbers)) {
+        break 0; // valor por defecto si no se encuentra
+      };
+      
+      let value = *vector::borrow(numbers, i);
+      if (value % 2 == 0) {
+        break value; // devuelve el primer número par
+      };
+      
+      i = i + 1;
+    }
+  }
+}
+```
+
+## Etiquetas de Bucle
+
+Para bucles anidados, puedes usar etiquetas para especificar qué bucle romper o continuar:
+
+```move
+script {
+  fun nested_search(matrix: &vector<vector<u64>>, target: u64): (u64, u64) {
+    let i = 0;
+    'outer: loop {
+      if (i >= vector::length(matrix)) {
+        break 'outer (0, 0); // no encontrado
+      };
+      
+      let row = vector::borrow(matrix, i);
+      let j = 0;
+      'inner: loop {
+        if (j >= vector::length(row)) {
+          break 'inner;
+        };
+        
+        if (*vector::borrow(row, j) == target) {
+          break 'outer (i, j); // encontrado en (i, j)
+        };
+        
+        j = j + 1;
+      };
+      
+      i = i + 1;
+    }
+  }
+}
+```
+
+## Ejemplos Prácticos
+
+### Búsqueda en Vector
+
+```move
+public fun find_index(values: &vector<u64>, target: u64): u64 {
+    let i = 0;
+    while (i < vector::length(values)) {
+        if (*vector::borrow(values, i) == target) {
+            return i;
+        };
+        i = i + 1;
+    };
+    abort E_NOT_FOUND
+}
+```
+
+### Validación de Todos los Elementos
+
+```move
+public fun all_positive(numbers: &vector<u64>): bool {
+    let i = 0;
+    while (i < vector::length(numbers)) {
+        if (*vector::borrow(numbers, i) == 0) {
+            return false;
+        };
+        i = i + 1;
+    };
+    true
+}
+```
+
+### Procesamiento con Acumulador
+
+```move
+public fun calculate_total_with_discount(
+    prices: &vector<u64>,
+    discount_rate: u64
+): u64 {
+    let total = 0;
+    let i = 0;
+    
+    while (i < vector::length(prices)) {
+        let price = *vector::borrow(prices, i);
+        let discounted = price * (100 - discount_rate) / 100;
+        total = total + discounted;
+        i = i + 1;
+    };
+    
+    total
+}
+```
+
+### Filtrado y Transformación
+
+```move
+public fun filter_and_double_evens(numbers: &vector<u64>): vector<u64> {
+    let result = vector::empty<u64>();
+    let i = 0;
+    
+    while (i < vector::length(numbers)) {
+        let num = *vector::borrow(numbers, i);
+        if (num % 2 == 0) {
+            vector::push_back(&mut result, num * 2);
+        };
+        i = i + 1;
+    };
+    
+    result
+}
+```
+
+### Búsqueda con Condición Compleja
+
+```move
+public fun find_user_by_criteria(
+    users: &vector<User>,
+    min_age: u8,
+    required_status: u8
+): u64 {
+    let i = 0;
+    loop {
+        if (i >= vector::length(users)) {
+            abort E_USER_NOT_FOUND;
+        };
+        
+        let user = vector::borrow(users, i);
+        if (user.age >= min_age && user.status == required_status) {
+            break i;
+        };
+        
+        i = i + 1;
+    }
+}
+```
+
+### Procesamiento por Lotes
+
+```move
+public fun process_in_batches(
+    items: &mut vector<Item>,
+    batch_size: u64
+) {
+    let i = 0;
+    while (i < vector::length(items)) {
+        let batch_end = if (i + batch_size < vector::length(items)) {
+            i + batch_size
+        } else {
+            vector::length(items)
+        };
+        
+        // Procesar lote actual
+        let j = i;
+        while (j < batch_end) {
+            let item = vector::borrow_mut(items, j);
+            process_item(item);
+            j = j + 1;
+        };
+        
+        i = batch_end;
+    }
+}
+```
+
+## Buenas Prácticas
+
+### 1. Elige el Tipo de Bucle Correcto
+
+```move
+// ✓ Bueno: for loop para iteraciones simples
+for (i in 0..length) {
+    process(i);
+}
+
+// ✓ Bueno: while loop para condiciones complejas
+while (has_more_data() && !error_occurred()) {
+    process_data();
+}
+
+// ✓ Bueno: loop para bucles infinitos controlados
+loop {
+    let input = get_next_input();
+    if (input == EXIT_CODE) break;
+    process(input);
+}
+```
+
+### 2. Evita Bucles Infinitos Accidentales
+
+```move
+// ✓ Bueno: asegúrate de que la condición eventualmente sea falsa
+let mut i = 0;
+while (i < limit) {
+    // ... hacer trabajo ...
+    i = i + 1; // importante: actualizar la variable de control
+}
+
+// ✗ Peligroso: posible bucle infinito
+let mut i = 0;
+while (i < limit) {
+    // ... hacer trabajo ...
+    // ¡olvidé incrementar i!
+}
+```
+
+### 3. Usa `break` y `continue` Estratégicamente
+
+```move
+// ✓ Bueno: early exit para eficiencia
+for (i in 0..vector::length(items)) {
+    let item = vector::borrow(items, i);
+    if (item.is_target()) {
+        break; // encontrado, no necesitamos seguir buscando
+    }
+}
+
+// ✓ Bueno: skip processing para casos especiales
+for (i in 0..vector::length(items)) {
+    let item = vector::borrow(items, i);
+    if (item.should_skip()) {
+        continue; // skip este item
+    }
+    process_item(item);
+}
+```
+
+### 4. Limita el Alcance de Variables de Bucle
+
+```move
+// ✓ Bueno: variable limitada al bucle
+{
+    let mut sum = 0;
+    for (i in 0..count) {
+        sum = sum + calculate_value(i);
+    }
+    // sum sale de alcance aquí
+}
+
+// usar sum aquí causaría error de compilación
+```
+
+### 5. Maneja Casos Límite
+
+```move
+// ✓ Bueno: verifica vectores vacíos
+public fun safe_process(items: &vector<Item>) {
+    if (vector::is_empty(items)) {
+        return; // maneja el caso vacío
+    }
+    
+    let i = 0;
+    while (i < vector::length(items)) {
+        // proceso seguro
+        i = i + 1;
+    }
+}
+```
+
+### 6. Usa Constantes para Límites
+
+```move
+const MAX_ITERATIONS: u64 = 1000;
+const BATCH_SIZE: u64 = 100;
+
+public fun bounded_loop() {
+    let mut iterations = 0;
+    loop {
+        if (iterations >= MAX_ITERATIONS) {
+            abort E_TOO_MANY_ITERATIONS;
+        }
+        
+        // ... hacer trabajo ...
+        iterations = iterations + 1;
+        
+        if (done()) break;
+    }
+}
+```

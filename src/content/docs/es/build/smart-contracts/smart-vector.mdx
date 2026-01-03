@@ -1,0 +1,200 @@
+---
+title: "Smart Vector"
+description: "Aprende sobre los Smart Vectors en Move para manejo eficiente de colecciones en contratos inteligentes de Aptos."
+sidebar:
+  label: "Smart Vector"
+---
+
+El Smart Vector es una implementación de vector escalable basada en `tables`, donde los elementos se agrupan en buckets. Esta estructura de datos permite el manejo eficiente de grandes conjuntos de datos combinando la flexibilidad de vectores pequeños con la escalabilidad de estructuras más grandes.
+
+## Características Core de `SmartVector`
+
+### Estructura
+
+El struct `SmartVector` está diseñado para manejar datos dinámicos con eficiencia:
+
+- `inline_vec`: Un vector pequeño que almacena elementos directamente.
+- `big_vec`: Un vector grande opcional para almacenamiento escalable.
+- `inline_capacity`: Un valor opcional que define la capacidad de `inline_vec`.
+- `bucket_size`: Un valor opcional que define el tamaño de los buckets en `big_vec`.
+
+### Constantes
+
+Las siguientes constantes definen varios códigos de error usados dentro del módulo:
+
+- `EINDEX_OUT_OF_BOUNDS`: 1
+- `EVECTOR_NOT_EMPTY`: 2
+- `EVECTOR_EMPTY`: 3
+- `EZERO_BUCKET_SIZE`: 4
+- `ESMART_VECTORS_LENGTH_MISMATCH`: 0x20005
+
+## Resumen de la API
+
+### Creando Vectores
+
+- `new<T: store>(): SmartVector<T>`: Crea un vector vacío.
+- `empty_with_config<T: store>(inline_capacity: u64, bucket_size: u64): SmartVector<T>`: Crea un vector vacío con capacidad personalizada y tamaño de bucket.
+- `singleton<T: store>(element: T): SmartVector<T>`: Crea un vector con un solo elemento.
+
+### Destruyendo Vectores
+
+- `destroy_empty<T>(v: SmartVector<T>)`: Destruye un vector vacío.
+- `destroy<T: drop>(v: SmartVector<T>)`: Destruye un vector y sus elementos.
+
+### Gestionando Elementos
+
+- `push_back<T: store>(v: &mut SmartVector<T>, val: T)`: Agrega un elemento al final del vector.
+- `pop_back<T>(v: &mut SmartVector<T>): T`: Remueve el último elemento del vector.
+- `remove<T>(v: &mut SmartVector<T>, i: u64): T`: Remueve un elemento en un índice específico.
+- `swap_remove<T>(v: &mut SmartVector<T>, i: u64): T`: Intercambia un elemento en un índice específico con el último elemento y lo remueve.
+- `borrow<T>(v: &SmartVector<T>, i: u64): &T`: Retorna una referencia inmutable a un elemento en un índice específico.
+- `borrow_mut<T>(v: &mut SmartVector<T>, i: u64): &mut T`: Retorna una referencia mutable a un elemento en un índice específico.
+
+### Funciones de Utilidad
+
+- `length<T>(v: &SmartVector<T>): u64`: Retorna el número de elementos en el vector.
+- `is_empty<T>(v: &SmartVector<T>): bool`: Verifica si el vector está vacío.
+- `clear<T: drop>(v: &mut SmartVector<T>)`: Limpia todos los elementos del vector.
+- `to_vector<T: store + copy>(v: &SmartVector<T>): vector<T>`: Convierte un smart vector a un vector nativo.
+
+## Ejemplo de Uso
+
+### Creando y Usando un SmartVector
+
+```move filename="smart_vector.move"
+module 0x42::smart_vector_usage {
+    use aptos_std::smart_vector;
+
+    public entry fun main() {
+        let v = smart_vector::new<u64>();
+        smart_vector::push_back(&mut v, 10);
+        smart_vector::push_back(&mut v, 20);
+        let length = smart_vector::length(&v);
+        assert!(length == 2, 0);
+        let first_elem = smart_vector::borrow(&v, 0);
+        assert!(*first_elem == 10, 0);
+        let second_elem = smart_vector::borrow(&v, 1);
+        assert!(*second_elem == 20, 0);
+        let last_elem = smart_vector::pop_back(&mut v);
+        assert!(last_elem == 20, 0);
+        smart_vector::destroy_empty(v);
+    }
+}
+```
+
+### Agregando Vectores
+
+```move filename="smart_vector.move"
+module 0x42::smart_vector_usage {
+    use aptos_std::smart_vector;
+
+    public fun append_vectors() {
+        let v1 = smart_vector::new<u64>();
+        let v2 = smart_vector::new<u64>();
+
+        smart_vector::push_back(&mut v1, 1);
+        smart_vector::push_back(&mut v1, 2);
+
+        smart_vector::push_back(&mut v2, 3);
+        smart_vector::push_back(&mut v2, 4);
+
+        smart_vector::append(&mut v1, v2);
+
+        let length = smart_vector::length(&v1);
+        assert!(length == 4, 0);
+
+        let first_elem = smart_vector::borrow(&v1, 0);
+        assert!(*first_elem == 1, 0);
+
+        let second_elem = smart_vector::borrow(&v1, 1);
+        assert!(*second_elem == 2, 0);
+
+        let third_elem = smart_vector::borrow(&v1, 2);
+        assert!(*third_elem == 3, 0);
+
+        let fourth_elem = smart_vector::borrow(&v1, 3);
+        assert!(*fourth_elem == 4, 0);
+    }
+}
+```
+
+### Removiendo Elementos
+
+```move filename="smart_vector.move"
+module 0x42::smart_vector_usage {
+    use aptos_std::smart_vector;
+
+    public fun remove_elements() {
+        let v = smart_vector::new<u64>();
+
+        smart_vector::push_back(&mut v, 1);
+        smart_vector::push_back(&mut v, 2);
+        smart_vector::push_back(&mut v, 3);
+
+        let removed_elem = smart_vector::remove(&mut v, 1);
+        assert!(removed_elem == 2, 0);
+
+        let length = smart_vector::length(&v);
+        assert!(length == 2, 0);
+
+        let first_elem = smart_vector::borrow(&v, 0);
+        assert!(*first_elem == 1, 0);
+
+        let second_elem = smart_vector::borrow(&v, 1);
+        assert!(*second_elem == 3, 0);
+    }
+}
+```
+
+### Limpiando el Vector
+
+```move filename="smart_vector.move"
+module 0x42::smart_vector_usage {
+    use aptos_std::smart_vector;
+
+    public fun clear_vector() {
+        let v = smart_vector::new<u64>();
+
+        smart_vector::push_back(&mut v, 1);
+        smart_vector::push_back(&mut v, 2);
+        smart_vector::push_back(&mut v, 3);
+
+        smart_vector::clear(&mut v);
+        let length = smart_vector::length(&v);
+        assert!(length == 0, 0);
+    }
+}
+```
+
+### Intercambiando Elementos
+
+```move filename="smart_vector.move"
+module 0x42::smart_vector_usage {
+    use aptos_std::smart_vector;
+
+    public fun swap_elements() {
+        let v = smart_vector::new<u64>();
+
+        smart_vector::push_back(&mut v, 1);
+        smart_vector::push_back(&mut v, 2);
+        smart_vector::push_back(&mut v, 3);
+
+        smart_vector::swap(&mut v, 0, 2);
+
+        let first_elem = smart_vector::borrow(&v, 0);
+        assert!(*first_elem == 3, 0);
+
+        let third_elem = smart_vector::borrow(&v, 2);
+        assert!(*third_elem == 1, 0);
+    }
+}
+```
+
+## Código Fuente
+
+- [smart\_vector.move](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-stdlib/sources/data_structures/smart_vector.move)
+
+## Otros Ejemplos
+
+- [tutorial de move spiders sobre smart vectors](https://movespiders.com/courses/modules/datastructures/lessonId/6)
+- [tutorial de move spiders sobre consultando smart vectors](https://movespiders.com/courses/modules/datastructures/lessonId/9)

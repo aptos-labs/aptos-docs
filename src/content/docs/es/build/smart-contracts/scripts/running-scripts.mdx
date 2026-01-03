@@ -1,0 +1,106 @@
+---
+title: "Ejecutar Scripts de Move"
+description: "Aprende cómo ejecutar scripts de Move en la blockchain de Aptos para operaciones de una sola vez y transacciones complejas."
+sidebar:
+  label: "Ejecutar Scripts"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Los scripts de Move son soportados en el SDK de TypeScript de Aptos, Adaptador de Billetera de Aptos,
+y en el CLI de Aptos.
+
+## Ejecutar scripts con el SDK de TypeScript
+
+Para usar un script con el SDK de TypeScript, agrega el `bytecode` directamente a la
+transacción en lugar de un nombre de función de entrada.
+
+```typescript
+import { readFileSync } from "fs";
+import { Aptos, Account, AccountAddress } from "@aptos-labs/ts-sdk";
+
+// Configurar cliente, y cuenta para firmar
+const aptos = new Aptos();
+const account = Account.generate();
+
+// Cargar bytecode del script
+const buffer = readFileSync("./transfer_half.mv", "buffer");
+const bytecode = new Uint8Array.from(buffer);
+
+// Construir una transacción con el bytecode del script
+const transaction = await aptos.transaction.build.simple({
+  sender: account.accountAddress,
+  data: {
+    bytecode,
+    typeArguments: [parseTypeTag("0x1::aptos_coin::AptosCoin")],
+    functionArguments: [AccountAddress.from("0x1")],
+  },
+});
+
+// Enviar y esperar a que la transacción se complete
+const pendingTxn = await aptos.signAndSubmitTransaction({
+  signer: account,
+  transaction,
+});
+await aptos.waitForTransaction({ transactionHash: pendingTxn.hash });
+```
+
+## Ejecutar scripts con el Adaptador de Billetera de Aptos
+
+<Aside type="caution">
+  No todas las billeteras soportan scripts, pero cuando la billetera soporta scripts, puede ser
+  proporcionado como abajo
+</Aside>
+
+Similar al SDK de TypeScript, las mismas entradas son aceptadas como un tipo de transacción
+en el adaptador de billetera. Simplemente carga el bytecode como una `string` hex o
+un `uint8array`.
+
+```typescript
+import { useWallet } from "@aptos-labs/wallet-adapter-react";
+
+//...
+
+// Cargar el bytecode ya sea como un uint8array o una cadena codificada en hex
+const BYTECODE_IN_HEX = "0xa11ceb0b...78979";
+
+export default function App() {
+  const { signAndSubmitTransaction } = useWallet();
+
+  function submitScript() {
+    signAndSubmitTransaction({
+      data: {
+        bytecode: BYTECODE_IN_HEX,
+        typeArguments: [parseTypeTag("0x1::aptos_coin::AptosCoin")],
+        functionArguments: [AccountAddress.from("0x1")],
+      },
+    });
+  }
+
+  // ...
+}
+```
+
+## Ejecutar scripts con el CLI
+
+Ejecutar scripts con el CLI puede ejecutarse con el comando
+
+```shellscript filename="Terminal"
+aptos move run-script
+```
+
+Hay dos formas de ejecutarlo, con un script pre-compilado, o compilará el
+script en el lugar similar al paso de compilación.
+
+Si ya tienes un script compilado, puedes ejecutarlo
+con `--compiled-script-path` como el ejemplo abajo:
+
+```shellscript filename="Terminal"
+aptos move run-script --compiled-script-path /opt/git/developer-docs/apps/docusaurus/static/move-examples/scripts/transfer_half/script.mv
+```
+
+De manera similar, si no está compilado, simplemente usa `--script-path`
+
+```shellscript filename="Terminal"
+aptos move run-script --script-path ./sources/transfer_half.move
+```

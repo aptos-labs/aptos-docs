@@ -1,0 +1,64 @@
+---
+title: "Construir con Objetos"
+description: "Aprende cómo construir con objetos de Aptos para el desarrollo de contratos inteligentes."
+sidebar:
+  label: "Objetos"
+---
+
+En Move, los Objetos agrupan recursos juntos para que puedan ser tratados como una sola entidad en la cadena.
+
+Los Objetos tienen su propia dirección y pueden poseer recursos similar a una cuenta. Son útiles para representar tipos de datos más complicados en la cadena ya que los Objetos pueden ser usados en funciones de entrada directamente, y pueden ser transferidos como paquetes completos en lugar de un recurso a la vez.
+
+Aquí hay un ejemplo de crear un Objeto y transferirlo:
+
+```move filename="Example.move"
+module my_addr::object_playground {
+  use std::signer;
+  use std::string::{Self, String};
+  use aptos_framework::object::{Self, ObjectCore};
+
+  struct MyStruct1 has key {
+    message: String,
+  }
+
+  struct MyStruct2 has key {
+    message: String,
+  }
+
+  entry fun create_and_transfer(caller: &signer, destination: address) {
+    // Create object
+    let caller_address = signer::address_of(caller);
+    let constructor_ref = object::create_object(caller_address);
+    let object_signer = object::generate_signer(&constructor_ref);
+
+    // Set up the object by creating 2 resources in it
+    move_to(&object_signer, MyStruct1 {
+      message: string::utf8(b"hello")
+    });
+    move_to(&object_signer, MyStruct2 {
+      message: string::utf8(b"world")
+    });
+
+    // Transfer to destination
+    let object = object::object_from_constructor_ref<ObjectCore>(
+      &constructor_ref
+    );
+    object::transfer(caller, object, destination);
+  }
+}
+```
+
+Durante la construcción, los Objetos pueden ser configurados para ser transferibles y extensibles.
+
+Por ejemplo, podrías usar un Objeto para representar un NFT soulbound haciéndolo solo transferible una vez, y que posea recursos para un enlace de imagen y metadatos. Los Objetos también pueden poseer otros Objetos, así que podrías implementar tu propio Objeto de colección NFT transfiriendo varios de los NFTs soulbound a él.
+
+## Aprende cómo
+
+- [Crear y configurar un nuevo Objeto.](/es/build/smart-contracts/object/creating-objects)
+- [Usar Objetos que creaste.](/es/build/smart-contracts/object/using-objects)
+
+## Ejemplos con contratos de Objetos
+
+- [Ejemplo de Mercado de Activos Digitales](https://github.com/aptos-labs/aptos-core/tree/main/aptos-move/move-examples/marketplace)
+- [Ejemplos de Activos Digitales](https://github.com/aptos-labs/aptos-core/tree/main/aptos-move/move-examples/token_objects)
+- [Ejemplos de Activos Fungibles](https://github.com/aptos-labs/aptos-core/tree/main/aptos-move/move-examples/fungible_asset)

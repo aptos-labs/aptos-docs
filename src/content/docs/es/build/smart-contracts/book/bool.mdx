@@ -1,0 +1,100 @@
+---
+title: "Bool"
+description: "Aprende sobre el tipo bool en el lenguaje de programación Move para el desarrollo de contratos inteligentes en Aptos."
+sidebar:
+  label: "Booleano"
+---
+
+`bool` es el tipo primitivo de Move para valores booleanos `true` y `false`.
+
+## Literales
+
+Los literales para `bool` son `true` o `false`.
+
+## Operaciones
+
+### Lógicas
+
+`bool` soporta tres operaciones lógicas:
+
+| Sintaxis | Descripción                | Expresión Equivalente                            |
+| -------- | -------------------------- | ------------------------------------------------ |
+| `&&`     | y lógico con cortocircuito | `p && q` es equivalente a `if (p) q else false`  |
+| `\|\|`   | o lógico con cortocircuito | `p \|\| q` es equivalente a `if (p) true else q` |
+| `!`      | negación lógica            | `!p` es equivalente a `if (p) false else true`   |
+
+### Flujo de Control
+
+Los valores `bool` se usan en varias construcciones de flujo de control de Move:
+
+- [`if (bool) { ... }`](/es/build/smart-contracts/book/conditionals)
+- [`while (bool) { .. }`](/es/build/smart-contracts/book/loops)
+- [`assert!(bool, u64)`](/es/build/smart-contracts/book/abort-and-assert)
+
+## Propiedad
+
+Al igual que con los otros valores escalares integrados en el lenguaje, los valores booleanos son implícitamente copiables, lo que significa que se pueden copiar sin una instrucción explícita como [`copy`](/es/build/smart-contracts/book/variables#move-and-copy).
+
+## Ejemplos
+
+### Operaciones Básicas
+
+```move
+fun boolean_examples() {
+    let x: bool = true;
+    let y: bool = false;
+    
+    // Operaciones lógicas
+    let and_result = x && y;     // false
+    let or_result = x || y;      // true
+    let not_result = !x;         // false
+}
+```
+
+### En Condicionales
+
+```move
+fun conditional_example(condition: bool) {
+    if (condition) {
+        // hacer algo si es verdadero
+    } else {
+        // hacer algo si es falso
+    }
+}
+```
+
+### Con Assert
+
+```move
+fun assert_example(value: u64) {
+    assert!(value > 0, 1); // Aborta con código 1 si value no es mayor que 0
+}
+```
+
+### Cortocircuito
+
+```move
+fun short_circuit_examples(x: u64) {
+    // El cortocircuito previene la evaluación de la segunda expresión si la primera es suficiente
+    let result1 = (x > 0) && (100 / x > 5); // Seguro: no divide por cero si x es 0
+    let result2 = (x == 0) || (100 / x > 5); // Seguro: no divide por cero si x es 0
+}
+```
+
+## Características Importantes
+
+1. **Cortocircuito**: Los operadores `&&` y `||` usan evaluación de cortocircuito, lo que significa que el segundo operando solo se evalúa si es necesario.
+
+2. **Sin conversión automática**: Move no convierte automáticamente otros tipos a `bool`. Debes usar comparaciones explícitas:
+
+```move
+// ✗ Incorrecto
+if (x) { ... }  // Error: x debe ser bool
+
+// ✓ Correcto  
+if (x != 0) { ... }  // Compara explícitamente x con 0
+```
+
+3. **Copiable implícitamente**: Los valores `bool` se pueden copiar libremente sin usar la palabra clave `copy`.
+
+4. **Inmutable**: Los valores `bool` son inmutables una vez creados, pero las variables que los contienen pueden ser reasignadas.

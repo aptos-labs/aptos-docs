@@ -1,0 +1,249 @@
+---
+title: "Estándar de Wallet de Aptos"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+{/* TODO: Consolidar con adaptador de wallet */}
+
+El estándar de wallet proporciona pautas para la interoperabilidad entre tipos de wallet.
+Esto asegura que los desarrolladores de dapps no necesiten cambiar sus aplicaciones para
+manejar diferentes wallets. Este estándar ofrece una interfaz única para todos los desarrolladores
+de dapps, permitiendo adiciones fáciles de nuevas wallets y más usuarios a cada
+aplicación. Esta interoperabilidad permite a los usuarios elegir qué wallet quieren
+sin preocuparse por si las apps soportan sus casos de uso.
+
+Para asegurar la interoperabilidad entre wallets de Aptos, se requiere lo siguiente:
+
+1. Mnemónicos - un conjunto de palabras que se pueden usar para derivar claves privadas de cuenta
+2. API de dapp - puntos de entrada a la wallet para soportar acceso a identidad gestionada
+   por la wallet
+3. Rotación de claves - la característica que maneja tanto la relación alrededor de mnemónicos
+   como la recuperación de cuentas en diferentes wallets
+
+## Frases mnemónicas
+
+Una frase mnemónica es una frase de múltiples palabras que se puede usar para generar direcciones
+de cuenta. Recomendamos un mnemónico por cuenta para manejar mejor la rotación de claves.
+Sin embargo, algunas wallets pueden querer soportar un mnemónico para muchas cuentas
+provenientes de otras cadenas. Para soportar ambos casos de uso, el estándar de wallet de Aptos
+usa una [Propuesta de Mejora de Bitcoin (BIP44)](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki) para derivar el path para
+mnemónicos a cuentas.
+
+### Crear una cuenta de Aptos
+
+La creación de cuentas de Aptos se puede soportar entre wallets de la siguiente manera:
+
+1. Generar una frase mnemónica, por ejemplo con BIP39.
+2. Obtener la semilla maestra de esa frase mnemónica.
+3. Usar el path derivado de BIP44 para recuperar una dirección de cuenta (ej. `m/44'/637'/0'/0'/0'`)
+
+- Ver la [implementación del SDK de TypeScript de Aptos para el path de derivación](https://github.com/aptos-labs/aptos-ts-sdk/blob/main/src/account/Account.ts#L181-L202)
+- Por ejemplo, Petra Wallet siempre usa el path `m/44'/637'/0'/0'/0'` ya que
+  hay un mnemónico por una cuenta.
+
+```typescript
+/**
+  * Crea una nueva cuenta con path bip44 y mnemónicos,
+  * @param path. (ej. m/44'/637'/0'/0'/0')
+  * Descripción detallada: {@link https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki}
+  * @param mnemonics.
+  * @returns AptosAccount
+  */
+  static fromDerivePath(path: string, mnemonics: string): AptosAccount {
+   if (!AptosAccount.isValidPath(path)) {
+     throw new Error("Invalid derivation path");
+   }
+
+   const normalizeMnemonics = mnemonics
+     .trim()
+     .split(/\s+/)
+     .map((part) => part.toLowerCase())
+     .join(" ");
+
+   const { key } = derivePath(path, bytesToHex(bip39.mnemonicToSeedSync(normalizeMnemonics)));
+
+   return new AptosAccount(new Uint8Array(key));
+}
+```
+
+### Soportar un mnemónico por wallets de múltiples cuentas
+
+Esto no se recomienda porque el paradigma de un-mnemónico-a-muchas-cuentas hace
+más difícil manejar claves rotadas (el mnemónico cambia para una cuenta pero no
+para otras). Sin embargo, muchas wallets de otros ecosistemas usan este paradigma, y toman
+estos pasos para generar cuentas
+
+1. Generar una frase mnemónica, por ejemplo con BIP39.
+2. Obtener la semilla maestra de esa frase mnemónica.
+3. Usar el path derivado de BIP44 para recuperar claves privadas (ej. `m/44'/637'/i'/0'/0'`)
+   donde `i` es el índice de la cuenta.
+
+- Ver la [implementación del SDK de TypeScript de Aptos para el path de derivación](https://github.com/aptos-labs/aptos-core/blob/1bc5fd1f5eeaebd2ef291ac741c0f5d6f75ddaef/ecosystem/typescript/sdk/src/aptos_account.ts#L49-L69)
+
+4. Incrementar `i` hasta que se encuentren todas las cuentas que el usuario quiere importar.
+
+- Nota: La iteración debe ser limitada, si una cuenta no existe durante
+  la iteración, continúa iterando por un `address_gap_limit` constante (10 por ahora) para ver
+  si hay otras cuentas. Si se encuentra una cuenta continuaremos a
+  iterar normalmente.
+
+ej.
+
+```typescript
+const gapLimit = 10;
+let currentGap = 0;
+
+for (let i = 0; currentGap < gapLimit; i += 1) {
+  const derivationPath = `m/44'/637'/${i}'/0'/0'`;
+  const account = fromDerivePath(derivationPath, mnemonic);
+  const response = account.getResources();
+  if (response.status !== 404) {
+    wallet.addAccount(account);
+    currentGap = 0;
+  } else {
+    currentGap += 1;
+  }
+}
+```
+
+## Wallet y comunicación de dapp
+
+Más importante que la creación de cuentas, es cómo las wallets y las dapps se comunican.
+
+[Siguiendo AIP-62](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-62.md), el estándar de Wallet define una API para la interacción entre wallet y aplicación.
+
+### Interfaz de Wallet Estándar
+
+Una wallet debe implementar una [interfaz AptosWallet](https://github.com/aptos-labs/wallet-standard/blob/main/src/wallet.ts) con la información del proveedor de wallet y las características:
+
+```typescript
+class MyWallet implements AptosWallet {
+  url: string;
+  version: "1.0.0";
+  name: string;
+  icon:
+    | `data:image/svg+xml;base64,${string}`
+    | `data:image/webp;base64,${string}`
+    | `data:image/png;base64,${string}`
+    | `data:image/gif;base64,${string}`;
+  chains: AptosChain;
+  features: AptosFeatures;
+  accounts: readonly AptosWalletAccount[];
+}
+```
+
+Una wallet debe implementar una [interfaz AptosWalletAccount](https://github.com/aptos-labs/wallet-standard/blob/main/src/account.ts) que representa las cuentas que han sido autorizadas por la dapp.
+
+```typescript
+enum AptosAccountVariant {
+  Ed25519,
+  MultiEd25519,
+  SingleKey,
+  MultiKey,
+}
+
+class AptosWalletAccount implements WalletAccount {
+  address: string;
+
+  publicKey: Uint8Array;
+
+  chains: AptosChain;
+
+  features: AptosFeatures;
+
+  variant: AptosAccountVariant;
+
+  label?: string;
+
+  icon?:
+    | `data:image/svg+xml;base64,${string}`
+    | `data:image/webp;base64,${string}`
+    | `data:image/png;base64,${string}`
+    | `data:image/gif;base64,${string}`
+    | undefined;
+}
+```
+
+Si la wallet es una wallet de extensión web (es decir, instalada a través de la tienda de extensiones de Chrome), la wallet debe registrar su propio uso usando el método [registerWallet](https://github.com/wallet-standard/wallet-standard/blob/master/packages/core/wallet/src/register.ts#L25) para notificar a la dapp que está lista para ser usada.
+
+```typescript
+const myWallet = new MyWallet();
+
+registerWallet(myWallet);
+```
+
+Una wallet se considera una wallet de Aptos válida si implementa las [características requeridas](https://github.com/aptos-labs/wallet-standard/blob/main/src/detect.ts#L16).
+
+Una wallet debe lanzar un [AptosWalletError](https://github.com/aptos-labs/wallet-standard/blob/main/src/errors.ts). El estándar requiere soportar `Unauthorized` y `InternalError`, pero una wallet puede lanzar un error `AptosWalletError` personalizado
+
+```typescript
+// Usando el mensaje por defecto
+if (error) {
+  throw new AptosWalletError(AptosWalletErrorCode.Unauthorized);
+}
+// Usando un mensaje personalizado
+if (error) {
+  throw new AptosWalletError(
+    AptosWalletErrorCode.Unauthorized,
+    "Mi mensaje de no autorizado personalizado"
+  );
+}
+// Usando un error personalizado
+if (error) {
+  throw new AptosWalletError(-32000, "Entrada inválida");
+}
+```
+
+### API de dapp
+
+<Aside type="note">
+  Para que una dapp sea fácilmente integrable con una wallet, se recomienda usar el [Estándar de Adaptador de Wallet de Aptos](/es/build/sdks/wallet-adapter).
+</Aside>
+
+Si por alguna razón, una dapp decide implementar una integración de wallet personalizada:
+
+Una dapp usa la función [getAptosWallets()](https://github.com/aptos-labs/wallet-standard/blob/main/src/detect.ts#L40) que obtiene todas las wallets de Aptos estándar compatibles.
+
+```typescript
+import { getAptosWallets } from "@aptos-labs/wallet-standard";
+
+let { aptosWallets, on } = getAptosWallets();
+```
+
+En la primera carga, y antes de que la dapp haya sido cargada, obtiene todas las wallets que han sido registradas hasta ahora. Para seguir obteniendo todas las wallets registradas después de este punto, la dapp debe añadir un listener para nuevas wallets que se registran, recibiendo una función de desuscripción, que puede usar más tarde para eliminar el listener.
+
+```typescript
+const removeRegisterListener = on("register", function () {
+  // La dapp puede añadir nuevas wallets de aptos a su propio contexto de estado a medida que se registran
+  let { aptosWallets } = getAptosWallets();
+});
+
+const removeUnregisterListener = on("unregister", function () {
+  let { aptosWallets } = getAptosWallets();
+});
+```
+
+La dapp tiene ahora un listener, por lo que ve nuevas wallets inmediatamente y no necesita pollarlas o enumerarlas de nuevo. Esto también funciona si la dapp carga antes de que ninguna wallet (inicializará, verá ninguna wallet, luego verá las wallets a medida que se cargan)
+
+Una dapp hace una solicitud de wallet llamando el nombre de la característica que corresponde a la acción deseada. Por ejemplo, para usar la característica `connect`:
+
+```typescript
+const onConnect = () => {
+  this.wallet.features["aptos:connect"].connect();
+};
+```
+
+## Rotación de claves
+
+La rotación de claves actualmente no está implementada en ninguna wallet. La asignación de claves rotadas ha sido [implementada](https://github.com/aptos-labs/aptos-core/pull/2972), pero la integración del SDK está en curso.
+
+Las wallets que importan una clave privada tendrán que hacer lo siguiente:
+
+1. Derivar la clave de autenticación.
+2. Buscar la clave de autenticación en la tabla de origen de la cuenta en la cadena.
+
+- Si la cuenta no existe, es una nueva cuenta. La dirección a usar es
+  la clave de autenticación.
+- Si la cuenta existe, es una cuenta de clave rotada, y la dirección a usar
+  vendrá de la tabla.

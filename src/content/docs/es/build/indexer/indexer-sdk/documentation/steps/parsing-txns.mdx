@@ -1,0 +1,90 @@
+---
+title: "Parsear Transacciones"
+description: "Parsea y extrae datos de transacciones de la blockchain de Aptos usando pasos de procesador con filtrado de eventos y transformación de datos"
+sidebar:
+  label: "Parsear Transacciones"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+{/* <IndexerBetaNotice /> */}
+
+{/* <!--
+  Things to add:
+  - We should have tabs for each language that mentions helper functions for extracting the thing you want. For example, if the user is trying to extract the entry function arguments, there should be a function like `get_entry_function_arguments` and we show how to use it in each language and where it comes from in the SDK.
+  --> */}
+
+Fundamentalmente un procesador indexer es solo algo que consume un flujo de transacciones y escribe datos procesados al almacenamiento. Vamos a profundizar en qué es una transacción y qué tipo de información puedes extraer de una.
+
+## ¿Qué es una transacción?
+
+Una transacción es una unidad de ejecución en la blockchain de Aptos. Si la ejecución del programa en una transacción (ej. comenzando con una función de entrada en un módulo Move) es exitosa, el cambio resultante en estado será aplicado al ledger. Aprende más sobre el ciclo de vida de transacciones en [esta página](/es/network/blockchain/blockchain-deep-dive#life-of-a-transaction).
+
+Hay cuatro tipos de transacciones en Aptos:
+
+- Genesis
+- Transacciones de metadatos de bloque
+- Transacciones de checkpoint de estado
+- Transacciones de usuario
+
+Los primeros 3 de estos son internos al sistema y no son relevantes para la mayoría de procesadores; no los cubrimos en esta guía.
+
+Generalmente hablando, la mayoría de transacciones de usuario se originan de un usuario llamando una función de entrada en un módulo Move desplegado en cadena, por ejemplo `0x1::coin::transfer`. En todos los otros casos se originan de [scripts Move](/es/build/smart-contracts/scripts). Puedes aprender más sobre los diferentes tipos de transacciones [aquí](/es/network/blockchain/txns-states#types-of-transaction-payloads).
+
+Una transacción de usuario que un procesador maneja contiene una variedad de información. A alto nivel contiene:
+
+- El payload que fue enviado.
+- Los cambios al ledger resultantes de la ejecución de la función / script.
+
+Profundizaremos en esto en las siguientes secciones.
+
+## ¿Qué es importante en una transacción?
+
+### Payload
+
+El payload es lo que el usuario envía a la blockchain cuando desean ejecutar una función Move. Parte de la información clave en el payload es:
+
+- La dirección del remitente
+- La dirección + nombre del módulo + nombre de la función de la función siendo ejecutada.
+- Los argumentos a la función.
+
+Hay otra información potencialmente interesante en el payload sobre la que puedes aprender en [esta página](/es/network/blockchain/txns-states#contents-of-a-transaction).
+
+### Eventos
+
+Los eventos son emitidos durante la ejecución de una transacción. Cada módulo Move puede definir sus propios eventos y elegir cuándo emitir los eventos durante la ejecución de una función.
+
+Por ejemplo, en Move podrías tener lo siguiente:
+
+```move filename="member_invited_event.move"
+struct MemberInvitedEvent has store, drop {
+    member: address,
+}
+
+public entry fun invite_member(member: address) {
+    event::emit_event(
+        &mut member_invited_events,
+        MemberInvitedEvent { member },
+    );
+}
+```
+
+Si `invite_member` es llamado, encontrarás el `MemberInvitedEvent` en la transacción.
+
+<Aside type="note">
+  ¿Por qué emitir eventos?
+
+  ¡Esta es una buena pregunta! En algunos casos, podrías encontrar innecesario emitir eventos ya que puedes simplemente parsear los writesets. Sin embargo, a veces es bastante difícil obtener todos los datos que necesitas de las diferentes "ubicaciones" en la transacción, o en algunos casos podría no ser posible, ej. si quieres indexar datos que no están incluidos en el writeset. En estos casos, los eventos son una forma conveniente de agrupar todo lo que quieres indexar.
+</Aside>
+
+### Writesets
+
+Cuando una transacción se ejecuta, no afecta directamente el estado en cadena en ese momento. En su lugar, produce un conjunto de cambios a ser hechos al ledger, llamado writeset. El writeset se aplica al ledger más tarde después de que todos los validadores hayan acordado el resultado de la ejecución.
+
+Los writesets muestran el estado final de los datos en cadena después de que la transacción ha ocurrido. Son la fuente de verdad de qué datos están almacenados en cadena. Hay varios tipos de cambios de write set:
+
+- Escribir módulo / eliminar módulo
+- Escribir recurso / eliminar recurso
+- Escribir elemento de tabla / eliminar elemento de tabla
+
+{/* <!-- Add more information about writesets, ideally once have the helper functions. --> */}

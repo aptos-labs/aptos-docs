@@ -1,0 +1,134 @@
+---
+title: "Node Inspection Service"
+description: "Access runtime metrics and system information from Aptos nodes through the inspection service for monitoring health and performance."
+sidebar:
+  label: "Inspection Service"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Aptos nodes collect metrics and system information while running. These metrics provide a way to track,
+monitor and inspect the health and performance of the node dynamically, at runtime. Node metrics and system
+information can be queried or exported via an inspection service that runs on each node.
+To see the list of important metrics and counters, see the [Important Node Metrics](/network/nodes/measure/important-metrics) document.
+
+<Aside type="caution">
+  We do not recommend making the inspection service publicly accessible, as it may expose potentially sensitive
+  information about your node, such as file paths and directories.
+</Aside>
+
+## Inspection service features
+
+If you'd like to examine all the endpoints provided by the inspection service, visit the following URL
+once you have started your node:
+
+```sh
+http://localhost:9101/
+```
+
+This will display a directory of all the endpoints and features offered by the service, for example:
+
+```
+Welcome to the Aptos Inspection Service!
+The following endpoints are available:
+	- /configuration
+	- /consensus_health_check
+	- /forge_metrics
+	- /identity_information
+	- /json_metrics
+	- /metrics
+	- /peer_information
+	- /system_information
+```
+
+## Examine node metrics
+
+If you'd like to examine the metrics of your node at runtime, visit the following URL:
+
+```sh
+http://localhost:9101/metrics
+```
+
+This will display the values of all the metrics and counters of your node at the time you queried it.
+To see updates to these values, simply refresh the page.
+
+Likewise, if you wish to view the metrics in `json` format, visit the following URL:
+
+```sh
+http://localhost:9101/json_metrics
+```
+
+## Configure the inspection service
+
+You can configure various aspects of the node inspection service, for example, you can change the port it listens on,
+enable or disable certain endpoints, and more. The inspection service is enabled by default, so you do not need to do
+anything special once you start your node.
+
+The inspection service should run by default at port `9101`. To change the port the inspection service listens on
+(e.g., to `1000`), add the following to your node configuration file:
+
+```yaml filename="fullnode.yaml"
+inspection_service:
+  port: 1000
+```
+
+## Examine node configuration
+
+The inspection service also provides a way to examine the configuration file of your node
+at runtime (i.e., the node configuration file that your node started with).
+
+<Aside type="caution">
+  By default, the configuration endpoint is disabled as it may expose potentially sensitive
+  information about your node, e.g., file paths and directories. We recommend enabling this
+  endpoint only if the inspection service is not publicly accessible.
+</Aside>
+
+To enable this feature, add the following to your node configuration file:
+
+```yaml filename="fullnode.yaml"
+inspection_service:
+  expose_configuration: true
+```
+
+And visit the configuration URL:
+
+```sh
+http://localhost:9101/configuration
+```
+
+## Examine system information
+
+Likewise, the inspection service also provides a way to examine the system information of your node
+at runtime (i.e., build and hardware information). Simply visit the following URL:
+
+```sh
+http://localhost:9101/system_information
+```
+
+If you'd like to disable this endpoint, add the following to your node configuration file:
+
+```yaml filename="fullnode.yaml"
+inspection_service:
+  expose_system_information: false
+```
+
+<Aside type="note">
+  The system information displayed here is not guaranteed to be 100% accurate due to limitations
+  in the way this information is collected.
+</Aside>
+
+## Examine identity information
+
+The inspection service also provides an easy way to examine the identity of your node
+(i.e., the peer ID for each network) at runtime. Simply visit the following URL:
+
+```sh
+http://localhost:9101/identity_information
+```
+
+If you'd like to disable this endpoint, add the following to your node configuration file:
+
+```yaml filename="fullnode.yaml"
+inspection_service:
+  expose_identity_information: false
+```

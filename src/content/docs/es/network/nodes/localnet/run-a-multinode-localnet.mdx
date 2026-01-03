@@ -1,0 +1,101 @@
+---
+title: "Localnet Multi-nodo"
+description: "Despliega una red local con múltiples nodos validator y validator fullnodes usando Aptos Forge para escenarios avanzados de prueba y desarrollo."
+sidebar:
+  label: "Con Multi-nodo"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Esta guía describe cómo ejecutar una red local con múltiples nodos validator y validator fullnodes. Usarás [Aptos Forge](https://github.com/aptos-labs/aptos-core/tree/main/testsuite/forge-cli/src) en el código fuente de [aptos-core](https://github.com/aptos-labs/aptos-core) para esto.
+
+<Aside type="note">
+  Los pasos descritos en esta guía solo deberían usarse para redes de prueba de redes locales multi-nodo. No uses esta guía para desplegar redes en entornos de producción.
+  Esta guía también asume que has completado los pasos en [Construir Aptos Desde Código Fuente](/es/network/nodes/building-from-source).
+</Aside>
+
+## Localnet con múltiples validators
+
+Para desplegar una localnet con múltiples validators locales, ejecuta este comando desde el directorio raíz del código fuente de [aptos-core](https://github.com/aptos-labs/aptos-core):
+
+```sh
+cargo run -p aptos-forge-cli \
+        -- \
+        --suite "run_forever" \
+        --num-validators 4 test local-swarm
+```
+
+Esto iniciará una red local de 4 validators, cada uno ejecutándose en su propio proceso. La red se ejecutará para siempre a menos que la termines manualmente.
+
+La salida del terminal mostrará las ubicaciones de los archivos del validator (por ejemplo, los archivos génesis, logs, configuraciones de nodo, etc.) y los comandos que se ejecutaron para iniciar cada nodo. El ID de proceso (PID) de cada nodo y direcciones del servidor (ej., APIs REST) también se muestran cuando inicia. Por ejemplo, si ejecutas el comando anterior deberías ver:
+
+```text
+...
+2022-09-01T15:41:27.228289Z [main] INFO crates/aptos-genesis/src/builder.rs:462 Building genesis with 4 validators. Directory of output: "/private/var/folders/dx/c0l2rrkn0656gfx6v5_dy_p80000gn/T/.tmpq9uPMJ"
+...
+2022-09-01T15:41:28.090606Z [main] INFO testsuite/forge/src/backend/local/swarm.rs:207 The root (or mint) key for the swarm is: 0xf9f...
+...
+2022-09-01T15:41:28.094800Z [main] INFO testsuite/forge/src/backend/local/node.rs:129 Started node 0 (PID: 78939) with command: ".../aptos-core/target/debug/aptos-node" "-f" "/private/var/folders/dx/c0l2rrkn0656gfx6v5_dy_p80000gn/T/.tmpq9uPMJ/0/node.yaml"
+2022-09-01T15:41:28.094825Z [main] INFO testsuite/forge/src/backend/local/node.rs:137 Node 0: REST API is listening at: http://127.0.0.1:64566
+2022-09-01T15:41:28.094838Z [main] INFO testsuite/forge/src/backend/local/node.rs:142 Node 0: Inspection service is listening at http://127.0.0.1:64568
+...
+```
+
+Usando la información de esta salida, puedes detener un solo nodo y reiniciarlo. Por ejemplo, para detener y reiniciar el nodo `0`, ejecuta los comandos abajo:
+
+```sh
+kill -9 <PID del Nodo 0>
+cargo run -p aptos-node \
+        -- \
+        -f <Ubicación al archivo de configuración del nodo 0 mostrado arriba>
+```
+
+## Faucet y acuñación
+
+Para acuñar monedas en esta red de prueba necesitas ejecutar un faucet. Puedes hacer eso con este comando:
+
+```sh
+cargo run -p aptos-faucet-service -- run-simple --key <key> --node-url <node_url>
+```
+
+Puedes obtener los valores arriba así:
+
+- `key`: Cuando iniciaste el swarm, hubo salida como esta: `The root (or mint) key for the swarm is: 0xf9f...`. Esta es la `key`.
+- `node_url`: Cuando iniciaste el swarm, hubo salida como esta: `REST API is listening at: http://127.0.0.1:64566`. Esta es la `node_url`.
+
+El comando anterior ejecutará un faucet localmente, escuchando en el puerto `8081`. Usando este faucet, puedes entonces acuñar tokens a tus cuentas de prueba, por ejemplo:
+
+```sh
+curl -X POST http://127.0.0.1:8081/mint?amount=<cantidad a acuñar>&pub_key=<clave pública para acuñar tokens>
+```
+
+Como alternativa a usar el servicio faucet, puedes usar el CLI faucet directamente:
+
+```sh
+cargo run -p aptos-faucet-cli -- --amount 10 --accounts <dirección_cuenta> --key <clave_privada>
+```
+
+<Aside type="tip">
+  Ver más sobre cómo funciona el faucet en el [README](https://github.com/aptos-labs/aptos-core/tree/main/crates/aptos-faucet).
+  También ver cómo usar el [CLI de Aptos](/es/build/cli) con un faucet existente.
+</Aside>
+
+## Validator fullnodes
+
+Para también ejecutar validator fullnodes dentro de la red, usa la bandera `--num-validator-fullnodes`. Por ejemplo:
+
+```sh
+cargo run -p aptos-forge-cli \
+        -- \
+        --suite "run_forever" \
+        --num-validators 3 \
+        --num-validator-fullnodes 1 test local-swarm
+```
+
+## Uso adicional
+
+Para ver todas las opciones de uso de la herramienta, ejecuta:
+
+```sh
+cargo run -p aptos-forge-cli --help
+```

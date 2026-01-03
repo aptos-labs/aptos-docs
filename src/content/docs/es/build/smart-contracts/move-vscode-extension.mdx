@@ -1,0 +1,273 @@
+---
+title: "Extensión de VSCode para Move"
+label: "Extensión VSCode"
+description: "Aprende sobre la extensión vscode de move para desarrollo de contratos inteligentes Move en la blockchain de Aptos."
+sidebar:
+  label: "Extensión VSCode"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Extensión de Lenguaje Move on Aptos
+
+Esta es la extensión oficial de Visual Studio Code (y Cursor) para [desarrollar contratos inteligentes en el lenguaje Move en la blockchain de Aptos](/es/build/smart-contracts).
+
+Construida desde cero, ofrece una experiencia de desarrollo moderna y eficiente, ofreciendo características esenciales como resaltado semántico, diagnósticos en tiempo real, auto-formato e integración perfecta con el resto de la cadena de herramientas de Aptos - todo diseñado para ayudar a los desarrolladores a construir y probar contratos Move con facilidad y confianza.
+
+Mantenida activamente por el equipo de Aptos, esta extensión está diseñada para evolucionar junto con el lenguaje Move y soporta tanto desarrolladores que son nuevos en Move, como aquellos construyendo aplicaciones más complejas.
+
+## Características
+
+- Resaltado Semántico
+- Ir a Definición
+- Encontrar Todas las Referencias y Renombrado de Símbolos
+- Tipo y Documentación al Pasar el Cursor
+- Auto-Completado Contextual
+- Sugerencias en Línea para Tipos y Parámetros de Función
+
+![Sugerencias en línea](~/images/move-vscode-extension/inlay_hints.png)
+
+- Diagnósticos en Tiempo Real
+- [Sugerencias de código](#sugerencias-de-código-con-correcciones)
+- Integración de `movefmt`
+
+![Formato con movefmt](~/images/move-vscode-extension/format.gif)
+
+- Ejecutar funciones `#[test]`
+- Verificar módulos y funciones con Move Prover
+
+## Instalación
+
+Publicamos lanzamientos tanto en [VSCode Marketplace](https://marketplace.visualstudio.com/items?itemName=AptosLabs.move-on-aptos) como en [OpenVSX](https://open-vsx.org/extension/aptoslabs/move-on-aptos).
+
+También publicamos pre-lanzamientos `nightly`, que se construyen desde la rama `main` cada noche. Para usar esos, selecciona **Switch to Pre-Release Version** desde la Vista de Extensiones de tu editor.
+
+![Selección de pre-lanzamientos](~/images/move-vscode-extension/pre-releases.png)
+
+### Construir desde fuentes
+
+Clona el repositorio, luego ejecuta:
+
+```
+cargo run -p xtask -- install --server --client
+```
+
+(o simplemente `cargo xtask install --server --client`, ver [https://github.com/matklad/cargo-xtask](https://github.com/matklad/cargo-xtask))
+
+El comando construye el archivo de extensión `move-on-aptos.vsix` y lo instala en tu VSCode.
+Luego ejecuta `cargo install` para construir e instalar el servidor de lenguaje.
+
+Pon
+
+```
+"move-on-aptos.server.path": "~/.cargo/bin/aptos-language-server",
+```
+
+en tu `settings.json` para apuntar la extensión a tu servidor de lenguaje construido localmente.
+
+### Construir desde fuentes: editor Cursor AI
+
+Si usas el editor AI [https://www.cursor.com/](https://www.cursor.com/), necesitas hacer un poco más de trabajo.
+
+Ejecuta el comando de instalación anterior. El resultado sería un paquete de extensión vscode `./editors/code/move-on-aptos.vsix`.
+Luego instálalo desde el editor usando el comando `"Install from VSIX..."`.
+
+## Configuración
+
+<Aside type="note">
+  La extensión por sí misma no descargará tus dependencias de la red.
+
+  Si ves errores de `unresolved reference` en las importaciones `AptosFramework` -
+  intenta ejecutar `aptos move compile` una vez en tu proyecto para descargar tus dependencias remotas.
+</Aside>
+
+Esta extensión proporciona configuraciones a través de la configuración de VSCode.
+Todas las configuraciones están bajo `move-on-aptos.*`.
+
+### Configuración recomendada para los directorios de paquetes Move
+
+LSP es algo limitado en lo que realmente puede hacer, así que algunas de las configuraciones necesitan ser especificadas manualmente.
+
+#### Marcar fuentes de biblioteca Move como solo lectura
+
+Agrega lo siguiente a tu `settings.json`:
+
+```json5
+    "files.readonlyInclude": {
+        "**/build/*/sources/**/*.move": true,
+        "**/.move/**/*.move": true,
+    }
+```
+
+#### Auto-cerrar `b"` y `x"` correctamente
+
+```json5
+    "[move]": {
+        "editor.wordSeparators": "`~!@#$%^&*()-=+[{]}\\|;:'\",.<>/?bx",
+    },
+```
+
+Un montón de símbolos en el valor de configuración son los predeterminados, estamos agregando símbolos `b` y `x` para los prefijos de cadena.
+
+#### Establecer comando `Organize Imports` a un atajo de teclado
+
+```json5
+    {
+        "key": "ctrl+alt+o",
+        "command": "move-on-aptos.organizeImports",
+        "when": "editorTextFocus && !editorReadonly"
+    }
+```
+
+## Configuración Avanzada
+
+### Diagnósticos
+
+La extensión proporciona una serie de diagnósticos, desde errores duros como "referencia no resuelta" hasta lints de estilo.
+Algunos de esos podrían ser menos útiles que otros para diferentes estilos de codificación, así que hay una vía de escape para deshabilitarlos:
+
+```json5
+{
+    "move-on-aptos.diagnostics.disabled": [],
+}
+```
+
+donde los valores son códigos de diagnóstico de los mensajes de error, como `unused-variable` aquí:
+
+![Ejemplo de código de diagnóstico](~/images/move-vscode-extension/diag_code.png)
+
+### Sugerencias en línea
+
+Se soportan sugerencias de tipo para las declaraciones let y parámetros lambda.
+
+```move
+module 0x1::m {
+    fun main() {
+        let a/*: integer*/ = 1;
+        let f: |u8| u8 = |e/*: u8*/| e;
+    }
+}
+```
+
+Para deshabilitarlas, usa:
+
+```json5
+{
+    "move-on-aptos.inlayHints.typeHints.enable": false,
+}
+```
+
+### Formato (funciona con `movefmt` >= 1.2.1)
+
+Especifica una ruta al ejecutable `movefmt` y argumentos extra (como un `--config-path`) si es necesario:
+
+```json5
+{
+    "move-on-aptos.movefmt.path": "~/code/movefmt/target/release/movefmt",
+    "move-on-aptos.movefmt.extraArgs": [],
+}
+```
+
+El formato al guardar puede habilitarse en VSCode con
+
+```json5
+{
+    "editor.formatOnSave": true,
+}
+```
+
+## Depuración
+
+Es útil habilitar el nivel de logging INFO, no es muy hablador y podría proporcionar información valiosa para depurar:
+
+```
+    "move-on-aptos.server.extraEnv": { "RA_LOG": "info" },
+```
+
+## Comandos adicionales
+
+### `aptos-language-server diagnostics`
+
+Ejecuta diagnósticos del servidor en el archivo (o directorio del paquete). Si se proporciona `--apply-fixes`, aplica automáticamente las correcciones automáticas disponibles:
+
+[Ver diagnósticos disponibles con auto-correcciones](#sugerencias-de-código-con-correcciones)
+
+```shell
+  $ aptos-language-server diagnostics --apply-fixes replace-with-method-call ./aptos-stdlib/sources/cryptography/keyless.move 
+processing package 'aptos-stdlib', file: /home/mkurnikov/code/aptos-core/aptos-move/framework/aptos-stdlib/sources/cryptography/keyless.move
+note[replace-with-method-call]: Can be replaced with method call
+   ┌─ /home/mkurnikov/code/aptos-core/aptos-move/framework/aptos-stdlib/sources/cryptography/keyless.move:67:17
+   │
+67 │         assert!(string::bytes(&iss).length() <= MAX_ISSUER_UTF8_BYTES_LENGTH, error::invalid_argument(E_INVALID_ISSUER_UTF8_BYTES_LENGTH));
+   │                 ^^^^^^^^^^^^^^^^^^^
+   │
+   ┌─ /home/mkurnikov/code/aptos-core/aptos-move/framework/aptos-stdlib/sources/cryptography/keyless.move:67:17
+   │
+67 │         assert!(iss.bytes().length() <= MAX_ISSUER_UTF8_BYTES_LENGTH, error::invalid_argument(E_INVALID_ISSUER_UTF8_BYTES_LENGTH));
+   │                 ^^^^^^^^^^^ after fix
+
+
+```
+
+## Sugerencias de código (con correcciones)
+
+### Usar notación de llamada de método
+
+**Código**: `replace-with-method-call`
+
+![Reemplazar con llamada de método](~/images/move-vscode-extension/replace_with_method_call.gif)
+
+### Usar expresión de asignación compuesta
+
+**Código**: `replace-with-compound-expr`
+
+![Expresión de asignación compuesta](~/images/move-vscode-extension/compound_expr.gif)
+
+### Usar expresión de índice de vector
+
+**Código**: `replace-with-index-expr`
+
+Detecta expresiones de la forma `*vector::borrow(&some_vector, index)` y `*some_vector.borrow(index)`,
+que pueden convertirse a `some_vector[index]`.
+
+![Expresión de índice de vector](~/images/move-vscode-extension/vector_index_expr.gif)
+
+### Usar abreviatura de inicialización de campo
+
+**Código**: `use-struct-lit-field-shorthand`, `use-struct-pat-field-shorthand`, `use-schema-lit-field-shorthand`
+
+Detecta campos de literales de struct que podrían escribirse en forma abreviada.
+
+![Abreviatura de inicialización de campo](~/images/move-vscode-extension/field_shorthand.gif)
+
+### Conversión de tipo entero redundante
+
+**Código**: `remove-redundant-cast`
+
+Detecta expresiones como `number as u8`, donde `number` ya es del tipo al que se está convirtiendo.
+
+![Conversión de tipo entero redundante](~/images/move-vscode-extension/redundant_cast.gif)
+
+### Agregar prefijo `_` al nombre de variable
+
+**Código**: `rename-with-underscore-prefix`
+
+Prefija variable no usada con `_`.
+
+![Renombrar con prefijo de guión bajo](~/images/move-vscode-extension/rename_fix.gif)
+
+## Hoja de ruta
+
+- Más resaltado de errores:
+  - Implementar más errores del compilador Aptos Move (como verificación de habilidades)
+  - Implementar lints del `aptos move lint` con correcciones rápidas proporcionadas por la extensión.
+
+- Trabajando con importaciones:
+  - Detectar importaciones no usadas y eliminarlas con la característica "Organize Imports" de VSCode.
+  - Mostrar elementos de completado no importados en el módulo actual, crear declaraciones `use` para esos automáticamente.
+
+- Integración con los comandos `aptos-cli`: compilar paquetes, publicar módulos y ejecutar transacciones.
+
+- Soporte para `Move.toml`.
+
+- Integración con IA (via servidor MCP).

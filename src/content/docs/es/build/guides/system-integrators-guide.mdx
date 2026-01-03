@@ -1,0 +1,550 @@
+---
+title: "Guía de Integración de Aplicaciones"
+description: "Guía de integración heredada para integradores de sistemas - obsoleta en favor de la guía de integración de exchanges."
+sidebar:
+  label: "Integración de Sistemas"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="note">
+  Esta guía está en proceso de ser reemplazada. Por favor revisa la [guía de integración de exchanges](/es/build/guides/exchanges)
+  para información más actualizada.
+</Aside>
+
+Si provees servicios de blockchain a tus clientes y deseas agregar la blockchain de Aptos a tu plataforma, entonces esta guía es para ti. Esta guía para integradores de sistemas te guiará a través de todo lo que necesitas para integrar la blockchain de Aptos en tu plataforma.
+
+## Resumen
+
+Este documento te guiará a través de las siguientes tareas para integrarte con Aptos:
+
+1. Preparar un entorno para pruebas.
+2. Crear una cuenta en la blockchain.
+3. Intercambiar identificadores de cuenta con otra entidad en la blockchain, por ejemplo, para realizar swaps.
+4. Crear una transacción.
+5. Obtener una estimación de gas y validar la transacción para su corrección.
+6. Enviar la transacción a la blockchain.
+7. Esperar el resultado de la transacción.
+8. Consultar transacciones históricas e interacciones para una cuenta dada con una cuenta específica, es decir, retiros y depósitos.
+
+## Empezando
+
+Para comenzar necesitarás seleccionar una red y elegir tu conjunto de
+herramientas. También hay una docena de SDKs para acelerar el desarrollo.
+
+### SDKs y herramientas
+
+Aptos tiene múltiples SDKs en múltiples lenguajes y plataformas, por favor
+consulta [SDKs](/es/build/sdks) para más información.
+
+Casi todos los desarrolladores beneficiarán de explorar el CLI.
+[Usando el CLI](/es/build/cli) demuestra cómo el CLI puede ser utilizado para crear
+cuentas, transferir monedas, publicar módulos Move, y más.
+
+## Cuentas en Aptos
+
+Una [cuenta](/es/network/blockchain/accounts) representa
+una entidad en la blockchain de Aptos que puede enviar transacciones. Cada cuenta
+está identificada por una dirección de cuenta de 32 bytes y es un contenedor para
+[módulos Move y recursos](/es/network/blockchain/resources).
+En Aptos, las cuentas deben ser creadas en la cadena de bloques antes de cualquier
+operación de blockchain que involucre esa cuenta. El framework de Aptos soporta
+la creación implícita de cuentas cuando se transfiere la moneda de Aptos a través de
+[`aptos_account::transfer`](https://github.com/aptos-labs/aptos-core/blob/88c9aab3982c246f8aa75eb2caf8c8ab1dcab491/aptos-move/framework/aptos-framework/sources/aptos_account.move#L18)
+o explícitamente a través de
+[`aptos_account::create_account`](https://github.com/aptos-labs/aptos-core/blob/88c9aab3982c246f8aa75eb2caf8c8ab1dcab491/aptos-move/framework/aptos-framework/sources/aptos_account.move#L13).
+
+Al crearse, una [cuenta de Aptos](https://github.com/aptos-labs/aptos-core/blob/88c9aab3982c246f8aa75eb2caf8c8ab1dcab491/aptos-move/framework/aptos-framework/sources/account.move#L23) contiene:
+
+- Un [recurso que contiene la moneda de Aptos](https://github.com/aptos-labs/aptos-core/blob/60751b5ed44984178c7163933da3d1b18ad80388/aptos-move/framework/aptos-framework/sources/coin.move#L50)
+  y el depósito y retiro de monedas de ese recurso.
+- Una clave de autenticación asociada con su clave pública actual, privada(s).
+- Un estrictamente
+  creciente [número de secuencia](/es/network/blockchain/accounts#account-sequence-number)
+  que representa el número de secuencia de la próxima transacción de la cuenta para prevenir
+  ataques de reproducción.
+- Un número estrictamente creciente que representa el número de creación de GUID siguiente.
+- Un [manejador de eventos](/es/network/blockchain/events) para todos los nuevos tipos de monedas agregadas a
+  la cuenta.
+- Un manejador de eventos para todas las rotaciones de claves de la cuenta.
+
+Lee más sobre [Cuentas](/es/network/blockchain/accounts)
+y [configúrala](/es/build/cli/setup-cli).
+
+## Transacciones
+
+Las [transacciones](/es/network/blockchain/txns-states) de Aptos están codificadas
+en [Serialización Binaria Canónica (BCS)](https://github.com/diem/bcs).
+Las transacciones contienen información como la dirección de cuenta del remitente,
+la autenticación del remitente, la operación deseada a ser realizada en la
+blockchain de Aptos, y la cantidad de gas que el remitente está dispuesto a pagar para ejecutar
+la transacción.
+
+Lee más en [Transacciones y Estados](/es/network/blockchain/txns-states).
+
+### Generar transacciones
+
+Aptos soporta dos métodos para construir transacciones:
+
+- Usar las bibliotecas de cliente de Aptos para generar transacciones nativas BCS.
+- Construir objetos JSON codificados y interactuar con la API REST para
+  generar transacciones nativas.
+
+El enfoque preferido es generar transacciones nativas BCS directamente.
+Generarlos a través de la API REST permite el desarrollo rápido al costo de
+confiar en el fullnode para generar la transacción correctamente.
+
+#### Transacciones codificadas en BCS
+
+Las transacciones codificadas en BCS pueden ser enviadas al endpoint `/transactions` pero
+deben especificar `Content-Type: application/x.aptos.signed_transaction+bcs` en los
+encabezados HTTP. Esto devolverá un resultado de envío de transacción que, si
+es exitoso, contiene un hash de transacción en
+el campo `hash` [field](https://github.com/aptos-labs/aptos-core/blob/9b85d41ed8ef4a61a9cd64f9de511654fcc02024/ecosystem/python/sdk/aptos_sdk/client.py#L138).
+
+### Tipos de transacciones
+
+Dentro de una transacción dada, el objetivo de ejecución puede ser uno de dos tipos:
+
+- Una función de entrada
+- Un script Move
+
+Todos los SDK oficiales soportan la generación de transacciones que apuntan a funciones de entrada. Esta guía destaca muchas de esas funciones de entrada, como `aptos_account::transfer` y `aptos_account::create_account`.
+
+La mayoría de las operaciones básicas en la blockchain de Aptos deberían estar disponibles a través de llamadas de punto de entrada. Mientras uno podría enviar múltiples transacciones llamando a puntos de entrada en serie, tales operaciones se benefician de ser llamadas atómicamente desde una sola transacción. Un script de carga útil de transacción puede llamar a cualquier función pública (entrada) definida dentro de cualquier módulo. Aquí está un ejemplo [script Move](https://github.com/aptos-labs/aptos-core/tree/main/aptos-move/move-examples/scripts/two_by_two_transfer) que usa una transacción MultiAgent para extraer fondos de dos cuentas y depositarlos en dos otras cuentas. Esto es un [ejemplo de Python](https://github.com/aptos-labs/aptos-python-sdk/blob/main/examples/transfer_two_by_two.py) que usa el código generado por compilar ese script.
+
+### Estado de una transacción
+
+Obtener el estado de la transacción consultando la API [`/transactions/by_hash/{hash}`](https://api.devnet.aptoslabs.com/v1/spec#/operations/get_transaction_by_hash) con el hash devuelto durante el envío de la transacción.
+
+Una estrategia razonable para enviar transacciones es limitar su vida útil a 30 a 60 segundos, y consultar esa API en intervalos regulares hasta que sea exitoso o algunos segundos después de que haya transcurrido el tiempo. Si no hay compromiso en la cadena, la transacción fue probablemente descartada.
+
+Todos los SDKs soportan esto automáticamente para esperar transacciones.
+
+### Probar transacciones o pre-ejecución de transacciones
+
+Para facilitar la evaluación de transacciones así como la estimación de gas, Aptos soporta una API de simulación que no requiere y no debe contener firmas válidas en las transacciones.
+
+La API de simulación es una API sincrónica que ejecuta una transacción y devuelve la salida inclusive de uso de gas. La API de simulación puede ser accedida enviando una transacción a [`/transactions/simulate`](https://api.devnet.aptoslabs.com/v1/spec#/operations/simulate_transaction).
+
+Ambos el [SDK de Typescript](https://github.com/aptos-labs/aptos-ts-sdk/blob/main/src/api/transactionSubmission/simulate.ts) y [SDK de Python](https://github.com/aptos-labs/aptos-python-sdk/blob/main/examples/simulate_transfer_coin.py) soportan la API de simulación. Tenga en cuenta que la salida y el gas utilizado pueden cambiar basado en el estado de la cuenta. Para las estimaciones de gas, recomendamos que el monto máximo de gas sea mayor que el monto citado por esta API.
+
+## Ver estado actual y histórico
+
+La mayoría de las integraciones en la blockchain de Aptos benefician de una visión holística y
+completa del estado actual y histórico de la blockchain. Aptos proporciona transacciones históricas, estados, y eventos, todos los resultados de
+la ejecución de la transacción.
+
+- Las transacciones históricas especifican el estado de ejecución, salida, y se vinculan a
+  eventos relacionados. Cada transacción tiene un número de versión único asociado con
+  ella que determina su orden secuencial global en la historia de la
+  cadena de bloques.
+- El estado es la representación de todos los saldos de transacción hasta una versión específica. En otras palabras, una versión de estado es la acumulación de todas
+  las transacciones inclusivas de esa versión de transacción.
+- A medida que las transacciones se ejecutan, pueden emitir eventos. [Eventos](/es/network/blockchain/events)
+  son sugerencias sobre cambios en los datos de la cadena.
+
+El servicio de almacenamiento en un nodo emplea dos formas de poda que borran datos de
+nodos:
+
+- estado
+- eventos, transacciones, y todo lo demás
+
+Mientras que cualquiera de estos puede ser deshabilitado, almacenar las versiones de estado no es
+particularmente sostenible.
+
+La poda de eventos y transacciones puede ser deshabilitada configurando
+el [`enable_ledger_pruner`](https://github.com/aptos-labs/aptos-core/blob/cf0bc2e4031a843cdc0c04e70b3f7cd92666afcf/config/src/config/storage_config.rs#L141)
+a `false`. Este es el comportamiento por defecto en Mainnet. En el futuro cercano, Aptos proporcionará indexadores que mitiguen la necesidad de consultar directamente de un nodo.
+
+La API REST ofrece consultas de transacciones y eventos de estas formas:
+
+- [Transacciones para una cuenta](https://api.devnet.aptoslabs.com/v1/spec#/operations/get_account_transactions)
+- [Transacción por versión](https://api.devnet.aptoslabs.com/v1/spec#/operations/get_transaction_by_version)
+- [Eventos por manejador de eventos](https://api.devnet.aptoslabs.com/v1/spec#/operations/get_events_by_event_handle)
+
+## Intercambiar y rastrear activos fungibles
+
+Aptos tiene una
+estándar [Activo Fungible](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/fungible_asset.move).
+Diferentes tipos de activo fungible (FA) pueden ser representados en este estándar
+a través del uso de un objeto de metadatos distinto.
+
+Un FA de un usuario se almacena en objetos `FungibleStore` propiedad de ellos. Para cada tipo de
+FA, cada cuenta tiene un almacén principal para ese FA y
+almacenes secundarios opcionales. La diferencia entre el almacén principal y el secundario
+es la dirección del almacén principal
+es determinista basado en las direcciones de cuenta de usuario y el objeto de metadatos.
+
+### Transferir FAs entre usuarios
+
+FAs, incluyendo APT, pueden ser transferidas entre los almacenes principales de los usuarios a través de
+la función [`primary_fungible_store::transfer`](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/primary_fungible_store.move#L142)
+.
+Para cualquier `FungibleStore`
+s, [`fungible_asset::transfer`](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/fungible_asset.move#L347)
+sería invocado con las direcciones de objetos `FungibleStore`.
+
+Se observa en la fase de migración de moneda a FA, retirar/depositar/transferir FA emparejado de moneda debería
+llamar a `0x1::coin::deposit/withdraw/transfer`(API de módulo de moneda) para transferir el activo porque la cuenta puede tener el activo en ambas
+formas pero la API de activo fungible solo puede mover la parte de FA pero no la parte de moneda. En contraste, la API de moneda podría mover ambas partes. Para otros FA,
+ya que no tiene un tipo de moneda emparejado, solo la API de activo fungible puede ser utilizada para mover activos.
+Para saber qué API llamar, por favor refiérase a la tabla [`concurrent_fungible_asset_balance`](/es/build/indexer/indexer-api/fungible-asset-balances) campo `standard`, donde "v1" significa usar API de moneda y "v2" significa usar API de activo fungible.
+
+### Balance actual para Activo Fungible
+
+Los usuarios de indexador pueden simplemente consultar [`concurrent_fungible_asset_balance`](/es/build/indexer/indexer-api/fungible-asset-balances) para obtener el balance.
+
+Para la API de nodo, el balance actual para un APT FA del `FungibleStore` está disponible en la URL de recursos de la cuenta: `https://{rest_api_server}/accounts/{fungible_store_object_address}/resource/0x1::fungible_asset::FungibleStore`. El balance se almacena como `balance`. El recurso también contiene un objeto de metadatos del tipo de FA y el estado congelado. La dirección del almacén principal fungible puede ser calculada como `sha3_256(32-byte dirección de cuenta | 32-byte dirección de objeto de metadatos | 0xFC)`. El objeto de metadatos de APT FA es `0xA`.
+
+Los usuarios de Aptos tienen la opción de actualizar a un balance fungible concurrente para permitir la paralelización de actualizaciones de balance, mejorando el rendimiento de una sola cuenta. Cuando un usuario ha actualizado el balance del almacén fungible a soportar actualizaciones concurrentes, el objeto del almacén fungible tendrá otro recurso `ConcurrentFungibleBalance` que contiene el balance del almacén, y el campo `balance` de `FungibleStore` se establecerá a 0. El balance actual para un APT FA de `ConcurrentFungibleBalance` (si existe) está disponible en la URL de recursos de la cuenta: `https://{rest_api_server}/accounts/{fungible_store_object_address}/resource/0x1::fungible_asset::ConcurrentFungibleBalance`.
+
+Por lo tanto, para obtener el balance total de un activo fungible, es el balance no nulo de `FungibleStore` o el campo `balance` de `ConcurrentFungibleBalance` si existe y el balance de `FungibleStore` es 0.
+
+```json
+{
+  "type": "0x1::fungible_asset::FungibleStore",
+  "data": {
+    "balance": "233910778869",
+    "frozen": false,
+    "metadata": {
+      "inner": "0xedc2704f2cef417a06d1756a04a16a9fa6faaed13af469be9cdfcac5a21a8e2e"
+    }
+  }
+}
+```
+
+```json
+{
+    "type": "0x1::fungible_asset::ConcurrentFungibleBalance",
+    "data": {
+        "balance": "233910778869"
+    }
+}
+```
+
+## Intercambiar y rastrear monedas
+
+Aptos tiene una estándar
+[Tipo de moneda](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/coin.move).
+Diferentes tipos de monedas pueden ser representados en este tipo a través del
+uso de estructuras distintas que representan el parámetro de tipo o genérico para `Coin<T>`.
+
+Las monedas se almacenan dentro de una cuenta bajo el recurso `CoinStore<T>`. Al crearse una cuenta, cada usuario tiene el recurso `CoinStore<0x1::aptos_coin::AptosCoin>`
+o `CoinStore<AptosCoin>`, por breve. Dentro de este recurso está la moneda de Aptos: `Coin<AptosCoin>`.
+
+### Transferir monedas entre usuarios
+
+Las monedas, incluyendo APT, pueden ser transferidas entre usuarios a través de
+la función [`aptos_account::transfer_coins`](https://github.com/aptos-labs/aptos-core/blob/d1610e1bb5214689a37a9cab59cf9254e8eb2be1/aptos-move/framework/aptos-framework/sources/aptos_account.move#L92)
+para todas las monedas
+y [`aptos_account::transfer`](https://github.com/aptos-labs/aptos-core/blob/88c9aab3982c246f8aa75eb2caf8c8ab1dcab491/aptos-move/framework/aptos-framework/sources/aptos_account.move#L18)
+para monedas de Aptos.
+
+<Aside type="caution">
+  Es importante tener en cuenta que si una cuenta no ha registrado un
+  `CoinStore<T />`
+  para un `T` dado, entonces cualquier transferencia de tipo `T` a esa cuenta fallará.
+</Aside>
+
+### Balance actual para una moneda
+
+Para obtener el balance de una moneda, o una moneda que fue migrada a un activo fungible, puedes usar
+la función de vista `0x1::coin::balance<CoinType>(dirección de cuenta)` . Esto combinará los balances de moneda y moneda migrado a activo fungible.
+
+```typescript filename="example.ts"
+import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
+
+const config = new AptosConfig({ network: Network.DEVNET });
+const aptos = new Aptos(config);
+
+const coinType = "0x1::aptos_coin::AptosCoin";
+const account = "0x00000000000000000000000000000001";
+const [balanceStr] = await aptos.view<[string]>({
+  payload: {
+    function: "0x1::coin::balance",
+    typeArguments: [coinType],
+    functionArguments: [account]
+  }
+});
+const balance = parseInt(balanceStr, 10);
+```
+
+### Consultar transacciones
+
+En Aptos, cada transacción se confirma como una versión distinta a la
+blockchain. Esto permite la conveniencia de compartir transacciones comprometidas
+por su número de versión; para hacerlo, consulta:
+`https://{rest_server_api}/transactions/by_version/{version}`
+
+Las transacciones enviadas por una cuenta también pueden ser consultadas a través de la siguiente URL
+donde el `sequence_number` coincide con el número de secuencia de la transacción:
+`https://{rest_server_api}/account/{address}/transactions?start={sequence_number}&limit=1`
+
+Una transacción de transferencia aparecería así:
+
+```json
+{
+  "version": "13629679",
+  "gas_used": "4",
+  "success": true,
+  "vm_status": "Executed successfully",
+  "changes": [
+    {
+      "address": "0xb258b91eee04111039320a85b0c24a2dd433909e14a6b5c32ee722e0fdecfddc",
+      "data": {
+        "type": "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>",
+        "data": {
+          "coin": {
+            "value": "1000"
+          },
+          "deposit_events": {
+            "counter": "1",
+             "guid": {
+               "id": {
+                 "addr": "0x5098df8e7969b58ab3bd2d440c6203f64c60a1fd5c08b9d4abe6ae4216246c3e",
+                 "creation_num": "2"
+               }
+             }
+          },
+          ...
+        }
+      },
+      "type": "write_resource"
+    },
+    ...
+  ],
+  "sender": "0x810026ca8291dd88b5b30a1d3ca2edd683d33d06c4a7f7c451d96f6d47bc5e8b",
+  "sequence_number": "0",
+  "max_gas_amount": "2000",
+  "gas_unit_price": "1",
+  "expiration_timestamp_secs": "1660616127",
+  "payload": {
+    "function": "0x1::aptos_account::transfer",
+    "arguments": [
+      "0x5098df8e7969b58ab3bd2d440c6203f64c60a1fd5c08b9d4abe6ae4216246c3e",
+      "1000"
+    ],
+    "type": "entry_function_payload"
+  },
+  "events": [
+    {
+      "key": "0x0300000000000000810026ca8291dd88b5b30a1d3ca2edd683d33d06c4a7f7c451d96f6d47bc5e8b",
+      "guid": {
+        "id": {
+          "addr": "0x810026ca8291dd88b5b30a1d3ca2edd683d33d06c4a7f7c451d96f6d47bc5e8b",
+          "creation_num": "3"
+        }
+      },
+      "sequence_number": "0",
+      "type": "0x1::coin::WithdrawEvent",
+      "data": {
+        "amount": "1000"
+      }
+    },
+    {
+      "key": "0x02000000000000005098df8e7969b58ab3bd2d440c6203f64c60a1fd5c08b9d4abe6ae4216246c3e",
+      "guid": {
+        "id": {
+          "addr": "0x5098df8e7969b58ab3bd2d440c6203f64c60a1fd5c08b9d4abe6ae4216246c3e",
+          "creation_num": "2"
+        }
+      },
+      "sequence_number": "0",
+      "type": "0x1::coin::DepositEvent",
+      "data": {
+        "amount": "1000"
+      }
+    }
+  ],
+  "timestamp": "1660615531147935",
+  "type": "user_transaction"
+}
+```
+
+Aquí está un resumen de la información en una transacción:
+
+- `version` indica el identificador único global para esta transacción, su
+  posición ordenada en todas las transacciones comprometidas en la blockchain
+- `sender` es la dirección de cuenta de la entidad que envió la transacción
+- `gas_used` es la unidad pagada por la ejecución de la transacción
+- `success` y `vm_status` indican si la transacción se ejecutó correctamente y cualquier razón por la que podría no haberlo
+- `changes` incluyen los valores finales para cualquier recurso de estado que haya sido
+  modificado durante la ejecución de la transacción
+- `events` contienen todos los eventos emitidos durante la ejecución de la transacción
+- `timestamp` es la marca de tiempo casi en tiempo real de la ejecución de la transacción
+
+Si `success` es falso, entonces `vm_status` contendrá un código de error o mensaje que resultó en que la transacción no se ejecutara correctamente. Cuando `success` es
+falso, `changes` se limitará a la gas deducida de la cuenta y el
+número de secuencia incrementando. No habrá `events`.
+
+Cada evento en `events` se diferencia por una `key`. La `key` se deriva de
+la `guid` en `changes`. Específicamente, la `key` es una cadena hex de 40 bytes donde
+los primeros ocho bytes (o 16 caracteres) son la representación little-endian del
+`creation_num` en la `guid` del evento en `changes`, y el resto de los
+caracteres son la dirección de cuenta.
+
+Como los eventos no dicen qué los emitió, es imperativo rastrear el camino
+en `changes` para determinar la fuente de un evento. En particular,
+cada `CoinStore<T>` tiene tanto un `WithdrawEvent` como un `DepositEvent`, basado
+en el tipo de moneda. Para determinar qué tipo de moneda se usa en una
+transacción, un indexador puede comparar el `guid::creation_num` en un `changes`
+evento combinado con la dirección para la `key` de los eventos en `events`.
+
+Usando el ejemplo anterior, `events[1].guid` es equivalente
+a `changes[0].data.data.deposit_events.guid`, que
+es
+
+```json
+{"addr": "0x5098df8e7969b58ab3bd2d440c6203f64c60a1fd5c08b9d4abe6ae4216246c3e", "creation_num": "2"}
+```
+
+<Aside type="note">
+  El campo `key` estará desapareciendo a favor de `guid`
+</Aside>
+
+### Consultar eventos
+
+Aptos proporciona eventos claros y canónicos para todos los retiros y depósitos
+de monedas. Esto puede ser utilizado en coordinación con las transacciones asociadas para
+presentar al usuario el cambio de su saldo de cuenta a lo largo del tiempo, cuando sucedió, y lo que lo causó. Con un poco de análisis adicional, metadatos como el tipo de transacción y las otras partes involucradas también pueden ser compartidos.
+
+Consultar eventos por manejador
+URL: `https://{rest_api_server}/accounts/{address}/events/0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>/withdraw_events`
+
+```json
+[
+  {
+    "version":"13629679",
+    "key": "0x0300000000000000cb2f940705c44ba110cd3b4f6540c96f2634938bd5f2aabd6946abf12ed88457",
+    "guid": {
+      "id": {
+        "addr": "0x810026ca8291dd88b5b30a1d3ca2edd683d33d06c4a7f7c451d96f6d47bc5e8b",
+        "creation_num": "3"
+      }
+    },
+    "sequence_number": "0",
+    "type": "0x1::coin::WithdrawEvent",
+    "data": {
+      "amount": "1000"
+    }
+  }
+]
+```
+
+Recopile más información de la transacción que generó el evento consultando `https://{rest_server_api}/transactions/by_version/{version}`
+donde `{version}` es el mismo valor que el `{version}` en la consulta de eventos.
+
+<Aside type="note">
+  Cuando se rastrean movimientos completos de monedas, normalmente los eventos son
+  suficientes. `0x1::aptos_coin::AptosCoin`, sin embargo, requiere
+  considerar `gas_used` para cada transacción enviada desde la cuenta dada
+  ya que representa gas en Aptos. Para reducir la sobrecarga innecesaria, extraer
+  las tarifas de gas debido a las transacciones no emite un evento. Todas las transacciones para una
+  cuenta pueden ser recuperadas de esta API:
+  `https://{rest_server_api}/accounts/{address}/transactions`
+</Aside>
+
+### Rastrear cambios en el balance de monedas
+
+Considere la transacción de la sección anterior, pero ahora con una moneda arbitraria `0x1337::my_coin::MyCoin` y algunos parámetros de gas cambiados:
+
+```json
+{
+  "version": "13629679",
+  "gas_used": "20",
+  "success": true,
+  "vm_status": "Executed successfully",
+  "changes": [
+    {
+      "address": "0xb258b91eee04111039320a85b0c24a2dd433909e14a6b5c32ee722e0fdecfddc",
+      "data": {
+        "type": "0x1::coin::CoinStore<0x1337::my_coin::MyCoin>",
+        "data": {
+          "coin": {
+            "value": "1000"
+          },
+          "deposit_events": {
+            "counter": "1",
+            "guid": {
+              "id": {
+                "addr": "0x5098df8e7969b58ab3bd2d440c6203f64c60a1fd5c08b9d4abe6ae4216246c3e",
+                  "creation_num": "2"
+              }
+            }
+          },
+        ...
+        }
+      },
+      "type": "write_resource"
+    },
+    ...
+  ],
+  "sender": "0x810026ca8291dd88b5b30a1d3ca2edd683d33d06c4a7f7c451d96f6d47bc5e8b",
+  "sequence_number": "0",
+  "max_gas_amount": "2000",
+  "gas_unit_price": "110",
+  "expiration_timestamp_secs": "1660616127",
+  "payload": {
+    "function": "0x1::aptos_account::transfer_coins",
+    "type_arguments": [
+      "0x1337::my_coin::MyCoin"
+    ],
+    "arguments": [
+      "0x5098df8e7969b58ab3bd2d440c6203f64c60a1fd5c08b9d4abe6ae4216246c3e",
+      "1000"
+    ],
+    "type": "entry_function_payload"
+  },
+  "events": [
+    {
+      "key": "0x0300000000000000810026ca8291dd88b5b30a1d3ca2edd683d33d06c4a7f7c451d96f6d47bc5e8b",
+      "guid": {
+        "id": {
+          "addr": "0x810026ca8291dd88b5b30a1d3ca2edd683d33d06c4a7f7c451d96f6d47bc5e8b",
+          "creation_num": "3"
+        }
+      },
+      "sequence_number": "0",
+      "type": "0x1::coin::WithdrawEvent",
+      "data": {
+        "amount": "1000"
+      }
+    },
+    {
+      "key": "0x02000000000000005098df8e7969b58ab3bd2d440c6203f64c60a1fd5c08b9d4abe6ae4216246c3e",
+      "guid": {
+        "id": {
+          "addr": "0x5098df8e7969b58ab3bd2d440c6203f64c60a1fd5c08b9d4abe6ae4216246c3e",
+          "creation_num": "2"
+        }
+      },
+      "sequence_number": "0",
+      "type": "0x1::coin::DepositEvent",
+      "data": {
+        "amount": "1000"
+      }
+    }
+  ],
+  "timestamp": "1660615531147935",
+  "type": "user_transaction"
+}
+```
+
+Hay tres cambios de balance en esta transacción:
+
+1. Una retirada de `1000` de `0x1337::my_coin::MyCoin` de la cuenta de transacción enviada `0x810026ca8291dd88b5b30a1d3ca2edd683d33d06c4a7f7c451d96f6d47bc5e8b`
+2. Un depósito de `1000` de `0x1337::my_coin::MyCoin` a la cuenta receptora `0x5098df8e7969b58ab3bd2d440c6203f64c60a1fd5c08b9d4abe6ae4216246c3e`
+3. Una tarifa de gas `2200` de `0x1::aptos_coin::AptosCoin` de la cuenta de transacción enviada `0x810026ca8291dd88b5b30a1d3ca2edd683d33d06c4a7f7c451d96f6d47bc5e8b`
+
+Para obtener la información de retirada:
+
+1. Escanee el `changes` para `0x1::coin::CoinStore<CoinType>`. Tenga en cuenta el
+   `CoinType`
+   es un signo genérico que indica qué moneda se almacena en el almacén. En este ejemplo,
+   el `CoinType` es `0x1337::my_coin::MyCoin`.
+2. Recupere el `guid` para `withdraw_events`. En este ejemplo, el `guid`
+   contiene `addr`
+   `0x810026ca8291dd88b5b30a1d3ca2edd683d33d06c4a7f7c451d96f6d47bc5e8b`
+   y `creation_num` `3`.
+3. Escanee para eventos con este \`

@@ -1,0 +1,191 @@
+---
+title: "Trabajando con Contratos Move"
+description: "Guía completa para compilar, probar, publicar y ejecutar contratos inteligentes Move usando la CLI de Aptos con ejemplos y mejores prácticas."
+sidebar:
+  label: "Herramientas Move"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+La CLI de Aptos se usa principalmente para compilar, probar y verificar formalmente contratos Move. Si aún no has instalado la CLI de Aptos, puedes hacerlo siguiendo los pasos aquí [Instalar la CLI de Aptos](/es/build/cli#-install-the-aptos-cli).
+
+Puedes ir a secciones específicas usando la tabla de contenidos a la derecha.
+
+Para ver cómo encadenar contratos Move en la cadena usando la CLI, puedes seguir este [tutorial de "Argumentos CLI"](/es/build/cli/working-with-move-contracts/arguments-in-json-tutorial).
+
+<Aside type="note" emoji="ℹ️">
+  A lo largo de este documento hay partes de comandos que tendrás que modificar para adaptarlos a tu situación. Esas variables estarán envueltas en corchetes triangulares `<como esto>`.
+</Aside>
+
+## 1. Compilando Move
+
+Puedes compilar un paquete Move ejecutando:
+
+```shellscript filename="Terminal"
+aptos move compile --package-dir <tu-directorio-de-paquete>
+```
+
+<Aside type="note" emoji="ℹ️">
+  El directorio del paquete es la carpeta que contiene el archivo `Move.toml`.
+</Aside>
+
+Basado en la configuración en tu archivo `Move.toml`, puede que necesites pasar información adicional a ese comando de compilación.
+
+Por ejemplo, si miras el [contrato Move de ejemplo hello\_blockchain](https://github.com/aptos-labs/aptos-core/tree/main/aptos-move/move-examples/hello_blockchain), en el archivo `Move.toml` especifica una variable de dirección llamada `hello_blockchain`.
+
+```toml filename="Move.toml"
+[addresses]
+hello_blockchain = "_"
+```
+
+Entonces, para compilar esto, necesitarás pasar el valor para `hello_blockchain` con el parámetro `--named-addresses`.
+Puedes usar ya sea una dirección completa ej. `0x123456...7890` o un nombre de un perfil en la CLI ej. `default` o `superuser`.
+
+A continuación usaremos `default` en nuestro ejemplo:
+
+```shellscript filename="Terminal"
+aptos move compile --package-dir aptos-move/move-examples/hello_blockchain/ --named-addresses hello_blockchain=default
+```
+
+Puedes aprender más sobre parámetros opcionales al compilar contratos Move ejecutando `aptos move compile --help`.
+
+## 2. Pruebas Unitarias de Contratos Move
+
+La CLI de Aptos también puede usarse para compilar y ejecutar pruebas unitarias localmente ejecutando:
+
+```shellscript filename="Terminal"
+aptos move test --package-dir <tu-directorio-de-paquete>
+```
+
+Este comando tanto compila como ejecuta pruebas, por lo que necesita todos los mismos parámetros opcionales que usas al compilar.
+
+Puedes aprender más sobre los parámetros opcionales para probar contratos move ejecutando `aptos move test --help`.
+
+### Imprimiendo Información de Depuración
+
+Al escribir pruebas, puede ser útil imprimir información de depuración o trazas de pila. Puedes hacer eso usando `debug::print` y `debug::print_stack_trace` para imprimir información cuando uses `aptos move test`. Ve un ejemplo de cómo se usan en [DebugDemo.move](https://github.com/aptos-labs/aptos-core/blob/main/crates/aptos/debug-move-example/sources/DebugDemo.move).
+
+Para ver la salida de probar el paquete de [DebugDemo.move](https://github.com/aptos-labs/aptos-core/blob/main/crates/aptos/debug-move-example/sources/DebugDemo.move):
+
+1. Clona `[aptos-core](https://github.com/aptos-labs/aptos-core)`.
+2. Navega al [debug-move-example](https://github.com/aptos-labs/aptos-core/tree/main/crates/aptos/debug-move-example) ejecutando `cd crates/aptos/debug-move-example`.
+3. Ejecuta `aptos move test`.
+
+Deberías ver:
+
+```shellscript filename="Terminal"
+Running Move unit tests
+[debug] 0000000000000000000000000000000000000000000000000000000000000001
+Call Stack:
+    [0] 0000000000000000000000000000000000000000000000000000000000000001::Message::sender_can_set_message
+
+        Code:
+            [4] CallGeneric(0)
+            [5] MoveLoc(0)
+            [6] LdConst(0)
+          > [7] Call(1)
+            [8] Ret
+
+        Locals:
+            [0] -
+            [1] 0000000000000000000000000000000000000000000000000000000000000001
+
+Operand Stack:
+```
+
+Para más sobre cómo escribir pruebas unitarias con Move, sigue este [tutorial de Move](https://github.com/aptos-labs/aptos-core/tree/main/aptos-move/move-examples/move-tutorial) (el paso 2 se enfoca en pruebas unitarias).
+
+## 3. Generando Reportes de Cobertura de Pruebas
+
+La CLI de Aptos puede usarse para analizar y mejorar las pruebas de tus módulos Move. Para usar esta característica:
+
+Para ver la cobertura de código de tus pruebas ejecuta el siguiente comando desde el directorio de tu paquete Move:
+
+```shellscript filename="Terminal"
+aptos move test --coverage
+```
+
+Si te gustaría enfocar tu cobertura en paquetes específicos, puedes hacerlo con la opción `--filter`. Para reducir aún más a módulos Move específicos, usa el parámetro `--module`.
+
+Para información de cobertura más detallada / avanzada (como tu cobertura de pruebas en el bytecode compilado) puedes ejecutar `aptos move coverage`. Con ese comando, la CLI te pedirá más detalles sobre qué específicamente te gustaría más información de cobertura.
+
+Puedes aprender más sobre parámetros opcionales para cobertura de pruebas ejecutando `aptos move test --help` y `aptos move coverage --help`.
+
+## 4. Publicando Contratos Move
+
+Para publicar un contrato Move, necesitarás ejecutar:
+
+```shellscript filename="Terminal"
+aptos move publish --package-dir <tu-directorio-de-paquete>
+```
+
+Ten en cuenta que cuando estés publicando en la red principal, las credenciales que pases a parámetros opcionales como `--named-addresses` necesitarán reflejar cuentas en esa red en lugar de credenciales de prueba.
+
+## 5. Verificando Contratos Move
+
+Para verificar formalmente un contrato Move, puedes usar:
+
+```shellscript filename="Terminal"
+aptos move prove --package-dir <tu-directorio-de-paquete>
+```
+
+La verificación formal ayuda a asegurar que tu código Move cumple con especificaciones matemáticas y está libre de ciertos tipos de errores.
+
+## 6. Comandos Comunes de CLI
+
+### Inicializar un nuevo paquete Move
+
+```shellscript filename="Terminal"
+aptos move init --name mi_paquete
+```
+
+### Compilar con direcciones nombradas
+
+```shellscript filename="Terminal"
+aptos move compile --named-addresses mi_addr=default
+```
+
+### Ejecutar pruebas específicas
+
+```shellscript filename="Terminal"
+aptos move test --filter "test_nombre"
+```
+
+### Publicar con perfil específico
+
+```shellscript filename="Terminal"
+aptos move publish --profile testnet
+```
+
+## Mejores Prácticas
+
+1. **Siempre prueba antes de publicar**: Ejecuta `aptos move test` antes de usar `aptos move publish`
+2. **Usa cobertura de código**: Regularmente verifica `aptos move test --coverage` para asegurar pruebas comprehensivas
+3. **Verifica formalmente código crítico**: Usa `aptos move prove` para contratos que manejan activos valiosos
+4. **Mantén organizados los perfiles**: Usa diferentes perfiles CLI para diferentes redes (devnet, testnet, mainnet)
+
+## Solución de Problemas Comunes
+
+### Error de direcciones nombradas
+
+Si recibes errores sobre direcciones no resueltas, asegúrate de pasar todas las direcciones nombradas requeridas:
+
+```shellscript filename="Terminal"
+aptos move compile --named-addresses addr1=0x123,addr2=default
+```
+
+### Errores de dependencias
+
+Para problemas de dependencias, verifica tu `Move.toml` y asegúrate de que todas las dependencias estén correctamente especificadas.
+
+### Errores de gas al publicar
+
+Si encuentras errores de gas insuficiente al publicar, incrementa el límite de gas:
+
+```shellscript filename="Terminal"
+aptos move publish --max-gas 10000
+```
+
+***
+
+Para documentación más detallada sobre argumentos específicos y casos de uso avanzados, consulta la [documentación completa](/es/build/cli/working-with-move-contracts) en inglés.

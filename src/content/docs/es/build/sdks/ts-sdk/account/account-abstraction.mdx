@@ -1,0 +1,297 @@
+---
+title: "Abstracción de Cuenta"
+description: "Implementa lógica de autenticación de transacciones personalizada a través de módulos Move con Abstracción de Cuenta de Aptos"
+sidebar:
+  label: "Abstracción de Cuenta"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+La Abstracción de Cuenta (AA) en Aptos **habilita lógica de autenticación de transacciones personalizada a través de módulos Move**, permitiendo a las cuentas definir sus propias reglas más allá de esquemas criptográficos nativos. **Nota:** Esto actualmente solo está en vivo en testnet a partir del 17 de julio de 2025.
+
+## Conceptos Centrales
+
+### `FunctionInfo`
+
+Una estructura que define la función de autenticación a ser invocada.
+
+```move
+struct FunctionInfo has copy, drop, store {
+    module_address: address,
+    module_name: String,
+    function_name: String
+}
+```
+
+La función de autenticación es responsable de definir la lógica de autenticación usando Move. Debería devolver un signer si la autenticación es exitosa, de lo contrario aborta la transacción.
+La única firma de función de autenticación aceptada que puede agregarse a una cuenta es la siguiente:
+
+```move
+// La función puede devolver un signer si la autenticación es exitosa, de lo contrario aborta la transacción.
+public fun authenticate(account: signer, auth_data: AbstractionAuthData): signer;
+```
+
+**Ejemplo (Move)**
+
+```move
+module deployer::authenticator {
+    use aptos_framework::auth_data::{AbstractionAuthData};
+
+    public fun authenticate(account: signer, auth_data: AbstractionAuthData): signer {
+        // ... lógica de autenticación ...
+        account
+    }
+}
+```
+
+**Ejemplo (Typescript)**
+
+```typescript
+const authenticationFunction = `${deployer}::authenticator::authenticate`;
+```
+
+### `AbstractionAuthData`
+
+Una variante enum que define los datos de autenticación a ser pasados a la función de autenticación. Contiene:
+
+- `digest`: El hash sha256 del mensaje de firma.
+- `authenticator`: Bytes abstractos que serán pasados a la función de autenticación que se usará para verificar la transacción.
+
+```move
+enum AbstractionAuthData has copy, drop {
+    V1 { 
+        digest: vector<u8>,       // Hash SHA3-256 del mensaje de firma
+        authenticator: vector<u8> // Datos de autenticación personalizados (ej., firmas)
+    },
+}
+```
+
+**¿Por qué es importante el `digest`?**
+
+El `digest` es verificado por la MoveVM para asegurar que el mensaje de firma de la transacción siendo enviada es el mismo que el presentado en el `AbstractionAuthData`. Esto
+es importante porque permite a la función de autenticación verificar firmas con respecto a la transacción correcta.
+
+Por ejemplo, si quieres permitir que una clave pública firme transacciones en nombre del usuario, puedes permitir que la clave pública firme una transacción con un payload específico.
+Sin embargo, si un usuario malicioso envía una firma para la clave pública correcta pero un payload diferente del `digest`, la firma no será válida.
+
+**Ejemplo (Move)**
+
+Este ejemplo demuestra una lógica de autenticación simple que verifica si el autenticador es igual a `"hello world"`.
+
+```move
+module deployer::hello_world_authenticator {
+    use aptos_framework::auth_data::{Self, AbstractionAuthData};
+
+    public fun authenticate(
+        account: signer,
+        auth_data: AbstractionAuthData
+    ): signer {
+        let authenticator = *auth_data::authenticator(&auth_data);
+        assert!(authenticator == b"hello world", 1);
+        account
+    }
+}
+```
+
+**Ejemplo (Typescript)**
+
+```typescript
+const abstractedAccount = new AbstractedAccount({
+  /**
+   * El resultado de la función signer estará disponible como el campo `authenticator` en la variante enum `AbstractionAuthData`.
+   */
+  signer: () => new TextEncoder().encode("hello world"),
+  /**
+   * La función de autenticación a ser invocada.
+   */
+  authenticationFunction: `${deployer}::hello_world_authenticator::authenticate`,
+});
+```
+
+## Guía Paso a Paso Mínima
+
+<Steps>
+  1. 1. Desplegar Módulo de Autenticación
+
+     En este ejemplo, desplegaremos el módulo `hello_world_authenticator`. La función `authenticate` toma un `AbstractionAuthData` y devuelve un `signer`
+     si la autenticación es exitosa, de lo contrario aborta la transacción. La lógica de autenticación solo permitirá transacciones que tengan un autenticador igual a `"hello world"`.
+
+     ```move
+     module deployer::hello_world_authenticator {
+         use aptos_framework::auth_data::{Self, AbstractionAuthData};
+         use std::bcs;
+
+         public fun authenticate(
+             account: signer,
+             auth_data: AbstractionAuthData
+         ): signer {
+             let authenticator = *auth_data::authenticator(&auth_data);
+             assert!(authenticator == b"hello world", 1);
+             account
+         }
+     }
+     ```
+
+     Para desplegar el módulo, puedes usar los siguientes comandos del [CLI de Aptos](/es/build/cli). Asumimos que ya has configurado un workspace con `aptos init` y
+     declarado las direcciones nombradas en tu archivo `Move.toml`.
+
+     ```shellscript
+     aptos move publish --named-addresses deployer=0x1234567890123456789012345678901234567890
+     ```
+
+  2. 2. Configurar tu Entorno
+
+     Una vez desplegado, puedes configurar tu entorno. En este ejemplo, usaremos Devnet y crearemos una cuenta llamada `alice` que actuará como nuestro usuario.
+
+     ```typescript
+     const DEPLOYER = "0x<hello_world_authenticator_deployer>"
+
+     const aptos = new Aptos(new AptosConfig({ network: Network.DEVNET }));
+
+     const alice = Account.generate();
+
+     const authenticationFunctionInfo = `${deployer}::hello_world_authenticator::authenticate`;
+     ```
+
+  3. 3. (Opcional) Verificar si la Abstracción de Cuenta está Habilitada
+
+     Antes de pedirles que habiliten la abstracción de cuenta, puedes verificar si la cuenta tiene abstracción de cuenta habilitada llamando a la función `isAccountAbstractionEnabled`.
+     Esto devolverá un valor booleano indicando si la cuenta tiene abstracción de cuenta habilitada.
+
+     ```typescript
+     const accountAbstractionStatus = await aptos.abstraction.isAccountAbstractionEnabled({
+         accountAddress: alice.accountAddress,
+         authenticationFunction,
+     });
+
+     console.log("Estado de Abstracción de Cuenta: ", accountAbstractionStatus);
+     ```
+
+  4. 4. Habilitar la Función de Autenticación
+
+     Asumiendo que la cuenta no tiene abstracción de cuenta habilitada, necesitas habilitar la función de autenticación para la cuenta. Esto puede hacerse llamando
+     a la función `enableAccountAbstractionTransaction`. Esto crea una transacción cruda que necesita ser firmada y enviada a la red. En este ejemplo, `alice`
+     será la cuenta que será habilitada.
+
+     ```typescript
+     const transaction = aptos.abstraction.enableAccountAbstractionTransaction({
+       accountAddress: alice.accountAddress,
+       authenticationFunction: `${deployer}::hello_world_authenticator::authenticate`,
+     });
+
+     const pendingTransaction = await aptos.signAndSubmitTransaction({
+       transaction,
+       signer: alice.signer,
+     });
+
+     await aptos.waitForTransaction({ hash: pendingTransaction.hash });
+
+     console.log("Abstracción de Cuenta habilitada para cuenta: ", alice.accountAddress);
+     ```
+
+     <details>
+       <summary>
+         <b>Ejemplo del Adaptador de Billetera</b>
+       </summary>
+
+       <Aside type="note">
+         Si estás usando el adaptador de billetera, puedes usar la función `signTransaction` para firmar la transacción antes de enviarla a la red.
+       </Aside>
+
+       ```tsx
+       export default function useEnableAbstraction() {
+         const { account, signTransaction } = useWallet();
+
+         return {
+           enableAbstraction: async () => {
+             if (!account) return;
+
+             // Nota: El cliente Aptos debe estar definido en algún lugar de la aplicación.
+             const transaction = aptos.abstraction.enableAccountAbstractionTransaction({
+               accountAddress: account.address,
+               authenticationFunction: `${deployer}::hello_world_authenticator::authenticate`,
+             });
+
+             const senderAuthenticator = await signTransaction(txn);
+
+             const pendingTxn = await aptos.transaction.submit.simple({
+               transaction: txn,
+               senderAuthenticator,
+             });
+
+             return await aptos.waitForTransaction({ hash: pendingTxn.hash });
+           }
+         }
+       }
+       ```
+     </details>
+
+  5. 5. Crear una Cuenta Abstraída
+
+     Una vez que la función de autenticación está habilitada, puedes crear un objeto de cuenta abstraída para firmar transacciones. Debes proporcionar la función de autenticación que se usará para verificar la transacción
+     y una función `signer` que se usará para firmar la transacción. La función `signer` es responsable de generar el autenticador que se pasará a la función de autenticación.
+
+     ```typescript
+     const abstractedAccount = new AbstractedAccount({
+       accountAddress: alice.accountAddress,
+       signer: () => new TextEncoder().encode("hello world"),
+       authenticationFunction: `${deployer}::hello_world_authenticator::authenticate`,
+     });
+     ```
+
+  6. 6. Firmar y Enviar una Transacción usando la Cuenta Abstraída
+
+     Una vez que hayas creado la cuenta abstraída, puedes usarla para firmar transacciones normalmente. Es importante que el campo `sender` en la transacción
+     sea el mismo que la dirección de la cuenta abstraída.
+
+     ```typescript
+     const coinTransferTransaction = await aptos.transaction.build.simple({
+       sender: abstractedAccount.accountAddress,
+       data: {
+         function: "0x1::coin::transfer",
+         typeArguments: ["0x1::aptos_coin::AptosCoin"],
+         functionArguments: [alice.accountAddress, 100],
+       },
+     });
+
+     const pendingCoinTransferTransaction = await aptos.transaction.signAndSubmitTransaction({
+       transaction: coinTransferTransaction,
+       signer: abstractedAccount,
+     });
+
+     await aptos.waitForTransaction({ transactionHash: pendingCoinTransferTransaction.hash });
+
+     console.log("¡Transacción de transferencia de moneda enviada! ", pendingCoinTransferTransaction.hash);
+     ```
+
+  7. 7. Conclusión
+
+     Para verificar que has firmado y enviado exitosamente la transacción usando la cuenta abstraída, puedes usar el explorador para verificar la transacción. Si la
+     firma de la transacción contiene un campo `function_info` y `auth_data`, ¡significa que usaste exitosamente la abstracción de cuenta! La demo E2E completa se puede encontrar [aquí](https://github.com/aptos-labs/aptos-ts-sdk/blob/main/examples/typescript/public_key_authenticator_account_abstraction.ts).
+
+     ![Firma de Transacción](~/images/account-abstraction/complex-guide-transaction-signature.png)
+</Steps>
+
+## Operaciones de Gestión
+
+Si quieres deshabilitar la abstracción de cuenta para una cuenta, puedes usar el `disableAccountAbstractionTransaction`. Si no especificas una función de autenticación,
+la transacción deshabilitará todas las funciones de autenticación para la cuenta.
+
+```typescript
+const transaction = aptos.abstraction.disableAccountAbstractionTransaction({
+  accountAddress: alice.accountAddress,
+  /**
+   * La función de autenticación a ser deshabilitada. Si se deja `undefined`, todas las funciones de autenticación serán deshabilitadas.
+  */
+  authenticationFunction,
+});
+```
+
+## Experiencia de Usuario de la Aplicación
+
+Las aplicaciones que quieren aprovechar la abstracción de cuenta querrán proporcionar una experiencia de usuario que permita a los usuarios verificar si la cuenta tiene abstracción de cuenta habilitada,
+y habilitarla, si no está habilitada.
+
+Abajo hay un diagrama del flujo UX para habilitar abstracción de cuenta.
+
+![UX de Abstracción de Cuenta](~/images/account-abstraction/account-abstraction-ux.png)

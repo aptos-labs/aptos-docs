@@ -1,0 +1,314 @@
+---
+title: "Habilidades"
+description: "Aprende sobre las habilidades en el lenguaje de programación Move para el desarrollo de contratos inteligentes en Aptos."
+sidebar:
+  label: "Habilidades"
+---
+
+Las habilidades son una característica de tipado en Move que controla qué acciones son permisibles para valores de un tipo dado. Este sistema otorga control de grano fino sobre el comportamiento de tipado "lineal" de valores, así como si y cómo los valores se usan en almacenamiento global. Esto se implementa controlando el acceso a ciertas instrucciones de bytecode para que un valor sea usado con la instrucción de bytecode, debe tener la habilidad requerida (si una es requerida en absoluto, no todas las instrucciones son controladas por una habilidad).
+
+## Las Cuatro Habilidades
+
+Las cuatro habilidades son:
+
+- [`copy`](#copy)
+  - Permite que valores de tipos con esta habilidad sean copiados.
+- [`drop`](#drop)
+  - Permite que valores de tipos con esta habilidad sean extraídos/descartados.
+- [`store`](#store)
+  - Permite que valores de tipos con esta habilidad existan dentro de un struct en almacenamiento global.
+- [`key`](#key)
+  - Permite que el tipo sirva como clave para operaciones de almacenamiento global.
+
+### `copy`
+
+La habilidad `copy` permite que valores de tipos con esa habilidad sean copiados. Controla la capacidad de copiar valores fuera de variables locales con el operador [`copy`](/es/build/smart-contracts/book/variables#move-and-copy) y copiar valores vía referencias con [desreferencia `*e`](/es/build/smart-contracts/book/references#reading-and-writing-through-references).
+
+Si un valor tiene `copy`, todos los valores contenidos dentro de ese valor tienen `copy`.
+
+### `drop`
+
+La habilidad `drop` permite que valores de tipos con esa habilidad sean descartados. Por descartado, queremos decir que el valor no es transferido y es efectivamente destruido mientras el programa Move se ejecuta. Como tal, esta habilidad controla la capacidad de ignorar valores en una multitud de ubicaciones, incluyendo:
+
+- no usar el valor en una variable local o parámetro
+- no usar el valor en una [secuencia vía `;`](/es/build/smart-contracts/book/variables#expression-blocks)
+- sobrescribir valores en variables en [asignaciones](/es/build/smart-contracts/book/variables#assignments)
+- sobrescribir valores vía referencias cuando [escribiendo `*e1 = e2`](/es/build/smart-contracts/book/references#reading-and-writing-through-references).
+
+Si un valor tiene `drop`, todos los valores contenidos dentro de ese valor tienen `drop`.
+
+### `store`
+
+La habilidad `store` permite que valores de tipos con esta habilidad existan dentro de un struct (resource) en almacenamiento global, _pero_ no necesariamente como un resource de nivel superior en almacenamiento global. Esta es la única habilidad que no controla directamente una operación. En su lugar, controla la existencia en almacenamiento global cuando se usa en conjunto con `key`.
+
+Si un valor tiene `store`, todos los valores contenidos dentro de ese valor tienen `store`.
+
+### `key`
+
+La habilidad `key` permite que el tipo sirva como clave para [operaciones de almacenamiento global](/es/build/smart-contracts/book/global-storage-operators). Controla todas las operaciones de almacenamiento global, por lo que para que un tipo sea usado con `move_to`, `borrow_global`, `move_from`, etc., el tipo debe tener la habilidad `key`. Ten en cuenta que las operaciones aún deben ser usadas en el módulo donde el tipo `key` está definido (en cierto sentido, las operaciones son privadas al módulo que las define).
+
+Si un valor tiene `key`, todos los valores contenidos dentro de ese valor tienen `store`. Esta es la única habilidad con este tipo de asimetría.
+
+## Tipos Integrados
+
+La mayoría de tipos primitivos e integrados tienen `copy`, `drop`, y `store` excepto por `signer`, que solo tiene `drop`.
+
+- `bool`, `u8`, `u16`, `u32`, `u64`, `u128`, `u256`, y `address` todos tienen `copy`, `drop`, y `store`.
+- `signer` tiene `drop`
+  - No puede ser copiado y no puede ser puesto en almacenamiento global
+- `vector<T>` puede tener `copy`, `drop`, y `store` dependiendo de las habilidades de `T`.
+  - Ve [Habilidades Condicionales y Tipos Genéricos](#conditional-abilities-and-generic-types) para más detalles.
+- Referencias inmutables `&` y referencias mutables `&mut` ambas tienen `copy` y `drop`.
+  - Esto se refiere a copiar y descartar la referencia en sí, no a lo que refieren.
+  - Las referencias no pueden aparecer en almacenamiento global, por lo tanto no tienen `store`.
+
+Ninguno de los tipos primitivos tienen `key`, lo que significa que ninguno de ellos puede ser usado directamente con las [operaciones de almacenamiento global](/es/build/smart-contracts/book/global-storage-operators).
+
+## Anotando Structs
+
+Para declarar que un `struct` tiene una habilidad, se declara con `has <ability>` después del nombre del struct pero antes de los campos. Por ejemplo:
+
+```move
+module 0x42::example {
+  struct Ignorable has drop { f: u64 }
+
+  struct Pair has copy, drop, store { x: u64, y: u64 }
+}
+```
+
+En este caso: `Ignorable` tiene la habilidad `drop`. `Pair` tiene `copy`, `drop`, y `store`.
+
+Todas estas habilidades tienen garantías fuertes sobre estas operaciones controladas. La operación puede ser realizada en el valor solo si tiene esa habilidad; ¡incluso si el valor está profundamente anidado dentro de alguna otra colección!
+
+Como tal: cuando declaras las habilidades de un struct, ciertos requisitos se colocan en los campos. Todos los campos deben satisfacer estas restricciones. Estas reglas son necesarias para que los structs satisfagan las reglas de alcanzabilidad para las habilidades dadas arriba. Si un struct se declara con la habilidad...
+
+- `copy`, todos los campos deben tener `copy`.
+- `drop`, todos los campos deben tener `drop`.
+- `store`, todos los campos deben tener `store`.
+- `key`, todos los campos deben tener `store`.
+  - `key` es la única habilidad actualmente que no se requiere a sí misma.
+
+Por ejemplo:
+
+```move
+module 0x42::example {
+  // Un struct sin ninguna habilidad
+  struct NoAbilities {}
+
+  struct WantsCopy has copy {
+    f: NoAbilities, // ERROR 'NoAbilities' no tiene 'copy'
+  }
+
+  struct WantsDrop has drop {
+    f: NoAbilities, // ERROR 'NoAbilities' no tiene 'drop'
+  }
+
+  struct WantsStore has store {
+    f: NoAbilities, // ERROR 'NoAbilities' no tiene 'store'
+  }
+
+  struct WantsKey has key {
+    f: NoAbilities, // ERROR 'NoAbilities' no tiene 'store'
+  }
+}
+```
+
+## Habilidades Condicionales y Tipos Genéricos
+
+Cuando las habilidades se anotan en un tipo genérico, no todas las instanciaciones de ese tipo están garantizadas a tener esa habilidad. Considera este struct:
+
+```move
+struct Cup<T> has copy, drop, store, key { item: T }
+```
+
+Podría ser muy útil si `Cup` pudiera contener cualquier tipo, independientemente de las habilidades del tipo. El sistema de tipos puede _ver_ el tipo dentro de `Cup`, por lo que las reglas de habilidad pueden aplicarse solo si es seguro.
+
+En este caso, `Cup` puede tener `copy`, `drop`, `store`, y `key` solo si `T` tiene `copy`, `drop`, y `store`. La asimetría de `key` se indica arriba: `Cup` puede tener `key` mientras `T` solo necesita `store`. Esto se debe a que `key` requiere que todos los campos tengan `store`, y no `key`.
+
+```move
+// Instanciaciones válidas
+struct Cup<u64> has copy, drop, store, key { item: u64 }
+struct Cup<Coin> has store, key { item: Coin } // si Coin tiene store
+
+// Instanciaciones inválidas
+struct Cup<NoAbilities> {} // No tendría ninguna habilidad
+```
+
+## Derivación de Habilidades
+
+Las habilidades pueden ser derivadas para structs. Cuando un struct se define con parámetros de tipo, sus habilidades dependen de las habilidades de esos parámetros de tipo:
+
+```move
+module 0x42::example {
+  struct Container<T> has copy, drop, store { item: T }
+
+  // Container<u64> automáticamente tiene copy, drop, store
+  // Container<signer> solo tiene drop (signer no tiene copy ni store)
+}
+```
+
+## Restricciones de Habilidades
+
+Los parámetros de tipo pueden ser restringidos para requerir ciertas habilidades:
+
+```move
+module 0x42::example {
+  // T debe tener copy y drop
+  struct Copyable<T: copy + drop> has copy, drop {
+    item: T
+  }
+
+  // T debe tener store
+  struct Storable<T: store> has store {
+    item: T
+  }
+
+  // Múltiples restricciones
+  fun example<T: copy + drop + store>() {
+    // T se puede copiar, descartar, y almacenar
+  }
+}
+```
+
+## Ejemplos Prácticos
+
+### Resource Básico
+
+```move
+module 0x42::coin {
+  // Solo puede ser almacenado, no copiado ni descartado
+  struct Coin has store, key {
+    value: u64
+  }
+
+  public fun mint(value: u64): Coin {
+    Coin { value }
+  }
+
+  public fun value(coin: &Coin): u64 {
+    coin.value
+  }
+
+  public fun destroy(coin: Coin): u64 {
+    let Coin { value } = coin;
+    value
+  }
+}
+```
+
+### Datos Copiables
+
+```move
+module 0x42::config {
+  // Puede ser copiado y descartado para facilidad de uso
+  struct Config has copy, drop, store {
+    fee_rate: u64,
+    enabled: bool
+  }
+
+  public fun default_config(): Config {
+    Config {
+      fee_rate: 100, // 1%
+      enabled: true
+    }
+  }
+
+  public fun create_modified_config(base: Config, new_fee: u64): Config {
+    let mut_config = base; // copia automática debido a 'copy'
+    mut_config.fee_rate = new_fee;
+    mut_config
+  }
+}
+```
+
+### Wrapper de Tipos
+
+```move
+module 0x42::id {
+  // Un wrapper que previene copia accidental de IDs
+  struct UserID has drop, store {
+    value: address
+  }
+
+  public fun new(addr: address): UserID {
+    UserID { value: addr }
+  }
+
+  public fun into_address(id: UserID): address {
+    let UserID { value } = id;
+    value
+  }
+
+  // Función de comparación ya que no podemos copiar
+  public fun equals(id1: &UserID, id2: &UserID): bool {
+    id1.value == id2.value
+  }
+}
+```
+
+### Eventos
+
+```move
+module 0x42::events {
+  use std::event;
+
+  // Los eventos deben ser drop + store
+  struct TransferEvent has drop, store {
+    from: address,
+    to: address,
+    amount: u64
+  }
+
+  struct EventHandle has key {
+    transfer_events: event::EventHandle<TransferEvent>
+  }
+
+  public fun emit_transfer(from: address, to: address, amount: u64) {
+    // Los eventos se descartan automáticamente después de la emisión
+    let event = TransferEvent { from, to, amount };
+    event::emit(event);
+  }
+}
+```
+
+## Buenas Prácticas
+
+1. **Minimiza habilidades**: Solo otorga las habilidades que necesitas realmente:
+
+```move
+// ✓ Bueno: solo las habilidades necesarias
+struct Coin has store, key { value: u64 }
+
+// ✗ Demasiadas habilidades
+struct Coin has copy, drop, store, key { value: u64 } // Los coins no deberían ser copiables
+```
+
+2. **Usa restricciones apropiadas**: Especifica restricciones de habilidades en funciones genéricas:
+
+```move
+// ✓ Bueno: T debe ser almacenable
+fun store_value<T: store>(value: T) { ... }
+
+// ✗ Muy restrictivo
+fun store_value<T: copy + drop + store + key>(value: T) { ... }
+```
+
+3. **Considera la semántica del dominio**: Las habilidades deben reflejar las propiedades del mundo real:
+
+```move
+// ✓ Bueno: NFTs únicos no deberían ser copiables
+struct NFT has store, key { id: u64, data: vector<u8> }
+
+// ✓ Bueno: Datos de configuración pueden ser copiables
+struct Settings has copy, drop, store { theme: u8, language: u8 }
+```
+
+4. **Documenta decisiones de habilidades**: Explica por qué elegiste ciertas habilidades:
+
+```move
+/// Representa una moneda que no puede ser copiada o descartada
+/// para prevenir inflación accidental o pérdida de valor
+struct SecureCoin has store, key {
+  value: u64
+}
+```

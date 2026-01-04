@@ -29,10 +29,13 @@ const hasAlgoliaConfig = ALGOLIA_APP_ID && ALGOLIA_SEARCH_API_KEY && ALGOLIA_IND
 }
 <script is:inline define:vars={{ hasAlgoliaConfig }}>
   if (hasAlgoliaConfig) {
-    // Wait for the page to load
-    document.addEventListener("DOMContentLoaded", () => {
+    function initDocSearchButtonAlt() {
       // Get our custom button
       const docSearchButtonAlt = document.querySelector(".DocSearch-Button-Alt");
+
+      // Skip if already initialized
+      if (docSearchButtonAlt?.dataset.init) return;
+      if (docSearchButtonAlt) docSearchButtonAlt.dataset.init = "true";
 
       // Add click event listener
       docSearchButtonAlt?.addEventListener("click", () => {
@@ -42,7 +45,17 @@ const hasAlgoliaConfig = ALGOLIA_APP_ID && ALGOLIA_SEARCH_API_KEY && ALGOLIA_IND
           docSearchButton.click();
         }
       });
-    });
+    }
+
+    // Initialize on first load
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", initDocSearchButtonAlt);
+    } else {
+      initDocSearchButtonAlt();
+    }
+
+    // Re-initialize after View Transition navigation
+    document.addEventListener("astro:page-load", initDocSearchButtonAlt);
   }
 </script>
 

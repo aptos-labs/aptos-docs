@@ -1,6 +1,6 @@
 ---
 import Default from "@astrojs/starlight/components/Head.astro";
-// import { ClientRouter } from "astro:transitions";
+import { ClientRouter } from "astro:transitions";
 import { Schema } from "astro-seo-schema";
 import { Font } from "astro:assets";
 import globalCssUrl from "../styles/global.css?url";
@@ -92,11 +92,23 @@ const keywords = Object.fromEntries(
 const lastUpdatedDate = lastUpdated ? lastUpdated.toISOString() : new Date().toISOString();
 ---
 
+{/* Critical font preload with high priority */}
 <Font cssVariable="--font-atkinson-hyperlegible-next" preload />
 
-<link rel="preconnect" href="https://api.testnet.staging.aptoslabs.com" />
+{/* Resource hints for external services */}
+<link rel="preconnect" href="https://api.testnet.staging.aptoslabs.com" crossorigin />
 <link rel="dns-prefetch" href="https://api.testnet.staging.aptoslabs.com" />
-<link rel="preload" href={globalCssUrl} as="style" />
+
+{/* Algolia search - preconnect for faster search initialization */}
+<link rel="preconnect" href="https://algolia.net" crossorigin />
+<link rel="preconnect" href="https://algolianet.com" crossorigin />
+
+{/* Google Tag Manager - preconnect for analytics (loaded via partytown) */}
+<link rel="preconnect" href="https://www.googletagmanager.com" crossorigin />
+<link rel="dns-prefetch" href="https://www.googletagmanager.com" />
+
+{/* Critical CSS with high fetch priority */}
+<link rel="preload" href={globalCssUrl} as="style" fetchpriority="high" />
 
 <Schema
   item={{
@@ -200,11 +212,12 @@ const lastUpdatedDate = lastUpdated ? lastUpdated.toISOString() : new Date().toI
   )
 }
 
-<!-- <style is:global>
+{/* View Transitions for SPA-like navigation */}
+<style is:global>
   ::view-transition-old(root),
   ::view-transition-new(root) {
     animation-duration: 0.1s;
     animation-timing-function: cubic-bezier(0.4, 0, 0.1, 1);
   }
 </style>
-<ClientRouter /> -->
+<ClientRouter />

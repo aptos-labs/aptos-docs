@@ -45,75 +45,88 @@ const { isMobile = false } = Astro.props;
 </div>
 
 <script>
-  const mobileButton = document.getElementById("mobile-chat-trigger");
-  const desktopButton = document.getElementById("chat-trigger");
-  const loadingOverlay = document.getElementById("chat-overlay");
+  function initChatButton() {
+    const mobileButton = document.getElementById("mobile-chat-trigger");
+    const desktopButton = document.getElementById("chat-trigger");
+    const loadingOverlay = document.getElementById("chat-overlay");
 
-  function showLoadingOverlay() {
-    if (loadingOverlay) {
-      loadingOverlay.classList.remove("hidden");
-      loadingOverlay.classList.add("visible");
-    }
-  }
-
-  function hideLoadingOverlay() {
-    if (loadingOverlay) {
-      loadingOverlay.classList.remove("visible");
-      loadingOverlay.classList.add("hidden");
-    }
-  }
-
-  function handleChatToggle() {
-    // Show loading overlay immediately
-    showLoadingOverlay();
-
-    // Dispatch the event to load the React component
-    window.dispatchEvent(new CustomEvent("toggle-chat"));
-
-    // Close the mobile menu when opening chat
-    if (document.body.hasAttribute("data-mobile-menu-expanded")) {
-      document.body.removeAttribute("data-mobile-menu-expanded");
-      const menuButton = document.querySelector("starlight-menu-button");
-      if (menuButton) {
-        menuButton.setAttribute("aria-expanded", "false");
+    function showLoadingOverlay() {
+      if (loadingOverlay) {
+        loadingOverlay.classList.remove("hidden");
+        loadingOverlay.classList.add("visible");
       }
     }
 
-    // Set up cleanup controller
-    const controller = new AbortController();
-
-    const cleanup = () => {
-      hideLoadingOverlay();
-      controller.abort();
-    };
-
-    // Hide loading when React component is ready
-    window.addEventListener("chat-ready", cleanup, {
-      once: true,
-      signal: controller.signal,
-    });
-
-    // Also hide loading if dialog is closed before ready
-    window.addEventListener("chat-closed", cleanup, {
-      once: true,
-      signal: controller.signal,
-    });
-
-    // Fallback: hide loading after 30 seconds (safety mechanism for extreme cases)
-    setTimeout(() => {
-      if (!controller.signal.aborted) {
-        cleanup();
+    function hideLoadingOverlay() {
+      if (loadingOverlay) {
+        loadingOverlay.classList.remove("visible");
+        loadingOverlay.classList.add("hidden");
       }
-    }, 30000);
+    }
+
+    function handleChatToggle() {
+      // Show loading overlay immediately
+      showLoadingOverlay();
+
+      // Dispatch the event to load the React component
+      window.dispatchEvent(new CustomEvent("toggle-chat"));
+
+      // Close the mobile menu when opening chat
+      if (document.body.hasAttribute("data-mobile-menu-expanded")) {
+        document.body.removeAttribute("data-mobile-menu-expanded");
+        const menuButton = document.querySelector("starlight-menu-button");
+        if (menuButton) {
+          menuButton.setAttribute("aria-expanded", "false");
+        }
+      }
+
+      // Set up cleanup controller
+      const controller = new AbortController();
+
+      const cleanup = () => {
+        hideLoadingOverlay();
+        controller.abort();
+      };
+
+      // Hide loading when React component is ready
+      window.addEventListener("chat-ready", cleanup, {
+        once: true,
+        signal: controller.signal,
+      });
+
+      // Also hide loading if dialog is closed before ready
+      window.addEventListener("chat-closed", cleanup, {
+        once: true,
+        signal: controller.signal,
+      });
+
+      // Fallback: hide loading after 30 seconds (safety mechanism for extreme cases)
+      setTimeout(() => {
+        if (!controller.signal.aborted) {
+          cleanup();
+        }
+      }, 30000);
+    }
+
+    // Remove any existing listeners to avoid duplicates after navigation
+    if (mobileButton) {
+      mobileButton.replaceWith(mobileButton.cloneNode(true));
+      const newMobileButton = document.getElementById("mobile-chat-trigger");
+      newMobileButton?.addEventListener("click", handleChatToggle);
+    }
+
+    if (desktopButton) {
+      desktopButton.replaceWith(desktopButton.cloneNode(true));
+      const newDesktopButton = document.getElementById("chat-trigger");
+      newDesktopButton?.addEventListener("click", handleChatToggle);
+    }
   }
 
-  if (mobileButton) {
-    mobileButton.addEventListener("click", handleChatToggle);
-  }
+  // Initialize on first load
+  initChatButton();
 
-  if (desktopButton) {
-    desktopButton.addEventListener("click", handleChatToggle);
-  }
+  // Re-initialize after View Transition navigation
+  document.addEventListener("astro:page-load", initChatButton);
 </script>
 
 <style>

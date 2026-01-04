@@ -5,14 +5,19 @@ import Default from "@astrojs/starlight/components/LanguageSelect.astro";
 <Default {...Astro.props}><slot /></Default>
 
 <script>
-  // Wait for the DOM to be fully loaded
-  document.addEventListener("DOMContentLoaded", () => {
+  function initLanguageSelect() {
     // Find ALL language select elements
-    const langSelects = document.querySelectorAll("starlight-lang-select select");
+    const langSelects = document.querySelectorAll<HTMLSelectElement>(
+      "starlight-lang-select select",
+    );
 
     if (langSelects.length > 0) {
       // Add our enhanced handler to each select element
       langSelects.forEach((langSelect) => {
+        // Skip if already initialized
+        if (langSelect.dataset.langSelectInit) return;
+        langSelect.dataset.langSelectInit = "true";
+
         langSelect.addEventListener("change", (e) => {
           if (e.currentTarget instanceof HTMLSelectElement) {
             // Get the selected locale from the pathname
@@ -28,5 +33,15 @@ import Default from "@astrojs/starlight/components/LanguageSelect.astro";
         });
       });
     }
-  });
+  }
+
+  // Initialize on first load
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initLanguageSelect);
+  } else {
+    initLanguageSelect();
+  }
+
+  // Re-initialize after View Transition navigation
+  document.addEventListener("astro:page-load", initLanguageSelect);
 </script>

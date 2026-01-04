@@ -1,0 +1,212 @@
+---
+title: "Sesiones de Simulación de Transacciones"
+description: "Guía para realizar simulaciones locales complejas usando Sesiones de Simulación de Transacciones."
+sidebar:
+  label: "Sesiones de Simulación de Transacciones"
+---
+
+import { Aside, FileTree } from '@astrojs/starlight/components';
+
+En los tutoriales anteriores, demostramos cómo puedes [simular una transacción localmente](/es/build/cli/working-with-move-contracts/local-simulation-benchmarking-and-gas-profiling),
+o [reproducir una transacción pasada](/es/build/cli/replay-past-transactions). Sin embargo, estos métodos solo funcionan para una única transacción.
+
+Para simular múltiples transacciones en secuencia, necesitarás usar **Sesiones de Simulación de Transacciones** -- una función avanzada del CLI que
+te permite crear un entorno local persistente que guarda y restaura estados entre ejecuciones, con el beneficio adicional de poder
+inspeccionar las salidas de las transacciones con facilidad.
+
+Esto hace posible probar flujos de trabajo complejos — como despliegue de contratos, actualizaciones de recursos o interacciones de múltiples pasos.
+
+<Aside type="note" emoji="ℹ️">
+  Antes de comenzar, asegúrate de haber actualizado tu Aptos CLI a la última versión.
+
+  Las versiones antiguas de Aptos CLI pueden no soportar las Sesiones de Simulación de Transacciones ya que es una función relativamente nueva.
+</Aside>
+
+## Inicializando una Sesión
+
+Puedes inicializar una sesión desde:
+
+- **Un génesis local limpio**, para un entorno completamente local y aislado, o
+- **Un estado de red bifurcado** (Devnet, Testnet o Mainnet), permitiéndote probar tus cambios contra datos del mundo real.
+
+Independientemente del modo que elijas, la interfaz, los comandos y cómo se guardan los datos de sesión son exactamente iguales.
+Solo especifica tu modo preferido cuando inicialices la sesión.
+
+### Desde un Estado de Red Bifurcado
+
+Con la bifurcación de red, puedes probar tu código Move usando **datos de red en vivo** — saldos, recursos y módulos publicados.
+
+Para comenzar con un estado de red bifurcado, ejecuta:
+
+```shellscript filename="Terminal"
+aptos move sim init --path <RUTA_SESION> --network <RED> --api-key <TU_API_KEY>
+```
+
+Aquí `<RED>` puede ser uno de los siguientes: `devnet`, `testnet`, `mainnet`, o una URL de fullnode personalizada.
+La sesión almacenará todos sus datos en el directorio `<RUTA_SESION>` especificado.
+
+<Aside type="note" emoji="ℹ️">
+  Necesitarás una cuenta de desarrollador de Aptos gratuita y una API key para usar el modo de bifurcación de red.
+  Sin una API key, se te asigna un límite de tasa muy bajo y casi seguramente encontrarás errores de límite de tasa.
+
+  Puedes seguir las instrucciones oficiales aquí: [Configurar una API Key](/es/build/guides/build-e2e-dapp#setup-api-key).
+</Aside>
+
+### Desde un Génesis Local Limpio
+
+Para el desarrollo del día a día, a veces solo necesitas empezar desde cero — sin datos de red real necesarios.
+Esto es perfecto para simulación ad-hoc, pruebas sintéticas o integración continua.
+
+Para comenzar con un génesis local limpio, ejecuta:
+
+```shellscript filename="Terminal"
+aptos move sim init --path <RUTA_SESION>
+```
+
+Todo lo demás funciona igual — excepto que la simulación no tocará la red en absoluto, ya que todos los datos son locales.
+
+## Ejecutando simulaciones
+
+Una vez inicializada, puedes ejecutar transacciones contra tu sesión usando los comandos estándar de `aptos move`,
+añadiendo el argumento `--session` para indicar qué sesión local usar.
+
+Los comandos soportados incluyen:
+
+- `run`
+- `run-script`
+- `publish`
+- `view`
+- `create-object-and-publish-package`
+- `upgrade-object-package`
+- `deploy-object`
+- `upgrade-object`
+- `create-resource-account-and-publish-package`
+
+También hay utilidades adicionales bajo `aptos move sim` para gestionar e inspeccionar sesiones.
+
+- `fund`: financiar una cuenta con una cantidad dada de APT
+- `view-resource`: ver un recurso Move
+- `view-resource-group`: ver un grupo de recursos
+
+Para ayuda más detallada, ejecuta `aptos move sim --help`.
+
+### Ejemplo de Flujo de Trabajo
+
+```shellscript filename="Terminal"
+# 1. Financiar tu cuenta por defecto con 1 APT (para demostración)
+aptos move sim fund --session sess --account default --amount 100000000
+
+# 2. Ejecutar una transacción de transferencia
+aptos move run --session sess \
+  --function-id 0x1::aptos_account::transfer \
+  --args address:default u64:100
+
+# 3. Consultar el número de secuencia de tu cuenta
+aptos move view --session sess \
+  --function-id 0x1::account::get_sequence_number \
+  --args address:default
+
+# 4. Ver tu recurso Account en cadena
+aptos move sim view-resource --session sess \
+  --account default \
+  --resource 0x1::account::Account
+
+# 5. Ver un grupo de recursos (ej. tu almacén fungible)
+aptos move sim view-resource-group --session sess \
+  --account default \
+  --resource-group 0x1::object::ObjectGroup \
+  --derived-object-address 0xA
+```
+
+De nuevo, todos los cambios de estado son locales y se almacenan bajo tu directorio de sesión.
+
+## Inspeccionando Datos de Sesión
+
+Cada Sesión de Simulación de Transacciones organiza sus datos en un árbol de directorios estructurado, facilitando la inspección de cada paso de tu simulación.
+
+Así es como se ve la estructura para la sesión de ejemplo:
+
+<FileTree>
+  - sess/
+    - \[0] fund (fungible)/
+      - summary.json
+    - \[1] execute 0x1::aptos\_account::transfer/
+      - events.json
+      - summary.json
+      - write\_set.json
+    - \[2] view 0x1::account::get\_sequence\_number/
+      - summary.json
+    - \[3] view resource 0xdbcb...::0x1::account::Account/
+      - summary.json
+    - \[4] view resource group 0x20ce...::0x1::object::ObjectGroup/
+      - summary.json
+    - config.json
+    - delta.json
+</FileTree>
+
+### Salidas de Ejemplo
+
+`[1] execute 0x1::aptos_account::transfer/summary.json`
+
+```json
+{
+  "execute_transaction": {
+    "status": {
+      "Keep": "Success"
+    },
+    "gas_used": 498,
+    "fee_statement": {
+      "total_charge_gas_units": 498,
+      "execution_gas_units": 4,
+      "io_gas_units": 3,
+      "storage_fee_octas": 49160,
+      "storage_fee_refund_octas": 0
+    }
+  }
+}
+```
+
+`[1] execute 0x1::aptos_account::transfer/events.json`
+
+```json
+[
+  {
+    "V2": {
+      "type_tag": "0x1::fungible_asset::Withdraw",
+      "event_data": {
+        "store": "20ce9f242351eae77cae7eb27e7e55f798e6c3b3528fcbb325bccea103e53ff9",
+        "amount": 100
+      }
+    }
+  },
+  {
+    "V2": {
+      "type_tag": "0x1::fungible_asset::Deposit",
+      "event_data": {
+        "store": "20ce9f242351eae77cae7eb27e7e55f798e6c3b3528fcbb325bccea103e53ff9",
+        "amount": 100
+      }
+    }
+  },
+  {
+    "V2": {
+      "type_tag": "0x1::transaction_fee::FeeStatement",
+      "event_data": {
+        "total_charge_gas_units": 498,
+        "execution_gas_units": 4,
+        "io_gas_units": 3,
+        "storage_fee_octas": 49160,
+        "storage_fee_refund_octas": 0
+      }
+    }
+  }
+]
+```
+
+## Planes Futuros
+
+Estamos trabajando en añadir más funciones a las Sesiones de Simulación de Transacciones, como:
+
+- Integración del Perfilador de Gas
+- Mejor rendimiento
+- Soporte para instantáneas y reversión

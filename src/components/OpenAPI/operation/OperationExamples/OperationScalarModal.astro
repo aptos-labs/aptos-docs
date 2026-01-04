@@ -49,54 +49,43 @@ import "@scalar/api-client/style.css";
     scalarContainer.classList.add(starlightThemeClassMap[theme]);
   });
 
-  // Initialize modal - create once and reuse
-  interface ModalInstance {
-    client?: {
-      open?: (options: { path: string; method: string }) => void;
-    };
-    router?: {
-      navigate?: (options: { path: string; method: string }) => void;
-    };
-  }
+  // Initialize modal once and reuse - the new sync API requires loading the spec separately
+  let modalClient: ReturnType<typeof createApiClientModal>["client"] | null = null;
+  let specLoaded = false;
 
-  let modalInstance: ModalInstance | null = null;
-
-  // Initialize modal on first use
-  function getModalInstance(): ModalInstance {
-    if (!modalInstance) {
-      modalInstance = createApiClientModal({
+  async function getModalClient() {
+    if (!modalClient) {
+      const { client } = createApiClientModal({
         el: scalarContainer,
         configuration: {
-          url: "/aptos-spec.json",
           servers,
           showSidebar: false,
           hideClientButton: true,
         },
-      }) as ModalInstance;
+      });
+      modalClient = client;
     }
-    return modalInstance;
+
+    // The new sync API doesn't load the spec automatically, we need to call updateConfig
+    if (!specLoaded) {
+      await modalClient.updateConfig({
+        url: "/aptos-spec.json",
+        servers,
+        showSidebar: false,
+        hideClientButton: true,
+      });
+      specLoaded = true;
+    }
+
+    return modalClient;
   }
 
-  // Initialize modal router
+  // Listen for modal open events
   document.addEventListener(
     "scalarModal:open",
-    function (e: ScalarModalOpenEvent) {
-      const instance = getModalInstance();
-      // Try using router.navigate or client methods
-      if (instance.router?.navigate) {
-        instance.router.navigate({ path: e.detail.operationPath, method: e.detail.method });
-      } else if (instance.client?.open) {
-        instance.client.open({ path: e.detail.operationPath, method: e.detail.method });
-      } else {
-        console.error(
-          "Scalar API client modal could not be opened: neither router.navigate nor client.open is available.",
-          {
-            operationPath: e.detail.operationPath,
-            method: e.detail.method,
-            instance,
-          },
-        );
-      }
+    async function (e: ScalarModalOpenEvent) {
+      const client = await getModalClient();
+      client.open({ path: e.detail.operationPath, method: e.detail.method });
     },
     { passive: true },
   );

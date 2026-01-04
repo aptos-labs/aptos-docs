@@ -175,11 +175,14 @@
     // Re-initialize after a delay to catch late-loading DocSearch
     setTimeout(initSearchFallbacks, 2000);
 
-    // Re-initialize after View Transition navigation
-    document.addEventListener("astro:page-load", () => {
-      initSearchFallbacks();
-      setTimeout(initSearchFallbacks, 2000);
-    });
+    // Re-initialize after View Transition navigation (register listener only once)
+    if (typeof window !== "undefined" && !window.__searchFallbackPageLoadListenerAdded) {
+      window.__searchFallbackPageLoadListenerAdded = true;
+      document.addEventListener("astro:page-load", () => {
+        initSearchFallbacks();
+        setTimeout(initSearchFallbacks, 2000);
+      });
+    }
   })();
 </script>
 

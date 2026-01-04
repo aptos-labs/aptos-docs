@@ -68,13 +68,19 @@ import "@scalar/api-client/style.css";
 
     // The new sync API doesn't load the spec automatically, we need to call updateConfig
     if (!specLoaded) {
-      await modalClient.updateConfig({
-        url: "/aptos-spec.json",
-        servers,
-        showSidebar: false,
-        hideClientButton: true,
-      });
-      specLoaded = true;
+      try {
+        await modalClient.updateConfig({
+          url: "/aptos-spec.json",
+          servers,
+          showSidebar: false,
+          hideClientButton: true,
+        });
+        specLoaded = true;
+      } catch (error) {
+        console.error("Failed to load Scalar API spec:", error);
+        specLoaded = false;
+        throw error;
+      }
     }
 
     return modalClient;

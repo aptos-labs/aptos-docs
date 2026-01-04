@@ -108,25 +108,26 @@ const { isMobile = false } = Astro.props;
       }, 30000);
     }
 
-    // Remove any existing listeners to avoid duplicates after navigation
-    if (mobileButton) {
-      mobileButton.replaceWith(mobileButton.cloneNode(true));
-      const newMobileButton = document.getElementById("mobile-chat-trigger");
-      newMobileButton?.addEventListener("click", handleChatToggle);
+    // Skip if already initialized (check via data attribute)
+    if (mobileButton && !mobileButton.dataset.chatInit) {
+      mobileButton.dataset.chatInit = "true";
+      mobileButton.addEventListener("click", handleChatToggle);
     }
 
-    if (desktopButton) {
-      desktopButton.replaceWith(desktopButton.cloneNode(true));
-      const newDesktopButton = document.getElementById("chat-trigger");
-      newDesktopButton?.addEventListener("click", handleChatToggle);
+    if (desktopButton && !desktopButton.dataset.chatInit) {
+      desktopButton.dataset.chatInit = "true";
+      desktopButton.addEventListener("click", handleChatToggle);
     }
   }
 
   // Initialize on first load
   initChatButton();
 
-  // Re-initialize after View Transition navigation
-  document.addEventListener("astro:page-load", initChatButton);
+  // Re-initialize after View Transition navigation (register listener only once)
+  if (!(window as any).__askAptosChatButtonPageLoadListenerAdded) {
+    (window as any).__askAptosChatButtonPageLoadListenerAdded = true;
+    document.addEventListener("astro:page-load", initChatButton);
+  }
 </script>
 
 <style>

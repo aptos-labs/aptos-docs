@@ -52,6 +52,8 @@ import "@scalar/api-client/style.css";
   // Initialize modal once and reuse - the new sync API requires loading the spec separately
   let modalClient: ReturnType<typeof createApiClientModal>["client"] | null = null;
   let specLoaded = false;
+  let specLoadAttempts = 0;
+  const MAX_SPEC_LOAD_ATTEMPTS = 3;
 
   async function getModalClient() {
     if (!modalClient) {
@@ -68,7 +70,13 @@ import "@scalar/api-client/style.css";
 
     // The new sync API doesn't load the spec automatically, we need to call updateConfig
     if (!specLoaded) {
+      // Prevent repeated failures - allow retry up to MAX_SPEC_LOAD_ATTEMPTS
+      if (specLoadAttempts >= MAX_SPEC_LOAD_ATTEMPTS) {
+        throw new Error("Max spec load attempts exceeded. Please reload the page.");
+      }
+
       try {
+        specLoadAttempts++;
         await modalClient.updateConfig({
           url: "/aptos-spec.json",
           servers,
@@ -76,8 +84,12 @@ import "@scalar/api-client/style.css";
           hideClientButton: true,
         });
         specLoaded = true;
+        specLoadAttempts = 0; // Reset on success
       } catch (error) {
-        console.error("Failed to load Scalar API spec:", error);
+        console.error(
+          `Failed to load Scalar API spec (attempt ${specLoadAttempts}/${MAX_SPEC_LOAD_ATTEMPTS}):`,
+          error,
+        );
         specLoaded = false;
         throw error;
       }
@@ -90,8 +102,26 @@ import "@scalar/api-client/style.css";
   document.addEventListener(
     "scalarModal:open",
     async function (e: ScalarModalOpenEvent) {
-      const client = await getModalClient();
-      client.open({ path: e.detail.operationPath, method: e.detail.method });
+      try {
+        const client = await getModalClient();
+        client.open({ path: e.detail.operationPath, method: e.detail.method });
+      } catch (error) {
+        console.error("Failed to open Scalar API modal:", error);
+        // Show a non-blocking notification to the user
+        const message =
+          specLoadAttempts >= MAX_SPEC_LOAD_ATTEMPTS
+            ? "Failed to load API reference. Please reload the page and try again."
+            : "Failed to open API reference. Please try again.";
+
+        // Use a toast-style notification if available, otherwise fall back to console
+        if (
+          typeof window !== "undefined" &&
+          "Notification" in window &&
+          Notification.permission === "granted"
+        ) {
+          new Notification("API Reference Error", { body: message });
+        }
+      }
     },
     { passive: true },
   );

@@ -3,15 +3,23 @@ import { getOgImageSecret } from "./getOgImageSecret";
 
 /**
  * Cache for memoizing OG image URLs during build time.
- * Key: JSON stringified options, Value: generated URL
+ * Key: deterministically serialized options, Value: generated URL
  * This avoids regenerating JWT tokens for the same content across builds.
  * The cache is bounded to avoid unbounded memory growth during large builds.
  */
 const MAX_CACHE_SIZE = 500;
 const ogImageUrlCache = new Map<string, string>();
 
+/**
+ * Creates a deterministic cache key by sorting object keys before stringifying.
+ * This ensures consistent cache keys regardless of property insertion order.
+ */
+function createDeterministicKey(obj: Record<string, unknown>): string {
+  return JSON.stringify(obj, Object.keys(obj).sort());
+}
+
 function setCacheWithLimit(key: string, value: string): void {
-  // Evict oldest entries if cache is at capacity
+  // Evict oldest entry if cache is at capacity (simple FIFO eviction)
   if (ogImageUrlCache.size >= MAX_CACHE_SIZE) {
     const firstKey = ogImageUrlCache.keys().next().value;
     if (firstKey !== undefined) {
@@ -30,8 +38,8 @@ export async function getImageUrl(
     return null;
   }
 
-  // Create a cache key from the full endpoint URL (including origin) and options
-  const cacheKey = JSON.stringify({ endpoint: endpointUrl.toString(), ...options });
+  // Create a deterministic cache key from the full endpoint URL and options
+  const cacheKey = createDeterministicKey({ endpoint: endpointUrl.toString(), ...options });
 
   // Return cached URL if available
   const cachedUrl = ogImageUrlCache.get(cacheKey);

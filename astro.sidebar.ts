@@ -227,6 +227,11 @@ export const sidebar = [
               "build/sdks/wallet-adapter/x-chain-accounts",
             ],
           }),
+          {
+            label: "Forklift",
+            link: "build/sdks/forklift",
+            badge: { text: "NEW", variant: "tip" },
+          },
           // Community SDKs
           group("build.group.sdks.community-sdks", {
             collapsed: true,

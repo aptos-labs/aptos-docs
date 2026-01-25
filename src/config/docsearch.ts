@@ -233,87 +233,77 @@ function preprocessQuery(query: string): string {
 let currentSearchQuery = "";
 
 /**
- * URL patterns that indicate "entry point" pages that should be boosted
- * when users search for common/short terms.
- */
-const ENTRY_POINT_PATTERNS = [
-  /\/overview$/i,
-  /\/introduction$/i,
-  /\/getting-started$/i,
-  /\/get-started$/i,
-  /\/setup$/i,
-  /\/install$/i,
-  /\/installation$/i,
-  /\/quickstart$/i,
-  /\/quick-start$/i,
-];
-
-/**
- * URL patterns that indicate the page is a primary/index page for a topic.
- * These get moderate boosting.
- */
-const PRIMARY_PAGE_PATTERNS = [
-  /\/cli\/?$/i, // CLI index page
-  /\/sdk\/?$/i, // SDK index page
-  /\/api\/?$/i, // API index page
-  /\/indexer\/?$/i, // Indexer index page
-  /\/move\/?$/i, // Move index page
-  /\/guides\/?$/i, // Guides index
-  /\/tutorials\/?$/i, // Tutorials index
-];
-
-/**
  * Calculates a boost score for a search result based on its URL and the query.
- * Higher scores = more relevant for "entry point" searches.
+ * The goal is to surface landing/overview pages for broad queries, while
+ * still allowing specific pages to rank high for specific queries.
+ *
+ * Strategy:
+ * - If the URL path ends with the search term (e.g., /build/cli for "CLI"),
+ *   that's likely the landing page - give it a big boost
+ * - Shallower pages (fewer path segments) get priority over deeply nested ones
+ * - Pages where the search term is in the URL path get a boost
  *
  * @param url - The result URL
  * @param query - The search query
  * @returns A boost score (higher = should appear earlier)
  */
 function calculateBoostScore(url: string, query: string): number {
-  const lowerUrl = url.toLowerCase();
   const lowerQuery = query.toLowerCase().trim();
-  const queryWords = lowerQuery.split(/\s+/);
 
-  // Only apply boosting for short queries (1-2 words) that are common terms
-  // For longer, specific queries, trust Algolia's default ranking
-  if (queryWords.length > 2) {
+  // Skip boosting for empty queries
+  if (!lowerQuery) {
     return 0;
   }
 
+  // Extract URL path and normalize it
+  let urlPath: string;
+  try {
+    urlPath = new URL(url).pathname.toLowerCase();
+  } catch {
+    urlPath = url.toLowerCase();
+  }
+
+  // Remove trailing slash and language prefix for matching
+  urlPath = urlPath.replace(/\/$/, "").replace(/^\/(en|es|zh|ja|ko|fr|de)\//, "/");
+
+  // Get individual query words
+  const queryWords = lowerQuery.split(/\s+/).filter((w) => w.length >= 2);
+
   let score = 0;
 
-  // Check if the query term appears in the URL path (not just content match)
-  // This indicates the page is specifically about that topic
-  const urlPath = lowerUrl.replace(/^https?:\/\/[^/]+/, "");
+  // Check each query word
   for (const word of queryWords) {
-    if (word.length >= 2 && urlPath.includes(`/${word}`)) {
-      score += 10;
+    // Highest boost: URL path ends with the search term
+    // e.g., searching "CLI" and URL is /build/cli → this is the landing page
+    if (urlPath.endsWith(`/${word}`)) {
+      score += 100;
     }
-  }
-
-  // Boost entry point pages (overview, setup, getting-started, etc.)
-  for (const pattern of ENTRY_POINT_PATTERNS) {
-    if (pattern.test(urlPath)) {
+    // High boost: URL path has a segment that exactly matches the search term
+    // e.g., searching "enums" and URL is /build/smart-contracts/book/enums
+    else if (urlPath.split("/").includes(word)) {
+      score += 50;
+    }
+    // Medium boost: URL path contains the search term as part of a segment
+    // e.g., searching "install" and URL contains /install-cli/
+    else if (urlPath.includes(word)) {
       score += 20;
-      break;
     }
   }
 
-  // Moderate boost for primary/index pages
-  for (const pattern of PRIMARY_PAGE_PATTERNS) {
-    if (pattern.test(urlPath)) {
-      score += 15;
-      break;
-    }
-  }
+  // Boost shallower pages - they tend to be overview/landing pages
+  // Count path segments (excluding empty strings from split)
+  const pathSegments = urlPath.split("/").filter((s) => s.length > 0);
+  const depth = pathSegments.length;
 
-  // Small boost for pages that are not deeply nested
-  // (shallower pages tend to be more introductory)
-  const pathDepth = (urlPath.match(/\//g) ?? []).length;
-  if (pathDepth <= 3) {
-    score += 5;
+  // Shallower pages get a bonus (max 30 points for depth 1-2)
+  if (depth <= 2) {
+    score += 30;
+  } else if (depth <= 3) {
+    score += 20;
+  } else if (depth <= 4) {
+    score += 10;
   }
+  // Deep pages (5+ segments) get no depth bonus
 
   return score;
 }

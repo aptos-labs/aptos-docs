@@ -328,6 +328,11 @@ export default Object.freeze({
     removeWordsIfNoResults: "allOptional" as const,
     // Use prefix search for all words (not just the last one)
     queryType: "prefixAll" as const,
+    // Boost shallower pages (landing pages) by giving them higher ranking
+    // This uses Algolia's distinct feature to prefer top-level results
+    distinct: true,
+    // Enable getting ranking info for debugging
+    getRankingInfo: true,
   },
   insights: true,
   /**
@@ -405,6 +410,10 @@ export default Object.freeze({
       items.length,
       "items, query:",
       currentSearchQuery,
+    );
+    console.log(
+      "[DocSearch] Original order (first 5):",
+      items.slice(0, 5).map((i) => i.url),
     );
 
     if (!Array.isArray(items)) {

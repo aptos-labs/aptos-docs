@@ -399,6 +399,14 @@ export default Object.freeze({
    * @returns Transformed and potentially reordered items
    */
   transformItems(items) {
+    // Debug: Log that transformItems is being called
+    console.log(
+      "[DocSearch] transformItems called with",
+      items.length,
+      "items, query:",
+      currentSearchQuery,
+    );
+
     if (!Array.isArray(items)) {
       console.error("Expected items to be an array");
       return [];
@@ -418,6 +426,11 @@ export default Object.freeze({
 
         const boostScore = calculateBoostScore(item.url, currentSearchQuery);
 
+        // Debug: Log boost scores for each item
+        if (boostScore > 0) {
+          console.log("[DocSearch] Boost:", boostScore, "for", item.url);
+        }
+
         return {
           item: {
             ...item,
@@ -435,19 +448,11 @@ export default Object.freeze({
     // Using stable sort to preserve Algolia's relevance ranking within same boost tier
     const sorted = transformedItems.sort((a, b) => b.boostScore - a.boostScore);
 
-    // Log boosting for debugging (only in development)
-    if (
-      typeof window !== "undefined" &&
-      window.location.hostname === "localhost" &&
-      sorted.some((s) => s.boostScore > 0)
-    ) {
-      console.debug(
-        "[Search] Boosted results:",
-        sorted
-          .filter((s) => s.boostScore > 0)
-          .map((s) => ({ url: s.item.url, boost: s.boostScore })),
-      );
-    }
+    // Debug: Log the sorted order
+    console.log(
+      "[DocSearch] Sorted results:",
+      sorted.slice(0, 5).map((s) => ({ url: s.item.url, boost: s.boostScore })),
+    );
 
     return sorted.map((s) => s.item);
   },

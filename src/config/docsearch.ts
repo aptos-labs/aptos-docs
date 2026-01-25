@@ -1,4 +1,5 @@
 import type { DocSearchClientOptions } from "@astrojs/starlight-docsearch";
+// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 import { ALGOLIA_APP_ID, ALGOLIA_SEARCH_API_KEY, ALGOLIA_INDEX_NAME } from "astro:env/client";
 
 const getFacetFilters = (): string[] =>
@@ -225,15 +226,13 @@ function preprocessQuery(query: string): string {
   return processedWords.join(" ");
 }
 
-// Environment variables from astro:env/client - validated at runtime
-const algoliaAppId = ALGOLIA_APP_ID as string | undefined;
-const algoliaSearchApiKey = ALGOLIA_SEARCH_API_KEY as string | undefined;
-const algoliaIndexName = ALGOLIA_INDEX_NAME as string | undefined;
-
 export default Object.freeze({
-  appId: getEnvVar("ALGOLIA_APP_ID", algoliaAppId),
-  apiKey: getEnvVar("ALGOLIA_SEARCH_API_KEY", algoliaSearchApiKey),
-  indexName: getEnvVar("ALGOLIA_INDEX_NAME", algoliaIndexName),
+  // Environment variables from astro:env/client - validated at runtime by getEnvVar
+  /* eslint-disable @typescript-eslint/no-unsafe-argument */
+  appId: getEnvVar("ALGOLIA_APP_ID", ALGOLIA_APP_ID),
+  apiKey: getEnvVar("ALGOLIA_SEARCH_API_KEY", ALGOLIA_SEARCH_API_KEY),
+  indexName: getEnvVar("ALGOLIA_INDEX_NAME", ALGOLIA_INDEX_NAME),
+  /* eslint-enable @typescript-eslint/no-unsafe-argument */
   searchParameters: {
     get facetFilters() {
       return getFacetFilters();

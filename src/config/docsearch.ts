@@ -226,6 +226,98 @@ function preprocessQuery(query: string): string {
   return processedWords.join(" ");
 }
 
+/**
+ * Store the current search query for use in transformItems.
+ * This allows us to boost results based on the query context.
+ */
+let currentSearchQuery = "";
+
+/**
+ * URL patterns that indicate "entry point" pages that should be boosted
+ * when users search for common/short terms.
+ */
+const ENTRY_POINT_PATTERNS = [
+  /\/overview$/i,
+  /\/introduction$/i,
+  /\/getting-started$/i,
+  /\/get-started$/i,
+  /\/setup$/i,
+  /\/install$/i,
+  /\/installation$/i,
+  /\/quickstart$/i,
+  /\/quick-start$/i,
+];
+
+/**
+ * URL patterns that indicate the page is a primary/index page for a topic.
+ * These get moderate boosting.
+ */
+const PRIMARY_PAGE_PATTERNS = [
+  /\/cli\/?$/i, // CLI index page
+  /\/sdk\/?$/i, // SDK index page
+  /\/api\/?$/i, // API index page
+  /\/indexer\/?$/i, // Indexer index page
+  /\/move\/?$/i, // Move index page
+  /\/guides\/?$/i, // Guides index
+  /\/tutorials\/?$/i, // Tutorials index
+];
+
+/**
+ * Calculates a boost score for a search result based on its URL and the query.
+ * Higher scores = more relevant for "entry point" searches.
+ *
+ * @param url - The result URL
+ * @param query - The search query
+ * @returns A boost score (higher = should appear earlier)
+ */
+function calculateBoostScore(url: string, query: string): number {
+  const lowerUrl = url.toLowerCase();
+  const lowerQuery = query.toLowerCase().trim();
+  const queryWords = lowerQuery.split(/\s+/);
+
+  // Only apply boosting for short queries (1-2 words) that are common terms
+  // For longer, specific queries, trust Algolia's default ranking
+  if (queryWords.length > 2) {
+    return 0;
+  }
+
+  let score = 0;
+
+  // Check if the query term appears in the URL path (not just content match)
+  // This indicates the page is specifically about that topic
+  const urlPath = lowerUrl.replace(/^https?:\/\/[^/]+/, "");
+  for (const word of queryWords) {
+    if (word.length >= 2 && urlPath.includes(`/${word}`)) {
+      score += 10;
+    }
+  }
+
+  // Boost entry point pages (overview, setup, getting-started, etc.)
+  for (const pattern of ENTRY_POINT_PATTERNS) {
+    if (pattern.test(urlPath)) {
+      score += 20;
+      break;
+    }
+  }
+
+  // Moderate boost for primary/index pages
+  for (const pattern of PRIMARY_PAGE_PATTERNS) {
+    if (pattern.test(urlPath)) {
+      score += 15;
+      break;
+    }
+  }
+
+  // Small boost for pages that are not deeply nested
+  // (shallower pages tend to be more introductory)
+  const pathDepth = (urlPath.match(/\//g) ?? []).length;
+  if (pathDepth <= 3) {
+    score += 5;
+  }
+
+  return score;
+}
+
 export default Object.freeze({
   // Environment variables from astro:env/client - validated at runtime by getEnvVar
   /* eslint-disable @typescript-eslint/no-unsafe-argument */
@@ -253,6 +345,7 @@ export default Object.freeze({
    * This improves search relevance by:
    * - Splitting concatenated words (e.g., "indexertable" → "indexer table")
    * - Splitting camelCase words (e.g., "IndexerTable" → "Indexer Table")
+   * - Storing the query for use in result boosting
    */
   transformSearchClient(searchClient) {
     return {
@@ -268,6 +361,9 @@ export default Object.freeze({
             if (request.params?.query) {
               const originalQuery = request.params.query;
               const processedQuery = preprocessQuery(originalQuery);
+
+              // Store the original query for use in transformItems boosting
+              currentSearchQuery = originalQuery;
 
               // Log transformation for debugging (only in development)
               if (
@@ -305,10 +401,12 @@ export default Object.freeze({
   // Replace URL with the current origin so search
   // can be used in local development and previews.
   /**
-   * Transforms search result URLs to use the current origin.
-   * This enables search functionality in local development and preview environments.
+   * Transforms search result URLs and boosts entry-point pages.
+   * - Replaces URLs with current origin for local dev/preview
+   * - Boosts overview, setup, and getting-started pages for short queries
+   *
    * @param items - Array of search result items from Algolia
-   * @returns Transformed items with updated URLs
+   * @returns Transformed and potentially reordered items
    */
   transformItems(items) {
     if (!Array.isArray(items)) {
@@ -316,10 +414,11 @@ export default Object.freeze({
       return [];
     }
 
-    return items.map((item) => {
+    // Transform URLs and calculate boost scores
+    const transformedItems = items.map((item) => {
       if (!item.url) {
         console.warn("Search result item missing URL");
-        return item;
+        return { item, boostScore: 0 };
       }
 
       try {
@@ -327,14 +426,39 @@ export default Object.freeze({
         url.protocol = window.location.protocol;
         url.host = window.location.host;
 
+        const boostScore = calculateBoostScore(item.url, currentSearchQuery);
+
         return {
-          ...item,
-          url: url.href,
+          item: {
+            ...item,
+            url: url.href,
+          },
+          boostScore,
         };
       } catch {
         console.warn("Failed to parse URL:", item.url);
-        return item;
+        return { item, boostScore: 0 };
       }
     });
+
+    // Sort by boost score (higher first), maintaining relative order for equal scores
+    // Using stable sort to preserve Algolia's relevance ranking within same boost tier
+    const sorted = transformedItems.sort((a, b) => b.boostScore - a.boostScore);
+
+    // Log boosting for debugging (only in development)
+    if (
+      typeof window !== "undefined" &&
+      window.location.hostname === "localhost" &&
+      sorted.some((s) => s.boostScore > 0)
+    ) {
+      console.debug(
+        "[Search] Boosted results:",
+        sorted
+          .filter((s) => s.boostScore > 0)
+          .map((s) => ({ url: s.item.url, boost: s.boostScore })),
+      );
+    }
+
+    return sorted.map((s) => s.item);
   },
 } satisfies DocSearchClientOptions);

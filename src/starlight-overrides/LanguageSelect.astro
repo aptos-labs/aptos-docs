@@ -29,6 +29,14 @@ import Default from "@astrojs/starlight/components/LanguageSelect.astro";
             const expiryDate = new Date();
             expiryDate.setFullYear(expiryDate.getFullYear() + 1);
             document.cookie = `preferred_locale=${locale}; expires=${expiryDate.toUTCString()}; path=/; SameSite=Lax`;
+
+            // Navigate to the new language path while preserving the URL fragment (hash)
+            // This fixes a bug where fragments like #section were lost when switching languages
+            const hash = window.location.hash;
+            window.location.href = pathname + hash;
+
+            // Prevent the default Starlight handler from also executing
+            e.stopImmediatePropagation();
           }
         });
       });

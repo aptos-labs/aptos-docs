@@ -35,7 +35,6 @@ export type NestedSidebarItem = // Export the type
 // A sidebar group with manual items
 type SidebarGroupWithItems = SidebarItemCommon & {
   items: NestedSidebarItem[];
-  link?: string; // Optional link to make the group header clickable
 };
 
 // A sidebar group with auto-generated items
@@ -103,10 +102,9 @@ const translations = (() => {
  * @param config - Configuration for the sidebar group
  * @returns A sidebar group entry compatible with Starlight's config
  */
-// Define specific config types that include the optional icon and link
+// Define specific config types that include the optional icon
 type GroupWithItemsConfig = Omit<SidebarGroupWithItems, "label" | "translations"> & {
   icon?: string;
-  link?: string; // Optional link to make the group header clickable
 };
 type GroupWithAutogenerateConfig = Omit<SidebarGroupWithAutogenerate, "label" | "translations"> & {
   icon?: string;

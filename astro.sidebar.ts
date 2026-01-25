@@ -42,8 +42,8 @@ export const sidebar = [
           "build/guides/first-multisig",
           group("guides.group.beginner.e2e", {
             collapsed: true,
-            link: "build/guides/build-e2e-dapp",
             items: [
+              "build/guides/build-e2e-dapp",
               "build/guides/build-e2e-dapp/1-create-smart-contract",
               "build/guides/build-e2e-dapp/2-set-up-the-frontend",
               "build/guides/build-e2e-dapp/3-fetch-data-from-chain",
@@ -63,8 +63,8 @@ export const sidebar = [
           "build/guides/key-rotation",
           group("guides.group.aptos-keyless", {
             collapsed: true,
-            link: "build/guides/aptos-keyless",
             items: [
+              "build/guides/aptos-keyless",
               "build/guides/aptos-keyless/introduction",
               "build/guides/aptos-keyless/how-keyless-works",
               "build/guides/aptos-keyless/integration-guide",
@@ -73,8 +73,8 @@ export const sidebar = [
               "build/guides/aptos-keyless/other",
               group("guides.group.aptos-keyless.federated-keyless", {
                 collapsed: true,
-                link: "build/guides/aptos-keyless/federated-keyless",
                 items: [
+                  "build/guides/aptos-keyless/federated-keyless",
                   "build/guides/aptos-keyless/federated-keyless/integration-guide",
                   "build/guides/aptos-keyless/federated-keyless/key-considerations",
                   "build/guides/aptos-keyless/federated-keyless/simple-example",
@@ -102,8 +102,8 @@ export const sidebar = [
       // Aptos APIs
       group("build.group.apis", {
         collapsed: true,
-        link: "build/apis",
         items: [
+          "build/apis",
           "build/apis/fullnode-rest-api",
           "build/apis/faucet-api",
           "build/apis/data-providers",
@@ -114,12 +114,12 @@ export const sidebar = [
       // SDKs - Collapsible groups for each SDK/tool
       group("build.group.sdks", {
         collapsed: true,
-        link: "build/sdks",
         items: [
+          "build/sdks",
           group("build.group.sdks.ts-sdk", {
             collapsed: true,
-            link: "build/sdks/ts-sdk",
             items: [
+              "build/sdks/ts-sdk",
               "build/sdks/ts-sdk/quickstart",
               "build/sdks/ts-sdk/fetch-data-via-sdk",
               "build/sdks/ts-sdk/ts-examples",
@@ -131,16 +131,16 @@ export const sidebar = [
               "build/sdks/ts-sdk/confidential-asset",
               group("build.group.sdks.ts-sdk.accounts", {
                 collapsed: true,
-                link: "build/sdks/ts-sdk/account",
                 items: [
+                  "build/sdks/ts-sdk/account",
                   "build/sdks/ts-sdk/account/account-abstraction",
                   "build/sdks/ts-sdk/account/derivable-account-abstraction",
                 ],
               }),
               group("build.group.sdks.ts-sdk.building-transactions", {
                 collapsed: true,
-                link: "build/sdks/ts-sdk/building-transactions",
                 items: [
+                  "build/sdks/ts-sdk/building-transactions",
                   "build/sdks/ts-sdk/building-transactions/batching-transactions",
                   "build/sdks/ts-sdk/building-transactions/bcs-format",
                   "build/sdks/ts-sdk/building-transactions/multi-agent-transactions",
@@ -152,22 +152,24 @@ export const sidebar = [
               }),
               group("build.group.sdks.ts-sdk.legacy-ts-sdk", {
                 collapsed: true,
-                link: "build/sdks/ts-sdk/legacy-ts-sdk",
-                items: ["build/sdks/ts-sdk/legacy-ts-sdk/migration-guide"],
+                items: [
+                  "build/sdks/ts-sdk/legacy-ts-sdk",
+                  "build/sdks/ts-sdk/legacy-ts-sdk/migration-guide",
+                ],
               }),
             ],
           }),
           group("build.group.sdks.go-sdk", {
             collapsed: true,
-            link: "build/sdks/go-sdk",
             items: [
+              "build/sdks/go-sdk",
               "build/sdks/go-sdk/account",
               "build/sdks/go-sdk/fetch-data-via-sdk",
               "build/sdks/go-sdk/go-examples",
               group("build.group.sdks.go-sdk.building-transactions", {
                 collapsed: true,
-                link: "build/sdks/go-sdk/building-transactions",
                 items: [
+                  "build/sdks/go-sdk/building-transactions",
                   "build/sdks/go-sdk/building-transactions/batching-transactions",
                   "build/sdks/go-sdk/building-transactions/simulating-transactions",
                   "build/sdks/go-sdk/building-transactions/bcs-format",
@@ -179,8 +181,8 @@ export const sidebar = [
           }),
           group("build.group.sdks.dotnet-sdk", {
             collapsed: true,
-            link: "build/sdks/dotnet-sdk",
             items: [
+              "build/sdks/dotnet-sdk",
               "build/sdks/dotnet-sdk/dotnet-examples",
               "build/sdks/dotnet-sdk/getting-started",
               "build/sdks/dotnet-sdk/godot-integration",
@@ -216,8 +218,8 @@ export const sidebar = [
           "build/sdks/rust-sdk",
           group("build.group.sdks.wallet-adapter", {
             collapsed: true,
-            link: "build/sdks/wallet-adapter",
             items: [
+              "build/sdks/wallet-adapter",
               "build/sdks/wallet-adapter/browser-extension-wallets",
               "build/sdks/wallet-adapter/dapp",
               "build/sdks/wallet-adapter/wallets",
@@ -233,12 +235,12 @@ export const sidebar = [
           // Community SDKs
           group("build.group.sdks.community-sdks", {
             collapsed: true,
-            link: "build/sdks/community-sdks",
             items: [
+              "build/sdks/community-sdks",
               group("build.group.sdks.community-sdks.kotlin-sdk", {
                 collapsed: true,
-                link: "build/sdks/community-sdks/kotlin-sdk",
                 items: [
+                  "build/sdks/community-sdks/kotlin-sdk",
                   "build/sdks/community-sdks/kotlin-sdk/quickstart",
                   "build/sdks/community-sdks/kotlin-sdk/account",
                   "build/sdks/community-sdks/kotlin-sdk/building-transactions",
@@ -264,12 +266,12 @@ export const sidebar = [
       // Indexer
       group("build.group.indexer", {
         collapsed: true,
-        link: "build/indexer",
         items: [
+          "build/indexer",
           group("build.group.indexer.indexer-api", {
             collapsed: true,
-            link: "build/indexer/indexer-api",
             items: [
+              "build/indexer/indexer-api",
               "build/indexer/indexer-api/architecture",
               "build/indexer/indexer-api/indexer-reference",
               "build/indexer/indexer-api/self-hosted",
@@ -285,13 +287,13 @@ export const sidebar = [
           }),
           group("build.group.indexer.indexer-sdk", {
             collapsed: true,
-            link: "build/indexer/indexer-sdk",
             items: [
+              "build/indexer/indexer-sdk",
               "build/indexer/indexer-sdk/quickstart",
               group("build.group.indexer.indexer-sdk.documentation", {
                 collapsed: true,
-                link: "build/indexer/indexer-sdk/documentation",
                 items: [
+                  "build/indexer/indexer-sdk/documentation",
                   "build/indexer/indexer-sdk/documentation/setup",
                   "build/indexer/indexer-sdk/documentation/connect-steps",
                   "build/indexer/indexer-sdk/documentation/define-schema",
@@ -318,8 +320,8 @@ export const sidebar = [
           }),
           group("build.group.indexer.nft-aggregator", {
             collapsed: true,
-            link: "build/indexer/nft-aggregator",
             items: [
+              "build/indexer/nft-aggregator",
               "build/indexer/nft-aggregator/analytics-api",
               "build/indexer/nft-aggregator/graphql-api",
               "build/indexer/nft-aggregator/marketplaces",
@@ -338,8 +340,8 @@ export const sidebar = [
           }),
           group("build.group.indexer.txn-stream", {
             collapsed: true,
-            link: "build/indexer/txn-stream",
             items: [
+              "build/indexer/txn-stream",
               "build/indexer/txn-stream/aptos-hosted-txn-stream",
               "build/indexer/txn-stream/local-development",
               "build/indexer/txn-stream/self-hosted",
@@ -348,8 +350,8 @@ export const sidebar = [
           }),
           group("build.group.indexer.legacy", {
             collapsed: true,
-            link: "build/indexer/legacy",
             items: [
+              "build/indexer/legacy",
               "build/indexer/legacy/custom-data-model",
               "build/indexer/legacy/indexer-fullnode",
               "build/indexer/legacy/migration",
@@ -361,8 +363,8 @@ export const sidebar = [
       // CLI
       group("build.group.cli", {
         collapsed: true,
-        link: "build/cli",
         items: [
+          "build/cli",
           group("build.group.cli.install-cli", {
             collapsed: true,
             items: [
@@ -375,13 +377,12 @@ export const sidebar = [
           }),
           group("build.group.cli.setup-cli", {
             collapsed: true,
-            link: "build/cli/setup-cli",
-            items: ["build/cli/setup-cli/install-move-prover"],
+            items: ["build/cli/setup-cli", "build/cli/setup-cli/install-move-prover"],
           }),
           group("build.group.cli.trying-things-on-chain", {
             collapsed: true,
-            link: "build/cli/trying-things-on-chain",
             items: [
+              "build/cli/trying-things-on-chain",
               "build/cli/trying-things-on-chain/create-test-accounts",
               "build/cli/trying-things-on-chain/looking-up-account-info",
               "build/cli/trying-things-on-chain/ledger",
@@ -392,8 +393,8 @@ export const sidebar = [
           }),
           group("build.group.cli.working-with-move-contracts", {
             collapsed: true,
-            link: "build/cli/working-with-move-contracts",
             items: [
+              "build/cli/working-with-move-contracts",
               "build/cli/working-with-move-contracts/local-simulation-benchmarking-and-gas-profiling",
               "build/cli/formatting-move-contracts",
               "build/cli/start-from-template",
@@ -409,8 +410,7 @@ export const sidebar = [
       // Create Aptos DApp
       group("build.group.createAptosDapp", {
         collapsed: true,
-        link: "build/create-aptos-dapp",
-        items: ["build/create-aptos-dapp/faq"],
+        items: ["build/create-aptos-dapp", "build/create-aptos-dapp/faq"],
       }),
       "network/faucet",
       {
@@ -488,20 +488,20 @@ export const sidebar = [
         items: [
           group("smartContracts.group.aptosFeatures.objects", {
             collapsed: true,
-            link: "build/smart-contracts/objects",
             items: [
+              "build/smart-contracts/objects",
               "build/smart-contracts/object/creating-objects",
               "build/smart-contracts/object/using-objects",
             ],
           }),
           group("smartContracts.group.aptosFeatures.aptosStandards", {
             collapsed: true,
-            link: "build/smart-contracts/aptos-standards",
             items: [
+              "build/smart-contracts/aptos-standards",
               group("smartContracts.group.aptosFeatures.aptosStandards.fungibleTokens", {
                 collapsed: true,
-                link: "build/smart-contracts/fungible-asset",
                 items: [
+                  "build/smart-contracts/fungible-asset",
                   {
                     label: "Aptos Coin",
                     link: "build/smart-contracts/aptos-coin",
@@ -512,8 +512,8 @@ export const sidebar = [
               }),
               group("smartContracts.group.aptosFeatures.aptosStandards.nonFungibleTokens", {
                 collapsed: true,
-                link: "build/smart-contracts/tokens",
                 items: [
+                  "build/smart-contracts/tokens",
                   "build/smart-contracts/digital-asset",
                   {
                     label: "Aptos Token",
@@ -551,8 +551,8 @@ export const sidebar = [
           "build/smart-contracts/compiler_v2",
           group("smartContracts.group.tooling.move-prover", {
             collapsed: true,
-            link: "build/smart-contracts/prover",
             items: [
+              "build/smart-contracts/prover",
               "build/smart-contracts/prover/prover-guide",
               "build/smart-contracts/prover/spec-lang",
               "build/smart-contracts/prover/supporting-resources",
@@ -588,16 +588,16 @@ export const sidebar = [
       // Validator Node
       group("network.group.validatorNode", {
         collapsed: true,
-        link: "network/nodes/validator-node",
         items: [
+          "network/nodes/validator-node",
           group("network.group.validatorNode.runValidators", {
             collapsed: true,
             items: [
               "network/nodes/validator-node/node-requirements",
               group("network.group.validatorNode.deployNodes", {
                 collapsed: true,
-                link: "network/nodes/validator-node/deploy-nodes",
                 items: [
+                  "network/nodes/validator-node/deploy-nodes",
                   "network/nodes/validator-node/deploy-nodes/using-source-code",
                   "network/nodes/validator-node/deploy-nodes/using-docker",
                   "network/nodes/validator-node/deploy-nodes/using-aws",
@@ -607,8 +607,10 @@ export const sidebar = [
               }),
               group("network.group.validatorNode.connectNodes", {
                 collapsed: true,
-                link: "network/nodes/validator-node/connect-nodes",
-                items: ["network/nodes/validator-node/connect-nodes/connect-to-aptos-network"],
+                items: [
+                  "network/nodes/validator-node/connect-nodes",
+                  "network/nodes/validator-node/connect-nodes/connect-to-aptos-network",
+                ],
               }),
               group("network.group.validatorNode.poolOperations", {
                 collapsed: true,
@@ -622,8 +624,8 @@ export const sidebar = [
           }),
           group("network.group.validatorNode.configureValidators", {
             collapsed: true,
-            link: "network/nodes/validator-node/modify-nodes",
             items: [
+              "network/nodes/validator-node/modify-nodes",
               "network/nodes/validator-node/modify-nodes/update-validator-node",
               "network/nodes/validator-node/modify-nodes/shutting-down-nodes",
               "network/nodes/validator-node/modify-nodes/rotate-consensus-key",
@@ -631,8 +633,8 @@ export const sidebar = [
           }),
           group("network.group.validatorNode.monitorValidators", {
             collapsed: true,
-            link: "network/nodes/validator-node/verify-nodes",
             items: [
+              "network/nodes/validator-node/verify-nodes",
               "network/nodes/validator-node/verify-nodes/node-liveness-criteria",
               "network/nodes/validator-node/verify-nodes/leaderboard-metrics",
             ],
@@ -643,16 +645,16 @@ export const sidebar = [
       // Full Node
       group("network.group.fullNode", {
         collapsed: true,
-        link: "network/nodes/full-node",
         items: [
+          "network/nodes/full-node",
           group("network.group.fullNode.runFullNodes", {
             collapsed: true,
             items: [
               "network/nodes/full-node/pfn-requirements",
               group("network.group.fullNode.deployFullNodes", {
                 collapsed: true,
-                link: "network/nodes/full-node/deployments",
                 items: [
+                  "network/nodes/full-node/deployments",
                   "network/nodes/full-node/deployments/using-source-code",
                   "network/nodes/full-node/deployments/using-docker",
                   "network/nodes/full-node/deployments/using-gcp",
@@ -663,8 +665,8 @@ export const sidebar = [
           }),
           group("network.group.fullNode.modifyFullNodes", {
             collapsed: true,
-            link: "network/nodes/full-node/modify",
             items: [
+              "network/nodes/full-node/modify",
               "network/nodes/full-node/modify/update-fullnode-with-new-releases",
               "network/nodes/full-node/modify/network-identity-fullnode",
               "network/nodes/full-node/modify/fullnode-network-connections",
@@ -672,8 +674,8 @@ export const sidebar = [
           }),
           group("network.group.fullNode.bootstrapFullnode", {
             collapsed: true,
-            link: "network/nodes/bootstrap-fullnode",
             items: [
+              "network/nodes/bootstrap-fullnode",
               "network/nodes/bootstrap-fullnode/bootstrap-fullnode",
               "network/nodes/bootstrap-fullnode/aptos-db-restore",
             ],
@@ -684,8 +686,8 @@ export const sidebar = [
       // Configure
       group("network.group.configure", {
         collapsed: true,
-        link: "network/nodes/configure",
         items: [
+          "network/nodes/configure",
           "network/nodes/configure/consensus-observer",
           "network/nodes/configure/state-sync",
           "network/nodes/configure/data-pruning",
@@ -696,14 +698,16 @@ export const sidebar = [
       // Monitor
       group("network.group.measure", {
         collapsed: true,
-        link: "network/nodes/measure",
         items: [
+          "network/nodes/measure",
           "network/nodes/measure/node-inspection-service",
           "network/nodes/measure/important-metrics",
           group("network.group.measure.nodeHealthChecker", {
             collapsed: true,
-            link: "network/nodes/measure/node-health-checker",
-            items: ["network/nodes/measure/node-health-checker-faq"],
+            items: [
+              "network/nodes/measure/node-health-checker",
+              "network/nodes/measure/node-health-checker-faq",
+            ],
           }),
         ],
       }),
@@ -716,8 +720,8 @@ export const sidebar = [
           "network/releases",
           group("network.group.networkInformation.locatingNetworkFiles", {
             collapsed: true,
-            link: "network/nodes/configure/node-files-all-networks",
             items: [
+              "network/nodes/configure/node-files-all-networks",
               "network/nodes/configure/node-files-all-networks/node-files-mainnet",
               "network/nodes/configure/node-files-all-networks/node-files-testnet",
               "network/nodes/configure/node-files-all-networks/node-files-devnet",
@@ -729,8 +733,8 @@ export const sidebar = [
       // Localnet
       group("network.group.localnet", {
         collapsed: true,
-        link: "network/nodes/localnet",
         items: [
+          "network/nodes/localnet",
           "network/nodes/localnet/local-development-network",
           "network/nodes/localnet/run-a-localnet",
           "network/nodes/localnet/run-a-multinode-localnet",
@@ -746,8 +750,8 @@ export const sidebar = [
       // Blockchain Fundamentals
       group("network.group.blockchain", {
         collapsed: true,
-        link: "network/blockchain",
         items: [
+          "network/blockchain",
           "network/blockchain/aptos-white-paper",
           "network/blockchain/blockchain-deep-dive",
           "network/blockchain/blocks",
@@ -801,8 +805,7 @@ export const sidebar = [
       // AIPs
       group("build.group.aips", {
         collapsed: true,
-        link: "build/aips",
-        items: ["build/aips/aip-88", "build/aips/aip-115"],
+        items: ["build/aips", "build/aips/aip-88", "build/aips/aip-115"],
       }),
       "network/glossary",
       "build/external-resources",
@@ -816,8 +819,7 @@ export const sidebar = [
     items: [
       group("ai.group.aptos-mcp", {
         collapsed: true,
-        link: "build/ai/aptos-mcp",
-        items: ["build/ai/aptos-mcp/claude", "build/ai/aptos-mcp/cursor"],
+        items: ["build/ai/aptos-mcp", "build/ai/aptos-mcp/claude", "build/ai/aptos-mcp/cursor"],
       }),
       {
         label: "LLMs.txt",

@@ -1,7 +1,15 @@
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import type { AstroIntegration } from "astro";
+
+async function waitForDir(dirPath: string, timeoutMs = 30000, intervalMs = 200) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (fs.existsSync(dirPath)) return true;
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  return false;
+}
 
 function findMdxFiles(dir: string): string[] {
   const files: string[] = [];
@@ -26,14 +34,13 @@ export function markdownFilesIntegration(): AstroIntegration {
   return {
     name: "markdown-files",
     hooks: {
-      "astro:build:done": ({ dir, logger }) => {
-        // dir is the Astro output directory (e.g., dist/client/)
-        // The Vercel adapter will copy this to .vercel/output/static/
-        const outputDir = fileURLToPath(dir);
+      "astro:build:done": async ({ logger }) => {
+        const staticDir = path.resolve(".vercel/output/static");
         const contentDir = path.resolve("src/content/docs");
 
-        if (!fs.existsSync(outputDir)) {
-          logger.warn(`Output directory not found: ${outputDir}`);
+        const ready = await waitForDir(staticDir);
+        if (!ready) {
+          logger.warn("Vercel static dir not found; skipping markdown generation");
           return;
         }
 
@@ -43,7 +50,7 @@ export function markdownFilesIntegration(): AstroIntegration {
         let count = 0;
         for (const mdxPath of mdxFiles) {
           const relativePath = path.relative(contentDir, mdxPath);
-          const outputPath = path.join(outputDir, relativePath.replace(/\.mdx$/, ".md"));
+          const outputPath = path.join(staticDir, relativePath.replace(/\.mdx$/, ".md"));
 
           try {
             fs.mkdirSync(path.dirname(outputPath), { recursive: true });

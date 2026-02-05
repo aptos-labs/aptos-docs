@@ -1,4 +1,4 @@
-import { initializeApp } from "firebase/app";
+import { initializeApp } from "@firebase/app";
 import * as CLIENT_ENV from "astro:env/client";
 import { API_KEY_ENV, APP_ID_ENV, AUTH_DOMAIN_ENV, PROJECT_ID_ENV } from "./constants";
 import { FirebaseError } from "./error";

@@ -6,13 +6,13 @@ import {
   signOut,
   type AuthProvider,
   type User,
-} from "firebase/auth";
+} from "@firebase/auth";
 import { atom, onMount } from "nanostores";
 
 import { getFirebaseAuth } from "~/lib/firebase/auth";
 import { singletonGetter } from "~/lib/singletonGetter";
 
-export type { User } from "firebase/auth";
+export type { User } from "@firebase/auth";
 
 export class AuthStore {
   $user = atom<User | null>(null);

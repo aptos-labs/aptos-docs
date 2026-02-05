@@ -96,11 +96,38 @@ install_required_packages() {
     fi
 }
 
+# Validate version string contains only safe characters
+validate_version() {
+    version=$1
+    # Allow digits, dots, hyphens, and alphanumeric characters
+    if ! echo "$version" | grep -qE '^[a-zA-Z0-9.\-]+$'; then
+        die "Invalid version string: $version. Version should only contain alphanumeric characters, dots, and hyphens."
+    fi
+}
+
+# Sort version tags - with fallback for systems without GNU sort -V
+sort_version_tags() {
+    # Try GNU sort -V first, fall back to basic sort if not available
+    if sort --version 2>/dev/null | grep -q "GNU"; then
+        sort -V
+    else
+        # Fallback: basic sort (may not handle all version formats correctly)
+        sort -t. -k1,1n -k2,2n -k3,3n 2>/dev/null || sort
+    fi
+}
+
 # Install CLI from source
+# Note: The minimal_cli_build.sh script handles installation of all required
+# dependencies (Rust, build tools, etc.). Git is required to clone the repository.
 install_from_source() {
     version=$1
     
     print_message "$CYAN" "Installing Aptos CLI from source..."
+    
+    # Validate version string if provided
+    if [ -n "$version" ]; then
+        validate_version "$version"
+    fi
     
     # Create bin directory if it doesn't exist
     mkdir -p "$BIN_DIR"
@@ -119,7 +146,7 @@ install_from_source() {
         # Clone and get latest CLI version tag
         retry_command git clone --depth 100 "$APTOS_REPO_URL" "$tmp_dir/aptos-core" || die "Failed to clone aptos-core repository"
         cd "$tmp_dir/aptos-core"
-        latest_tag=$(git tag -l 'aptos-cli-v*' | sort -V | tail -1)
+        latest_tag=$(git tag -l 'aptos-cli-v*' | sort_version_tags | tail -1)
         if [ -z "$latest_tag" ]; then
             die "Could not find any aptos-cli release tags"
         fi
@@ -131,6 +158,11 @@ install_from_source() {
     cd "$tmp_dir/aptos-core"
     
     print_message "$CYAN" "Building Aptos CLI (this may take several minutes)..."
+    
+    # Ensure the minimal build script exists before attempting to run it
+    if [ ! -f "./scripts/minimal_cli_build.sh" ]; then
+        die "Build script ./scripts/minimal_cli_build.sh not found in cloned aptos-core repository"
+    fi
     
     # Build the CLI using the minimal build script
     ./scripts/minimal_cli_build.sh || die "Failed to build Aptos CLI"

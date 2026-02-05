@@ -688,20 +688,41 @@ class Installer:
             tags = [t for t in tags if t]  # Filter empty strings
             if not tags:
                 return None
-            # Sort tags by version
-            tags.sort(key=lambda x: [int(n) if n.isdigit() else n for n in x.replace("aptos-cli-v", "").split(".")])
+
+            # Sort tags by version using packaging.version.Version when available
+            # This handles pre-release versions (e.g., 1.2.3-rc1) correctly
+            if Version is not None:
+                versioned_tags = []
+                for tag in tags:
+                    version_str = tag.replace("aptos-cli-v", "", 1)
+                    try:
+                        version_obj = Version(version_str)
+                        versioned_tags.append((version_obj, tag))
+                    except Exception:
+                        # Skip tags that cannot be parsed as versions
+                        continue
+                if versioned_tags:
+                    versioned_tags.sort(key=lambda vt: vt[0])
+                    return versioned_tags[-1][1]
+
+            # Fallback to simplistic sorting if Version is unavailable or no parsable tags
+            tags.sort(
+                key=lambda x: [
+                    int(n) if n.isdigit() else n
+                    for n in x.replace("aptos-cli-v", "", 1).split(".")
+                ]
+            )
             return tags[-1]
         except subprocess.CalledProcessError:
             return None
 
     def install_from_source(self, version: Optional[str] = None) -> int:
-        """Install the Aptos CLI by building from source."""
-        # Building from source is not supported on Windows
-        if WINDOWS:
-            self._write(colorize("error", "Building from source is not supported on Windows."))
-            self._write(colorize("info", "Please use the pre-built binary installation instead (remove --from-source flag)."))
-            return 1
-
+        """Install the Aptos CLI by building from source.
+        
+        Note: The minimal_cli_build.sh script handles installation of all required
+        dependencies (Rust, build tools, etc.), so we don't need to check for them here.
+        Git is required to clone the repository.
+        """
         self._write(colorize("info", "Installing Aptos CLI from source..."))
         self._write("")
 
@@ -754,9 +775,16 @@ class Installer:
             self._write(colorize("info", "Building Aptos CLI (this may take several minutes)..."))
             self._write("")
 
+            # Check if the build script exists before attempting to run it
+            build_script = os.path.join(repo_path, "scripts", "minimal_cli_build.sh")
+            if not os.path.exists(build_script):
+                self._write(colorize("error", f"Build script not found: {build_script}"))
+                self._write(colorize("info", "The aptos-core repository may be incomplete or the structure has changed."))
+                return 1
+
             try:
                 # Build the CLI using the minimal build script
-                build_script = os.path.join(repo_path, "scripts", "minimal_cli_build.sh")
+                # Note: We intentionally don't capture output here so users can see build progress
                 subprocess.run(
                     ["sh", build_script],
                     cwd=repo_path,
@@ -788,9 +816,28 @@ class Installer:
         self.display_post_message(version)
         return 0
 
+    def _validate_version_string(self, version: str) -> bool:
+        """Validate that version string only contains safe characters."""
+        import re
+        # Allow digits, dots, hyphens, and alphanumeric characters for version strings
+        # e.g., "1.2.3", "1.2.3-rc1", "1.2.3-beta.1"
+        return bool(re.match(r'^[a-zA-Z0-9.\-]+$', version))
+
     def run_from_source(self) -> int:
         """Run installation from source."""
+        # Building from source is not supported on Windows
+        if WINDOWS:
+            self._write(colorize("error", "Building from source is not supported on Windows."))
+            self._write(colorize("info", "Please use the pre-built binary installation instead (remove --from-source flag)."))
+            return 1
+
         version = self._version
+
+        # Validate version string if provided
+        if version and not self._validate_version_string(version):
+            self._write(colorize("error", f"Invalid version string: {version}"))
+            self._write(colorize("info", "Version should only contain alphanumeric characters, dots, and hyphens."))
+            return 1
 
         # Check if CLI is already installed with the requested version
         if not self._force and version:
@@ -804,8 +851,9 @@ class Installer:
                 if current_version == version:
                     self._write(colorize("warning", f"Aptos CLI version {version} is already installed."))
                     return 0
-            except Exception:
-                pass  # CLI not installed, proceed with installation
+            except (FileNotFoundError, PermissionError, subprocess.CalledProcessError, OSError):
+                # CLI not installed or not runnable, proceed with installation
+                pass
 
         return self.install_from_source(version)
 

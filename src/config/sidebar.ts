@@ -51,15 +51,16 @@ const translations = (() => {
   >;
 
   // Initialize with empty objects for all known keys
-  Object.keys(enLabels).forEach((key) => {
-    result[key as NavKey] = {};
+  (Object.keys(enLabels) as NavKey[]).forEach((key) => {
+    result[key] = {};
   });
 
   try {
     // Load all language files
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call -- import.meta.glob is a valid Vite/Astro feature
     const langModules = import.meta.glob<{ default: NavDict }>("../content/nav/*.ts", {
       eager: true,
-    });
+    }) as Record<string, { default: NavDict }>;
 
     // Check if we have any language modules
     if (Object.keys(langModules).length === 0) {
@@ -71,18 +72,17 @@ const translations = (() => {
     }
 
     // Process each language file's translations
-    Object.entries(langModules).forEach(([path, mod]) => {
+    (Object.entries(langModules) as [string, { default: NavDict }][]).forEach(([path, mod]) => {
       const match = /\/([^/]+)\.ts$/.exec(path);
       if (!match?.[1]) return;
 
       const lang = match[1];
-      const dict = mod.default;
+      const dict: NavDict = mod.default;
 
       // Add translations to our result
-      Object.keys(dict).forEach((key) => {
+      (Object.keys(dict) as NavKey[]).forEach((key) => {
         if (Object.prototype.hasOwnProperty.call(result, key)) {
-          const navKey = key as NavKey;
-          result[navKey][lang] = dict[navKey];
+          result[key][lang] = dict[key];
         }
       });
     });

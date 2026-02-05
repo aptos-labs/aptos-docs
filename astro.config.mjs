@@ -254,8 +254,6 @@ export default defineConfig({
         },
         // Try to reduce serverless function size
         maxDuration: 30,
-        // Use function-level bundling to avoid monolithic bundles
-        functionPerRoute: true,
       })
     : node({
         mode: "standalone",
@@ -291,6 +289,8 @@ export default defineConfig({
             // Content data can be split by language if needed
             if (id.includes("content/docs/es/")) return "content-es";
             if (id.includes("content/docs/zh/")) return "content-zh";
+            // Return undefined for other files to use default chunking
+            return undefined;
           },
         },
       },

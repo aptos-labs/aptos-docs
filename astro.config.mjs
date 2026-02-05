@@ -1,6 +1,6 @@
 // @ts-check
 import { fileURLToPath } from "url";
-import { defineConfig, envField } from "astro/config";
+import { defineConfig, envField, fontProviders } from "astro/config";
 import starlight from "@astrojs/starlight";
 import tailwindcss from "@tailwindcss/vite";
 import starlightLinksValidator from "starlight-links-validator";
@@ -335,25 +335,27 @@ export default defineConfig({
     csp: cspConfig,
     fonts: [
       {
-        provider: "local",
+        provider: fontProviders.local(),
         name: "Atkinson Hyperlegible Next",
         cssVariable: "--font-atkinson-hyperlegible-next",
-        variants: [
-          {
-            weight: "200 800",
-            style: "normal",
-            src: ["./src/assets/fonts/AtkinsonHyperlegibleNext-VariableFont_wght.woff2"],
-            variationSettings: "normal",
-            display: "swap",
-          },
-          {
-            weight: "200 800",
-            style: "italic",
-            src: ["./src/assets/fonts/AtkinsonHyperlegibleNext-Italic-VariableFont_wght.woff2"],
-            variationSettings: "normal",
-            display: "swap",
-          },
-        ],
+        display: "swap",
+        variationSettings: "normal",
+        weights: ["200 800"],
+        styles: ["normal", "italic"],
+        options: {
+          variants: [
+            {
+              weight: "200 800",
+              style: "normal",
+              src: ["./src/assets/fonts/AtkinsonHyperlegibleNext-VariableFont_wght.woff2"],
+            },
+            {
+              weight: "200 800",
+              style: "italic",
+              src: ["./src/assets/fonts/AtkinsonHyperlegibleNext-Italic-VariableFont_wght.woff2"],
+            },
+          ],
+        },
       },
     ],
   },

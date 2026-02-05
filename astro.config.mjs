@@ -30,6 +30,7 @@ import { devServerFileWatcher } from "./src/integrations/dev-server-file-watcher
 import onDemandDirective from "./src/integrations/client-on-demand/register.js";
 import { cspConfig } from "./src/config/csp";
 import { monacoEditorIntegration } from "./src/integrations/monacoEditor";
+import { markdownFilesIntegration } from "./src/integrations/markdownFiles";
 
 const ALGOLIA_APP_ID = ENV.ALGOLIA_APP_ID;
 const ALGOLIA_SEARCH_API_KEY = ENV.ALGOLIA_SEARCH_API_KEY;
@@ -236,6 +237,7 @@ export default defineConfig({
         ],
       },
     }),
+    markdownFilesIntegration(),
   ],
   adapter: process.env.VERCEL
     ? vercel({

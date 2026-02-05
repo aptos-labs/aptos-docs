@@ -52,9 +52,15 @@ export function markdownFilesIntegration(): AstroIntegration {
           const relativePath = path.relative(contentDir, mdxPath);
           const outputPath = path.join(staticDir, relativePath.replace(/\.mdx$/, ".md"));
 
-          fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-          fs.copyFileSync(mdxPath, outputPath);
-          count++;
+          try {
+            fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+            fs.copyFileSync(mdxPath, outputPath);
+            count++;
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            logger.error(`Failed to copy "${relativePath}": ${message}`);
+            throw err;
+          }
         }
 
         logger.info(`Generated ${String(count)} markdown files`);

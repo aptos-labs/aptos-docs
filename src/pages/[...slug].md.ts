@@ -6,6 +6,9 @@ import { getCollection } from "astro:content";
 // Cache control settings
 const CACHE_CONTROL_TTL = 60 * 60; // 1 hour for markdown files
 
+// Vercel configuration to prevent body size limit issues
+export const prerender = true;
+
 /**
  * Get static paths for all documentation pages
  * This generates .md endpoints for every docs page
@@ -14,10 +17,10 @@ export const getStaticPaths: GetStaticPaths = async () => {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
   const docs = await getCollection("docs");
 
+  // Only return the slug params, no props needed since we read files directly
   // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
   return docs.map((doc: { id: string }) => ({
     params: { slug: doc.id },
-    props: { doc },
   }));
 };
 

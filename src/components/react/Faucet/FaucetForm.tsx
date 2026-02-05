@@ -1,4 +1,4 @@
-import { type FormEvent, useState } from "react";
+import { type SyntheticEvent, useState } from "react";
 import type { User } from "~/stores/auth";
 import { Button } from "~/components/react/Button/Button";
 import { IconCheck } from "~/components/react/Icon/IconCheck";
@@ -24,7 +24,7 @@ export function FaucetForm({ user }: FaucetFormProps) {
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleFaucetRequest = async (e: FormEvent) => {
+  const handleFaucetRequest = async (e: SyntheticEvent) => {
     e.preventDefault();
     setError(null);
     setIsSubmitting(true);

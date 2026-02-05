@@ -273,8 +273,10 @@ class Installer:
     @property
     def latest_release_info(self):
         # Iterate through the releases and find the latest CLI release.
+        # We look for tags starting with "aptos-cli-v" (with 'v' prefix) to ensure
+        # we get properly versioned releases with assets, not draft/incomplete releases.
         for release in self.release_info:
-            if release["tag_name"].startswith("aptos-cli-"):
+            if release["tag_name"].startswith("aptos-cli-v") and release.get("assets"):
                 return release
         raise RuntimeError("Failed to find latest CLI release")
 
@@ -438,7 +440,15 @@ class Installer:
             version_to_install = self._version
             self._write(colorize("info", "Installing CLI version: {}".format(version_to_install)))
         else:
-            version_to_install = self.latest_release_info["tag_name"].split("-v")[-1]
+            # Extract version by removing the "aptos-cli-v" prefix from the tag name
+            # Tags are expected to be in format "aptos-cli-v{version}" (e.g., "aptos-cli-v7.14.2")
+            tag_name = self.latest_release_info["tag_name"]
+            prefix = "aptos-cli-v"
+            if tag_name.startswith(prefix):
+                version_to_install = tag_name[len(prefix):]
+            else:
+                # Fallback to split method for backwards compatibility
+                version_to_install = tag_name.split("-v")[-1]
             self._write(colorize("info", "Latest CLI release: {}".format(version_to_install)))
 
         if self._force:

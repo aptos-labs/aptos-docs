@@ -13,7 +13,7 @@ export const groupPagesByLang = <T extends CollectionEntry<"docs">>(
   return entries.reduce<Record<string, T[]>>(
     (accumulator, entry) => {
       // Extract language code from the ID (first segment before slash)
-      const idParts = (entry.id as string).split("/");
+      const idParts = entry.id.split("/");
 
       // Ensure we have a valid string for the language code
       const lang: string = idParts[0] ?? "unknown";

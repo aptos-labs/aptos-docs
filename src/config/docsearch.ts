@@ -12,9 +12,12 @@ const getEnvVar = (key: string, value: string | undefined): string => {
 };
 
 export default Object.freeze({
-  appId: getEnvVar("ALGOLIA_APP_ID", ALGOLIA_APP_ID as string | undefined),
-  apiKey: getEnvVar("ALGOLIA_SEARCH_API_KEY", ALGOLIA_SEARCH_API_KEY as string | undefined),
-  indexName: getEnvVar("ALGOLIA_INDEX_NAME", ALGOLIA_INDEX_NAME as string | undefined),
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- Astro env types may not resolve correctly in all environments
+  appId: getEnvVar("ALGOLIA_APP_ID", ALGOLIA_APP_ID),
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- Astro env types may not resolve correctly in all environments
+  apiKey: getEnvVar("ALGOLIA_SEARCH_API_KEY", ALGOLIA_SEARCH_API_KEY),
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument -- Astro env types may not resolve correctly in all environments
+  indexName: getEnvVar("ALGOLIA_INDEX_NAME", ALGOLIA_INDEX_NAME),
   searchParameters: {
     get facetFilters() {
       return getFacetFilters();

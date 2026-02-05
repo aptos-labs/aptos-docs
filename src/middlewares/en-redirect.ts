@@ -10,11 +10,6 @@ export default function middleware(request: Request): Response | void {
   const url = new URL(request.url);
   const pathname = url.pathname;
 
-  // Skip .md file requests - these should be served directly without redirect
-  if (pathname.endsWith(".md")) {
-    return undefined;
-  }
-
   // Check if the path starts with /en
   const enPathMatch = /^\/en(\/.*|$)/.exec(pathname);
 

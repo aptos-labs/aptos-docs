@@ -24,6 +24,7 @@ import { sidebar } from "./astro.sidebar.ts";
 import { ENV } from "./src/lib/env";
 import { ogImagesIntegration } from "./src/integrations/ogImages";
 import { fileSizeCheckIntegration } from "./src/integrations/fileSizeCheck";
+import { markdownFilesIntegration } from "./src/integrations/markdownFiles";
 import { SUPPORTED_LANGUAGES, SITE_TITLES } from "./src/config/i18n";
 import { firebaseIntegration } from "./src/integrations/firebase";
 import { remarkClientOnly } from "./src/plugins";
@@ -57,6 +58,8 @@ export default defineConfig({
     onDemandDirective(),
     // Check for large files that might exceed Vercel limits
     fileSizeCheckIntegration(),
+    // Generate static .md files for each doc page (self-hosted, no GitHub rate limits)
+    markdownFilesIntegration(),
     // Mermaid diagram support
     mermaid(),
     // Only include devServerFileWatcher in development mode

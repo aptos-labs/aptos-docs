@@ -2,7 +2,6 @@ import { next } from "@vercel/edge";
 
 /* eslint-disable @typescript-eslint/no-invalid-void-type */
 // Edge-compatible middleware that implements a middleware chain pattern
-import markdownRedirect from "./middlewares/markdown-redirect";
 import i18nRedirect from "./middlewares/i18n-redirect";
 import enRedirect from "./middlewares/en-redirect";
 import { matcher } from "./middlewares/matcher-routes-dynamic";
@@ -28,9 +27,10 @@ async function applyMiddleware(
 }
 
 // The main middleware function
+// Note: .md files are now served as static files generated at build time
+// (see markdownFilesIntegration), no middleware redirect needed
 export default async function middleware(req: Request) {
   return await applyMiddleware(req, [
-    markdownRedirect, // Handle .md requests first (redirects to GitHub raw content)
     enRedirect,
     i18nRedirect,
     // Add more middleware functions here as needed

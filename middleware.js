@@ -220,44 +220,6 @@ import_headers.geolocation;
 import_headers.ipAddress;
 var export_next = import_middleware.next;
 import_middleware.rewrite;
-const GITHUB_REPO = process.env.GITHUB_REPO ?? "aptos-labs/aptos-docs";
-const GITHUB_BRANCH = process.env.GITHUB_BRANCH ?? "main";
-const GITHUB_RAW_BASE = `https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_BRANCH}`;
-const DOCS_PATH_PREFIX = "/src/content/docs";
-function normalizePath(pathname) {
-  if (pathname.includes("%2e") || pathname.includes("%2E")) {
-    return null;
-  }
-  const segments = pathname.split("/").filter(Boolean);
-  const resolved = [];
-  for (const segment of segments) {
-    if (segment === "..") {
-      return null;
-    } else if (segment !== ".") {
-      resolved.push(segment);
-    }
-  }
-  return "/" + resolved.join("/");
-}
-function middleware$3(request) {
-  const url = new URL(request.url);
-  const pathname = url.pathname;
-  if (!pathname.endsWith(".md")) {
-    return void 0;
-  }
-  const basePath = pathname.slice(0, -3);
-  if (basePath === "" || basePath === "/") {
-    return void 0;
-  }
-  const normalizedPath = normalizePath(basePath);
-  if (normalizedPath === null) {
-    return new Response("Invalid path", {
-      status: 400,
-    });
-  }
-  const githubRawUrl = `${GITHUB_RAW_BASE}${DOCS_PATH_PREFIX}${normalizedPath}.mdx`;
-  return Response.redirect(githubRawUrl, 302);
-}
 const SUPPORTED_LANGUAGES = [
   {
     code: "en",
@@ -388,25 +350,21 @@ export const config = {
     "/",
     "/build/:path*",
     "/contribute/:path*",
-    "/es/:path*",
     "/network/:path*",
     "/move-reference",
     "/move-reference/:path*",
     "/en",
     "/en/:path*",
-    "/:path*.md",
     "/zh$",
     "/zh/build/:path*",
     "/zh/contribute/:path*",
-    "/zh/es/:path*",
     "/zh/network/:path*",
     "/zh/move-reference",
     "/zh/move-reference/:path*",
     "/zh/en",
     "/zh/en/:path*",
-    "/zh/:path*.md",
   ],
 };
 export default async function middleware(req) {
-  return await applyMiddleware(req, [middleware$3, middleware$1, middleware$2, export_next]);
+  return await applyMiddleware(req, [middleware$1, middleware$2, export_next]);
 }

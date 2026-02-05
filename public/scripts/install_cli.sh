@@ -143,19 +143,33 @@ install_from_source() {
         print_message "$CYAN" "Checking out version $version..."
         retry_command git clone --depth 1 --branch "aptos-cli-v$version" "$APTOS_REPO_URL" "$tmp_dir/aptos-core" || die "Failed to clone aptos-core repository"
     else
-        # Clone and get latest CLI version tag
-        retry_command git clone --depth 100 "$APTOS_REPO_URL" "$tmp_dir/aptos-core" || die "Failed to clone aptos-core repository"
-        cd "$tmp_dir/aptos-core"
+        # Clone repository - use filter to reduce download size while still getting all tags
+        # (shallow clones may miss tags if there have been many commits since the tag)
+        retry_command git clone --filter=blob:none "$APTOS_REPO_URL" "$tmp_dir/aptos-core" || die "Failed to clone aptos-core repository"
+        cd "$tmp_dir/aptos-core" || die "Failed to change directory to cloned repository"
         latest_tag=$(git tag -l 'aptos-cli-v*' | sort_version_tags | tail -1)
         if [ -z "$latest_tag" ]; then
             die "Could not find any aptos-cli release tags"
         fi
+        version=$(echo "$latest_tag" | sed 's/aptos-cli-v//')
+        
+        # Check if the latest version is already installed (skip build if so)
+        if [ "$FORCE" = false ]; then
+            installed_version=""
+            if [ -x "$BIN_DIR/$SCRIPT" ]; then
+                installed_version=$("$BIN_DIR/$SCRIPT" --version 2>/dev/null | awk 'NF{print $NF}')
+            fi
+            if [ -n "$installed_version" ] && [ "$installed_version" = "$version" ]; then
+                print_message "$GREEN" "Aptos CLI version $version is already installed. Use --force to rebuild."
+                exit 0
+            fi
+        fi
+        
         print_message "$CYAN" "Checking out $latest_tag..."
         git checkout "$latest_tag" || die "Failed to checkout $latest_tag"
-        version=$(echo "$latest_tag" | sed 's/aptos-cli-v//')
     fi
     
-    cd "$tmp_dir/aptos-core"
+    cd "$tmp_dir/aptos-core" || die "Failed to change directory to cloned repository"
     
     print_message "$CYAN" "Building Aptos CLI (this may take several minutes)..."
     
@@ -164,12 +178,15 @@ install_from_source() {
         die "Build script ./scripts/minimal_cli_build.sh not found in cloned aptos-core repository"
     fi
     
+    # Ensure the build script is executable
+    chmod +x "./scripts/minimal_cli_build.sh" || die "Failed to make build script executable"
+    
     # Build the CLI using the minimal build script
     ./scripts/minimal_cli_build.sh || die "Failed to build Aptos CLI"
     
     # Move the binary to the bin directory
     if [ -f "target/release/aptos" ]; then
-        mv "target/release/aptos" "$BIN_DIR/"
+        mv "target/release/aptos" "$BIN_DIR/" || die "Failed to move binary to $BIN_DIR"
         chmod +x "$BIN_DIR/aptos"
         print_message "$GREEN" "Aptos CLI version $version installed successfully from source!"
     else

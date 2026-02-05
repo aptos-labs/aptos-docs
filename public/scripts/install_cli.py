@@ -14,6 +14,7 @@ import argparse
 import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -744,9 +745,10 @@ class Installer:
                         text=True,
                     )
                 else:
-                    # Clone with enough depth to find tags
+                    # Clone repository - we need full clone to ensure all tags are available
+                    # (shallow clones may miss tags if there have been many commits since the tag)
                     subprocess.run(
-                        ["git", "clone", "--depth", "100", self.APTOS_REPO_URL, repo_path],
+                        ["git", "clone", "--filter=blob:none", self.APTOS_REPO_URL, repo_path],
                         check=True,
                         capture_output=True,
                         text=True,
@@ -758,6 +760,21 @@ class Installer:
                         self._write(colorize("error", "Could not find any aptos-cli release tags"))
                         return 1
 
+                    # Check if the latest version is already installed
+                    latest_version = latest_tag.replace("aptos-cli-v", "")
+                    if not self._force:
+                        try:
+                            out = subprocess.check_output(
+                                [self.bin_path, "--version"],
+                                universal_newlines=True,
+                            )
+                            current_version = out.split(" ")[-1].rstrip().lstrip()
+                            if current_version == latest_version:
+                                self._write(colorize("warning", f"Aptos CLI version {latest_version} is already installed."))
+                                return 0
+                        except (FileNotFoundError, PermissionError, subprocess.CalledProcessError, OSError):
+                            pass  # CLI not installed, proceed
+
                     self._write(colorize("info", f"Checking out {latest_tag}..."))
                     subprocess.run(
                         ["git", "checkout", latest_tag],
@@ -766,8 +783,12 @@ class Installer:
                         capture_output=True,
                         text=True,
                     )
-                    version = latest_tag.replace("aptos-cli-v", "")
+                    version = latest_version
 
+            except FileNotFoundError:
+                self._write(colorize("error", "Git is not installed or not found in PATH."))
+                self._write(colorize("info", "Please install Git and try again: https://git-scm.com/downloads"))
+                return 1
             except subprocess.CalledProcessError as e:
                 self._write(colorize("error", f"Failed to clone repository: {e.stderr if e.stderr else e}"))
                 return 1
@@ -795,8 +816,8 @@ class Installer:
                 return 1
 
             # Determine the binary name and location
-            binary_name = "aptos.exe" if WINDOWS else "aptos"
-            source_binary = os.path.join(repo_path, "target", "release", binary_name)
+            # Note: Windows is blocked in run_from_source(), so we only handle Unix here
+            source_binary = os.path.join(repo_path, "target", "release", "aptos")
 
             if not os.path.exists(source_binary):
                 self._write(colorize("error", "Build succeeded but could not find the aptos binary"))
@@ -804,10 +825,15 @@ class Installer:
 
             # Move the binary to the bin directory
             dest_binary = self.bin_path
-            if dest_binary.exists():
-                dest_binary.unlink()
-            shutil.copy2(source_binary, dest_binary)
-            os.chmod(dest_binary, 0o755)
+            try:
+                if dest_binary.exists():
+                    dest_binary.unlink()
+                shutil.copy2(source_binary, dest_binary)
+                os.chmod(dest_binary, 0o755)
+            except OSError as e:
+                self._write(colorize("error", f"Failed to install Aptos CLI binary to {dest_binary}: {e}"))
+                self._write(colorize("info", "Please ensure you have write permissions to this directory and sufficient disk space."))
+                return 1
 
             self._write("")
             self._write(colorize("success", f"Aptos CLI version {version} installed successfully from source!"))
@@ -818,7 +844,6 @@ class Installer:
 
     def _validate_version_string(self, version: str) -> bool:
         """Validate that version string only contains safe characters."""
-        import re
         # Allow digits, dots, hyphens, and alphanumeric characters for version strings
         # e.g., "1.2.3", "1.2.3-rc1", "1.2.3-beta.1"
         return bool(re.match(r'^[a-zA-Z0-9.\-]+$', version))

@@ -23,6 +23,7 @@ import starlightImageZoom from "starlight-image-zoom";
 import { sidebar } from "./astro.sidebar.ts";
 import { ENV } from "./src/lib/env";
 import { ogImagesIntegration } from "./src/integrations/ogImages";
+import { fileSizeCheckIntegration } from "./src/integrations/fileSizeCheck";
 import { SUPPORTED_LANGUAGES, SITE_TITLES } from "./src/config/i18n";
 import { firebaseIntegration } from "./src/integrations/firebase";
 import { remarkClientOnly } from "./src/plugins";
@@ -54,6 +55,8 @@ export default defineConfig({
     monacoEditorIntegration(),
     // Custom client directive for on-demand loading
     onDemandDirective(),
+    // Check for large files that might exceed Vercel limits
+    fileSizeCheckIntegration(),
     // Mermaid diagram support
     mermaid(),
     // Only include devServerFileWatcher in development mode

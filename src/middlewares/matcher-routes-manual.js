@@ -11,7 +11,6 @@ export const routes = [
   "/en",
   "/en/:path*",
 
-  // Routes for .md file access (redirects to GitHub raw content)
-  // These allow accessing raw markdown by appending .md to any doc URL
-  "/:path*.md",
+  // Note: .md files are now served as static files generated at build time
+  // (see markdownFilesIntegration), no middleware routes needed
 ];

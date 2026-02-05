@@ -2,7 +2,6 @@
 import StarlightPage from "@astrojs/starlight/components/StarlightPage.astro";
 import FallbackContentNotice from "@astrojs/starlight/components/FallbackContentNotice.astro";
 import { dereference } from "@readme/openapi-parser";
-import type { InferGetStaticPropsType } from "astro";
 
 import { getSchemaStaticPaths } from "starlight-openapi/libs/route";
 import { getPageProps } from "starlight-openapi/libs/starlight";
@@ -12,41 +11,55 @@ import OperationTag from "./OperationTag.astro";
 import Overview from "./Overview.astro";
 import OperationScalarModal from "./operation/OperationExamples/OperationScalarModal.astro";
 
-export const prerender = true;
+// Render REST API pages on-demand (SSR) instead of statically at build time.
+// This significantly reduces the Vercel deployment size by removing ~60+ large
+// HTML files (each ~1.69 MB) from the static output.
+export const prerender = false;
 
-export function getStaticPaths() {
-  return getSchemaStaticPaths();
+// Build a lookup map from slug to props for SSR routing.
+// The data comes from the virtual module (compiled into the serverless function),
+// so this is fast and does not involve any external I/O.
+const allRoutes = getSchemaStaticPaths();
+const routeMap = new Map(allRoutes.map((route) => [route.params.openAPISlug, route.props]));
+
+// Match the current request's slug against known API routes
+const slug = Astro.params.openAPISlug as string;
+const matchedProps = routeMap.get(slug);
+
+if (!matchedProps) {
+  return new Response(null, { status: 404 });
 }
 
-type Props = InferGetStaticPropsType<typeof getStaticPaths>;
-
-const { schema, type } = Astro.props;
+const { schema, type } = matchedProps;
 
 schema.document = await dereference(schema.document);
 
 const isOverview = type === "overview";
 const isOperationTag = type === "operation-tag";
 
-const title = isOverview || isOperationTag ? "Overview" : Astro.props.operation.title;
+const operation = type === "operation" ? matchedProps.operation : undefined;
+const tag = type === "operation-tag" ? matchedProps.tag : undefined;
+const title = isOverview || isOperationTag ? "Overview" : (operation?.title ?? "API");
+
+// Cache SSR responses at the CDN edge for performance.
+// s-maxage=86400: CDN caches for 24 hours
+// stale-while-revalidate=604800: serve stale while revalidating for up to 7 days
+Astro.response.headers.set(
+  "Cache-Control",
+  "public, s-maxage=86400, stale-while-revalidate=604800",
+);
 ---
 
-<StarlightPage
-  {...getPageProps(
-    title,
-    schema,
-    isOverview || isOperationTag ? undefined : Astro.props.operation,
-    isOperationTag ? Astro.props.tag : undefined,
-  )}
->
+<StarlightPage {...getPageProps(title, schema, operation, tag)}>
   {Astro.currentLocale !== "en" && <FallbackContentNotice />}
   {
     isOverview ? (
       <Overview {schema} />
-    ) : isOperationTag ? (
-      <OperationTag tag={Astro.props.tag} />
-    ) : (
-      <Operation {schema} operation={Astro.props.operation} />
-    )
+    ) : isOperationTag && tag ? (
+      <OperationTag tag={tag} />
+    ) : operation ? (
+      <Operation {schema} operation={operation} />
+    ) : null
   }
 </StarlightPage>
 <!-- We render it here, because StarlightPage component creates stacking context which breaks modal styles -->

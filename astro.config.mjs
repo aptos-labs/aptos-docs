@@ -42,6 +42,10 @@ const enableApiReference = true;
 
 // https://astro.build/config
 export default defineConfig({
+  // Use server output mode so REST API pages can be rendered on-demand (SSR)
+  // instead of being statically generated at build time.
+  // Starlight pages remain prerendered (static) by default.
+  output: "server",
   build: {
     inlineStylesheets: "never",
   },
@@ -56,6 +60,18 @@ export default defineConfig({
     monacoEditorIntegration(),
     // Custom client directive for on-demand loading
     onDemandDirective(),
+    // Override prerender for OpenAPI REST API routes to use SSR.
+    // This reduces the static output size by ~100+ MB (each page is ~1.69 MB).
+    {
+      name: "openapi-ssr-override",
+      hooks: {
+        "astro:route:setup": ({ route }) => {
+          if (route.component.includes("OpenAPI/Route.astro")) {
+            route.prerender = false;
+          }
+        },
+      },
+    },
     // Check for large files that might exceed Vercel limits
     fileSizeCheckIntegration(),
     // Generate static .md files for each doc page (self-hosted, no GitHub rate limits)

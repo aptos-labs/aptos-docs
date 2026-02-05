@@ -16,7 +16,7 @@ export const groupPagesByLang = <T extends CollectionEntry<"docs">>(
       const idParts = entry.id.split("/");
 
       // Ensure we have a valid string for the language code
-      const lang: string = idParts[0] ?? "unknown";
+      const lang = idParts[0] ?? "unknown";
 
       // Initialize the array for this language if it doesn't exist yet
       accumulator[lang] ??= [];

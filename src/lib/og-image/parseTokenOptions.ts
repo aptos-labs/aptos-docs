@@ -15,5 +15,5 @@ export async function parseTokenOptions<Schema extends z.AnyZodObject>(
 
   const verifiedJWT = await jwtVerify(signedJWTToken, secret);
   // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return -- Astro's virtual modules (astro:schema) have limited TypeScript support
-  return schema.parse(verifiedJWT.payload) as z.infer<Schema>;
+  return schema.parse(verifiedJWT.payload);
 }

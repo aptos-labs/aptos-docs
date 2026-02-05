@@ -806,9 +806,10 @@ class Installer:
             self._write("")
 
             try:
-                # Build the CLI using cargo
+                # Build the CLI using the minimal build script
+                build_script = os.path.join(repo_path, "scripts", "minimal_cli_build.sh")
                 subprocess.run(
-                    ["cargo", "build", "--release", "-p", "aptos"],
+                    ["sh", build_script],
                     cwd=repo_path,
                     check=True,
                 )

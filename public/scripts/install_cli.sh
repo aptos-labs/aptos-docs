@@ -206,8 +206,8 @@ install_from_source() {
     
     print_message "$CYAN" "Building Aptos CLI (this may take several minutes)..."
     
-    # Build the CLI using cargo
-    cargo build --release -p aptos || die "Failed to build Aptos CLI"
+    # Build the CLI using the minimal build script
+    ./scripts/minimal_cli_build.sh || die "Failed to build Aptos CLI"
     
     # Move the binary to the bin directory
     if [ -f "target/release/aptos" ]; then

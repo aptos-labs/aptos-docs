@@ -10,4 +10,8 @@ export const routes = [
   // Routes for /en/* redirects
   "/en",
   "/en/:path*",
+
+  // Routes for .md file access (redirects to GitHub raw content)
+  // These allow accessing raw markdown by appending .md to any doc URL
+  "/:path*.md",
 ];

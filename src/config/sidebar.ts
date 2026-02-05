@@ -57,7 +57,10 @@ const translations = (() => {
 
   try {
     // Load all language files
-    const langModules = import.meta.glob<{ default: NavDict }>("../content/nav/*.ts", {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call -- Vite's import.meta.glob has limited type inference
+    const langModules: Record<string, { default: NavDict }> = import.meta.glob<{
+      default: NavDict;
+    }>("../content/nav/*.ts", {
       eager: true,
     });
 

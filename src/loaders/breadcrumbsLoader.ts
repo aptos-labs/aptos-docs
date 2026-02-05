@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument, @typescript-eslint/restrict-plus-operands -- Astro's virtual modules (astro:content) have limited TypeScript support */
 import { getCollection } from "astro:content";
 import { SUPPORTED_LANGUAGES } from "~/config/i18n";
 

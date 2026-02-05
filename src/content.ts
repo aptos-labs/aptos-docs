@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- Astro's virtual modules (astro:content) have limited TypeScript support */
 import { getCollection } from "astro:content";
 import { isEnglishEntry, isKoreanEntry } from "./content.config";
 

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access -- Astro's virtual modules (astro:env/client) have limited TypeScript support */
 import { initializeApp } from "firebase/app";
 import * as CLIENT_ENV from "astro:env/client";
 import { API_KEY_ENV, APP_ID_ENV, AUTH_DOMAIN_ENV, PROJECT_ID_ENV } from "./constants";

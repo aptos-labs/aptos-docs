@@ -1,4 +1,5 @@
 // src/content/config.ts
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-unnecessary-type-parameters -- Astro's virtual modules (astro:content) have limited TypeScript support */
 
 import { docsLoader, i18nLoader } from "@astrojs/starlight/loaders";
 import { docsSchema, i18nSchema } from "@astrojs/starlight/schema";
@@ -70,8 +71,9 @@ export type DocsEntry<T extends DocsEntryType> = CollectionEntry<"docs"> & {
 };
 
 export function createIsDocsEntry<T extends DocsEntryType>(type: T) {
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-  return (entry: CollectionEntry<"docs">): entry is DocsEntry<T> => entry.data.type === type;
+  return (entry: CollectionEntry<"docs">): entry is DocsEntry<T> =>
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Type guard needs runtime check
+    entry.data.type === type;
 }
 
 export function createIsLangEntry(lang: string) {

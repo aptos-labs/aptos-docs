@@ -49,6 +49,7 @@ export class GitHubFetcher {
 
     this.client = graphql.defaults({
       headers: {
+        // eslint-disable-next-line @typescript-eslint/restrict-template-expressions -- Astro's virtual modules (astro:env/server) have limited TypeScript support
         authorization: `token ${GITHUB_TOKEN}`,
       },
     });

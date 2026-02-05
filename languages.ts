@@ -28,6 +28,7 @@ const twoLanguages = {
  * Map of language codes to a written out language name.
  * Used to populate the language switcher in the navbar.
  */
+// eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- Vite env variable
 export default import.meta.env.PUBLIC_TWO_LANG ? twoLanguages : allLanguages;
 
 // export const rtlLanguages = new Set(['ar']);

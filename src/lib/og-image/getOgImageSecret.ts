@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-argument -- Astro's virtual modules (astro:env/server) have limited TypeScript support */
 import { getSecret } from "astro:env/server";
 import { OG_IMAGES_ENV_NAME } from "./constants";
 

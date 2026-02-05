@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unnecessary-condition -- Astro's virtual modules (astro:content) have limited TypeScript support */
 import type { CollectionEntry } from "astro:content";
 
 /**
@@ -12,10 +13,10 @@ export const groupPagesByLang = <T extends CollectionEntry<"docs">>(
   return entries.reduce<Record<string, T[]>>(
     (accumulator, entry) => {
       // Extract language code from the ID (first segment before slash)
-      const idParts = entry.id.split("/");
+      const idParts = (entry.id as string).split("/");
 
       // Ensure we have a valid string for the language code
-      const lang = idParts[0] ?? "unknown";
+      const lang: string = idParts[0] ?? "unknown";
 
       // Initialize the array for this language if it doesn't exist yet
       accumulator[lang] ??= [];

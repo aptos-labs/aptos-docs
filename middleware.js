@@ -220,8 +220,25 @@ import_headers.geolocation;
 import_headers.ipAddress;
 var export_next = import_middleware.next;
 import_middleware.rewrite;
-const GITHUB_RAW_BASE = "https://raw.githubusercontent.com/aptos-labs/aptos-docs/main";
+const GITHUB_REPO = process.env.GITHUB_REPO ?? "aptos-labs/aptos-docs";
+const GITHUB_BRANCH = process.env.GITHUB_BRANCH ?? "main";
+const GITHUB_RAW_BASE = `https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_BRANCH}`;
 const DOCS_PATH_PREFIX = "/src/content/docs";
+function normalizePath(pathname) {
+  if (pathname.includes("%2e") || pathname.includes("%2E")) {
+    return null;
+  }
+  const segments = pathname.split("/").filter(Boolean);
+  const resolved = [];
+  for (const segment of segments) {
+    if (segment === "..") {
+      return null;
+    } else if (segment !== ".") {
+      resolved.push(segment);
+    }
+  }
+  return "/" + resolved.join("/");
+}
 function middleware$3(request) {
   const url = new URL(request.url);
   const pathname = url.pathname;
@@ -232,7 +249,13 @@ function middleware$3(request) {
   if (basePath === "" || basePath === "/") {
     return void 0;
   }
-  const githubRawUrl = `${GITHUB_RAW_BASE}${DOCS_PATH_PREFIX}${basePath}.mdx`;
+  const normalizedPath = normalizePath(basePath);
+  if (normalizedPath === null) {
+    return new Response("Invalid path", {
+      status: 400,
+    });
+  }
+  const githubRawUrl = `${GITHUB_RAW_BASE}${DOCS_PATH_PREFIX}${normalizedPath}.mdx`;
   return Response.redirect(githubRawUrl, 302);
 }
 const SUPPORTED_LANGUAGES = [

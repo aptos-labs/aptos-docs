@@ -282,8 +282,8 @@ export default defineConfig({
     build: {
       // Target modern browsers for smaller output (no legacy polyfills)
       target: "es2022",
-      // Improve CSS minification
-      cssMinify: "lightningcss",
+      // Use default esbuild CSS minification (lightningcss is stricter but incompatible
+      // with some third-party CSS that uses invalid var() syntax)
       // Better tree-shaking
       modulePreload: {
         polyfill: false,

@@ -45,6 +45,7 @@ export default defineConfig({
   build: {
     inlineStylesheets: "never",
   },
+  compressHTML: true,
   site:
     ENV.VERCEL_ENV === "production"
       ? "https://aptos.dev"
@@ -86,6 +87,12 @@ export default defineConfig({
       },
       lastUpdated: true,
       expressiveCode: {
+        // Minimize output: remove unnecessary wrapper styles
+        styleOverrides: {
+          codePaddingInline: "1rem",
+        },
+        // Use only Starlight's built-in themes to reduce CSS output
+        themes: ["starlight-dark", "starlight-light"],
         shiki: {
           // Define langs for shiki syntax highlighting
           langAlias: {
@@ -272,6 +279,77 @@ export default defineConfig({
         "~/images": fileURLToPath(new URL("./src/assets/images", import.meta.url)),
       },
     },
+    build: {
+      // Target modern browsers for smaller output (no legacy polyfills)
+      target: "es2022",
+      // Improve CSS minification
+      cssMinify: "lightningcss",
+      // Better tree-shaking
+      modulePreload: {
+        polyfill: false,
+      },
+      rollupOptions: {
+        output: {
+          // Code splitting: separate vendor chunks for better caching
+          manualChunks(id) {
+            // Firebase - large dependency, rarely changes
+            if (id.includes("firebase/")) {
+              return "vendor-firebase";
+            }
+            // React ecosystem
+            if (
+              id.includes("node_modules/react/") ||
+              id.includes("node_modules/react-dom/") ||
+              id.includes("node_modules/scheduler/")
+            ) {
+              return "vendor-react";
+            }
+            // React-based UI libraries
+            if (id.includes("@radix-ui/") || id.includes("lucide-react")) {
+              return "vendor-react-ui";
+            }
+            // Mermaid - very large, only used on some pages
+            if (id.includes("node_modules/mermaid/")) {
+              return "vendor-mermaid";
+            }
+            // KaTeX - math rendering, only used on some pages
+            if (id.includes("node_modules/katex/")) {
+              return "vendor-katex";
+            }
+            // Shiki / syntax highlighting - large
+            if (id.includes("node_modules/shiki/") || id.includes("node_modules/@shikijs/")) {
+              return "vendor-shiki";
+            }
+            // Monaco editor - very large, only used on GraphQL page
+            if (id.includes("monaco-editor") || id.includes("monaco-graphql")) {
+              return "vendor-monaco";
+            }
+            // Algolia DocSearch
+            if (id.includes("@docsearch/") || id.includes("@algolia/")) {
+              return "vendor-search";
+            }
+            // GraphiQL
+            if (id.includes("graphiql") || id.includes("@graphiql/")) {
+              return "vendor-graphiql";
+            }
+            // Nanostores
+            if (id.includes("nanostores") || id.includes("@nanostores/")) {
+              return "vendor-nanostores";
+            }
+            // AI chatbot client
+            if (id.includes("@aptos-labs/ai-chatbot-client")) {
+              return "vendor-chatbot";
+            }
+            // Let Rollup handle all other modules
+            return undefined;
+          },
+        },
+        treeshake: {
+          // More aggressive tree-shaking
+          preset: "recommended",
+        },
+      },
+    },
   },
   markdown: {
     remarkPlugins: [
@@ -288,7 +366,12 @@ export default defineConfig({
     ],
     rehypePlugins: [rehypeRaw, rehypeKatex],
   },
-  prefetch: true,
+  prefetch: {
+    // Only prefetch on hover/focus for better bandwidth usage
+    // Avoids prefetching all visible links which wastes bandwidth
+    prefetchAll: false,
+    defaultStrategy: "hover",
+  },
   image: {
     domains: ["preview.aptos.dev", "aptos.dev"],
     remotePatterns: [{ protocol: "https" }],

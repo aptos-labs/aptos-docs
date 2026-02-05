@@ -41,7 +41,7 @@ var __toESM = (mod, isNodeMode, target) => (
   )
 );
 var require_headers = __commonJS({
-  "../functions/headers.js"(exports, module) {
+  "../functions/headers.js"(exports$1, module) {
     var __defProp2 = Object.defineProperty;
     var __getOwnPropDesc2 = Object.getOwnPropertyDescriptor;
     var __getOwnPropNames2 = Object.getOwnPropertyNames;
@@ -136,7 +136,7 @@ var require_headers = __commonJS({
   },
 });
 var require_middleware = __commonJS({
-  "../functions/middleware.js"(exports, module) {
+  "../functions/middleware.js"(exports$1, module) {
     var __defProp2 = Object.defineProperty;
     var __getOwnPropDesc2 = Object.getOwnPropertyDescriptor;
     var __getOwnPropNames2 = Object.getOwnPropertyNames;
@@ -173,8 +173,7 @@ var require_middleware = __commonJS({
     });
     module.exports = __toCommonJS(middleware_exports);
     function handleMiddlewareField(init, headers) {
-      var _a;
-      if ((_a = init == null ? void 0 : init.request) == null ? void 0 : _a.headers) {
+      if (init?.request?.headers) {
         if (!(init.request.headers instanceof Headers)) {
           throw new Error("request.headers must be an instance of Headers");
         }
@@ -187,7 +186,7 @@ var require_middleware = __commonJS({
       }
     }
     function rewrite2(destination, init) {
-      const headers = new Headers((init == null ? void 0 : init.headers) ?? {});
+      const headers = new Headers(init?.headers ?? {});
       headers.set("x-middleware-rewrite", String(destination));
       handleMiddlewareField(init, headers);
       return new Response(null, {
@@ -196,7 +195,7 @@ var require_middleware = __commonJS({
       });
     }
     function next2(init) {
-      const headers = new Headers((init == null ? void 0 : init.headers) ?? {});
+      const headers = new Headers(init?.headers ?? {});
       headers.set("x-middleware-next", "1");
       handleMiddlewareField(init, headers);
       return new Response(null, {
@@ -221,6 +220,21 @@ import_headers.geolocation;
 import_headers.ipAddress;
 var export_next = import_middleware.next;
 import_middleware.rewrite;
+const GITHUB_RAW_BASE = "https://raw.githubusercontent.com/aptos-labs/aptos-docs/main";
+const DOCS_PATH_PREFIX = "/src/content/docs";
+function middleware$3(request) {
+  const url = new URL(request.url);
+  const pathname = url.pathname;
+  if (!pathname.endsWith(".md")) {
+    return void 0;
+  }
+  const basePath = pathname.slice(0, -3);
+  if (basePath === "" || basePath === "/") {
+    return void 0;
+  }
+  const githubRawUrl = `${GITHUB_RAW_BASE}${DOCS_PATH_PREFIX}${basePath}.mdx`;
+  return Response.redirect(githubRawUrl, 302);
+}
 const SUPPORTED_LANGUAGES = [
   {
     code: "en",
@@ -235,10 +249,6 @@ const SUPPORTED_LANGUAGES = [
     code: "zh",
     label: "简体中文",
   },
-  //{
-  //  code: "ja",
-  //  label: "日本語",
-  //},
 ];
 const LANGUAGE_CODES = SUPPORTED_LANGUAGES.map((lang) => lang.code);
 const DEFAULT_LANG = "en";
@@ -302,7 +312,6 @@ function isCrawler(userAgent) {
   return MOST_COMMON_CRAWLERS.some((regexp) => regexp.test(userAgent));
 }
 function middleware$2(request) {
-  var _a, _b;
   const url = new URL(request.url);
   const pathname = url.pathname;
   const userAgent = request.headers.get("user-agent");
@@ -314,10 +323,7 @@ function middleware$2(request) {
   let preferredLocale = langCookieMatch ? langCookieMatch[1] : null;
   if (!preferredLocale) {
     const acceptLanguage = request.headers.get("accept-language") ?? "";
-    preferredLocale =
-      ((_b = (_a = acceptLanguage.split(",")[0]) == null ? void 0 : _a.split(";")[0]) == null
-        ? void 0
-        : _b.split("-")[0]) ?? DEFAULT_LANG;
+    preferredLocale = acceptLanguage.split(",")[0]?.split(";")[0]?.split("-")[0] ?? DEFAULT_LANG;
   }
   const langPathMatch = /^\/([a-z]{2})(\/.*|$)/.exec(pathname);
   const currentLang = langPathMatch ? langPathMatch[1] : DEFAULT_LANG;
@@ -363,18 +369,32 @@ export const config = {
     "/",
     "/build/:path*",
     "/contribute/:path*",
-    "/guides/:path*",
     "/network/:path*",
     "/move-reference",
     "/move-reference/:path*",
     "/en",
     "/en/:path*",
-    "/es",
-    "/es/:path*",
-    "/zh",
-    "/zh/:path*",
+    "/:path*.md",
+    "/es$",
+    "/es/build/:path*",
+    "/es/contribute/:path*",
+    "/es/network/:path*",
+    "/es/move-reference",
+    "/es/move-reference/:path*",
+    "/es/en",
+    "/es/en/:path*",
+    "/es/:path*.md",
+    "/zh$",
+    "/zh/build/:path*",
+    "/zh/contribute/:path*",
+    "/zh/network/:path*",
+    "/zh/move-reference",
+    "/zh/move-reference/:path*",
+    "/zh/en",
+    "/zh/en/:path*",
+    "/zh/:path*.md",
   ],
 };
 export default async function middleware(req) {
-  return await applyMiddleware(req, [middleware$1, middleware$2, export_next]);
+  return await applyMiddleware(req, [middleware$3, middleware$1, middleware$2, export_next]);
 }

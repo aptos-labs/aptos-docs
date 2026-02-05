@@ -39,7 +39,7 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(function ChatI
     textarea.style.height = `${Math.min(textarea.scrollHeight, 120).toString()}px`;
   };
 
-  const handleSubmit = (e?: React.FormEvent) => {
+  const handleSubmit = (e?: React.SyntheticEvent) => {
     e?.preventDefault();
     if (!message.trim()) return;
     onSend?.(message);

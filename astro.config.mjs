@@ -269,32 +269,6 @@ export default defineConfig({
         "~/images": fileURLToPath(new URL("./src/assets/images", import.meta.url)),
       },
     },
-    build: {
-      rollupOptions: {
-        output: {
-          // Split large chunks to avoid Vercel's 5MB serverless function limit
-          manualChunks(id) {
-            // Split node_modules into separate chunks
-            if (id.includes("node_modules")) {
-              // Large dependencies get their own chunks
-              if (id.includes("mermaid")) return "vendor-mermaid";
-              if (id.includes("shiki") || id.includes("oniguruma")) return "vendor-shiki";
-              if (id.includes("firebase")) return "vendor-firebase";
-              if (id.includes("react")) return "vendor-react";
-              if (id.includes("katex")) return "vendor-katex";
-              if (id.includes("monaco")) return "vendor-monaco";
-              // Other node_modules
-              return "vendor";
-            }
-            // Content data can be split by language if needed
-            if (id.includes("content/docs/es/")) return "content-es";
-            if (id.includes("content/docs/zh/")) return "content-zh";
-            // Return undefined for other files to use default chunking
-            return undefined;
-          },
-        },
-      },
-    },
   },
   markdown: {
     remarkPlugins: [

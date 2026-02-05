@@ -96,85 +96,11 @@ install_required_packages() {
     fi
 }
 
-# Check and install Rust/Cargo if needed for source installation
-ensure_rust_installed() {
-    if command_exists cargo; then
-        print_message "$GREEN" "✓ Cargo is already installed"
-        return 0
-    fi
-
-    print_message "$YELLOW" "Rust/Cargo is not installed. Installing via rustup..."
-    
-    if command_exists curl; then
-        retry_command curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y || die "Failed to install Rust"
-    elif command_exists wget; then
-        retry_command wget -qO- https://sh.rustup.rs | sh -s -- -y || die "Failed to install Rust"
-    else
-        die "Neither curl nor wget is installed. Please install one of them manually."
-    fi
-
-    # Source cargo environment
-    if [ -f "$HOME/.cargo/env" ]; then
-        . "$HOME/.cargo/env"
-    fi
-
-    if ! command_exists cargo; then
-        die "Cargo installation failed. Please install Rust manually from https://rustup.rs"
-    fi
-
-    print_message "$GREEN" "✓ Rust/Cargo installed successfully"
-}
-
-# Install required build dependencies for source installation
-install_build_dependencies() {
-    print_message "$CYAN" "Checking build dependencies..."
-    
-    # Check for git
-    if ! command_exists git; then
-        print_message "$YELLOW" "Installing git..."
-        /tmp/install_pkg.sh git || die "Failed to install git"
-    fi
-
-    # Platform-specific dependencies
-    case "$(uname -s)" in
-        Linux*)
-            # Install build-essential, pkg-config, libssl-dev, etc.
-            if [ -f /etc/debian_version ]; then
-                print_message "$YELLOW" "Installing build dependencies for Debian/Ubuntu..."
-                /tmp/install_pkg.sh build-essential || print_message "$YELLOW" "build-essential may already be installed"
-                /tmp/install_pkg.sh pkg-config || print_message "$YELLOW" "pkg-config may already be installed"
-                /tmp/install_pkg.sh libssl-dev || print_message "$YELLOW" "libssl-dev may already be installed"
-                /tmp/install_pkg.sh libudev-dev || print_message "$YELLOW" "libudev-dev may already be installed"
-            elif [ -f /etc/redhat-release ]; then
-                print_message "$YELLOW" "Installing build dependencies for RedHat/CentOS..."
-                /tmp/install_pkg.sh gcc || print_message "$YELLOW" "gcc may already be installed"
-                /tmp/install_pkg.sh pkgconfig || print_message "$YELLOW" "pkgconfig may already be installed"
-                /tmp/install_pkg.sh openssl-devel || print_message "$YELLOW" "openssl-devel may already be installed"
-            fi
-            ;;
-        Darwin*)
-            # macOS usually has most things via Xcode CLI tools
-            if ! xcode-select -p >/dev/null 2>&1; then
-                print_message "$YELLOW" "Installing Xcode Command Line Tools..."
-                xcode-select --install 2>/dev/null || print_message "$YELLOW" "Xcode CLI tools may already be installed"
-            fi
-            ;;
-    esac
-
-    print_message "$GREEN" "✓ Build dependencies checked"
-}
-
 # Install CLI from source
 install_from_source() {
     version=$1
     
     print_message "$CYAN" "Installing Aptos CLI from source..."
-    
-    # Install build dependencies
-    install_build_dependencies
-    
-    # Ensure Rust is installed
-    ensure_rust_installed
     
     # Create bin directory if it doesn't exist
     mkdir -p "$BIN_DIR"

@@ -674,56 +674,6 @@ class Installer:
         """Download a file from URL to local path with retry logic."""
         urlretrieve(url, local_path)
 
-    def _command_exists(self, cmd: str) -> bool:
-        """Check if a command exists in the system."""
-        return shutil.which(cmd) is not None
-
-    def _ensure_rust_installed(self) -> bool:
-        """Check if Rust/Cargo is installed and install it if not."""
-        if self._command_exists("cargo"):
-            self._write(colorize("success", "✓ Cargo is already installed"))
-            return True
-
-        self._write(colorize("warning", "Rust/Cargo is not installed. Installing via rustup..."))
-
-        try:
-            if WINDOWS:
-                # On Windows, download and run rustup-init.exe
-                with tempfile.TemporaryDirectory() as tmpdir:
-                    rustup_init = os.path.join(tmpdir, "rustup-init.exe")
-                    self._download_file("https://win.rustup.rs/x86_64", rustup_init)
-                    subprocess.run([rustup_init, "-y"], check=True)
-            else:
-                # On Unix systems, use the shell script
-                result = subprocess.run(
-                    ["sh", "-c", "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y"],
-                    check=True,
-                    capture_output=True,
-                    text=True,
-                )
-        except subprocess.CalledProcessError as e:
-            self._write(colorize("error", f"Failed to install Rust: {e}"))
-            return False
-
-        # Update PATH to include cargo
-        cargo_bin = Path.home() / ".cargo" / "bin"
-        if cargo_bin.exists():
-            os.environ["PATH"] = f"{cargo_bin}{os.pathsep}{os.environ.get('PATH', '')}"
-
-        if self._command_exists("cargo"):
-            self._write(colorize("success", "✓ Rust/Cargo installed successfully"))
-            return True
-        else:
-            self._write(colorize("error", "Cargo installation failed. Please install Rust manually from https://rustup.rs"))
-            return False
-
-    def _ensure_git_installed(self) -> bool:
-        """Check if git is installed."""
-        if self._command_exists("git"):
-            return True
-        self._write(colorize("error", "Git is not installed. Please install git to build from source."))
-        return False
-
     def _get_latest_cli_tag(self, repo_path: str) -> Optional[str]:
         """Get the latest CLI tag from the cloned repository."""
         try:
@@ -746,15 +696,14 @@ class Installer:
 
     def install_from_source(self, version: Optional[str] = None) -> int:
         """Install the Aptos CLI by building from source."""
+        # Building from source is not supported on Windows
+        if WINDOWS:
+            self._write(colorize("error", "Building from source is not supported on Windows."))
+            self._write(colorize("info", "Please use the pre-built binary installation instead (remove --from-source flag)."))
+            return 1
+
         self._write(colorize("info", "Installing Aptos CLI from source..."))
         self._write("")
-
-        # Check for required tools
-        if not self._ensure_git_installed():
-            return 1
-
-        if not self._ensure_rust_installed():
-            return 1
 
         self.bin_dir.mkdir(parents=True, exist_ok=True)
 

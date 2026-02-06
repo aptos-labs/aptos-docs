@@ -22,7 +22,9 @@ FORCE=false
 ACCEPT_ALL=false
 VERSION=""
 GENERIC_LINUX=false
+FROM_SOURCE=false
 UNIVERSAL_INSTALLER_URL="https://raw.githubusercontent.com/gregnazario/universal-installer/main/scripts/install_pkg.sh"
+APTOS_REPO_URL="https://github.com/aptos-labs/aptos-core.git"
 
 # Print colored message
 print_message() {
@@ -91,6 +93,104 @@ install_required_packages() {
         print_message "$YELLOW" "Installing unzip..."
         /tmp/install_pkg.sh unzip || die "Failed to install unzip"
         rm /tmp/install_pkg.sh
+    fi
+}
+
+# Validate version string contains only safe characters
+validate_version() {
+    version=$1
+    # Allow digits, dots, hyphens, and alphanumeric characters
+    if ! echo "$version" | grep -qE '^[a-zA-Z0-9.\-]+$'; then
+        die "Invalid version string: $version. Version should only contain alphanumeric characters, dots, and hyphens."
+    fi
+}
+
+# Sort version tags - with fallback for systems without GNU sort -V
+sort_version_tags() {
+    # Try GNU sort -V first, fall back to basic sort if not available
+    if sort --version 2>/dev/null | grep -q "GNU"; then
+        sort -V
+    else
+        # Fallback: basic sort (may not handle all version formats correctly)
+        sort -t. -k1,1n -k2,2n -k3,3n 2>/dev/null || sort
+    fi
+}
+
+# Install CLI from source
+# Note: The minimal_cli_build.sh script handles installation of all required
+# dependencies (Rust, build tools, etc.). Git is required to clone the repository.
+install_from_source() {
+    version=$1
+    
+    print_message "$CYAN" "Installing Aptos CLI from source..."
+    
+    # Validate version string if provided
+    if [ -n "$version" ]; then
+        validate_version "$version"
+    fi
+    
+    # Create bin directory if it doesn't exist
+    mkdir -p "$BIN_DIR"
+    
+    # Create temporary directory for building
+    tmp_dir=$(mktemp -d)
+    trap 'rm -rf "$tmp_dir"' EXIT
+    
+    print_message "$CYAN" "Cloning aptos-core repository..."
+    
+    if [ -n "$version" ]; then
+        # Clone specific version
+        print_message "$CYAN" "Checking out version $version..."
+        retry_command git clone --depth 1 --branch "aptos-cli-v$version" "$APTOS_REPO_URL" "$tmp_dir/aptos-core" || die "Failed to clone aptos-core repository"
+    else
+        # Clone repository - use filter to reduce download size while still getting all tags
+        # (shallow clones may miss tags if there have been many commits since the tag)
+        retry_command git clone --filter=blob:none "$APTOS_REPO_URL" "$tmp_dir/aptos-core" || die "Failed to clone aptos-core repository"
+        cd "$tmp_dir/aptos-core" || die "Failed to change directory to cloned repository"
+        latest_tag=$(git tag -l 'aptos-cli-v*' | sort_version_tags | tail -1)
+        if [ -z "$latest_tag" ]; then
+            die "Could not find any aptos-cli release tags"
+        fi
+        version=$(echo "$latest_tag" | sed 's/aptos-cli-v//')
+        
+        # Check if the latest version is already installed (skip build if so)
+        if [ "$FORCE" = false ]; then
+            installed_version=""
+            if [ -x "$BIN_DIR/$SCRIPT" ]; then
+                installed_version=$("$BIN_DIR/$SCRIPT" --version 2>/dev/null | awk 'NF{print $NF}')
+            fi
+            if [ -n "$installed_version" ] && [ "$installed_version" = "$version" ]; then
+                print_message "$GREEN" "Aptos CLI version $version is already installed. Use --force to rebuild."
+                exit 0
+            fi
+        fi
+        
+        print_message "$CYAN" "Checking out $latest_tag..."
+        git checkout "$latest_tag" || die "Failed to checkout $latest_tag"
+    fi
+    
+    cd "$tmp_dir/aptos-core" || die "Failed to change directory to cloned repository"
+    
+    print_message "$CYAN" "Building Aptos CLI (this may take several minutes)..."
+    
+    # Ensure the minimal build script exists before attempting to run it
+    if [ ! -f "./scripts/minimal_cli_build.sh" ]; then
+        die "Build script ./scripts/minimal_cli_build.sh not found in cloned aptos-core repository"
+    fi
+    
+    # Ensure the build script is executable
+    chmod +x "./scripts/minimal_cli_build.sh" || die "Failed to make build script executable"
+    
+    # Build the CLI using the minimal build script
+    ./scripts/minimal_cli_build.sh || die "Failed to build Aptos CLI"
+    
+    # Move the binary to the bin directory
+    if [ -f "target/release/aptos" ]; then
+        mv "target/release/aptos" "$BIN_DIR/" || die "Failed to move binary to $BIN_DIR"
+        chmod +x "$BIN_DIR/aptos"
+        print_message "$GREEN" "Aptos CLI version $version installed successfully from source!"
+    else
+        die "Build succeeded but could not find the aptos binary"
     fi
 }
 
@@ -235,31 +335,52 @@ main() {
                 GENERIC_LINUX=true
                 shift
                 ;;
+            --from-source)
+                FROM_SOURCE=true
+                shift
+                ;;
             *)
                 die "Unknown option: $1"
                 ;;
         esac
     done
     
-    # Get version if not specified
-    if [ -z "$VERSION" ]; then
-        VERSION=$(get_latest_version)
-    fi
-    
-    # Get target platform
-    target=$(get_target)
-    
-    # Check if CLI is already installed
-    if [ -x "$BIN_DIR/aptos" ] && [ "$FORCE" = false ]; then
-        current_version=$("$BIN_DIR/aptos" --version | awk '{print $NF}')
-        if [ "$current_version" = "$VERSION" ]; then
-            print_message "$YELLOW" "Aptos CLI version $VERSION is already installed."
-            exit 0
+    # Handle installation from source
+    if [ "$FROM_SOURCE" = true ]; then
+        # Get version if specified, otherwise install_from_source will get latest
+        if [ -n "$VERSION" ]; then
+            # Check if CLI is already installed with this version
+            if [ -x "$BIN_DIR/aptos" ] && [ "$FORCE" = false ]; then
+                current_version=$("$BIN_DIR/aptos" --version | awk '{print $NF}')
+                if [ "$current_version" = "$VERSION" ]; then
+                    print_message "$YELLOW" "Aptos CLI version $VERSION is already installed."
+                    exit 0
+                fi
+            fi
         fi
+        
+        install_from_source "$VERSION"
+    else
+        # Get version if not specified
+        if [ -z "$VERSION" ]; then
+            VERSION=$(get_latest_version)
+        fi
+        
+        # Get target platform
+        target=$(get_target)
+        
+        # Check if CLI is already installed
+        if [ -x "$BIN_DIR/aptos" ] && [ "$FORCE" = false ]; then
+            current_version=$("$BIN_DIR/aptos" --version | awk '{print $NF}')
+            if [ "$current_version" = "$VERSION" ]; then
+                print_message "$YELLOW" "Aptos CLI version $VERSION is already installed."
+                exit 0
+            fi
+        fi
+        
+        # Install the CLI
+        install_cli "$VERSION" "$target"
     fi
-    
-    # Install the CLI
-    install_cli "$VERSION" "$target"
     
     # Add to PATH if not already there
     if ! echo "$PATH" | grep -q "$BIN_DIR"; then

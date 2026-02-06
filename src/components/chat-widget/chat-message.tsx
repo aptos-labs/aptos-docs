@@ -4,29 +4,35 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { PrismLight as SyntaxHighlighter } from "react-syntax-highlighter";
 import oneDark from "react-syntax-highlighter/dist/cjs/styles/prism/one-dark";
-import bash from "react-syntax-highlighter/dist/cjs/languages/prism/bash";
-import go from "react-syntax-highlighter/dist/cjs/languages/prism/go";
-import javascript from "react-syntax-highlighter/dist/cjs/languages/prism/javascript";
-import json from "react-syntax-highlighter/dist/cjs/languages/prism/json";
-import python from "react-syntax-highlighter/dist/cjs/languages/prism/python";
-import rust from "react-syntax-highlighter/dist/cjs/languages/prism/rust";
-import solidity from "react-syntax-highlighter/dist/cjs/languages/prism/solidity";
-import toml from "react-syntax-highlighter/dist/cjs/languages/prism/toml";
-import tsx from "react-syntax-highlighter/dist/cjs/languages/prism/tsx";
-import typescript from "react-syntax-highlighter/dist/cjs/languages/prism/typescript";
-import yaml from "react-syntax-highlighter/dist/cjs/languages/prism/yaml";
+import bashLang from "react-syntax-highlighter/dist/cjs/languages/prism/bash";
+import goLang from "react-syntax-highlighter/dist/cjs/languages/prism/go";
+import javascriptLang from "react-syntax-highlighter/dist/cjs/languages/prism/javascript";
+import jsonLang from "react-syntax-highlighter/dist/cjs/languages/prism/json";
+import pythonLang from "react-syntax-highlighter/dist/cjs/languages/prism/python";
+import rustLang from "react-syntax-highlighter/dist/cjs/languages/prism/rust";
+import solidityLang from "react-syntax-highlighter/dist/cjs/languages/prism/solidity";
+import tomlLang from "react-syntax-highlighter/dist/cjs/languages/prism/toml";
+import tsxLang from "react-syntax-highlighter/dist/cjs/languages/prism/tsx";
+import typescriptLang from "react-syntax-highlighter/dist/cjs/languages/prism/typescript";
+import yamlLang from "react-syntax-highlighter/dist/cjs/languages/prism/yaml";
 
-SyntaxHighlighter.registerLanguage("bash", bash);
-SyntaxHighlighter.registerLanguage("go", go);
-SyntaxHighlighter.registerLanguage("javascript", javascript);
-SyntaxHighlighter.registerLanguage("json", json);
-SyntaxHighlighter.registerLanguage("python", python);
-SyntaxHighlighter.registerLanguage("rust", rust);
-SyntaxHighlighter.registerLanguage("solidity", solidity);
-SyntaxHighlighter.registerLanguage("toml", toml);
-SyntaxHighlighter.registerLanguage("tsx", tsx);
-SyntaxHighlighter.registerLanguage("typescript", typescript);
-SyntaxHighlighter.registerLanguage("yaml", yaml);
+// CJS modules export as { default: fn }, extract the actual language function
+const getLang = (mod: { default?: unknown }) =>
+  (typeof mod === "function" ? mod : mod.default) as Parameters<
+    typeof SyntaxHighlighter.registerLanguage
+  >[1];
+
+SyntaxHighlighter.registerLanguage("bash", getLang(bashLang));
+SyntaxHighlighter.registerLanguage("go", getLang(goLang));
+SyntaxHighlighter.registerLanguage("javascript", getLang(javascriptLang));
+SyntaxHighlighter.registerLanguage("json", getLang(jsonLang));
+SyntaxHighlighter.registerLanguage("python", getLang(pythonLang));
+SyntaxHighlighter.registerLanguage("rust", getLang(rustLang));
+SyntaxHighlighter.registerLanguage("solidity", getLang(solidityLang));
+SyntaxHighlighter.registerLanguage("toml", getLang(tomlLang));
+SyntaxHighlighter.registerLanguage("tsx", getLang(tsxLang));
+SyntaxHighlighter.registerLanguage("typescript", getLang(typescriptLang));
+SyntaxHighlighter.registerLanguage("yaml", getLang(yamlLang));
 import type { Message } from "./types";
 
 interface ChatMessageProps extends ComponentProps<"div"> {

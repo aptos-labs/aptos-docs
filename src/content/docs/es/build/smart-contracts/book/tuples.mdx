@@ -1,0 +1,576 @@
+---
+title: "Tuplas y Unit"
+description: "Comprende los tipos tupla en Move para agrupar múltiples valores y patrones de retorno de funciones en el desarrollo de contratos inteligentes."
+sidebar:
+  label: "Tuplas"
+---
+
+Move no soporta completamente las tuplas como uno podría esperar viniendo de otro lenguaje que las tiene como [valor de primera clase](https://en.wikipedia.org/wiki/First-class_citizen). Sin embargo, para soportar múltiples valores de retorno, Move tiene expresiones similares a tuplas. Estas expresiones no resultan en un valor concreto en tiempo de ejecución (no hay tuplas en el bytecode), y como resultado están muy limitadas: solo pueden aparecer en expresiones (usualmente en la posición de retorno para una función); no pueden vincularse a variables locales; no pueden almacenarse en structs; y los tipos tupla no pueden usarse para instanciar genéricos.
+
+De manera similar, [unit `()`](https://en.wikipedia.org/wiki/Unit_type) es un tipo creado por el lenguaje fuente de Move para ser basado en expresiones. El valor unit `()` no resulta en ningún valor en tiempo de ejecución. Podemos considerar unit `()` como una tupla vacía, y cualquier restricción que se aplique a las tuplas también se aplica a unit.
+
+Puede sentirse extraño tener tuplas en el lenguaje dadas estas restricciones. Pero uno de los casos de uso más comunes para tuplas en otros lenguajes es para que las funciones permitan retornar múltiples valores. Algunos lenguajes solucionan esto forzando a los usuarios a escribir structs que contengan los múltiples valores de retorno. Sin embargo, en Move, no puedes poner referencias dentro de [structs](/es/build/smart-contracts/book/structs-and-resources). Esto requirió que Move soporte múltiples valores de retorno. Estos múltiples valores de retorno se empujan todos en la pila a nivel de bytecode. A nivel de fuente, estos múltiples valores de retorno se representan usando tuplas.
+
+## Literales
+
+Las tuplas se crean por una lista separada por comas de expresiones dentro de paréntesis.
+
+| Sintaxis        | Tipo                                                                          | Descripción                                                         |
+| --------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `()`            | `(): ()`                                                                      | Unit, la tupla vacía, o la tupla de aridad 0                        |
+| `(e1, ..., en)` | `(e1, ..., en): (T1, ..., Tn)` donde `e_i: Ti` tal que `0 < i <= n` y `n > 0` | Una `n`-tupla, una tupla de aridad `n`, una tupla con `n` elementos |
+
+Nota que `(e)` no tiene tipo `(e): (t)`, en otras palabras no hay tupla con un solo elemento. Si solo hay un elemento dentro de los paréntesis, los paréntesis solo se usan para desambiguación y no tienen ningún otro significado especial.
+
+A veces, las tuplas con dos elementos se llaman "pares" y las tuplas con tres elementos se llaman "triples".
+
+### Ejemplos
+
+```move
+module 0x42::example {
+  // las 3 funciones son equivalentes
+
+  // cuando no se proporciona tipo de retorno, se asume que es `()`
+  fun returns_unit_1() { }
+
+  // hay un valor () implícito en bloques de expresión vacíos
+  fun returns_unit_2(): () { }
+
+  // versión explícita de `returns_unit_1` y `returns_unit_2`
+  fun returns_unit_3(): () { () }
+
+
+  fun returns_3_values(): (u64, bool, address) {
+    (0, false, @0x42)
+  }
+  fun returns_4_values(x: &u64): (&u64, u8, u128, vector<u8>) {
+    (x, 0, 1, b"foobar")
+  }
+}
+```
+
+## Operaciones
+
+La única operación que puede hacerse en tuplas actualmente es la desestructuración.
+
+### Desestructuración
+
+Para tuplas de cualquier tamaño, pueden desestructurarse ya sea en una vinculación `let` o en una asignación.
+
+Por ejemplo:
+
+```move
+module 0x42::example {
+  // las 3 funciones son equivalentes
+  fun returns_unit() {}
+  fun returns_2_values(): (bool, bool) { (true, false) }
+  fun returns_4_values(x: &u64): (&u64, u8, u128, vector<u8>) { (x, 0, 1, b"foobar") }
+
+  fun examples(cond: bool) {
+    let () = returns_unit();
+    let (x, y): (bool, bool) = returns_2_values();
+    let (a, b, c, d) = returns_4_values(&0);
+
+    if (cond) {
+      let () = ();
+      let (x, y): (bool, bool) = (true, false);
+      let (a, b, c, d) = (&0, 0, 1, b"foobar");
+    }
+  }
+}
+```
+
+Para más detalles, ver: [Variables y Asignaciones](/es/build/smart-contracts/book/variables).
+
+### Desestructuración en Asignaciones
+
+También puedes desestructurar tuplas en asignaciones:
+
+```move
+module 0x42::example {
+  fun examples() {
+    let x: u8;
+    let y: u64;
+    let z: u32;
+
+    (x, y, z) = (0, 1, 2);
+
+    // Equivalente a:
+    // x = 0;
+    // y = 1;
+    // z = 2;
+  }
+}
+```
+
+### Ignorar Valores con `_`
+
+Puedes ignorar valores en tuplas usando `_`:
+
+```move
+module 0x42::example {
+  fun returns_4_values(): (u64, bool, address, vector<u8>) {
+    (0, false, @0x42, b"hello")
+  }
+
+  fun ignore_some_values() {
+    let (x, _, z, _) = returns_4_values();
+    // Solo x y z están disponibles para uso
+    // Los valores bool y vector<u8> son ignorados
+  }
+}
+```
+
+### Anidamiento de Tuplas
+
+Aunque Move no soporta tuplas anidadas directamente, puedes simular el comportamiento desestructurando en pasos:
+
+```move
+module 0x42::example {
+  fun nested_returns(): ((u64, bool), address) {
+    // Esto no es sintaxis válida - solo para ilustración
+    // ((0, true), @0x42)
+    
+    // En su lugar, necesitas hacerlo en pasos:
+    let pair = (0, true);
+    let addr = @0x42;
+    (pair, addr)
+  }
+
+  fun process_nested() {
+    let (pair, addr) = nested_returns();
+    let (num, flag) = pair;
+    // Ahora tienes acceso a num, flag, y addr
+  }
+}
+```
+
+## Limitaciones de las Tuplas
+
+### No Pueden Almacenarse
+
+Las tuplas no pueden almacenarse en structs o en almacenamiento global:
+
+```move
+module 0x42::example {
+  struct BadStruct {
+    // Error: tuplas no pueden almacenarse en structs
+    // data: (u64, bool),
+  }
+
+  struct GoodStruct {
+    // En su lugar, usa campos separados
+    num: u64,
+    flag: bool,
+  }
+}
+```
+
+### No Pueden Asignarse a Variables
+
+Las tuplas no pueden asignarse directamente a variables:
+
+```move
+module 0x42::example {
+  fun tuple_limitations() {
+    // Error: no puedes asignar una tupla a una variable
+    // let my_tuple = (1, 2, 3);
+    
+    // En su lugar, debes desestructurar:
+    let (a, b, c) = (1, 2, 3);
+  }
+}
+```
+
+### No Pueden Usarse en Genéricos
+
+Las tuplas no pueden usarse como argumentos de tipo para genéricos:
+
+```move
+module 0x42::example {
+  use std::vector;
+
+  fun generic_limitations() {
+    // Error: no puedes usar tipos tupla en genéricos
+    // let vec: vector<(u64, bool)> = vector::empty();
+    
+    // En su lugar, define un struct:
+    struct Pair {
+      first: u64,
+      second: bool,
+    }
+    
+    let vec: vector<Pair> = vector::empty();
+  }
+}
+```
+
+## Casos de Uso Comunes
+
+### Múltiples Valores de Retorno
+
+El caso de uso principal para tuplas es retornar múltiples valores de funciones:
+
+```move
+module 0x42::math_utils {
+  fun divide_with_remainder(dividend: u64, divisor: u64): (u64, u64) {
+    let quotient = dividend / divisor;
+    let remainder = dividend % divisor;
+    (quotient, remainder)
+  }
+
+  fun min_max(a: u64, b: u64): (u64, u64) {
+    if (a < b) {
+      (a, b)
+    } else {
+      (b, a)
+    }
+  }
+
+  fun coordinate_operations(x1: u64, y1: u64, x2: u64, y2: u64): (u64, u64, u64) {
+    let distance_x = if (x2 > x1) { x2 - x1 } else { x1 - x2 };
+    let distance_y = if (y2 > y1) { y2 - y1 } else { y1 - y2 };
+    let midpoint_x = (x1 + x2) / 2;
+    (distance_x, distance_y, midpoint_x)
+  }
+}
+```
+
+### Intercambio de Variables
+
+```move
+module 0x42::swap_example {
+  fun swap_variables() {
+    let a = 10;
+    let b = 20;
+    
+    // Intercambiar usando tuplas
+    (a, b) = (b, a);
+    
+    // Ahora a = 20, b = 10
+  }
+
+  fun swap_multiple() {
+    let x = 1;
+    let y = 2;
+    let z = 3;
+    
+    // Rotación circular
+    (x, y, z) = (z, x, y);
+    
+    // Ahora x = 3, y = 1, z = 2
+  }
+}
+```
+
+### Funciones de Utilidad con Múltiples Resultados
+
+```move
+module 0x42::string_utils {
+  use std::vector;
+  use std::string::{Self, String};
+
+  fun split_at_first_space(s: String): (String, String) {
+    let bytes = string::bytes(&s);
+    let len = vector::length(bytes);
+    let mut i = 0;
+    
+    while (i < len) {
+      if (*vector::borrow(bytes, i) == 32) { // espacio ASCII
+        let first_part = string::substring(&s, 0, i);
+        let second_part = string::substring(&s, i + 1, len);
+        return (first_part, second_part)
+      };
+      i = i + 1;
+    };
+    
+    // Si no se encuentra espacio, retorna string original y string vacío
+    (s, string::utf8(b""))
+  }
+
+  fun validate_email(email: String): (bool, String) {
+    // Validación simplificada
+    let bytes = string::bytes(&email);
+    let has_at = vector::contains(bytes, &64); // @ ASCII
+    
+    if (has_at) {
+      (true, string::utf8(b"Email válido"))
+    } else {
+      (false, string::utf8(b"Email debe contener @"))
+    }
+  }
+}
+```
+
+## Unit Type `()`
+
+El tipo unit es especial y merece atención adicional:
+
+### Uso Implícito
+
+```move
+module 0x42::unit_examples {
+  // Estas funciones son equivalentes
+  fun no_return_1() {
+    // Implícitamente retorna ()
+  }
+
+  fun no_return_2() -> () {
+    // Explícitamente especifica retorno ()
+  }
+
+  fun no_return_3() -> () {
+    () // Explícitamente retorna ()
+  }
+}
+```
+
+### En Condicionales
+
+```move
+module 0x42::conditional_unit {
+  fun conditional_side_effects(condition: bool) {
+    if (condition) {
+      // Hacer algo
+      do_something();
+    } else {
+      // No hacer nada - implícitamente ()
+    };
+    
+    // Ambas ramas retornan (), así que la expresión if tiene tipo ()
+  }
+
+  fun do_something() {
+    // alguna lógica
+  }
+}
+```
+
+### En Loops
+
+```move
+module 0x42::loop_unit {
+  fun loop_examples() {
+    let mut i = 0;
+    
+    // while loop retorna ()
+    while (i < 10) {
+      i = i + 1;
+    };
+    
+    // for loop también retorna ()
+    let vec = vector[1, 2, 3, 4, 5];
+    for (element in &vec) {
+      // procesar elemento
+    };
+  }
+}
+```
+
+## Comparación con Otros Lenguajes
+
+### Diferencias con Rust
+
+```rust
+// En Rust - esto sería válido
+let tuple = (1, 2, 3);
+let first = tuple.0;
+
+// En Move - esto NO es válido
+// let tuple = (1, 2, 3);  // Error
+// let (a, b, c) = tuple;  // Error
+
+// En Move debes desestructurar inmediatamente
+let (a, b, c) = (1, 2, 3);  // OK
+```
+
+### Diferencias con Python
+
+```python
+# En Python - esto sería válido
+def multiple_returns():
+    return 1, 2, 3
+
+tuple_result = multiple_returns()
+a, b, c = tuple_result
+```
+
+```move
+// En Move - equivalente
+module 0x42::example {
+  fun multiple_returns(): (u64, u64, u64) {
+    (1, 2, 3)
+  }
+
+  fun use_returns() {
+    // No puedes asignar la tupla a una variable
+    // let tuple_result = multiple_returns();  // Error
+    
+    // Debes desestructurar inmediatamente
+    let (a, b, c) = multiple_returns();  // OK
+  }
+}
+```
+
+## Patrones Avanzados
+
+### Funciones de Orden Superior con Tuplas
+
+```move
+module 0x42::higher_order {
+  fun apply_to_pair<T, U>(
+    pair: (T, T),
+    f: |T| U
+  ): (U, U) {
+    let (first, second) = pair;
+    (f(first), f(second))
+  }
+
+  fun square(x: u64): u64 {
+    x * x
+  }
+
+  fun example() {
+    let numbers = (3, 4);
+    let (squared_a, squared_b) = apply_to_pair(numbers, |x| x * x);
+    // squared_a = 9, squared_b = 16
+  }
+}
+```
+
+### Cadenas de Transformación
+
+```move
+module 0x42::transformations {
+  fun process_coordinates(x: u64, y: u64): (u64, u64) {
+    let (normalized_x, normalized_y) = normalize(x, y);
+    let (scaled_x, scaled_y) = scale(normalized_x, normalized_y, 2);
+    translate(scaled_x, scaled_y, 10, 20)
+  }
+
+  fun normalize(x: u64, y: u64): (u64, u64) {
+    // Normalización simplificada
+    (x / 100, y / 100)
+  }
+
+  fun scale(x: u64, y: u64, factor: u64): (u64, u64) {
+    (x * factor, y * factor)
+  }
+
+  fun translate(x: u64, y: u64, dx: u64, dy: u64): (u64, u64) {
+    (x + dx, y + dy)
+  }
+}
+```
+
+## Mejores Prácticas
+
+### 1. Usa Nombres Descriptivos en Desestructuración
+
+```move
+// ✅ Bueno - nombres descriptivos
+let (quotient, remainder) = divide_with_remainder(10, 3);
+let (width, height) = get_dimensions();
+
+// ❌ Malo - nombres no descriptivos
+let (a, b) = divide_with_remainder(10, 3);
+let (x, y) = get_dimensions();
+```
+
+### 2. Limita el Número de Elementos
+
+```move
+// ✅ Bueno - tupla manejable
+fun get_position(): (u64, u64) {
+  (x, y)
+}
+
+// ❌ Malo - demasiados elementos, considera un struct
+fun get_all_data(): (u64, u64, bool, address, vector<u8>, String, u8) {
+  // Demasiados elementos - difícil de manejar
+}
+
+// ✅ Mejor - usa un struct para datos complejos
+struct ComplexData {
+  x: u64,
+  y: u64,
+  active: bool,
+  owner: address,
+  metadata: vector<u8>,
+  name: String,
+  version: u8,
+}
+```
+
+### 3. Documenta Tuplas de Retorno
+
+```move
+module 0x42::documented {
+  /// Retorna (éxito, mensaje de error)
+  /// - éxito: true si la operación fue exitosa
+  /// - mensaje: descripción del resultado o error
+  fun validate_input(input: String): (bool, String) {
+    // lógica de validación
+  }
+
+  /// Retorna (posición_x, posición_y, velocidad)
+  fun get_object_state(object_id: u64): (u64, u64, u64) {
+    // obtener estado del objeto
+  }
+}
+```
+
+## Errores Comunes
+
+### Intentar Almacenar Tuplas
+
+```move
+// ❌ Error común
+module 0x42::bad_storage {
+  struct Container {
+    // Error: no puedes almacenar tuplas
+    // data: (u64, bool),
+  }
+}
+
+// ✅ Solución
+module 0x42::good_storage {
+  struct Container {
+    value: u64,
+    flag: bool,
+  }
+  
+  fun get_data(container: &Container): (u64, bool) {
+    (container.value, container.flag)
+  }
+}
+```
+
+### Intentar Asignar Tuplas a Variables
+
+```move
+// ❌ Error común
+fun wrong_usage() {
+  // Error: no puedes asignar tupla a variable
+  // let tuple = (1, 2, 3);
+}
+
+// ✅ Solución
+fun correct_usage() {
+  let (a, b, c) = (1, 2, 3);
+  // Usa a, b, c individualmente
+}
+```
+
+## Conclusión
+
+Las tuplas en Move son una característica especializada diseñada específicamente para soportar múltiples valores de retorno. Aunque tienen limitaciones significativas comparadas con otros lenguajes, son esenciales para ciertos patrones en Move, especialmente cuando se trabaja con referencias que no pueden almacenarse en structs.
+
+Puntos clave para recordar:
+
+- Las tuplas solo existen a nivel de sintaxis, no en tiempo de ejecución
+- Su uso principal es para múltiples valores de retorno
+- Deben desestructurarse inmediatamente
+- No pueden almacenarse en structs o variables
+- Unit `()` es una tupla especial de cero elementos
+- Para datos persistentes, usa structs en lugar de tuplas

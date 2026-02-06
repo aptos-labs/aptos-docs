@@ -1,0 +1,59 @@
+---
+title: "Terminología y FAQ de Keyless"
+description: "Terminología esencial, definiciones y preguntas frecuentes sobre cuentas Keyless de Aptos e integración OIDC."
+sidebar:
+  label: "Terminología y FAQ"
+---
+
+## Terminología
+
+- **OpenID Connect (OIDC)**: es el protocolo de autenticación de identidad usado para habilitar verificación de identidad federada. Este protocolo es lo que se usa cuando un usuario pasa por el flujo "Iniciar sesión con Google" por ejemplo.
+- **Proveedor de Identidad (IdP)**: es la autoridad confiable que autentica tu identidad a través de OIDC. Ejemplos soportados incluyen: Google.
+- **JSON Web Token (JWT):** es un estándar abierto usado para compartir información de seguridad entre dos partes — un cliente y un servidor. Cada JWT contiene objetos JSON codificados, incluyendo un conjunto de claims. Los JWTs están firmados usando un algoritmo criptográfico para asegurar que los claims no puedan ser alterados después de que el token sea emitido.
+  - `iss`, un identificador para el proveedor OIDC (ej., [https://accounts.google.com](https://accounts.google.com))
+  - `aud`, el `client_id` OAuth de la aplicación en la que el usuario está iniciando sesión (ej., [Notion.so](https://notion.so))
+  - `sub`, un identificador que el proveedor OIDC usa para identificar al usuario
+    - Esto podría ser un identificador específico a este `client_id`
+    - O, podría ser un identificador compartido entre diferentes `client_id`s (ej., el OIDC de Facebook hace esto)
+  - `email`, algunos proveedores también podrían exponer el email del usuario como uno de los campos (ej., Google)
+    - además, un campo `email_verified` se expondrá para indicar si el proveedor ha verificado que el usuario posee esta dirección de email
+  - `nonce`, datos arbitrarios que la aplicación quiere que el proveedor OIDC firme
+  - `iat`, el tiempo en que el JWT fue emitido.
+- **Par de Claves Efímeras:** un par de claves público/privado temporal que se usa para firmar transacciones para una cuenta Keyless de Aptos. La clave pública y su fecha de expiración se comprometen en el token JWT a través del campo `nonce`.
+- **Cuenta Keyless:** una cuenta de blockchain que se deriva directamente de (1) una cuenta OIDC del usuario (ej., `alice@gmail.com`) y (2) un client\_id OAuth de la aplicación asociada (ej., Notion.so). Los usuarios se autentican a través del flujo OIDC.
+- **JSON Web Key (JWK):** es la clave pública criptográfica del proveedor OIDC. Esta clave pública se usa para verificar la firma en los JWTs que el proveedor OIDC emite a la aplicación cliente. De esta manera, la aplicación cliente puede verificar la autenticidad de los tokens y asegurar que no han sido manipulados.
+- **client\_id:** el identificador OAuth para tu aplicación que recibirás del IdP después de registrar tu aplicación con ellos. Esto se usará en nuestra arquitectura keyless en la derivación de dirección para tus usuarios.
+- **redirect\_uri:** la URI del manejador de callback una vez que el usuario se autentica exitosamente. Necesita ser registrada con tu IdP.
+
+## Ceremonia
+
+Aptos participó en ceremonias iterativas de configuración confiable para asegurar nuestro circuito ZK basado en Groth16. Una ceremonia de configuración confiable es una computación multi-parte (MPC) que produce las claves de probador y verificador usadas en un sistema zkSNARK, común para sistemas de prueba de conocimiento cero eficientes. Mientras un solo participante en la ceremonia sea honesto, el proceso se considera seguro y las salidas serán válidas. Nuestra ceremonia inicial consistió en más de 140 miembros del ecosistema Aptos, lo que fue una muestra increíble del poder de la descentralización, seguridad y comunidad - y se celebró una ceremonia de seguimiento después de una fase de retroalimentación de desarrolladores que nos permitió identificar e implementar una mejora a nuestro circuito que nos ayudó a asegurar que Keyless sea universalmente accesible. Nuestras contribuciones de ceremonia final se pueden encontrar en este repositorio \[aquí] y verificar usando el proceso delineado \[aquí].
+
+## Preguntas Frecuentes
+
+**¿Cuál es la mejor manera de usar cuentas Keyless?**
+
+- La mejor manera de usar cuentas Keyless depende de tu caso de uso. Si la interoperabilidad de cuentas sin problemas a través de nuestro ecosistema es importante para tu experiencia dApp (piensa: acuñar un NFT en tu plataforma y permitir a los usuarios vender su NFT en un mercado NFT externo), es posible que quieras considerar integrar una billetera que soporte Keyless. Si quieres crear una experiencia de cuenta completamente integrada en tu dApp, permitiendo a los usuarios transaccionar sin salir nunca de tu aplicación, es posible que quieras hacer una integración directa del SDK Keyless de Aptos.
+
+**¿Keyless funciona con transacciones patrocinadas o mis usuarios siempre necesitan pagar por su propio gas?**
+
+- Sí, Keyless funciona con transacciones patrocinadas como cualquier cuenta regular basada en clave privada.
+
+**Si uso el SDK Keyless de Aptos, ¿pueden los usuarios usar sus cuentas a través de otras dApps?**
+
+- Las cuentas Keyless están limitadas al dominio con el que se crean ya que la derivación de dirección incluye un identificador único para la aplicación.
+
+**¿Qué es Aptos Connect?**
+
+- Infraestructura de Gestión de Cuentas: Central al paradigma de cuentas keyless es una infraestructura robusta de gestión de cuentas que facilita la creación, eliminación y gestión de cuentas de usuario, junto con el almacenamiento y recuperación de metadatos asociados.
+
+- Mientras la adopción de cuentas keyless anuncia un cambio de paradigma hacia usabilidad y seguridad mejoradas, es imperativo que los desarrolladores permanezcan conscientes de las compensaciones asociadas con este sistema vs. alternativas comunes como claves privadas de texto plano.
+
+**¿Hay dependencia de servicios externos?**
+
+- Sí, las cuentas Keyless introducen un grado de dependencia en servicios de autenticación externos (pepper y probador), necesitando planes de contingencia y mecanismos de respaldo para mitigar interrupciones de servicio y asegurar acceso ininterrumpido del usuario
+
+**Si mi dApp se cae, mis usuarios no pueden acceder a sus cuentas Keyless. ¿Cómo puedo ayudar a protegerlos en ese caso?**
+
+- Alentamos a los desarrolladores de dApp a soportar opciones adicionales de recuperación de respaldo para tus usuarios al integrar Keyless en una dApp. Específicamente, recomendamos que soportes agregar una clave privada de respaldo a las cuentas Keyless en tu dApp. Prácticamente, esto transformaría las cuentas en cuentas multi-firma 1 de 2 donde ambas claves son propiedad del usuario. Esto permitiría a los usuarios continuar usando inicio de sesión OIDC a través de tu dApp para acceder a sus cuentas Keyless pero agregaría la capacidad para que tus usuarios exporten su clave privada de respaldo a cualquier producto de auto-custodia, donde podrían firmar transacciones desde esa misma cuenta con su clave privada tradicional. Hacer esto asegurará que los usuarios nunca pierdan acceso a sus activos digitales, incluso si tu dApp se cierra o el usuario pierde acceso a su cuenta OIDC.
+- Debes tomar una determinación en qué punto del viaje del usuario incorporar un respaldo es apropiado para tu dApp. Incorporar un método de respaldo más tarde en el viaje del usuario preservaría la experiencia de incorporación sin problemas que Keyless ofrece pero podría resultar en menos usuarios recibiendo una clave de recuperación. Solicitar a los usuarios agregar una clave de respaldo durante el proceso de incorporación probablemente llevaría a más usuarios recibiendo una clave de recuperación pero podría agregar fricción potencial durante el proceso de incorporación.

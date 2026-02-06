@@ -1,0 +1,113 @@
+---
+title: "API REST del Nodo Completo"
+description: "API REST de bajo nivel para leer estado, enviar transacciones y simular operaciones en la blockchain de Aptos"
+sidebar:
+  label: "API REST"
+---
+
+import { Aside, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+Esta API - integrada en Nodos Completos - proporciona una forma simple, de baja latencia, pero de bajo nivel de leer estado y enviar transacciones a la Blockchain de Aptos. También soporta simulación de transacciones.
+Para consultas más avanzadas, recomendamos usar la [API GraphQL del Indexador](/es/build/indexer).
+
+## Explorador de API REST del Nodo Completo
+
+<CardGrid>
+  <LinkCard href="https://fullnode.mainnet.aptoslabs.com/v1/spec#/" title="API REST del Nodo Completo de Mainnet" description="Explorador de API REST para Mainnet" target="_blank" />
+
+  <LinkCard href="https://fullnode.testnet.aptoslabs.com/v1/spec#/" title="API REST del Nodo Completo de Testnet" description="Explorador de API REST para Testnet" target="_blank" />
+
+  <LinkCard href="https://fullnode.devnet.aptoslabs.com/v1/spec#/" title="API REST del Nodo Completo de Devnet" description="Explorador de API REST para Devnet" target="_blank" />
+</CardGrid>
+
+## Entendiendo los límites de tasa
+
+Como con el [Indexador de Aptos](/es/build/indexer/indexer-api), la API REST de Aptos tiene límites de tasa basados en unidades de cómputo. Puedes aprender más sobre cómo funciona el límite de tasa leyendo la [documentación de Geomi](https://geomi.dev/docs/admin/billing).
+
+## Viendo estado actual e histórico
+
+La mayoría de las integraciones en la blockchain de Aptos se benefician de una visión holística y comprensiva del estado actual e
+histórico de la blockchain. Aptos proporciona transacciones históricas, estado y eventos, todo el resultado de
+la ejecución de transacciones.
+
+- Las transacciones históricas especifican el estado de ejecución, salida y vinculación a eventos relacionados. Cada transacción tiene un número de
+  versión único asociado que dicta su orden secuencial global en la historia del libro mayor de la blockchain.
+- El estado es la representación de todas las salidas de transacciones hasta una versión específica. En otras palabras, una versión de estado
+  es la acumulación de todas las transacciones incluyendo esa versión de transacción.
+- A medida que las transacciones se ejecutan, pueden emitir eventos. Los [Eventos](/es/network/blockchain/events) son pistas sobre cambios en datos
+  de la cadena.
+
+<Aside type="note">
+  Asegúrate de que el [nodo completo](/es/network/nodes/networks) con el que te estás comunicando esté actualizado. El nodo completo debe alcanzar la
+  versión que contiene tu transacción para recuperar datos relevantes de ella. Puede haber latencia de los nodos completos
+  recuperando estado de [nodos completos validador](/es/network/blockchain/fullnodes), que a su vez dependen de
+  [nodos validador](/es/network/blockchain/validator-nodes) como la fuente de verdad.
+</Aside>
+
+El servicio de almacenamiento en un nodo emplea dos formas de poda que borran datos de los nodos:
+
+- estado
+- eventos, transacciones y todo lo demás
+
+Mientras que cualquiera de estos puede ser deshabilitado, almacenar las versiones de estado no es particularmente sostenible.
+
+La poda de eventos y transacciones puede ser deshabilitada configurando [`enable_ledger_pruner`](https://github.com/aptos-labs/aptos-core/blob/cf0bc2e4031a843cdc0c04e70b3f7cd92666afcf/config/src/config/storage_config.rs#L141)
+a `false` en `storage_config.rs`. Este es el comportamiento por defecto en Mainnet. En el futuro cercano, Aptos proporcionará indexadores
+que mitiguen la necesidad de consultar directamente desde un nodo.
+
+La API REST ofrece consultar transacciones y eventos de estas maneras:
+
+- [Transacciones para una cuenta](https://api.devnet.aptoslabs.com/v1/spec#/operations/get_account_transactions)
+- [Transacciones por versión](https://api.devnet.aptoslabs.com/v1/spec#/operations/get_transaction_by_version)
+- [Eventos por manejador de eventos](https://api.devnet.aptoslabs.com/v1/spec#/operations/get_events_by_event_handle)
+
+## Leyendo estado con la función View
+
+Las funciones View no modifican el estado de la blockchain cuando se llaman desde la API. Una [función View](https://github.com/aptos-labs/aptos-core/blob/main/api/src/view_function.rs)
+y su [entrada](https://github.com/aptos-labs/aptos-core/blob/main/api/types/src/view.rs) pueden ser usadas para leer
+estado potencialmente complejo de la cadena usando Move. Por ejemplo, puedes evaluar quién tiene la oferta más alta en un contrato
+de subasta. Aquí están los archivos relacionados:
+
+- [`view_function.rs`](https://github.com/aptos-labs/aptos-core/blob/main/api/src/tests/view_function.rs) para un ejemplo
+- código [Move](https://github.com/aptos-labs/aptos-core/blob/90c33dc7a18662839cd50f3b70baece0e2dbfc71/aptos-move/framework/aptos-framework/sources/coin.move#L226) relacionado
+- [especificación](https://github.com/aptos-labs/aptos-core/blob/90c33dc7a18662839cd50f3b70baece0e2dbfc71/api/doc/spec.yaml#L8513).
+
+La función view opera como la API de simulación de Aptos,
+aunque sin efectos secundarios y con una ruta de salida accesible. Las funciones view pueden ser llamadas via el endpoint `/view`. Las llamadas
+a funciones view requieren los nombres del módulo y función junto con parámetros de tipo de entrada y valores.
+
+Una función no tiene que ser inmutable para ser etiquetada como `#[view]`, pero si la función es mutable no resultará en
+mutación de estado cuando se llame desde la API. Si quieres etiquetar una función mutable como `#[view]`, considera hacerla privada
+para que no pueda ser llamada maliciosamente durante el tiempo de ejecución.
+
+Para usar las funciones View, necesitas [publicar el módulo](/es/build/cli/working-with-move-contracts)
+a través de la [CLI de Aptos](/es/build/cli).
+
+En la CLI de Aptos, una solicitud de función view se vería así:
+
+```shellscript filename="Terminal"
+aptos move view --function-id devnet::message::get_message --profile devnet --args address:devnet
+{
+  "Result": [
+    "View functions rock!"
+  ]
+}
+```
+
+En el SDK de TypeScript, una solicitud de función view se vería así:
+
+```typescript filename="index.ts"
+import { Aptos } from "@aptos-labs/ts-sdk";
+
+const aptos = new Aptos();
+const [balance] = aptos.view<[string]>({
+  function: "0x1::coin::balance",
+  typeArguments: ["0x1::aptos_coin::AptosCoin"],
+  functionArguments: [alice.accountAddress]
+});
+
+expect(balance).toBe("100000000");
+```
+
+La función view retorna una lista de valores como un vector. Por defecto, los resultados se retornan en formato JSON; sin embargo,
+pueden ser opcionalmente retornados en formato codificado de Serialización Canónica Binaria (BCS).

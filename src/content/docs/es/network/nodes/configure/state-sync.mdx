@@ -1,0 +1,217 @@
+---
+title: "Sincronización de Estado"
+description: "Aprende cómo la sincronización de estado mantiene los nodos Aptos actualizados con el último estado de blockchain incluyendo opciones de configuración y modos de sincronización."
+sidebar:
+  label: "Sincronización de Estado"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Los nodos en una red de Aptos (ej., validators, VFNs y PFNs) siempre deben estar sincronizados al último estado de blockchain.
+El componente de [sincronización de estado](https://medium.com/aptoslabs/the-evolution-of-state-sync-the-path-to-100k-transactions-per-second-with-sub-second-latency-at-52e25a2c6f10) (state sync) que se ejecuta en cada nodo es responsable de esto. La sincronización de estado
+identifica y obtiene nuevos datos de blockchain de pares, valida los datos y los persiste en almacenamiento local. Este
+documento explica cómo configurar la sincronización de estado en tu nodo.
+
+## Sincronización de estado
+
+A alto nivel, la sincronización de estado opera en dos fases. Primero, los nodos se inicializan al inicio (en la **fase de inicialización**).
+Esto permite al nodo ponerse al día con el último estado en la blockchain de Aptos. Luego, el nodo se mantendrá actualizado con la blockchain
+sincronizando continuamente (en la **fase de sincronización continua**).
+
+<Aside type="tip">
+  **¿Necesitas iniciar un nodo rápidamente? Esto es lo que recomendamos:**<br />
+
+  - **Mainnet**: Para sincronizar todo el historial de blockchain, restaura desde un [backup](/es/network/nodes/bootstrap-fullnode/aptos-db-restore). De lo contrario, usa [sincronización rápida](/es/network/nodes/configure/state-sync#fast-syncing).
+  - **Testnet**: Para sincronizar todo el historial de blockchain, restaura desde un [backup](/es/network/nodes/bootstrap-fullnode/aptos-db-restore). De lo contrario, usa [sincronización rápida](/es/network/nodes/configure/state-sync#fast-syncing).
+  - **Devnet**: Para sincronizar todo el historial de blockchain, usa [sincronización inteligente](/es/network/nodes/configure/state-sync#intelligent-syncing). De lo contrario, usa [sincronización rápida](/es/network/nodes/configure/state-sync#fast-syncing).
+</Aside>
+
+### Modos de inicialización
+
+Cuando el nodo inicia, la sincronización de estado realizará la inicialización usando el modo de inicialización configurado.
+
+<Aside type="tip">
+  **¿Modos de inicialización por defecto?** <br />
+
+  - **Mainnet y Testnet**: El modo de inicialización por defecto es **sincronización rápida**, porque estas redes tienen larga vida
+    y tienen una gran cantidad de datos históricos.
+  - **Devnet**: El modo de inicialización por defecto es **sincronización inteligente desde génesis**, porque esta red tiene
+    vida corta y típicamente tiene una pequeña cantidad de datos históricos.
+</Aside>
+
+Hay varios modos de inicialización:
+
+- **Ejecutar transacciones desde génesis**. Este modo obtendrá todas las transacciones desde génesis (es decir, el
+  inicio de la historia de la blockchain), y re-ejecutará cada transacción. Este modo es el más lento de inicialización.
+- **Aplicar salidas de transacciones desde génesis**. Este modo obtendrá todas las transacciones desde génesis (es decir, el inicio de
+  la historia de la blockchain), pero omitirá la re-ejecución de transacciones y en su lugar aplicará las salidas de las
+  transacciones como originalmente fueron producidas por la ejecución del validator.
+- **Sincronización inteligente desde génesis**. Este modo es un híbrido de los dos modos anteriores. Obtendrá todas las transacciones
+  desde génesis (es decir, el inicio de la historia de la blockchain), y ya sea ejecutará las transacciones, o aplicará las
+  salidas de transacciones, dependiendo de cuál sea más rápido, por fragmento de datos. Esto permite al nodo adaptarse a restricciones de recursos de CPU y red
+  más eficientemente.
+- **Sincronización rápida**. Este modo obtendrá el último estado de blockchain directamente, omitiendo todas las transacciones históricas.
+  Como resultado, el nodo no tendrá datos de transacciones históricas, pero podrá ponerse al día mucho más rápidamente.
+
+<Aside type="caution">
+  **¿Sincronizando desde génesis?** <br />
+  La mayoría de nodos en Mainnet y Testnet no mantienen todos los datos de transacciones desde génesis. Si deseas sincronizar todos
+  los datos desde génesis, necesitas agregar manualmente pares semilla al archivo de configuración del nodo, para que
+  tu nodo pueda conectarse a pares con los datos. Ver [Conectarse a Pares Semilla](/es/network/nodes/full-node/modify/fullnode-network-connections#connecting-to-seed-peers).
+</Aside>
+
+### Modos de sincronización continua
+
+Después de que el nodo se haya inicializado, la sincronización de estado se moverá a la fase de sincronización continua para mantenerse actualizado con la
+blockchain.
+
+<Aside type="tip">
+  **¿Modos de sincronización continua por defecto?**<br />
+  El modo de sincronización continua por defecto es siempre sincronización inteligente, porque este modo es el más performante.
+</Aside>
+
+Hay varios modos de sincronización continua:
+
+- **Ejecutar transacciones**. Este modo mantendrá el nodo actualizado ejecutando transacciones a medida que son
+  confirmadas en la blockchain.
+- **Aplicar salidas de transacciones**. Este modo mantendrá el nodo actualizado omitiendo la ejecución de transacciones
+  y solo aplicando las salidas de las transacciones como fueron producidas previamente por la ejecución del validator.
+- **Sincronización inteligente**. Este modo mantendrá el nodo actualizado ya sea ejecutando las transacciones, o aplicando
+  las salidas de transacciones, dependiendo de cuál sea más rápido, por fragmento de datos. Esto permite al nodo adaptarse a restricciones de recursos de CPU y
+  red más eficientemente.
+
+## Configurar sincronización de estado
+
+Los fragmentos abajo proporcionan instrucciones para configurar la sincronización de estado en tus nodos para diferentes casos de uso.
+Estas configuraciones pueden agregarse al archivo de configuración de tu nodo, ej., `fullnode.yaml` o `validator.yaml`.
+
+<Aside type="danger">
+  **¿Necesitas configurar sincronización de estado?**<br />
+  La mayoría de usuarios no deberían necesitar configurar sincronización de estado manualmente. La sincronización de estado seleccionará automáticamente la
+  mejor configuración para tu nodo y red. Solo deberías configurar sincronización de estado si tienes un caso de uso
+  que lo requiera. Seleccionar la configuración incorrecta llevará a tiempos de sincronización más lentos y rendimiento degradado.
+</Aside>
+
+### Ejecutar transacciones desde génesis
+
+Para ejecutar todas las transacciones desde génesis y continuar ejecutando nuevas
+transacciones a medida que son confirmadas, agrega lo siguiente a tu archivo de
+configuración de nodo:
+
+```yaml filename="fullnode.yaml"
+state_sync:
+  state_sync_driver:
+    bootstrapping_mode: ExecuteTransactionsFromGenesis
+    continuous_syncing_mode: ExecuteTransactions
+```
+
+### Aplicar salidas de transacciones desde génesis
+
+Para aplicar todas las salidas de transacciones desde génesis y continuar aplicando nuevas
+salidas de transacciones a medida que las transacciones son confirmadas, agrega lo siguiente a tu
+archivo de configuración de nodo:
+
+```yaml filename="fullnode.yaml"
+state_sync:
+  state_sync_driver:
+    bootstrapping_mode: ApplyTransactionOutputsFromGenesis
+    continuous_syncing_mode: ApplyTransactionOutputs
+```
+
+### Sincronización inteligente desde génesis
+
+Para ejecutar o aplicar todas las transacciones y salidas desde génesis (y continuar
+haciendo lo mismo a medida que nuevas transacciones son confirmadas), agrega lo siguiente a tu archivo de
+configuración de nodo:
+
+```yaml filename="fullnode.yaml"
+state_sync:
+  state_sync_driver:
+    bootstrapping_mode: ExecuteOrApplyFromGenesis
+    continuous_syncing_mode: ExecuteTransactionsOrApplyOutputs
+```
+
+### Sincronización rápida
+
+Para descargar el último estado de blockchain y continuar procesando nuevas
+transacciones a medida que son confirmadas, agrega lo siguiente a tu
+archivo de configuración de nodo:
+
+```yaml filename="fullnode.yaml"
+state_sync:
+  state_sync_driver:
+    bootstrapping_mode: DownloadLatestStates
+    continuous_syncing_mode: ExecuteTransactionsOrApplyOutputs
+```
+
+## Verificar Progreso de Sincronización
+
+Para verificar que tu nodo esté sincronizando correctamente, puedes monitorear las métricas relevantes de sincronización de estado expuestas por el
+[Servicio de Inspección de Nodos](/es/network/nodes/measure/node-inspection-service).
+
+Si tu nodo está inicializando en modo **sincronización rápida**, deberías monitorear la siguiente métrica:
+
+- `aptos_state_sync_version{type="synced_states"}`: Esta métrica indica el estado de blockchain más alto que ha sido
+  procesado. Esta métrica aumentará a medida que tu nodo sincronice rápido. Una vez que todos los estados hayan sido descargados, esta métrica
+  dejará de aumentar y tu nodo comenzará a procesar transacciones como usual.
+
+Durante operación normal del nodo, deberías monitorear la siguiente métrica:
+
+- `aptos_state_sync_version{type="synced"}`: Esta métrica indica la versión de transacción más alta que ha sido
+  completamente procesada por tu nodo. Esta métrica aumentará mientras tu nodo esté sincronizando correctamente.
+
+<Aside type="tip">
+  **Tiempos de sincronización rápida**<br />
+  La velocidad de sincronización rápida depende de varios factores, incluyendo tu ancho de banda de red y rendimiento de disco.
+  En la mayoría de nodos bien provisionados, la sincronización rápida usualmente se completa dentro de unas pocas horas.
+</Aside>
+
+## PFNs Archivales
+
+<Aside type="danger">
+  **Los nodos archivales están deprecados**<br />
+  Ejecutar nodos archivales es caro y lento, ya que la cantidad de datos siendo almacenados
+  en el nodo crecerá indefinidamente. Como resultado, los nodos archivales han sido oficialmente deprecados.
+  Si deseas almacenar y mantener todo el historial de blockchain, recomendamos usar un [Indexer](/es/build/indexer).
+</Aside>
+
+Para operar un PFN archival (que es un PFN que contiene todos los datos de blockchain
+desde el inicio de la red, es decir, génesis), puedes:
+
+1. Asegurarte de que tu PFN **no** esté usando sincronización rápida como el modo de inicialización.
+   La sincronización rápida omitirá el historial de transacciones. En su lugar, usa un modo que sincronice desde génesis,
+   ej., sincronización inteligente desde génesis.
+2. Deshabilitar el podador de ledger, como se describe en el [documento de Poda de Datos](/es/network/nodes/configure/data-pruning#disable-the-ledger-pruner).
+   Esto asegurará que no se eliminen datos y el PFN contenga todos los datos de blockchain.
+
+Seguir estos dos pasos juntos asegurará que tu PFN obtenga todos los datos desde
+génesis, y continúe sincronizando sin podar ningún dato.
+
+<Aside type="caution">
+  **¿Sincronizando desde génesis?** <br />
+  Como se mencionó arriba, si deseas sincronizar todos los datos desde génesis, necesitas agregar manualmente pares semilla a
+  el archivo de configuración de tu nodo. Ver [Conectarse a Pares Semilla](/es/network/nodes/full-node/modify/fullnode-network-connections#connecting-to-seed-peers).
+</Aside>
+
+## Implicaciones de seguridad e integridad de datos
+
+Todos los modos de sincronización de estado realizan verificaciones de integridad de datos para asegurar que los datos sean correctos y apropiadamente firmados
+por los validators. Sin embargo, hay algunas diferencias en las garantías de seguridad proporcionadas por cada modo:
+
+1. **Ejecutar transacciones desde génesis**: Ejecutar transacciones desde génesis es el modo de sincronización más seguro.
+   Verificará que todas las transacciones desde el principio del tiempo fueron correctamente acordadas por consenso y
+   que todas las transacciones fueron apropiadamente ejecutadas por los validators.
+2. **Aplicar salidas de transacciones desde génesis**: Aplicar salidas de transacciones desde génesis requiere que el
+   nodo sincronizando confíe en los validators para haber ejecutado las transacciones correctamente. Sin embargo, todo otro
+   estado de blockchain aún se re-verifica manualmente, ej., mensajes de consenso, el historial de transacciones y hashes de estado.
+3. **Sincronización inteligente**: La sincronización inteligente ya sea ejecutará transacciones o aplicará salidas de transacciones
+   dependiendo de cuál sea más rápido, por fragmento de datos. Las implicaciones de seguridad de usar este modo
+   son idénticas a las de arriba, dependiendo de qué método se use para cada fragmento de datos.
+4. **Sincronización rápida**: La sincronización rápida omite el historial de transacciones y descarga el último estado de blockchain antes de
+   sincronizar continuamente. Para hacer esto, requiere que el nodo sincronizando confíe en los validators para haber correctamente
+   acordado todas las transacciones en el historial de transacciones así como los resultados de ejecutar esas transacciones.
+   Sin embargo, todos los otros datos de blockchain aún se re-verifican manualmente, ej., cambios de época y los estados de blockchain resultantes.
+
+Todos los modos de sincronización obtienen su raíz de confianza del conjunto de validators
+y firmas criptográficas de esos validators sobre los datos de blockchain.
+Para más información sobre cómo funciona esto, ver el [post de blog de sincronización de estado](https://medium.com/aptoslabs/the-evolution-of-state-sync-the-path-to-100k-transactions-per-second-with-sub-second-latency-at-52e25a2c6f10).

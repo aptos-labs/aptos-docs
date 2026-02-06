@@ -1,0 +1,115 @@
+---
+title: "Unity SDK"
+description: "Official Unity SDK for Aptos blockchain development - build games and applications with Unity"
+sidebar:
+  label: "Unity SDK"
+---
+
+import { Aside, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+<Aside type="caution" emoji="❗">
+  This SDK is currently in beta. Please report any issues you encounter by
+  creating an issue in the
+  [aptos-labs/unity-sdk](https://github.com/aptos-labs/unity-sdk) repository.
+</Aside>
+
+Integrate Aptos Web3 capabilities within your Unity applications. The goal of this SDK is to provide a set of tools
+for developers to build Web3 games using the Unity game engine.
+
+**Supported Features**
+
+- Support for the [Aptos .NET SDK](/build/sdks/dotnet-sdk)
+
+  > - Binary Canonical Serialization (BCS) encoding and decoding
+  > - Ed25519, SingleKey, MultiKey, and Keyless signer support
+  > - Utilities for transaction building, signing, and submission
+  > - Abstractions over the Aptos Fullnode and Indexer APIs
+  > - Aptos Names (ANS) support for resolution and lookup
+
+**Compatibility**
+
+| .NET Version      | Supported |
+| ----------------- | --------- |
+| .NET Standard 2.1 | ✅         |
+
+## Installation
+
+### Install via Unity Package Manager (UPM)
+
+1. Open the Unity Package Manager (`Window` > `Package Manager`).
+2. Click on the `+` button and select `Add package from git URL...`.
+3. Enter the URL of the Aptos Unity SDK path in this repository:
+
+```shellscript
+https://github.com/aptos-labs/unity-sdk.git?path=/Packages/com.aptoslabs.aptos-unity-sdk
+```
+
+### Install via `unitypackage`
+
+1. Go to the [`aptos-labs/unity-sdk Releases`](https://github.com/aptos-labs/unity-sdk/releases) and download the latest release.
+2. Drag and drop the `.unitypackage` file into your Unity project.
+
+## Usage
+
+Set up your Aptos client by adding the `Aptos` namespace and instantiating an `AptosUnityClient`. You can use a predefined
+configuration from `Networks` or configuring your own.
+
+```csharp {2-2,8-8,11-15}
+using UnityEngine;
+using Aptos;
+
+class Example : MonoBehaviour
+{
+    public void Start()
+    {
+        PrintLedgerInfo();
+    }
+
+    async void PrintLedgerInfo() {
+        var client = new AptosUnityClient(Networks.Mainnet);
+        var ledgerInfo = await client.Block.GetLedgerInfo();
+        Debug.Log(ledgerInfo.BlockHeight);
+    }
+
+}
+```
+
+To interact with the blockchain, you will need to create a signer and build a transaction.
+
+```csharp filename="Program.cs" {10-11,13-21,23-24,26-27}
+using UnityEngine;
+using Aptos;
+
+class Example : MonoBehaviour
+{
+    public async void Start()
+    {
+        var client = new AptosUnityClient(Networks.Mainnet);
+
+        // 1. Create a signer
+        var signer = Account.Generate();
+
+        // 2. Build the transaction
+        var transaction = await client.Transaction.Build(
+            sender: account,
+            data: new GenerateEntryFunctionPayloadData(
+                function: "0x1::aptos_account::transfer_coins",
+                typeArguments: ["0x1::aptos_coin::AptosCoin"],
+                functionArguments: [account.Address, "100000"]
+            )
+        );
+
+        // 3. Sign and submit the transaction
+        var pendingTransaction = client.Transaction.SignAndSubmitTransaction(account, transaction);
+
+        // 4. (Optional) Wait for the transaction to be committed
+        var committedTransaction = await client.Transaction.WaitForTransaction(pendingTransaction);
+    }
+}
+```
+
+## Resources
+
+<CardGrid>
+  <LinkCard href="https://github.com/aptos-labs/aptos-unity-starter" title="Aptos Wallet Starter" description="Example Unity project with an integration of the Aptos Unity SDK." target="_blank" />
+</CardGrid>

@@ -1,0 +1,387 @@
+---
+title: "Calculando Gas de Transacciones – Optimización de Costos"
+description: "Aprende cómo calcular y optimizar el gas de transacciones en Aptos: gas de instrucciones, almacenamiento y payload. Guía completa de optimización de costos."
+sidebar:
+  label: "Gas Base"
+---
+
+Las transacciones de Aptos por defecto cobran una tarifa de gas base, independientemente de las condiciones del mercado.
+Para cada transacción, esta cantidad de "gas base" está basada en tres condiciones:
+
+1. Instrucciones.
+2. Almacenamiento.
+3. Payload.
+
+Mientras más llamadas de función, declaraciones condicionales de bifurcación, etc. requiera una transacción, más gas de instrucción costará.
+De igual manera, mientras más lecturas de y escrituras al almacenamiento global requiera una transacción, más gas de almacenamiento costará.
+Finalmente, mientras más bytes tenga el payload de una transacción, más costará.
+
+Como se explica en la sección [principios de optimización](#optimization-principles), el gas de almacenamiento tiene por mucho el mayor efecto en el gas base. Para información de fondo sobre el modelo de gas de Aptos, ver [The Making of the Aptos Gas Schedule](https://aptoslabs.medium.com/the-making-of-the-aptos-gas-schedule-508d5686a350).
+
+## Gas de instrucción
+
+Los parámetros básicos de gas de instrucción están definidos en \[`instr.rs`] e incluyen los siguientes tipos de instrucción:
+
+### Sin operación
+
+| Parámetro | Significado       |
+| --------- | ----------------- |
+| `nop`     | Una sin-operación |
+
+### Flujo de control
+
+| Parámetro  | Significado                         |
+| ---------- | ----------------------------------- |
+| `ret`      | Retorno                             |
+| `abort`    | Abortar                             |
+| `br_true`  | Ejecutar rama condicional verdadera |
+| `br_false` | Ejecutar rama condicional falsa     |
+| `branch`   | Bifurcación                         |
+
+### Pila
+
+| Parámetro           | Significado                              |
+| ------------------- | ---------------------------------------- |
+| `pop`               | Extraer de la pila                       |
+| `ld_u8`             | Cargar un `u8`                           |
+| `ld_u16`            | Cargar un `u16`                          |
+| `ld_u32`            | Cargar un `u32`                          |
+| `ld_u64`            | Cargar un `u64`                          |
+| `ld_u128`           | Cargar un `u128`                         |
+| `ld_256`            | Cargar un `u256`                         |
+| `ld_true`           | Cargar un `true`                         |
+| `ld_false`          | Cargar un `false`                        |
+| `ld_const_base`     | Costo base para cargar una constante     |
+| `ld_const_per_byte` | Costo por byte para cargar una constante |
+
+### Ámbito local
+
+| Parámetro                   | Significado                            |
+| --------------------------- | -------------------------------------- |
+| `imm_borrow_loc`            | Tomar prestado inmutablemente          |
+| `mut_borrow_loc`            | Tomar prestado mutablemente            |
+| `imm_borrow_field`          | Tomar prestado un campo inmutablemente |
+| `mut_borrow_field`          | Tomar prestado un campo mutablemente   |
+| `imm_borrow_field_generic`  | Préstamo inmutable de campo genérico   |
+| `mut_borrow_field_generic`  | Préstamo mutable de campo genérico     |
+| `copy_loc_base`             | Costo base para copiar                 |
+| `copy_loc_per_abs_val_unit` | Costo por unidad de valor absoluto     |
+| `move_loc_base`             | Mover                                  |
+| `st_loc_base`               | Almacenar local base                   |
+
+### Llamadas
+
+| Parámetro                 | Significado                            |
+| ------------------------- | -------------------------------------- |
+| `call_base`               | Costo base para una llamada de función |
+| `call_per_arg`            | Costo por argumento de función         |
+| `call_per_local`          | Costo por argumento local              |
+| `call_generic_base`       | Costo base para llamada genérica       |
+| `call_generic_per_ty_arg` | Costo por argumento de tipo            |
+| `call_generic_per_arg`    | Costo genérico por argumento           |
+| `call_generic_per_local`  | Costo genérico por argumento local     |
+
+### Structs
+
+| Parámetro                  | Significado                                     |
+| -------------------------- | ----------------------------------------------- |
+| `pack_base`                | Costo base para empaquetar un `struct`          |
+| `pack_per_field`           | Costo para empaquetar un `struct`, por campo    |
+| `pack_generic_base`        | Costo base para empaquetar struct genérico      |
+| `pack_generic_per_field`   | Costo por campo para struct genérico            |
+| `unpack_base`              | Costo base para desempaquetar un `struct`       |
+| `unpack_per_field`         | Costo para desempaquetar un `struct`, por campo |
+| `unpack_generic_base`      | Costo base para desempaquetar struct genérico   |
+| `unpack_generic_per_field` | Costo por campo para desempaquetar genérico     |
+
+### Referencias
+
+| Parámetro                   | Significado                                   |
+| --------------------------- | --------------------------------------------- |
+| `read_ref_base`             | Costo base para leer desde una referencia     |
+| `read_ref_per_abs_val_unit` | Costo por unidad de valor absoluto de lectura |
+| `write_ref_base`            | Costo base para escribir a una referencia     |
+| `freeze_ref`                | Congelar una referencia                       |
+
+### Casting
+
+| Parámetro   | Significado      |
+| ----------- | ---------------- |
+| `cast_u8`   | Cast a un `u8`   |
+| `cast_u16`  | Cast a un `u16`  |
+| `cast_u32`  | Cast a un `u32`  |
+| `cast_u64`  | Cast a un `u64`  |
+| `cast_u128` | Cast a un `u128` |
+| `cast_u256` | Cast a un `u256` |
+
+### Aritmética
+
+| Parámetro | Significado |
+| --------- | ----------- |
+| `add`     | Sumar       |
+| `sub`     | Restar      |
+| `mul`     | Multiplicar |
+| `div`     | Dividir     |
+| `mod`     | Módulo      |
+
+## Gas de almacenamiento
+
+El gas de almacenamiento es significativamente más complejo que el gas de instrucción y payload, con dos tipos principales:
+
+### IO de almacenamiento (Storage IO)
+
+Las tarifas de IO de almacenamiento están diseñadas para reflejar el costo computacional de procesar transacciones:
+
+| Parámetro                               | Significado                                                                            |
+| --------------------------------------- | -------------------------------------------------------------------------------------- |
+| `storage_io_per_state_slot_write`       | cobrado por operación de escritura de estado en la salida de transacción               |
+| `storage_io_per_state_byte_write`       | cobrado por byte en todas las ops de escritura de estado en la salida de transacción   |
+| `storage_io_per_event_byte_write`       | cobrado por byte en todos los eventos en la salida de transacción                      |
+| `storage_io_per_transaction_byte_write` | cobrado por byte en la transacción misma que también es parte del historial del ledger |
+
+### Tarifa de almacenamiento (Storage Fee)
+
+Los siguientes parámetros de tarifa de almacenamiento se aplican (es decir, se cobran en valores APT absolutos) para representar el espacio en disco y costos estructurales asociados con usar la [estructura de datos autenticada de Aptos](/es/network/glossary#merkle-trees) para almacenar elementos en la blockchain.
+
+| Parámetro                           | Significado                                                                                                                                                                                                                                                                 |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `storage_fee_per_state_slot_create` | asignar un slot de estado, por `move_to()`, `table::add()`, etc                                                                                                                                                                                                             |
+| `storage_fee_per_state_byte`        | Nota que esto se cobra cada vez que el slot crece en tamaño, no solo en tiempo de asignación. (Sin embargo, para simplicidad, el reembolso es solo en tiempo de eliminación. Ver [AIP-65](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-65.md#specification)) |
+
+### Vectores
+
+Las tarifas por byte se evalúan similarmente en vectores, que consumen $\sum\_{i = 0}^{n - 1} e\_i + b(n)$ bytes, donde:
+
+- $n$ es el número de elementos en el vector
+- $e\_i$ es el tamaño del elemento $i$
+- $b(n)$ es un "tamaño base" que es una función de $n$
+
+Ver la \[especificación de secuencia BCS] para más información sobre el tamaño base de vector (técnicamente un `ULEB128`), que típicamente ocupa solo un byte en la práctica, de manera que un vector de 100 elementos `u8` cuenta por $100 + 1 = 101$ bytes.
+Por lo tanto, por la metodología de lectura por elemento descrita arriba, leer el último elemento de tal vector se trata como una lectura de 101 bytes.
+
+## Gas de payload
+
+El gas de payload está definido en [`transaction.rs`](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/aptos-gas-schedule/src/gas_schedule/transaction.rs), que incorpora gas de almacenamiento con varios parámetros asociados con payload y precios:
+
+| Parámetro                       | Significado                                                                                        |
+| ------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `min_transaction_gas_units`     | Unidades mínimas de gas interno para una transacción, cobradas al inicio de ejecución              |
+| `large_transaction_cutoff`      | Tamaño, en bytes, arriba del cual las transacciones serán cobradas una cantidad adicional por byte |
+| `intrinsic_gas_per_byte`        | Unidades de gas interno cobradas por byte para payloads arriba de `large_transaction_cutoff`       |
+| `maximum_number_of_gas_units`   | Límite superior en unidades de gas externo para una transacción                                    |
+| `min_price_per_gas_unit`        | Precio mínimo de gas permitido para una transacción                                                |
+| `max_price_per_gas_unit`        | Precio máximo de gas permitido para una transacción                                                |
+| `max_transaction_size_in_bytes` | Tamaño máximo de payload de transacción en bytes                                                   |
+| `gas_unit_scaling_factor`       | Factor de conversión entre unidades de gas interno y externo                                       |
+
+Aquí, "unidades de gas interno" se definen como constantes en archivos fuente como \[`instr.rs`] y \[`storage_gas.move`], que son más granulares que "unidades de gas externo" por un factor de `gas_unit_scaling_factor`:
+para convertir de unidades de gas interno a externo, dividir por `gas_unit_scaling_factor`.
+Luego, para convertir de unidades de gas externo a [octas](/es/network/glossary#octa), multiplicar por el "precio de gas", que denota el número de octas por unidad de gas externo.
+
+## Principios de optimización
+
+### Constantes de unidad y precio
+
+Al momento de escribir esto, `min_price_per_gas_unit` en [`transaction.rs`](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/aptos-gas-schedule/src/gas_schedule/transaction.rs) se define como \[`aptos_global_constants`]`::GAS_UNIT_PRICE` (que está definido como 100), con otras constantes notables de [`transaction.rs`](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/aptos-gas-schedule/src/gas_schedule/transaction.rs) como sigue:
+
+| Constante                 | Valor          |
+| ------------------------- | -------------- |
+| `min_price_per_gas_unit`  | 100            |
+| `max_price_per_gas_unit`  | 10,000,000,000 |
+| `gas_unit_scaling_factor` | 1,000,000      |
+
+Ver [Gas de payload](#payload-gas) para el significado de estas constantes.
+
+### Tarifa de almacenamiento
+
+Cuando la carga de la red es baja, se espera que el precio de unidad de gas sea bajo, haciendo que la mayoría de aspectos del costo de transacción sean más asequibles. Sin embargo, la tarifa de almacenamiento es una excepción, ya que se cobra en términos de valor APT absoluto. En la mayoría de instancias, la tarifa de transacción es el componente predominante del costo total de transacción. Esto es especialmente cierto cuando una transacción asigna slots de estado, escribe a elementos de estado de tamaño considerable, emite numerosos o grandes eventos, o cuando la transacción misma es grande. Todos estos factores consumen espacio en disco en nodos Aptos y se cobran acordemente.
+
+Por otro lado, el reembolso de almacenamiento incentiva liberar slots de estado eliminando elementos de estado. La tarifa de slot de estado se reembolsa completamente al desasignar el slot, mientras que la tarifa excesiva de byte de estado no es reembolsable. Esto cambiará pronto diferenciando entre bytes permanentes (aquellos en el estado global) y bytes efímeros relativos (aquellos que atraviesan el historial del ledger).
+
+Algunas estrategias de optimización de costo concernientes a la tarifa de almacenamiento:
+
+1. Minimizar creación de elementos de estado.
+2. Minimizar emisiones de eventos.
+3. Evitar elementos de estado grandes, eventos y transacciones.
+4. Limpiar elementos de estado que ya no están en uso.
+5. Si dos campos se actualizan consistentemente juntos, agruparlos en el mismo resource o grupo de resource.
+6. Si un struct es grande y solo unos pocos campos se actualizan frecuentemente, mover esos campos a un resource separado o grupo de resource.
+
+### Gas de instrucción
+
+Al momento de escribir esto, todas las operaciones de gas de instrucción se multiplican por el `EXECUTION_GAS_MULTIPLIER` definido en \[`meter.rs`], que está establecido en 20.
+Por lo tanto, las siguientes operaciones representativas asumen costos de gas como sigue (dividir gas interno por factor de escalamiento, luego multiplicar por precio mínimo de gas):
+
+| Operación                    | [Octas](/es/network/glossary#octa) mínimas |
+| ---------------------------- | ------------------------------------------ |
+| Table add/borrow/remove box  | 240                                        |
+| Llamada de función           | 200                                        |
+| Cargar constante             | 130                                        |
+| Tomar prestado globalmente   | 100                                        |
+| Leer/escribir referencia     | 40                                         |
+| Cargar `u128` en pila        | 16                                         |
+| Operación table box por byte | 2                                          |
+
+(Nota que el gas de instrucción de operación table box por byte no cuenta para gas de almacenamiento, que se evalúa por separado).
+
+Para comparación, leer un elemento de 100 bytes cuesta $r\_i + 100 \* r\_b = 3000 + 100 \* 3 = 3300$ [octas](/es/network/glossary#octa) como mínimo, unas 16.5 veces tanto como una llamada de función, y en general, los costos de gas de instrucción son ampliamente dominados por costos de gas de almacenamiento.
+
+Notablemente, sin embargo, todavía técnicamente hay un incentivo para reducir el número de llamadas de función en un programa, pero los esfuerzos de ingeniería son más efectivamente dedicados a escribir código modular y descompuesto que está orientado hacia reducir costos de gas de almacenamiento, en lugar de intentar escribir bloques de código repetitivos con menos funciones anidadas (en casi todos los casos).
+
+En casos extremos es posible que el gas de instrucción supere con creces el gas de almacenamiento, por ejemplo si una función matemática de bucle toma 10,000 iteraciones para converger; pero nuevamente este es un caso extremo y para la mayoría de aplicaciones el gas de almacenamiento tiene un impacto mayor en el gas base que el gas de instrucción.
+
+### Gas de payload
+
+Al momento de escribir esto, [`transaction/mod.rs`](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/aptos-gas-schedule/src/gas_schedule/transaction.rs) define la cantidad mínima de gas interno por transacción como 1,500,000 unidades internas (15,000 [octas](/es/network/glossary#octa) como mínimo), una cantidad que aumenta por 2,000 unidades de gas interno (20 octas mínimo) por byte para payloads mayores que 600 bytes, con el número máximo de bytes permitidos en una transacción establecido en 65536.
+Por lo tanto, en la práctica, el gas de payload es improbable que sea una preocupación.
+
+## Ejemplos Prácticos de Optimización
+
+### Optimización de Almacenamiento
+
+```move
+// ✗ Ineficiente: múltiples resources pequeños
+struct UserName has key { name: vector<u8> }
+struct UserAge has key { age: u8 }
+struct UserEmail has key { email: vector<u8> }
+
+// ✓ Eficiente: un resource consolidado
+struct UserProfile has key {
+    name: vector<u8>,
+    age: u8,
+    email: vector<u8>
+}
+```
+
+### Minimización de Eventos
+
+```move
+// ✗ Ineficiente: eventos frecuentes y grandes
+public fun process_items(items: vector<LargeItem>) {
+    let i = 0;
+    while (i < vector::length(&items)) {
+        let item = vector::borrow(&items, i);
+        // Emite evento por cada item (costoso)
+        emit_detailed_processing_event(item);
+        i = i + 1;
+    };
+}
+
+// ✓ Eficiente: evento sumario único
+public fun process_items(items: vector<LargeItem>) {
+    let processed_count = 0;
+    let i = 0;
+    while (i < vector::length(&items)) {
+        // Procesar sin eventos individuales
+        process_item_internal(vector::borrow(&items, i));
+        processed_count = processed_count + 1;
+        i = i + 1;
+    };
+    // Un solo evento sumario
+    emit_batch_processing_event(processed_count);
+}
+```
+
+### Agrupación de Actualizaciones
+
+```move
+// ✓ Eficiente: actualizar campos relacionados juntos
+public fun update_user_info(
+    user: &signer,
+    new_name: vector<u8>,
+    new_email: vector<u8>
+) acquires UserProfile {
+    let profile = borrow_global_mut<UserProfile>(signer::address_of(user));
+    // Una sola operación de almacenamiento para múltiples campos
+    profile.name = new_name;
+    profile.email = new_email;
+}
+```
+
+### Limpieza de Estado
+
+```move
+public fun cleanup_expired_items(registry: &mut ItemRegistry, current_time: u64) {
+    let i = 0;
+    while (i < vector::length(&registry.items)) {
+        let item = vector::borrow(&registry.items, i);
+        if (item.expires_at < current_time) {
+            // Remover items expirados para liberar espacio (reembolso)
+            vector::remove(&mut registry.items, i);
+        } else {
+            i = i + 1;
+        }
+    };
+}
+```
+
+## Herramientas de Análisis de Gas
+
+### Simulación de Transacciones
+
+```typescript
+import { AptosClient } from "aptos";
+
+const client = new AptosClient("https://fullnode.mainnet.aptoslabs.com");
+
+// Simular transacción para estimar gas
+const simulation = await client.simulateTransaction(senderAccount, transaction, {
+  estimateGasUnitPrice: true,
+  estimateMaxGasAmount: true,
+});
+
+console.log(`Gas estimado: ${simulation[0].gas_used}`);
+console.log(`Precio de gas: ${simulation[0].gas_unit_price}`);
+```
+
+### Profiling de Gas
+
+```move
+#[test]
+fun test_gas_usage() {
+    let scenario = test_scenario::begin(@admin);
+    
+    // Medir gas antes
+    let gas_before = test_scenario::gas_used(&scenario);
+    
+    // Ejecutar operación
+    expensive_operation(&mut scenario);
+    
+    // Medir gas después
+    let gas_after = test_scenario::gas_used(&scenario);
+    let gas_consumed = gas_after - gas_before;
+    
+    assert!(gas_consumed < MAX_ACCEPTABLE_GAS, 1);
+    test_scenario::end(scenario);
+}
+```
+
+## Consideraciones para Desarrolladores
+
+### 1. Jerarquía de Costos
+
+- **Storage Fee** > **Storage IO** > **Instruction Gas** > **Payload Gas**
+- Enfócate primero en optimizar almacenamiento
+
+### 2. Mejores Prácticas
+
+- Agrupa datos relacionados en un solo resource
+- Limpia estado innecesario regularmente
+- Usa eventos con moderación y eficiencia
+- Prefiere operaciones por lotes sobre individuales
+
+### 3. Medición y Monitoreo
+
+- Simula transacciones antes de enviar
+- Monitorea costos de gas en producción
+- Establece límites de gas apropiados
+- Optimiza basado en métricas reales
+
+### 4. Arquitectura Eficiente
+
+- Diseña estructuras de datos planas cuando sea posible
+- Evita anidamiento profundo de recursos
+- Usa tablas para almacenamiento a gran escala
+- Implementa patrones de limpieza automática
+
+La comprensión del modelo de gas de Aptos es esencial para desarrollar aplicaciones eficientes y rentables en la plataforma.

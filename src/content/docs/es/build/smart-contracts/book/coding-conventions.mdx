@@ -1,0 +1,517 @@
+---
+title: "Convenciones de Codificación de Move"
+description: "Sigue las convenciones de codificación de Move, guías de estilo y mejores prácticas para código de contratos inteligentes limpio y mantenible."
+sidebar:
+  label: "Convenciones"
+---
+
+Esta sección establece algunas convenciones básicas de codificación para Move que el equipo de Move ha encontrado útiles. Estas son solo recomendaciones, y deberías sentirte libre de usar otras pautas de formato y convenciones si tienes preferencia por ellas.
+
+## Nomenclatura
+
+- **Nombres de módulos**: deben ser en minúsculas con guiones bajos (snake case), ej., `fixed_point32`, `vector`.
+- **Nombres de tipos**: deben estar en formato camelCase si no son un tipo nativo, ej., `Coin`, `RoleId`.
+- **Nombres de funciones**: deben ser en minúsculas con guiones bajos (snake case), ej., `destroy_empty`.
+- **Nombres de constantes**: deben estar en formato UpperCamelCase y comenzar con una `E` si representan códigos de error (ej., `EIndexOutOfBounds`) y en mayúsculas con guiones bajos (UPPER\_SNAKE\_CASE) si representan un valor que no es error (ej., `MIN_STAKE`).
+- **Nombres de tipos genéricos**: deben ser descriptivos, o anti-descriptivos donde sea apropiado, ej., `T` o `Element` para el parámetro de tipo genérico Vector. La mayoría del tiempo el tipo "principal" en un módulo debería tener el mismo nombre que el módulo ej., `option::Option`, `fixed_point32::FixedPoint32`.
+- **Nombres de archivos de módulos**: deben ser iguales al nombre del módulo ej., `option.move`.
+- **Nombres de archivos de scripts**: deben ser en minúsculas con guiones bajos y deben coincidir con el nombre de la función "principal" en el script.
+- **Nombres de archivos mixtos**: Si el archivo contiene múltiples módulos y/o scripts, el nombre del archivo debe ser en minúsculas con guiones bajos, donde el nombre no coincida con ningún módulo/script particular dentro.
+
+## Importaciones
+
+- Todas las declaraciones `use` del módulo deben estar en la parte superior del módulo.
+- Las funciones deben ser importadas y usadas completamente calificadas desde el módulo en el que están declaradas, y no importadas en el nivel superior.
+- Los tipos deben ser importados en el nivel superior. Donde haya conflictos de nombres, `as` debe ser usado para renombrar el tipo localmente según sea apropiado.
+
+Por ejemplo, si hay un módulo:
+
+```move
+module 0x1::foo {
+  struct Foo { }
+  const CONST_FOO: u64 = 0;
+  public fun do_foo(): Foo { Foo{} }
+  // ...
+}
+```
+
+esto sería importado y usado como:
+
+```move
+module 0x1::bar {
+  use 0x1::foo::{Self, Foo};
+
+  public fun do_bar(x: u64): Foo {
+    if (x == 10) {
+      foo::do_foo()
+    } else {
+      abort 0
+    }
+  }
+  // ...
+}
+```
+
+Y, si hay un conflicto de nombres local al importar dos módulos:
+
+```move
+module 0x1::other_foo {
+  struct Foo {}
+  // ...
+}
+
+module 0x1::importer {
+  use 0x1::other_foo::Foo as OtherFoo;
+  use 0x1::foo::Foo;
+  // ...
+}
+```
+
+## Comentarios
+
+- Cada módulo, struct, y declaración de función pública debe ser comentada.
+- Move tiene comentarios de documentación `///`, comentarios regulares de una línea `//`, comentarios de bloque `/* */`, y comentarios de bloque de documentación `/** */`.
+- Comenzando con Aptos CLI 7.4.0, caracteres UTF-8 están permitidos en comentarios.
+
+### Ejemplo de Comentarios
+
+Los comentarios de documentación deben estar directamente arriba del elemento que están comentando. Por ejemplo, lo siguiente es válido:
+
+```move
+/// Mi módulo increíble, el comentario de doc puede ser usado aquí
+module 0x42::example { // doble barra puede estar en cualquier lugar
+
+  // Doble barra puede estar en cualquier lugar
+
+  /// Mi constante increíble
+  const MY_VALUE: u64 = 5;
+
+  /// Mi mensaje de error increíble
+  const E_MY_ERROR: u64 = 10;
+
+  #[view]
+  /// Mi función de vista increíble
+  fun show_me_the_money() {
+    // ...
+  }
+
+  /* Similarmente comentarios de bloque pueden estar en cualquier lugar */
+}
+```
+
+Abajo hay ejemplos de comentarios de documentación `///` que fallarán:
+
+```move
+module 0x42::example {
+
+  /// Mi función de vista increíble <- debe estar debajo de la anotación, justo arriba de lo comentado
+  #[view]
+  fun show_me_the_money() {
+    // ...
+    /// Dentro de una función
+  }
+
+  /// No adjunto a nada
+}
+```
+
+## Formato
+
+El equipo de Move planea escribir un auto-formateador para aplicar convenciones de formato. Sin embargo, mientras tanto:
+
+- Indentación de cuatro espacios debe ser usada excepto para bloques `script` y `address` cuyos contenidos no deben ser indentados.
+- Las líneas deben ser cortadas si son más largas que 100 caracteres.
+- Structs y constantes deben ser declarados antes que todas las funciones en un módulo.
+
+## Ejemplos de Mejores Prácticas
+
+### Estructura de Módulo Bien Organizada
+
+```move
+/// Módulo para gestionar tokens fungibles con funcionalidad de burn/mint
+module token_factory::fungible_token {
+    use std::string::{Self, String};
+    use std::signer;
+    use aptos_framework::coin::{Self, Coin};
+    use aptos_framework::event;
+
+    // ============ Constantes ============
+    
+    /// Suministro máximo permitido para cualquier token
+    const MAX_SUPPLY: u64 = 1_000_000_000;
+    
+    /// Código de error para suministro insuficiente
+    const E_INSUFFICIENT_SUPPLY: u64 = 1;
+    
+    /// Código de error para permisos insuficientes
+    const E_UNAUTHORIZED: u64 = 2;
+    
+    /// Código de error para suministro máximo excedido
+    const E_MAX_SUPPLY_EXCEEDED: u64 = 3;
+
+    // ============ Structs ============
+    
+    /// Metadatos para un token fungible
+    struct TokenMetadata has key, store {
+        name: String,
+        symbol: String,
+        decimals: u8,
+        total_supply: u64,
+        max_supply: u64,
+        creator: address
+    }
+    
+    /// Capacidades para administrar el token
+    struct TokenCapabilities has key {
+        mint_capability: coin::MintCapability<TokenMetadata>,
+        burn_capability: coin::BurnCapability<TokenMetadata>,
+        freeze_capability: coin::FreezeCapability<TokenMetadata>
+    }
+
+    // ============ Eventos ============
+    
+    #[event]
+    /// Evento emitido cuando se crean nuevos tokens
+    struct TokenMintEvent has drop, store {
+        token_address: address,
+        amount: u64,
+        recipient: address
+    }
+    
+    #[event]
+    /// Evento emitido cuando se queman tokens
+    struct TokenBurnEvent has drop, store {
+        token_address: address,
+        amount: u64,
+        burner: address
+    }
+
+    // ============ Funciones Públicas ============
+    
+    /// Inicializa un nuevo token fungible
+    /// 
+    /// # Parámetros
+    /// * `creator` - La cuenta que crea el token
+    /// * `name` - Nombre del token
+    /// * `symbol` - Símbolo del token
+    /// * `decimals` - Número de decimales
+    /// * `max_supply` - Suministro máximo (0 para ilimitado)
+    /// 
+    /// # Aborts
+    /// * `E_MAX_SUPPLY_EXCEEDED` - Si max_supply excede MAX_SUPPLY
+    public fun initialize_token(
+        creator: &signer,
+        name: String,
+        symbol: String,
+        decimals: u8,
+        max_supply: u64
+    ) {
+        assert!(max_supply <= MAX_SUPPLY, E_MAX_SUPPLY_EXCEEDED);
+        
+        let creator_addr = signer::address_of(creator);
+        
+        // Inicializar el coin
+        let (burn_cap, freeze_cap, mint_cap) = coin::initialize<TokenMetadata>(
+            creator,
+            name,
+            symbol,
+            decimals,
+            true // monitor_supply
+        );
+        
+        // Almacenar metadatos
+        move_to(creator, TokenMetadata {
+            name,
+            symbol,
+            decimals,
+            total_supply: 0,
+            max_supply,
+            creator: creator_addr
+        });
+        
+        // Almacenar capacidades
+        move_to(creator, TokenCapabilities {
+            mint_capability: mint_cap,
+            burn_capability: burn_cap,
+            freeze_capability: freeze_cap
+        });
+    }
+    
+    /// Acuña nuevos tokens
+    /// 
+    /// # Parámetros
+    /// * `creator` - El creador del token (debe tener capacidades)
+    /// * `amount` - Cantidad a acuñar
+    /// * `recipient` - Dirección que recibirá los tokens
+    /// 
+    /// # Aborts
+    /// * `E_UNAUTHORIZED` - Si el firmante no es el creador
+    /// * `E_MAX_SUPPLY_EXCEEDED` - Si excede el suministro máximo
+    public fun mint_tokens(
+        creator: &signer,
+        amount: u64,
+        recipient: address
+    ) acquires TokenMetadata, TokenCapabilities {
+        let creator_addr = signer::address_of(creator);
+        
+        // Verificar permisos
+        assert!(exists<TokenCapabilities>(creator_addr), E_UNAUTHORIZED);
+        
+        let metadata = borrow_global_mut<TokenMetadata>(creator_addr);
+        let capabilities = borrow_global<TokenCapabilities>(creator_addr);
+        
+        // Verificar límite de suministro
+        if (metadata.max_supply > 0) {
+            assert!(
+                metadata.total_supply + amount <= metadata.max_supply,
+                E_MAX_SUPPLY_EXCEEDED
+            );
+        };
+        
+        // Acuñar tokens
+        let coins = coin::mint<TokenMetadata>(amount, &capabilities.mint_capability);
+        coin::deposit(recipient, coins);
+        
+        // Actualizar suministro total
+        metadata.total_supply = metadata.total_supply + amount;
+        
+        // Emitir evento
+        event::emit(TokenMintEvent {
+            token_address: creator_addr,
+            amount,
+            recipient
+        });
+    }
+    
+    /// Quema tokens de la cuenta del firmante
+    /// 
+    /// # Parámetros
+    /// * `burner` - La cuenta que quema sus propios tokens
+    /// * `token_creator` - Dirección del creador del token
+    /// * `amount` - Cantidad a quemar
+    /// 
+    /// # Aborts
+    /// * `E_INSUFFICIENT_SUPPLY` - Si no hay suficientes tokens para quemar
+    public fun burn_tokens(
+        burner: &signer,
+        token_creator: address,
+        amount: u64
+    ) acquires TokenMetadata, TokenCapabilities {
+        let burner_addr = signer::address_of(burner);
+        
+        // Verificar que el token existe
+        assert!(exists<TokenCapabilities>(token_creator), E_UNAUTHORIZED);
+        
+        let metadata = borrow_global_mut<TokenMetadata>(token_creator);
+        let capabilities = borrow_global<TokenCapabilities>(token_creator);
+        
+        // Extraer tokens de la cuenta del quemador
+        let coins = coin::withdraw<TokenMetadata>(burner, amount);
+        
+        // Quemar tokens
+        coin::burn(coins, &capabilities.burn_capability);
+        
+        // Actualizar suministro total
+        metadata.total_supply = metadata.total_supply - amount;
+        
+        // Emitir evento
+        event::emit(TokenBurnEvent {
+            token_address: token_creator,
+            amount,
+            burner: burner_addr
+        });
+    }
+
+    // ============ Funciones de Vista ============
+    
+    #[view]
+    /// Obtiene los metadatos del token
+    public fun get_token_metadata(token_creator: address): (String, String, u8, u64, u64) 
+    acquires TokenMetadata {
+        let metadata = borrow_global<TokenMetadata>(token_creator);
+        (
+            metadata.name,
+            metadata.symbol,
+            metadata.decimals,
+            metadata.total_supply,
+            metadata.max_supply
+        )
+    }
+    
+    #[view]
+    /// Verifica si una cuenta tiene balance del token
+    public fun has_token_balance(account: address, token_creator: address): bool {
+        coin::is_account_registered<TokenMetadata>(account)
+    }
+    
+    #[view]
+    /// Obtiene el balance de tokens de una cuenta
+    public fun get_token_balance(account: address, token_creator: address): u64 {
+        if (has_token_balance(account, token_creator)) {
+            coin::balance<TokenMetadata>(account)
+        } else {
+            0
+        }
+    }
+
+    // ============ Funciones de Utilidad ============
+    
+    /// Registra una cuenta para recibir el token
+    public fun register_for_token(account: &signer, token_creator: address) {
+        coin::register<TokenMetadata>(account);
+    }
+    
+    /// Transfiere tokens entre cuentas
+    public fun transfer_tokens(
+        from: &signer,
+        to: address,
+        token_creator: address,
+        amount: u64
+    ) {
+        coin::transfer<TokenMetadata>(from, to, amount);
+    }
+
+    // ============ Funciones Solo para Pruebas ============
+    
+    #[test_only]
+    /// Función auxiliar para configurar un token de prueba
+    public fun setup_test_token(
+        creator: &signer,
+        initial_supply: u64
+    ): address acquires TokenMetadata, TokenCapabilities {
+        let creator_addr = signer::address_of(creator);
+        
+        initialize_token(
+            creator,
+            string::utf8(b"Test Token"),
+            string::utf8(b"TEST"),
+            8,
+            1_000_000
+        );
+        
+        if (initial_supply > 0) {
+            mint_tokens(creator, initial_supply, creator_addr);
+        };
+        
+        creator_addr
+    }
+}
+```
+
+### Convenciones de Comentarios y Documentación
+
+````move
+/// Módulo principal para gestión de NFTs en el marketplace
+/// 
+/// Este módulo proporciona funcionalidad para:
+/// - Crear colecciones de NFTs
+/// - Acuñar NFTs individuales
+/// - Transferir propiedad
+/// - Gestionar metadatos
+/// 
+/// # Ejemplos de Uso
+/// 
+/// ```move
+/// // Crear una nueva colección
+/// nft_marketplace::create_collection(creator, "Mi Colección", "Descripción");
+/// 
+/// // Acuñar un NFT
+/// nft_marketplace::mint_nft(creator, "Token Name", "URI", recipient);
+/// ```
+module nft_marketplace::core {
+    // ...
+    
+    /// Representa una colección de NFTs con metadatos compartidos
+    /// 
+    /// # Campos
+    /// * `name` - Nombre legible de la colección
+    /// * `description` - Descripción de la colección
+    /// * `creator` - Dirección del creador original
+    /// * `total_minted` - Número total de NFTs acuñados en esta colección
+    struct Collection has key, store {
+        name: String,
+        description: String,
+        creator: address,
+        total_minted: u64
+    }
+    
+    /// Crea una nueva colección de NFTs
+    /// 
+    /// Esta función inicializa una nueva colección con los metadatos proporcionados.
+    /// Solo el creador puede acuñar NFTs en esta colección.
+    /// 
+    /// # Parámetros
+    /// * `creator` - Cuenta que creará y poseerá la colección
+    /// * `name` - Nombre de la colección (máximo 128 caracteres)
+    /// * `description` - Descripción de la colección (máximo 512 caracteres)
+    /// 
+    /// # Aborts
+    /// * `E_COLLECTION_ALREADY_EXISTS` - Si ya existe una colección para este creador
+    /// * `E_NAME_TOO_LONG` - Si el nombre excede 128 caracteres
+    /// * `E_DESCRIPTION_TOO_LONG` - Si la descripción excede 512 caracteres
+    /// 
+    /// # Ejemplos
+    /// ```move
+    /// create_collection(
+    ///     &creator_signer,
+    ///     string::utf8(b"Crypto Punks"),
+    ///     string::utf8(b"10,000 unique collectible characters")
+    /// );
+    /// ```
+    public fun create_collection(
+        creator: &signer,
+        name: String,
+        description: String
+    ) {
+        // Implementación...
+    }
+}
+````
+
+### Convenciones de Manejo de Errores
+
+```move
+module error_handling_example {
+    // ============ Códigos de Error ============
+    
+    // Errores de autorización (1xx)
+    const E_UNAUTHORIZED: u64 = 101;
+    const E_INSUFFICIENT_PERMISSIONS: u64 = 102;
+    const E_INVALID_SIGNER: u64 = 103;
+    
+    // Errores de estado (2xx)
+    const E_ALREADY_EXISTS: u64 = 201;
+    const E_NOT_FOUND: u64 = 202;
+    const E_INVALID_STATE: u64 = 203;
+    
+    // Errores de parámetros (3xx)
+    const E_INVALID_AMOUNT: u64 = 301;
+    const E_INVALID_ADDRESS: u64 = 302;
+    const E_PARAMETER_OUT_OF_RANGE: u64 = 303;
+    
+    // Errores de recursos (4xx)
+    const E_INSUFFICIENT_BALANCE: u64 = 401;
+    const E_RESOURCE_EXHAUSTED: u64 = 402;
+    const E_QUOTA_EXCEEDED: u64 = 403;
+    
+    public fun example_function(user: &signer, amount: u64) {
+        // Validar parámetros primero
+        assert!(amount > 0, E_INVALID_AMOUNT);
+        assert!(amount <= MAX_AMOUNT, E_PARAMETER_OUT_OF_RANGE);
+        
+        // Verificar permisos
+        assert!(is_authorized(user), E_UNAUTHORIZED);
+        
+        // Verificar estado
+        assert!(exists<UserAccount>(signer::address_of(user)), E_NOT_FOUND);
+        
+        // Verificar recursos
+        let balance = get_balance(signer::address_of(user));
+        assert!(balance >= amount, E_INSUFFICIENT_BALANCE);
+        
+        // Ejecutar lógica principal...
+    }
+}
+```
+
+Estas convenciones ayudan a mantener el código Move legible, mantenible y consistente a través de diferentes proyectos y equipos de desarrollo.

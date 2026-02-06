@@ -1,0 +1,102 @@
+---
+title: "SDK de Go - Obtener Datos"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Puedes usar el cliente `Aptos` para obtener datos de la cadena usando una variedad de funciones
+de ayuda. Específicamente, muchas de las funciones listadas en la [documentación de referencia](https://pkg.go.dev/github.com/aptos-labs/aptos-go-sdk)
+recuperarán datos de la cadena, por ejemplo `Account`, `AccountResources`, `Transactions`.
+
+Aquí hay un ejemplo mostrando cómo obtener datos comunes que puedes necesitar en tu aplicación:
+
+```go filename="fetch_data.go"
+client, err := aptos.NewClient(aptos.DevnetConfig)
+if err != nil {
+  panic("Failed to create client:" + err.Error())
+}
+
+address := aptos.AccountAddress{}
+err := address.ParseStringRelaxed("0x123")
+if err != nil {
+  panic("Failed to parse address:" + err.Error())
+}
+
+accountInfo, err := client.Account(address)
+resources, err := client.AccountResources(address)
+transactions, err := client.Transactions()
+```
+
+<Aside type="note">
+  Muchas tienen entradas opcionales como `ledgerVersion` para especificar qué versión
+  del ledger consultar el estado.
+</Aside>
+
+El cliente `Aptos` puede por defecto consultar tanto datos de red desde
+[fullnodes](https://api.mainnet.aptoslabs.com/v1/spec#/) como la
+[API del Indexador](https://cloud.hasura.io/public/graphiql?endpoint=https://api.mainnet.aptoslabs.com/v1/graphql)
+que contiene datos agregados y enriquecidos. Si quieres usar una consulta personalizada
+para datos de la API del Indexador, puedes usar `client.QueryIndexer()` así:
+
+```go filename="fetch_data.go"
+	var out []CoinBalance
+	var q struct {
+		Current_coin_balances []struct {
+			CoinType     string `graphql:"coin_type"`
+			Amount       uint64
+			OwnerAddress string `graphql:"owner_address"`
+		} `graphql:"current_coin_balances(where: {owner_address: {_eq: $address}})"`
+	}
+
+	variables := map[string]any{
+		"address": address.StringLong(),
+	}
+	err := ic.Query(&q, variables)
+
+	if err != nil {
+		return nil, err
+	}
+
+	for _, coin := range q.Current_coin_balances {
+		out = append(out, CoinBalance{
+			CoinType: coin.CoinType,
+			Amount:   coin.Amount,
+		})
+	}
+```
+
+<Aside type="note">
+  Ten en cuenta que todos los valores en GraphQL deben estar en mayúsculas y CamelCased. Para
+  convertir a nombres de campo directos de base de datos, usa la etiqueta `graphql`.
+</Aside>
+
+## Usando Funciones de Vista Move
+
+Puedes llamar funciones de vista que retornan datos personalizados de la cadena usando `client.View`.
+
+Por ejemplo, puedes buscar la red que estás usando con la función de vista `chain_id`:
+
+```go filename="fetch_data.go"
+viewResponse, err := client.View(&aptos.ViewPayload {
+  Module: aptos.ModuleId{Address: aptos.AccountAddress{}, Name: "chain_id"},
+  Function: "get",
+  ArgTypes: []aptos.TypeTag{},
+  Args: [][]byte{},
+)
+
+chainId := viewResponse[0]
+```
+
+## Asegurar Datos Frescos del Indexador
+
+Detrás de escena, algunas solicitudes usan la [API del Indexador](/es/build/indexer) para
+acceder a datos que han sido procesados o agregados. Ese análisis adicional puede tomar
+un poco de tiempo, por lo que los datos pueden estar ligeramente atrasados respecto al ledger más reciente.
+
+Si quieres asegurar que los datos estén frescos, puedes esperar en una versión específica
+del indexador.
+
+```go filename="fetch_data.go"
+// Esperar en processorName para alcanzar la versión 12345
+err := client.WaitOnIndexer("processorName", 12345)
+```

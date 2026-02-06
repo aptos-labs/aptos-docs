@@ -1,0 +1,896 @@
+---
+title: "Rotación de Claves de Cuenta"
+description: "Característica de seguridad avanzada para rotar claves de cuenta para mantener control mientras se cambian las credenciales de autenticación."
+sidebar:
+  label: "Rotación de Claves"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+<Aside type="caution">
+  La rotación de claves de cuenta es una característica avanzada que debe usarse con precaución.
+  La mayoría de usuarios nunca necesitarán usar esta característica.
+</Aside>
+
+Las cuentas de Aptos Move tienen una dirección pública, una clave de autenticación, una clave pública,
+y una clave privada. La dirección pública es permanente, siempre coincidiendo con
+la clave de autenticación inicial de la cuenta, que se deriva de la clave privada
+original.
+
+El modelo de cuenta de Aptos facilita la capacidad única de rotar la clave privada
+de una cuenta. Dado que la dirección de una cuenta es la clave de autenticación _inicial_,
+la capacidad de firmar para una cuenta puede ser transferida a otra clave privada sin
+cambiar su dirección pública.
+
+En esta guía, mostramos ejemplos de cómo rotar la clave de autenticación de una cuenta
+usando la CLI y algunos de los diversos SDKs de Aptos.
+
+Aquí están los enlaces de instalación para los SDKs que cubriremos en este ejemplo:
+
+- [CLI de Aptos](/es/build/cli)
+- [SDK de TypeScript](/es/build/sdks/ts-sdk)
+- [SDK de Python](/es/build/sdks/python-sdk)
+
+<Aside type="caution">
+  Algunos de los siguientes ejemplos usan claves privadas. No compartas tus claves
+  privadas con nadie.
+</Aside>
+
+## Rotaciones de claves probadas y no probadas
+
+La lógica en la cadena para la rotación de claves se implementa a través de dos APIs de Move:
+
+1. [`account::rotate_authentication_key`], que ejecuta una rotación "probada".
+2. [`account::rotate_authentication_key_call`], que ejecuta una rotación "no probada".
+
+### Rotaciones de claves probadas
+
+La API [`account::rotate_authentication_key`] requiere un
+\[`account::RotationProofChallenge`] firmado, que prueba que la operación de rotación es
+aprobada por la clave privada tanto antes _como_ después de la operación. Cuando la
+operación es exitosa, la tabla \[`account::OriginatingAddress`] se actualiza
+con una entrada que mapea desde la nueva clave de autenticación a la dirección
+de cuenta correspondiente.
+
+La tabla \[`account::OriginatingAddress`] es una tabla de búsqueda inversa que permite
+a los usuarios consultar una dirección de cuenta asociada con una clave de autenticación dada,
+y solo permite una entrada por clave de autenticación. De ahí el requisito de un
+\[`account::RotationProofChallenge`] firmado para asegurar que un actor malicioso no
+rote la clave de autenticación de una cuenta a una clave que ya está en la
+tabla, ya que este ataque impediría la búsqueda de la dirección de origen válida que
+el titular de una clave de autenticación había aprobado previamente.
+
+Notablemente, la tabla \[`account::OriginatingAddress`] se actualiza _solo_ durante la rotación
+de claves, no durante la generación estándar de cuentas. Esto significa que con rotaciones
+de claves probadas, una clave privada dada puede teóricamente autenticar hasta dos cuentas
+al mismo tiempo:
+
+1. La dirección de cuenta derivada de la clave privada durante la generación estándar
+   de cuentas, asumiendo que la cuenta no ha sufrido ninguna rotación de claves.
+2. Una segunda dirección arbitraria, que ha tenido su clave de autenticación rotada a
+   la clave privada dada.
+
+Sin embargo, se considera una mejor práctica autenticar solo _una_ cuenta con
+una clave privada dada a la vez, porque siempre que la tabla
+\[`account::OriginatingAddress`] se actualiza, la lógica subyacente primero
+verifica si la clave de autenticación inicial de la cuenta que rota está en la tabla,
+y si es así, verifica que la dirección de la cuenta que rota es la mapeada en la
+tabla.
+
+Esto significa que si la clave de autenticación de una cuenta arbitraria se rota a
+una clave privada dada, la cuenta estándar cuya dirección se deriva originalmente
+de la clave privada no podrá ejecutar su primera rotación de clave de autenticación
+mientras la clave de autenticación asociada esté mapeada a una segunda dirección
+de cuenta arbitraria en la tabla \[`account::OriginatingAddress`], porque esta
+operación fallaría la verificación de que la dirección de la cuenta que rota es la
+mapeada en la tabla (ya que la tabla solo se actualiza durante la rotación, no
+durante la generación estándar de cuentas).
+
+Para prevenir este problema y asegurar que se sigan las mejores prácticas, siempre puedes ejecutar
+\[`account::set_originating_address`] después de generar una nueva cuenta (ver tutorial
+de CLI a continuación).
+
+### Rotaciones de claves no probadas
+
+A diferencia de [`account::rotate_authentication_key`], la
+[`account::rotate_authentication_key_call`] _no_ requiere un
+\[`account::RotationProofChallenge`] firmado. Esto significa que la operación no está probada
+en el sentido de que la clave privada de _después_ de la operación ha aprobado la
+rotación de claves. Por lo tanto, la tabla \[`account::OriginatingAddress`] _no_ se actualiza
+para rotaciones de claves no probadas, y por lo tanto no hay restricción en el número de
+cuentas que pueden ser autenticadas con una clave privada dada. Nota que la
+CLI `aptos` actualmente no soporta rotaciones de claves no probadas.
+
+<Aside type="note" emoji="🧠">
+  La [`account::rotate_authentication_key_call`] fue introducida para soportar
+  algoritmos de clave no estándar, como passkeys, que no pueden producir pruebas de
+  conocimiento durante las operaciones de rotación.
+</Aside>
+
+Mientras que es técnicamente posible autenticar tantas cuentas como quieras
+con una clave de autenticación dada a través de rotaciones de claves no probadas,
+no se considera una mejor práctica porque este enfoque no garantiza una asignación uno a uno.
+
+Si ejecutas una rotación de clave no probada, se sugiere que sigas con
+\[`account::set_originating_address`] para asegurar una asignación uno a uno de
+clave de autenticación a dirección de cuenta para facilitar la búsqueda de la dirección de origen
+(ver tutorial de CLI a continuación).
+
+## Rotación de claves con la CLI de Aptos
+
+<Steps>
+  1. Inicia una localnet
+
+     Inicia una localnet:
+
+     ```shellscript filename="Terminal"
+     aptos node run-localnet
+     ```
+
+     La localnet está lista cuando imprime:
+
+     ```shellscript filename="Terminal"
+     Applying post startup steps...
+
+     Setup is complete, you can now use the localnet!
+     ```
+
+     <Aside type="note" emoji="🧠">
+       Si estás en un sistema UNIX-like, el siguiente comando puede usarse para iniciar una
+       localnet limpia como un proceso en segundo plano:
+
+       ```shellscript filename="Terminal"
+       mkdir -p localnet-data
+       aptos node run-localnet \
+           --assume-yes \
+           --test-dir localnet-data \
+           --force-restart &
+       export LOCALNET_PID=$!
+       ```
+
+       Puedes detener la localnet en cualquier momento con el siguiente comando:
+
+       ```shellscript filename="Terminal"
+       kill $LOCALNET_PID
+       ```
+     </Aside>
+
+  2. Genera una clave privada
+
+     Crea una clave privada correspondiente a una clave de autenticación, y por lo tanto
+     dirección de cuenta inicial, que comienza con el prefijo de fantasía `0xaaa`:
+
+     ```shellscript filename="Terminal"
+     aptos key generate \
+         --assume-yes \
+         --output-file private-key-a \
+         --vanity-prefix 0xaaa
+     ```
+
+     <details>
+       <summary>Ejemplo de salida</summary>
+
+       ```shellscript filename="Terminal"
+       {
+         "Result": {
+           "Account Address:": "0xaaa5131b4d3fcef8d33ee465c4ee65727e36039f283455be87b1164200572e5b",
+           "PublicKey Path": "private-key-a.pub",
+           "PrivateKey Path": "private-key-a"
+         }
+       }
+       ```
+     </details>
+
+     Esto generará dos archivos:
+
+     1. Una clave privada en `private-key-a`.
+     2. Una clave pública en `private-key-a.pub`.
+
+     Ya que no hay una cuenta asociada con la clave de autenticación, el
+     siguiente comando debería fallar con un mensaje correspondiente:
+
+     ```shellscript filename="Terminal"
+     aptos account lookup-address \
+         --public-key-file private-key-a.pub \
+         --url http://localhost:8080
+     ```
+
+     <details>
+       <summary>Ejemplo de salida</summary>
+
+       ```shellscript filename="Terminal"
+       {
+         "Error": "API error: API error Error(AccountNotFound): Account not found by Address(0xaaafb224eb00e4d0ef520ce02038ede850893622562a4189b7f6e5d94454ccd9) and Ledger version(1206)"
+       }
+       ```
+     </details>
+
+  3. Inicializa un perfil
+
+     Usa la clave privada para inicializar `test-profile-1` en la localnet:
+
+     ```shellscript filename="Terminal"
+     aptos init \
+         --assume-yes \
+         --network local \
+         --private-key-file private-key-a \
+         --profile test-profile-1
+     ```
+
+     <details>
+       <summary>Ejemplo de salida</summary>
+
+       ```shellscript filename="Terminal"
+       Configuring for profile test-profile-1
+       Configuring for network Local
+       Using command line argument for private key
+       Account 0xaaa5131b4d3fcef8d33ee465c4ee65727e36039f283455be87b1164200572e5b doesn\'t exist, creating it and funding it with 100000000 Octas
+       Account 0xaaa5131b4d3fcef8d33ee465c4ee65727e36039f283455be87b1164200572e5b funded successfully
+
+       ---
+       Aptos CLI is now set up for account 0xaaa5131b4d3fcef8d33ee465c4ee65727e36039f283455be87b1164200572e5b as profile test-profile-1!  Run `aptos --help` for more information about commands
+       {
+         "Result": "Success"
+       }
+       ```
+     </details>
+
+     Nota que siempre puedes ver el perfil con:
+
+     ```shellscript filename="Terminal"
+     aptos config show-profiles --profile test-profile-1
+     ```
+
+     <details>
+       <summary>Ejemplo de salida</summary>
+
+       ```shellscript filename="Terminal"
+       {
+         "Result": {
+           "test-profile-1": {
+             "has_private_key": true,
+             "public_key": "0xe0bfe46f41c5be40e7a068e8dff4d6016126b226d947a39262f5b2347217a7e3",
+             "account": "aaa5131b4d3fcef8d33ee465c4ee65727e36039f283455be87b1164200572e5b",
+             "rest_url": "http://localhost:8080",
+             "faucet_url": "http://localhost:8081"
+           }
+         }
+       }
+       ```
+     </details>
+
+     Sin embargo, esto no mostrará la clave privada, que está oculta por defecto. Si quieres
+     ver la clave privada:
+
+     ```shellscript filename="Terminal"
+     aptos config show-private-key --profile test-profile-1
+     ```
+
+     <details>
+       <summary>Ejemplo de salida</summary>
+
+       ```shellscript filename="Terminal"
+       {
+         "Result": "0xcc3b0c38ad99e171263a7af930464313d1fb105d0d8e6a4b13f9b1140563a7dd"
+       }
+       ```
+     </details>
+
+  4. Busca la dirección
+
+     Ahora que hay una cuenta en la cadena de Aptos asociada con la clave de autenticación,
+     puedes buscar la dirección de la cuenta usando `aptos account lookup-address`:
+
+     ```shellscript filename="Terminal"
+     aptos account lookup-address \
+         --public-key-file private-key-a.pub \
+         --url http://localhost:8080
+     ```
+
+     <details>
+       <summary>Ejemplo de salida</summary>
+
+       ```shellscript filename="Terminal"
+       {
+         "Result": "aaa5131b4d3fcef8d33ee465c4ee65727e36039f283455be87b1164200572e5b"
+       }
+       ```
+     </details>
+
+     Almacena esta dirección en una variable de shell:
+
+     ```shellscript filename="Terminal"
+     ADDRESS_A=aaa...
+     ```
+
+     <Aside type="note" emoji="🧠">
+       Si estás usando una máquina UNIX-like que tiene `jq`, puedes almacenar fácilmente la dirección de la cuenta via:
+
+       ```shellscript filename="Terminal"
+       export ADDRESS_A=$(
+           aptos account lookup-address \
+               --public-key-file private-key-a.pub \
+               --url http://localhost:8080 \
+                   | jq -r '.Result'
+       )
+       echo $ADDRESS_A
+       ```
+     </Aside>
+
+  5. Busca la clave de autenticación
+
+     Recuerda que la dirección de una cuenta es idéntica a su clave de autenticación
+     cuando se crea por primera vez, lo que significa que la dirección de cuenta `aaa...` es
+     idéntica a la clave de autenticación de la cuenta:
+
+     ```shellscript filename="Terminal"
+     aptos move view \
+         --args address:$ADDRESS_A \
+         --function-id 0x1::account::get_authentication_key \
+         --url http://localhost:8080
+     ```
+
+     <details>
+       <summary>Ejemplo de salida</summary>
+
+       ```shellscript filename="Terminal"
+       {
+         "Result": [
+           "0xaaa5131b4d3fcef8d33ee465c4ee65727e36039f283455be87b1164200572e5b"
+         ]
+       }
+       ```
+     </details>
+
+     Por lo tanto, almacena la clave de autenticación en una variable de shell:
+
+     ```shellscript
+     AUTH_KEY_A=$ADDRESS_A
+     ```
+
+     Nota, sin embargo, ya que la cuenta no ha tenido su clave de autenticación rotada,
+     no hay una entrada correspondiente en la tabla \[`account::OriginatingAddress`]:
+
+     ```shellscript filename="Terminal"
+     aptos move view \
+         --args address:$AUTH_KEY_A \
+         --function-id 0x1::account::originating_address \
+         --url http://localhost:8080
+     ```
+
+     <details>
+       <summary>Ejemplo de salida</summary>
+
+       ```shellscript filename="Terminal"
+       {
+         "Result": [
+           {
+             "vec": []
+           }
+         ]
+       }
+       ```
+     </details>
+
+  6. Establece la dirección de origen
+
+     Para asegurar una entrada en la tabla \[`account::OriginatingAddress`] para esta nueva cuenta,
+     puedes ejecutar \[`account::set_originating_address`]:
+
+     ```shellscript filename="Terminal"
+     aptos move run \
+         --assume-yes \
+         --function-id 0x1::account::set_originating_address \
+         --profile test-profile-1
+     ```
+
+     <details>
+       <summary>Ejemplo de salida</summary>
+
+       ```shellscript filename="Terminal"
+       {
+         "Result": {
+           "transaction_hash": "0x216992ef37a3c2f42aa9f8fed8f94d9f945a00e952dfe96b46123bb5c387ab6c",
+           "gas_used": 444,
+           "gas_unit_price": 100,
+           "sender": "aaa5131b4d3fcef8d33ee465c4ee65727e36039f283455be87b1164200572e5b",
+           "sequence_number": 0,
+           "success": true,
+           "timestamp_us": 1717809169531279,
+           "version": 3268,
+           "vm_status": "Executed successfully"
+         }
+       }
+       ```
+     </details>
+
+     Luego deberías ver una entrada en la tabla \[`account::OriginatingAddress`]:
+
+     ```shellscript filename="Terminal"
+     aptos move view \
+         --args address:$AUTH_KEY_A \
+         --function-id 0x1::account::originating_address \
+         --url http://localhost:8080
+     ```
+
+     <details>
+       <summary>Ejemplo de salida</summary>
+
+       ```shellscript filename="Terminal"
+       {
+         "Result": [
+           {
+             "vec": [
+               "0xaaa5131b4d3fcef8d33ee465c4ee65727e36039f283455be87b1164200572e5b"
+             ]
+           }
+         ]
+       }
+       ```
+     </details>
+
+  7. Rota la clave de autenticación
+
+     Genera una nueva clave privada:
+
+     ```shellscript filename="Terminal"
+     aptos key generate \
+         --assume-yes \
+         --output-file private-key-b \
+         --vanity-prefix 0xbbb
+     ```
+
+     <details>
+       <summary>Ejemplo de salida</summary>
+
+       ```shellscript filename="Terminal"
+       {
+         "Result": {
+           "PrivateKey Path": "private-key-b",
+           "Account Address:": "0xbbbdb12f4fa23b8fe8711b77f4ab7108f3a22077c5dfe787eed3d048a0b82734",
+           "PublicKey Path": "private-key-b.pub"
+         }
+       }
+       ```
+     </details>
+
+     Rota la clave de autenticación de la cuenta en la cadena existente a la nueva
+     clave privada:
+
+     ```shellscript filename="Terminal"
+     aptos account rotate-key \
+         --assume-yes \
+         --new-private-key-file private-key-b \
+         --profile test-profile-1 \
+         --save-to-profile test-profile-2
+     ```
+
+     <details>
+       <summary>Ejemplo de salida</summary>
+
+       ```shellscript filename="Terminal"
+       {
+         "Result": {
+           "message": "Saved new profile test-profile-2",
+           "transaction": {
+             "transaction_hash": "0xe561b710390511203511d15eee6f019a2e43ba32f8e3b7ce6bf812232e3bd27f",
+             "gas_used": 449,
+             "gas_unit_price": 100,
+             "sender": "aaa8dc0f5e7a6e820f7b1906d99864412b12274ed259ad06bc2c2d8ee7b51e51",
+             "sequence_number": 1,
+             "success": true,
+             "timestamp_us": 1717810059696079,
+             "version": 1109,
+             "vm_status": "Executed successfully"
+           }
+         }
+       }
+       ```
+     </details>
+
+  8. Compara perfiles
+
+     Compara `test-profile-1` (que ahora está obsoleto) con `test-profile-2` (que es
+     actual) notando que la clave pública ha cambiado, pero no la dirección de la cuenta:
+
+     ```shellscript filename="Terminal"
+     aptos config show-profiles --profile test-profile-1
+     aptos config show-profiles --profile test-profile-2
+     ```
+
+     <details>
+       <summary>Ejemplo de salida</summary>
+
+       ```shellscript filename="Terminal"
+       {
+         "Result": {
+           "test-profile-1": {
+             "has_private_key": true,
+             "public_key": "0xb517173e68f4116e99c7fa1677058a6ee786a3b9e12447000db7fd85ab99dbdd",
+             "account": "aaa8dc0f5e7a6e820f7b1906d99864412b12274ed259ad06bc2c2d8ee7b51e51",
+             "rest_url": "http://localhost:8080",
+             "faucet_url": "http://localhost:8081"
+           }
+         }
+       }
+       {
+         "Result": {
+           "test-profile-2": {
+             "has_private_key": true,
+             "public_key": "0xadc3dd795fdd8569f59dc7b9900b38a5d7b95348b815de4eb5f00e2c2da07916",
+             "account": "aaa8dc0f5e7a6e820f7b1906d99864412b12274ed259ad06bc2c2d8ee7b51e51",
+             "rest_url": "http://localhost:8080",
+             "faucet_url": "http://localhost:8081"
+           }
+         }
+       }
+       ```
+     </details>
+
+     Busca la nueva clave de autenticación:
+
+     ```shellscript filename="Terminal"
+     aptos move view \
+         --args address:$ADDRESS_A \
+         --function-id 0x1::account::get_authentication_key \
+         --url http://localhost:8080
+     ```
+
+     <details>
+       <summary>Ejemplo de salida</summary>
+
+       ```shellscript filename="Terminal"
+       {
+         "Result": [
+           "0xbbbdb12f4fa23b8fe8711b77f4ab7108f3a22077c5dfe787eed3d048a0b82734"
+         ]
+       }
+       ```
+     </details>
+
+     Almacena la clave de autenticación en una variable de shell:
+
+     ```shellscript filename="Terminal"
+     AUTH_KEY_B=bbb...
+     ```
+
+     <Aside type="note" emoji="🧠">
+       Si estás usando una máquina UNIX-like que tiene `jq`, puedes almacenar fácilmente la clave de autenticación via:
+
+       ```shellscript filename="Terminal"
+       export AUTH_KEY_B=$(
+           aptos move view \
+               --args address:$ADDRESS_A \
+               --function-id 0x1::account::get_authentication_key \
+               --url http://localhost:8080 \
+               | jq -r '.Result[0]'
+       )
+       echo $AUTH_KEY_B
+       ```
+     </Aside>
+
+  9. Busca las direcciones de origen
+
+     Verifica la dirección de origen para la nueva clave de autenticación:
+
+     ```shellscript filename="Terminal"
+     aptos move view \
+         --args address:$AUTH_KEY_B \
+         --function-id 0x1::account::originating_address \
+         --url http://localhost:8080
+     ```
+
+     <details>
+       <summary>Ejemplo de salida</summary>
+
+       ```shellscript filename="Terminal"
+       {
+         "Result": [
+           {
+             "vec": [
+               "0xaaa8dc0f5e7a6e820f7b1906d99864412b12274ed259ad06bc2c2d8ee7b51e51"
+             ]
+           }
+         ]
+       }
+       ```
+     </details>
+
+     Verifica la dirección de origen para la clave de autenticación antigua:
+
+     ```shellscript filename="Terminal"
+     aptos move view \
+         --args address:$AUTH_KEY_A \
+         --function-id 0x1::account::originating_address \
+         --url http://localhost:8080
+     ```
+
+     <details>
+       <summary>Ejemplo de salida</summary>
+
+       ```shellscript filename="Terminal"
+       {
+         "Result": [
+           {
+             "vec": []
+           }
+         ]
+       }
+       ```
+     </details>
+
+  10. Intenta una rotación inválida (misma clave)
+
+      Intenta una rotación inválida donde la clave de autenticación actual es idéntica
+      a la nueva clave de autenticación:
+
+      ```shellscript filename="Terminal"
+      aptos account rotate-key \
+          --assume-yes \
+          --new-private-key-file private-key-b \
+          --profile test-profile-2 \
+          --skip-saving-profile
+      ```
+
+      <details>
+        <summary>Ejemplo de salida</summary>
+
+        ```shellscript filename="Terminal"
+        {
+          "Error": "Invalid arguments: New public key cannot be the same as the current public key"
+        }
+        ```
+      </details>
+
+  11. Intenta una rotación inválida (nueva clave ya mapeada)
+
+      Crea otra clave privada:
+
+      ```shellscript filename="Terminal"
+      aptos key generate \
+          --assume-yes \
+          --output-file private-key-c \
+          --vanity-prefix 0xccc
+      ```
+
+      <details>
+        <summary>Ejemplo de salida</summary>
+
+        ```shellscript filename="Terminal"
+        {
+          "Result": {
+            "PrivateKey Path": "private-key-c",
+            "PublicKey Path": "private-key-c.pub",
+            "Account Address:": "0xccc79d46b2963cb87f2ff32c51eb6c6361e8aa108d334d3183c3016389542958"
+          }
+        }
+        ```
+      </details>
+
+      Inicializa un nuevo perfil:
+
+      ```shellscript filename="Terminal"
+      aptos init \
+          --assume-yes \
+          --network local \
+          --private-key-file private-key-c \
+          --profile test-profile-3
+      ```
+
+      <details>
+        <summary>Ejemplo de salida</summary>
+
+        ```shellscript filename="Terminal"
+        Configuring for profile test-profile-3
+        Configuring for network Local
+        Using command line argument for private key
+        Account 0xccc79d46b2963cb87f2ff32c51eb6c6361e8aa108d334d3183c3016389542958 doesn\'t exist, creating it and funding it with 100000000 Octas
+        Account 0xccc79d46b2963cb87f2ff32c51eb6c6361e8aa108d334d3183c3016389542958 funded successfully
+
+        ---
+        Aptos CLI is now set up for account 0xccc79d46b2963cb87f2ff32c51eb6c6361e8aa108d334d3183c3016389542958 as profile test-profile-3!  Run `aptos --help` for more information about commands
+        {
+          "Result": "Success"
+        }
+        ```
+      </details>
+
+      Intenta una rotación inválida donde la nueva clave de autenticación ya está mapeada:
+
+      ```shellscript filename="Terminal"
+      aptos account rotate-key \
+          --assume-yes \
+          --max-gas 100000 \
+          --new-private-key-file private-key-b \
+          --profile test-profile-3 \
+          --skip-saving-profile
+      ```
+
+      (`--max-gas` se especifica aquí para omitir la simulación local, que no imprime
+      como descriptivo de un error como la transacción real.)
+
+      <details>
+        <summary>Ejemplo de salida</summary>
+
+        ```shellscript filename="Terminal"
+        {
+          "Error": "API error: Unknown error Transaction committed on chain, but failed execution: Move abort in 0x1::account: ENEW_AUTH_KEY_ALREADY_MAPPED(0x10015): The new authentication key already has an entry in the `OriginatingAddress` table"
+        }
+        ```
+      </details>
+
+  12. Intenta una rotación inválida (dirección de origen inválida)
+
+      Rota la clave de autenticación para la cuenta `0xaaa...` para usar la clave de autenticación
+      para la cuenta `0xccc...`:
+
+      ```shellscript filename="Terminal"
+      aptos account rotate-key \
+          --assume-yes \
+          --new-private-key-file private-key-c \
+          --profile test-profile-2 \
+          --save-to-profile test-profile-4
+      ```
+
+      <details>
+        <summary>Ejemplo de salida</summary>
+
+        ```shellscript filename="Terminal"
+        {
+          "Result": {
+            "message": "Saved new profile test-profile-4",
+            "transaction": {
+              "transaction_hash": "0xa5dec792d82ef7471cdf82b9c957fc79b5815da770ad1dd9232ae4692e4f0895",
+              "gas_used": 449,
+              "gas_unit_price": 100,
+              "sender": "aaa8dc0f5e7a6e820f7b1906d99864412b12274ed259ad06bc2c2d8ee7b51e51",
+              "sequence_number": 2,
+              "success": true,
+              "timestamp_us": 1717812312772580,
+              "version": 5355,
+              "vm_status": "Executed successfully"
+            }
+          }
+        }
+        ```
+      </details>
+
+      Luego intenta rotar la clave de autenticación para la cuenta `0xccc...` por primera vez,
+      una operación que está bloqueada porque una entrada para la clave de autenticación
+      se estableció en la tabla \[`account::OriginatingAddress`] durante la última operación:
+
+      ```shellscript filename="Terminal"
+      aptos account rotate-key \
+          --assume-yes \
+          --max-gas 100000 \
+          --new-private-key-file private-key-b \
+          --profile test-profile-3 \
+          --skip-saving-profile
+      ```
+
+      (`--max-gas` se especifica aquí para omitir la simulación local, que no imprime
+      como descriptivo de un error como la transacción real.)
+
+      <details>
+        <summary>Ejemplo de salida</summary>
+
+        ```shellscript filename="Terminal"
+        {
+          "Error": "API error: Unknown error Transaction committed on chain, but failed execution: Move abort in 0x1::account: EINVALID_ORIGINATING_ADDRESS(0x6000d): Abort the transaction if the expected originating address is different from the originating address on-chain"
+        }
+        ```
+      </details>
+
+  13. Limpia
+
+      Elimina los perfiles de prueba:
+
+      ```shell filename="Terminal"
+      aptos config delete-profile --profile test-profile-1
+      aptos config delete-profile --profile test-profile-2
+      aptos config delete-profile --profile test-profile-3
+      aptos config delete-profile --profile test-profile-4
+      ```
+
+      Luego puedes detener la localnet y eliminar los archivos de clave y clave pública.
+
+      <Aside type="note" emoji="🧠">
+        Si estás usando una máquina UNIX-like:
+
+        ```shell filename="Terminal"
+        aptos config delete-profile --profile test-profile-1
+        aptos config delete-profile --profile test-profile-2
+        aptos config delete-profile --profile test-profile-3
+        aptos config delete-profile --profile test-profile-4
+        rm private-key-*
+        kill $LOCALNET_PID
+        rm -fr localnet-data
+        ```
+      </Aside>
+
+  14. Rotación de claves para un Ledger
+
+      También puedes realizar la rotación de clave de autenticación con una clave privada que
+      está segúnmente almacenada en una billetera de hardware Ledger. Para más información,
+      ver la guía de [Rotación de clave de autenticación para Ledger](/es/build/cli/trying-things-on-chain/ledger#authentication-key-rotation).
+</Steps>
+
+## Ejemplo de rotación de clave de TypeScript
+
+Este programa crea dos cuentas en devnet, Alice y Bob, las funde, y luego
+rota la clave de autenticación de Alice a la de Bob.
+
+Ver el ejemplo completo para este código
+[aquí](https://github.com/aptos-labs/aptos-ts-sdk/blob/main/examples/typescript/rotate_key.ts).
+
+La función para rotar es muy simple:
+
+{/* TODO CODE EXAMPLE */}
+
+Comandos para ejecutar el script de ejemplo:
+
+### Navega al directorio del SDK de TypeScript, instala las dependencias y ejecuta
+
+rotate\_key.ts
+
+```shellscript filename="Terminal"
+cd ~/aptos-core/ecosystem/typescript/sdk/examples/typescript-esm
+pnpm install && pnpm rotate_key
+```
+
+### rotate\_key.ts output
+
+```shell filename="Terminal"
+Account Address Auth Key Private Key Public Key
+------------------------------------------------------------------------------------------------
+Alice 0x213d...031013 '0x213d...031013' '0x00a4...b2887b' '0x859e...08d2a9'
+Bob 0x1c06...ac3bb3 0x1c06...ac3bb3 0xf2be...9486aa 0xbbc1...abb808
+
+...rotating...
+
+Alice 0x213d...031013 '0x1c06...ac3bb3' '0xf2be...9486aa' '0xbbc1...abb808'
+Bob 0x1c06...ac3bb3 0x1c06...ac3bb3 0xf2be...9486aa 0xbbc1...abb808
+```
+
+## Ejemplo de rotación de clave de Python
+
+Este programa crea dos cuentas en devnet, Alice y Bob, las funde, y luego
+rota la clave de autenticación de Alice a la de Bob.
+
+Ver el ejemplo completo para este código
+[aquí](https://github.com/aptos-labs/aptos-python-sdk/blob/main/examples/rotate_key.py).
+
+Aquí está el código relevante que rota las claves de Alice a las de Bob:
+
+{/* TODO CODE EXAMPLE */}
+
+Comandos para ejecutar el script de ejemplo:
+
+### Navega al directorio del SDK de Python, instala las dependencias y ejecuta
+
+rotate\_key.ts
+
+```shellscript filename="Terminal"
+cd aptos-core/ecosystem/python/sdk
+poetry install && poetry run python -m examples.rotate-key
+```
+
+### rotate\_key.py output
+
+```shellscript filename="Terminal"
+Account Address Auth Key Private Key Public Key
+------------------------------------------------------------------------------------------------
+Alice 0x213d...031013 '0x213d...031013' '0x00a4...b2887b' '0x859e...08d2a9'
+Bob 0x1c06...ac3bb3 0x1c06...ac3bb3 0xf2be...9486aa 0xbbc1...abb808
+
+...rotating...
+
+Alice 0x213d...031013 '0x1c06...ac3bb3' '0xf2be...9486aa' '0xbbc1...abb808'
+Bob 0x1c06...ac3bb3 0x1c06...ac3bb3 0xf2be...9486aa 0xbbc1...abb808
+```
+
+[`account::rotate_authentication_key`]: https://github.com/aptos-labs/aptos-core/blob/acb6c891cd42a63b3af96561a1aca164b800c7ee/aptos-move/framework/aptos-framework/sources/account.move#L326
+
+[`account::rotate_authentication_key_call`]: https://github.com/aptos-labs/aptos-core/blob/acb6c891cd42a63b3af96561a1aca164b800c7ee/aptos-move/framework/aptos-framework/sources/account.move#L294
+
+\[`account::RotationProofChallenge`

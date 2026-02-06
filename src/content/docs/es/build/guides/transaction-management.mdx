@@ -1,0 +1,113 @@
+---
+title: "Gestión de Transacciones"
+description: "Construye sistemas de gestión de transacciones escalables en Aptos con manejo adecuado de cuentas y gestión de números de secuencia."
+sidebar:
+  label: "Gestión de Transacciones"
+---
+
+Esta guía explica cómo construir un sistema de gestión de transacciones que pueda escalar en la blockchain de Aptos.
+
+## Antecedentes
+
+En Aptos, las transacciones se asignan a una cuenta en términos de la entidad que firma o autoriza esa transacción y proporciona un número de secuencia basado en la cuenta. Cuando la red de Aptos recibe una nueva transacción, se siguen varias reglas respecto a esto:
+
+- La transacción enviada desde una cuenta debe estar autorizada correctamente por esa cuenta.
+- El tiempo actual, según lo definido por la actualización más reciente del ledger, debe ser anterior a la marca de tiempo de expiración de la transacción.
+- El número de secuencia de la transacción debe ser igual o mayor que el número de secuencia en la cadena para esa cuenta.
+
+Una vez que el nodo inicial ha aceptado una transacción, la transacción avanza en el sistema por una regla adicional. Si el número de secuencia de la transacción es mayor que el número de secuencia actual en la cadena, solo puede avanzar hacia el consenso si cada nodo en el camino ha visto una transacción con el número de secuencia entre el estado en la cadena y el número de secuencia actual.
+
+Ejemplo:
+
+Alice posee una cuenta cuyo número de secuencia actual en la cadena es 5.
+
+Alice envía una transacción al nodo Bob con número de secuencia 6.
+
+Bob, el nodo, acepta la transacción pero no la reenvía, porque Bob no ha visto la 5.
+
+Para avanzar, Alice debe enviar a Bob la transacción número 5 o Bob debe ser notificado por consenso de que la 5 fue confirmada. En el último caso, Alice envió la transacción a través de otro nodo.
+
+Más allá de esto, hay dos principios restantes:
+
+- Una sola cuenta puede tener como máximo 100 transacciones no confirmadas enviadas a la blockchain. Cualquier transacción adicional será rechazada. Esto puede suceder silenciosamente si Alice envía las primeras 100 a Bob (el nodo) y las siguientes 100 a Carol (el nodo). Si ambos nodos comparten un upstream común, ese upstream aceptará las 100 enviadas por Bob pero rechazará silenciosamente las 100 enviadas por Carol.
+- Enviar transacciones distintas a múltiples nodos resultará en una resolución lenta, ya que las transacciones no avanzarán desde el nodo al que se enviaron hasta que ese nodo sepa que todas las transacciones anteriores han sido confirmadas. Por ejemplo, si Alice envía las primeras 50 a Bob y las siguientes 50 a Carol.
+
+## Construyendo un Gestor de Transacciones
+
+Ahora que entendemos las particularidades de las transacciones, profundicemos en la construcción de un gestor de transacciones robusto. Esto consiste en los siguientes componentes principales:
+
+- Un generador de números de secuencia que asigna y gestiona los números de secuencia disponibles para una sola cuenta.
+- Un gestor de transacciones que recibe cargas útiles de una aplicación o usuario, números de secuencia del generador de números de secuencia, y tiene acceso a la clave de la cuenta para combinar las tres piezas en una transacción firmada viable. También se encarga de enviar la transacción a la blockchain.
+- Un worker on-chain, harness de líder que permite que múltiples cuentas compartan el firmante de una sola cuenta compartida.
+
+Actualmente, este framework asume que la red no construye una cola sustancial, es decir, una transacción que se envía se ejecuta y confirma con poca o ninguna demora. Para abordar una alta demanda, este trabajo debe extenderse con los siguientes componentes:
+
+- Optimizar el precio de `base_gas_unit` para asegurar que las transacciones prioritarias puedan ser confirmadas en la blockchain.
+- Manejar aún más las tasas de procesamiento de transacciones para asegurar que el temporizador de expiración esté correctamente configurado.
+- Manejar los fallos de transacciones para que sean ignorados o reenviados según el resultado deseado.
+
+Nota: una cuenta debe ser gestionada por una sola instancia del gestor de transacciones. De lo contrario, cada instancia probablemente tendrá un estado en memoria desactualizado, resultando en números de secuencia superpuestos.
+
+### Implementaciones
+
+- Python
+  - [Gestor de números de secuencia](https://github.com/aptos-labs/aptos-core/pull/7987)
+  - [Gestor de transacciones](https://github.com/aptos-labs/aptos-core/pull/7987)
+- [Contrato inteligente worker-líder](https://github.com/aptos-labs/aptos-core/pull/7986)
+
+### Gestión de Números de Secuencia
+
+Cada transacción requiere un número de secuencia distinto que sea secuencial a las transacciones enviadas previamente. Esto puede proporcionarse mediante el siguiente proceso:
+
+1. Al iniciar, consulta la blockchain para obtener el número de secuencia actual de la cuenta.
+2. Soporta hasta 100 transacciones en vuelo al mismo tiempo, es decir, se pueden asignar 100 números de secuencia sin confirmar que alguno haya sido confirmado.
+3. Si hay 100 transacciones en vuelo, determina el estado realmente confirmado consultando la red. Esto actualizará el número de secuencia actual.
+4. Si hay menos de 100 transacciones en vuelo, vuelve al paso 2.
+5. De lo contrario, espera 0.1 segundos y continúa reevaluando el número de secuencia actual en la cadena.
+6. Todas las transacciones deben tener un tiempo de expiración. Si el tiempo de expiración ha pasado, asume que ha habido un fallo y reinicia el número de secuencia. El caso trivial es solo monitorear los fallos cuando el número máximo de transacciones está en vuelo y dejar que otros servicios gestionen esto en otros casos.
+
+En paralelo, monitorea las nuevas transacciones enviadas. Una vez que el tiempo de expiración de la transacción más temprana haya expirado, sincroniza hasta esa transacción. Luego repite el proceso para la siguiente transacción.
+
+Si hay algún fallo, espera hasta que todas las transacciones pendientes hayan expirado y deja que la aplicación decida cómo proceder, por ejemplo, volver a enviar las transacciones fallidas. El mejor método para esperar las transacciones pendientes es consultar la marca de tiempo del ledger y asegurarse de que haya transcurrido al menos el tiempo máximo de espera desde el último envío de transacción. Desde ahí, valida con mempool que todas las transacciones desde la última transacción confirmada conocida estén confirmadas o ya no existan en el mempool. Esto se puede hacer consultando la API REST para transacciones de una cuenta específica, especificando el número de secuencia que se está evaluando y estableciendo el límite en 1. Una vez que estas comprobaciones estén completas, el número de transacción local puede ser resincronizado.
+
+Estos pasos de manejo de fallos son críticos por las siguientes razones:
+
+- Mempool no elimina inmediatamente las transacciones expiradas.
+- Una nueva transacción no puede sobrescribir una existente, incluso si está expirada.
+- El consenso, es decir, la marca de tiempo del ledger, dicta las expiraciones; el nodo local solo expirará después de ver una marca de tiempo confirmada posterior al tiempo de expiración de la transacción y que se haya realizado una recolección de basura.
+
+### Gestión de Transacciones
+
+Una vez que una transacción ha sido enviada, pasa por una variedad de pasos:
+
+1. Envío a un endpoint REST.
+2. Validación previa a la ejecución en el Mempool durante el envío.
+3. Transmisión de Mempool a Mempool con validación previa a la ejecución en cada nodo upstream.
+4. Inclusión en una propuesta de consenso.
+5. Una validación previa a la ejecución más.
+6. Ejecución y confirmación en almacenamiento.
+
+Hay muchos posibles casos de fallo que deben considerarse:
+
+- Fallo durante el envío de la transacción (1 y 2):
+  - Visibilidad: La aplicación recibirá un error ya sea de que la red no está disponible o que la transacción falló la validación previa a la ejecución.
+  - Si el error está relacionado con disponibilidad o números de secuencia duplicados, espera hasta que el acceso esté disponible y el número de secuencia se haya resincronizado.
+  - Los fallos de validación previa a la ejecución actualmente están fuera de alcance, fuera de los relacionados con números de secuencia duplicados; los problemas de cuenta probablemente estén relacionados con una clave inválida para la cuenta o la cuenta no tiene fondos suficientes para gas.
+- Fallo entre el envío y la ejecución (3, 4 y 5):
+  - Visibilidad: Solo se conoce esperando hasta que la transacción haya expirado.
+  - Estos son iguales a otros errores de validación previa a la ejecución debido a cambios en la cuenta a medida que se ejecutan transacciones anteriores. Probablemente sean números de secuencia duplicados o la cuenta no tiene fondos suficientes para gas.
+- Fallo durante la ejecución (6):
+  - Visibilidad: Estos se confirman en la blockchain.
+  - Estos errores ocurren como resultado de problemas de estado on-chain, tienden a ser específicos de la aplicación, como una subasta donde una nueva oferta podría no ser mayor que la oferta actual.
+
+### Workers e Identidad
+
+Usando el framework anterior, una sola cuenta puede enviar hasta 100 transacciones desde el inicio de un bloque hasta el final de un bloque. Suponiendo que las 100 transacciones se consumen dentro de 1 bloque, tomará un poco de tiempo para que los siguientes 100 espacios estén disponibles. Esto se debe a los retrasos de la red y al pipeline de validadores en varias etapas.
+
+Para aprovechar completamente la blockchain para un rendimiento masivo, usar una sola cuenta de usuario no es suficiente. En su lugar, Aptos soporta el concepto de cuentas worker que pueden compartir la responsabilidad de enviar trabajo a través de una cuenta compartida, también conocida como cuenta de recurso.
+
+En este modelo, cada worker tiene acceso al `SignerCap` de la cuenta compartida, lo que les permite suplantar la cuenta compartida o generar el `signer` para la cuenta compartida. Al obtener el `signer`, la transacción puede ejecutar la lógica que está restringida por el firmante de la cuenta compartida.
+
+Otro modelo, si es viable, es desacoplar el `signer` completamente de los permisos y hacer una capacidad específica de la aplicación. Entonces esta capacidad puede ser dada a cada worker para que operen sobre la infraestructura compartida.
+
+Ten en cuenta que la paralelización en la infraestructura compartida puede estar limitada si alguna transacción tiene conflictos de lectura o escritura. Esto no impedirá que múltiples transacciones se ejecuten dentro de un bloque, pero puede impactar el rendimiento máximo de la blockchain.

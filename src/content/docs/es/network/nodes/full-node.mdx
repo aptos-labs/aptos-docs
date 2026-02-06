@@ -1,0 +1,282 @@
+---
+title: "Ejecutar un Nodo Completo Público (PFN) – Guía de Despliegue"
+description: "Aprende a desplegar y operar un nodo completo público (PFN) en Aptos: configuración, monitoreo, mantenimiento y solución de problemas."
+sidebar:
+  label: "Nodo Completo (PFN)"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Puedes ejecutar tu propio nodo completo público (PFN) para sincronizar el estado de la blockchain de Aptos y mantenerte actualizado. Los PFN replican todo el estado de la blockchain sincronizándose desde otros VFN y PFN de Aptos. Los PFN pueden ser ejecutados por cualquiera. Esta sección explica cómo desplegar un PFN y conectarse a una red de Aptos. Puedes aprender más sobre los diferentes tipos de nodos en la sección [Análisis Profundo de Blockchain](/es/network/blockchain).
+
+<Aside type="note">
+  **Conexión predeterminada a mainnet**<br />
+  Si sigues la configuración predeterminada en este documento, entonces tu PFN se conectará a la mainnet de Aptos. Para conectarse
+  a una red diferente de Aptos, como devnet o testnet, asegúrate de tener la etiqueta correcta de imagen docker, o la rama de código
+  fuente correcta si compilas el binario directamente.
+
+  Puedes encontrar los archivos genesis y waypoint para todas las redes, aquí ➜ [https://github.com/aptos-labs/aptos-networks](https://github.com/aptos-labs/aptos-networks).
+</Aside>
+
+## ¿Por qué ejecutar un Nodo Completo Público?
+
+Ejecutar tu propio PFN ofrece varios beneficios:
+
+### **Acceso Directo a Datos**
+
+- Acceso directo y confiable a los datos de la blockchain
+- Sin dependencia de servicios de terceros para consultas
+- Capacidad de consultar datos históricos completos
+
+### **Mejor Rendimiento**
+
+- Latencia reducida para aplicaciones que interactúan frecuentemente con la blockchain
+- Control sobre la configuración y optimización del nodo
+- Capacidad de procesar consultas sin límites de tasa externos
+
+### **Contribución a la Red**
+
+- Ayuda a descentralizar la red proporcionando más puntos de acceso
+- Mejora la resiliencia general de la red
+- Apoya la misión de descentralización de Aptos
+
+### **Desarrollo y Pruebas**
+
+- Entorno confiable para desarrollo de aplicaciones
+- Capacidad de probar contra datos de blockchain reales
+- Útil para servicios de indexación personalizados
+
+## Tipos de Despliegue
+
+Puedes desplegar tu PFN usando varios métodos:
+
+### **Docker (Recomendado)**
+
+- Fácil de configurar y mantener
+- Imágenes pre-construidas disponibles
+- Aislamiento y gestión de dependencias automatizada
+
+### **Kubernetes**
+
+- Escalable y apto para producción
+- Gestión automatizada y recuperación ante fallos
+- Ideal para operaciones empresariales
+
+### **Código Fuente**
+
+- Control total sobre la compilación y configuración
+- Útil para desarrollo y personalización
+- Requiere más experiencia técnica
+
+### **Servicios en la Nube**
+
+- AWS, GCP, Azure y otros proveedores
+- Infraestructura gestionada
+- Escalabilidad automática disponible
+
+## Requisitos del Sistema
+
+### **Requisitos Mínimos**
+
+- **CPU**: 4 núcleos
+- **RAM**: 8GB
+- **Almacenamiento**: 300GB SSD
+- **Red**: Conexión estable a internet con 100Mbps+
+
+### **Requisitos Recomendados**
+
+- **CPU**: 8+ núcleos
+- **RAM**: 16GB+
+- **Almacenamiento**: 1TB+ SSD NVMe
+- **Red**: 1Gbps+ conexión dedicada
+
+### **Requisitos de Red**
+
+- Puerto 6180: Para sincronización de nodos (debe estar abierto)
+- Puerto 8080: Para API REST (opcional, para acceso público)
+- Puerto 9101: Para métricas (opcional, para monitoreo)
+
+## Configuración Básica
+
+### **1. Preparar el Entorno**
+
+```bash
+# Crear directorio para el nodo
+mkdir aptos-fullnode
+cd aptos-fullnode
+
+# Crear subdirectorios necesarios
+mkdir config data
+```
+
+### **2. Descargar Archivos de Configuración**
+
+```bash
+# Descargar configuración de mainnet
+wget https://raw.githubusercontent.com/aptos-labs/aptos-networks/main/mainnet/validator.yaml -O config/validator.yaml
+wget https://raw.githubusercontent.com/aptos-labs/aptos-networks/main/mainnet/genesis.blob -O config/genesis.blob
+wget https://raw.githubusercontent.com/aptos-labs/aptos-networks/main/mainnet/waypoint.txt -O config/waypoint.txt
+```
+
+### **3. Configurar Docker Compose**
+
+```yaml filename="docker-compose.yml"
+version: "3.8"
+services:
+  fullnode:
+    image: "aptoslab/validator:mainnet"
+    restart: unless-stopped
+    ports:
+      - "6180:6180"
+      - "8080:8080"
+      - "9101:9101"
+    volumes:
+      - ./config:/opt/aptos/etc
+      - ./data:/opt/aptos/data
+    command: ["/usr/local/bin/aptos-node", "-f", "/opt/aptos/etc/validator.yaml"]
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
+```
+
+### **4. Iniciar el Nodo**
+
+```bash
+# Iniciar con Docker Compose
+docker-compose up -d
+
+# Verificar que esté ejecutándose
+docker-compose ps
+```
+
+## Monitoreo y Mantenimiento
+
+### **Verificar Estado del Nodo**
+
+```bash
+# Verificar estado de sincronización
+curl http://localhost:8080/v1
+
+# Verificar información del nodo
+curl http://localhost:8080/v1/-/healthy
+```
+
+### **Monitorear Logs**
+
+```bash
+# Ver logs en tiempo real
+docker-compose logs -f fullnode
+
+# Ver logs recientes
+docker-compose logs --tail=100 fullnode
+```
+
+### **Métricas y Monitoreo**
+
+```bash
+# Acceder a métricas Prometheus
+curl http://localhost:9101/metrics
+
+# Verificar progreso de sincronización
+curl http://localhost:9101/metrics | grep aptos_state_sync_version
+```
+
+## Configuración Avanzada
+
+### **Configuración de Red Personalizada**
+
+Para conectar a testnet o devnet, modifica la configuración:
+
+```yaml filename="validator.yaml"
+# Para testnet
+base:
+  chain_id: 2
+  data_dir: "/opt/aptos/data"
+  waypoint:
+    from_file: "/opt/aptos/etc/waypoint.txt"
+
+# Configuración de red específica...
+```
+
+### **Optimización de Rendimiento**
+
+```yaml filename="validator.yaml"
+storage:
+  enable_indexer: true
+  rocksdb_configs:
+    max_open_files: 10000
+    max_total_wal_size: 1073741824
+
+state_sync:
+  continuous_syncing_mode: apply_transaction_outputs
+```
+
+### **Configuración de Firewall**
+
+```bash
+# Permitir tráfico necesario
+sudo ufw allow 6180/tcp
+sudo ufw allow 8080/tcp
+sudo ufw allow 9101/tcp
+```
+
+## Solución de Problemas
+
+### **Problemas Comunes**
+
+1. **Sincronización Lenta**
+   - Verificar conexión de red
+   - Aumentar recursos de CPU/RAM
+   - Verificar espacio en disco
+
+2. **Errores de Conexión**
+   - Verificar configuración de firewall
+   - Verificar archivos genesis/waypoint
+   - Verificar configuración de red
+
+3. **Alto Uso de Recursos**
+   - Optimizar configuración de RocksDB
+   - Aumentar memoria disponible
+   - Usar almacenamiento SSD más rápido
+
+### **Comandos de Diagnóstico**
+
+```bash
+# Verificar uso de recursos
+docker stats
+
+# Verificar conectividad de red
+telnet <peer-ip> 6180
+
+# Verificar archivos de configuración
+docker-compose exec fullnode cat /opt/aptos/etc/validator.yaml
+```
+
+## Actualizaciones
+
+### **Actualizar el Nodo**
+
+```bash
+# Parar el nodo
+docker-compose down
+
+# Actualizar imagen
+docker-compose pull
+
+# Reiniciar con nueva imagen
+docker-compose up -d
+```
+
+### **Respaldo de Datos**
+
+```bash
+# Crear respaldo de datos
+tar -czf aptos-backup-$(date +%Y%m%d).tar.gz data/
+
+# Restaurar desde respaldo (si es necesario)
+tar -xzf aptos-backup-20240101.tar.gz
+```
+
+Para guías de despliegue más detalladas y específicas por plataforma, consulta las secciones de documentación especializadas.

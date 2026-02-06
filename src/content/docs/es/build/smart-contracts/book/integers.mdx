@@ -1,0 +1,243 @@
+---
+title: "Enteros"
+description: "Aprende sobre los tipos enteros en el lenguaje de programación Move para el desarrollo de contratos inteligentes en Aptos."
+sidebar:
+  label: "Enteros"
+---
+
+Move soporta seis tipos de enteros sin signo: `u8`, `u16`, `u32`, `u64`, `u128`, y `u256`. Los valores de estos tipos van desde 0 hasta un máximo que depende del tamaño del tipo.
+
+| Tipo                                 | Rango de Valores        |
+| ------------------------------------ | ----------------------- |
+| Entero sin signo de 8 bits, `u8`     | 0 a 2<sup>8</sup> - 1   |
+| Entero sin signo de 16 bits, `u16`   | 0 a 2<sup>16</sup> - 1  |
+| Entero sin signo de 32 bits, `u32`   | 0 a 2<sup>32</sup> - 1  |
+| Entero sin signo de 64 bits, `u64`   | 0 a 2<sup>64</sup> - 1  |
+| Entero sin signo de 128 bits, `u128` | 0 a 2<sup>128</sup> - 1 |
+| Entero sin signo de 256 bits, `u256` | 0 a 2<sup>256</sup> - 1 |
+
+## Literales
+
+Los valores literales para estos tipos se especifican como una secuencia de dígitos (por ejemplo, `112`) o como literales hexadecimales, por ejemplo, `0xFF`. El tipo del literal puede agregarse opcionalmente como sufijo, por ejemplo, `112u8`. Si no se especifica el tipo, el compilador intentará inferir el tipo del contexto donde se usa el literal. Si el tipo no se puede inferir, se asume que es `u64`.
+
+Los literales numéricos pueden separarse con guiones bajos para agrupación y legibilidad. (por ejemplo, `1_234_5678`, `1_000u128`, `0xAB_CD_12_35`).
+
+Si un literal es demasiado grande para su rango de tamaño especificado (o inferido), se reporta un error.
+
+### Ejemplos
+
+```move
+script {
+  fun example() {
+    // literales con anotaciones explícitas;
+    let explicit_u8 = 1u8;
+    let explicit_u16 = 1u16;
+    let explicit_u32 = 1u32;
+    let explicit_u64 = 2u64;
+    let explicit_u128 = 3u128;
+    let explicit_u256 = 1u256;
+    let explicit_u64_underscored = 154_322_973u64;
+
+    // literales con inferencia simple
+    let simple_u8: u8 = 1;
+    let simple_u16: u16 = 1;
+    let simple_u32: u32 = 1;
+    let simple_u64: u64 = 2;
+    let simple_u128: u128 = 3;
+    let simple_u256: u256 = 1;
+
+    // literales con inferencia más compleja
+    let complex_u8 = 1; // inferido: u8
+    // el argumento derecho de shift debe ser u8
+    let _unused = 10 << complex_u8;
+
+    let x: u8 = 38;
+    let complex_u8 = 2; // inferido: u8
+    // los argumentos de `+` deben tener el mismo tipo
+    let _unused = x + complex_u8;
+
+    let complex_u128 = 133_876; // inferido: u128
+    // inferido desde el tipo de argumento de función
+    function_that_takes_u128(complex_u128);
+
+    // los literales pueden escribirse en hexadecimal
+    let hex_u8: u8 = 0x1;
+    let hex_u16: u16 = 0x1BAE;
+    let hex_u32: u32 = 0xDEAD80;
+    let hex_u64: u64 = 0xCAFE;
+    let hex_u128: u128 = 0xDEADBEEF;
+    let hex_u256: u256 = 0x1123_456A_BCDE_F;
+  }
+}
+```
+
+## Operaciones
+
+### Aritméticas
+
+Cada uno de estos tipos soporta el mismo conjunto de operaciones aritméticas verificadas. Para todas estas operaciones, ambos argumentos (los operandos del lado izquierdo y derecho) _deben_ ser del mismo tipo. Si necesitas operar sobre valores de diferentes tipos, primero deberás realizar un [cast](#casting). De manera similar, si esperas que el resultado de la operación sea demasiado grande para el tipo entero, realiza un [cast](#casting) a un tamaño mayor antes de realizar la operación.
+
+Todas las operaciones aritméticas abortan en lugar de comportarse de una manera que los enteros matemáticos no harían (por ejemplo, desbordamiento, subdesbordamiento, división por cero).
+
+| Sintaxis | Operación         | Aborta Si                                            |
+| -------- | ----------------- | ---------------------------------------------------- |
+| `+`      | suma              | El resultado es demasiado grande para el tipo entero |
+| `-`      | resta             | El resultado es menor que cero                       |
+| `*`      | multiplicación    | El resultado es demasiado grande para el tipo entero |
+| `%`      | división modular  | El divisor es `0`                                    |
+| `/`      | división truncada | El divisor es `0`                                    |
+
+### Bitwise
+
+Los tipos enteros soportan las siguientes operaciones bitwise que tratan cada número como una serie de bits individuales, ya sea 0 o 1, en lugar de como valores enteros numéricos.
+
+Las operaciones bitwise no abortan.
+
+| Sintaxis | Operación   | Descripción                                             |
+| -------- | ----------- | ------------------------------------------------------- |
+| `&`      | and bitwise | Realiza un and booleano para cada bit en pares          |
+| `\|`     | or bitwise  | Realiza un or booleano para cada bit en pares           |
+| `^`      | xor bitwise | Realiza un or exclusivo booleano para cada bit en pares |
+
+### Desplazamientos de Bits
+
+Los tipos enteros soportan las siguientes operaciones de desplazamiento de bits. Pero a diferencia de las otras operaciones, el operando del lado derecho (cuánto desplazar) debe _siempre_ ser un `u8` y no necesita coincidir con el tipo entero del lado izquierdo.
+
+Las operaciones de desplazamiento de bits no abortan.
+
+| Sintaxis | Operación                | Descripción                                                     |
+| -------- | ------------------------ | --------------------------------------------------------------- |
+| `<<`     | desplazamiento izquierdo | Desplaza los bits hacia la izquierda por el número especificado |
+| `>>`     | desplazamiento derecho   | Desplaza los bits hacia la derecha por el número especificado   |
+
+### Comparaciones
+
+Los tipos enteros soportan las siguientes operaciones de comparación. El resultado de una comparación es siempre de tipo `bool`.
+
+| Sintaxis | Operación         |
+| -------- | ----------------- |
+| `<`      | menor que         |
+| `>`      | mayor que         |
+| `<=`     | menor o igual que |
+| `>=`     | mayor o igual que |
+
+### Igualdad
+
+Al igual que todos los tipos con [`drop`](/es/build/smart-contracts/book/abilities), todos los tipos enteros soportan las operaciones de [igualdad](/es/build/smart-contracts/book/equality) `==` y `!=`.
+
+## Casting
+
+Los tipos enteros de una tamaño pueden ser convertidos a tipos enteros de otro tamaño. Los enteros son los únicos tipos en Move que soportan casting.
+
+Los casts no truncan. Los casts abortarán si el resultado es demasiado grande para el tipo especificado.
+
+| Sintaxis   | Operación                                  | Aborta Si                                         |
+| ---------- | ------------------------------------------ | ------------------------------------------------- |
+| `(e as T)` | Convierte el entero `e` al tipo entero `T` | `e` es demasiado grande para representar como `T` |
+
+Aquí, el tipo `T` debe ser uno de `u8`, `u16`, `u32`, `u64`, `u128`, o `u256`.
+
+Por ejemplo:
+
+```move
+script {
+  fun example() {
+    let x: u8 = 1;
+    let y: u64 = 2;
+    let z = (x as u64) + y; // x se convierte a u64 antes de la suma
+  }
+}
+```
+
+## Propiedad
+
+Al igual que con los otros valores escalares integrados en el lenguaje, los valores enteros son implícitamente copiables, lo que significa que se pueden copiar sin una instrucción explícita como [`copy`](/es/build/smart-contracts/book/variables#move-and-copy).
+
+## Ejemplos Prácticos
+
+### Operaciones Básicas
+
+```move
+fun arithmetic_examples(): u64 {
+    let a: u64 = 10;
+    let b: u64 = 3;
+    
+    let sum = a + b;        // 13
+    let diff = a - b;       // 7
+    let product = a * b;    // 30
+    let quotient = a / b;   // 3 (división truncada)
+    let remainder = a % b;  // 1
+    
+    sum
+}
+```
+
+### Operaciones Bitwise
+
+```move
+fun bitwise_examples(): u8 {
+    let a: u8 = 0b1010; // 10 en decimal
+    let b: u8 = 0b1100; // 12 en decimal
+    
+    let and_result = a & b;  // 0b1000 = 8
+    let or_result = a | b;   // 0b1110 = 14
+    let xor_result = a ^ b;  // 0b0110 = 6
+    
+    and_result
+}
+```
+
+### Casting y Verificación de Desbordamiento
+
+```move
+fun safe_casting_example(small: u8): u64 {
+    // Cast seguro: u8 siempre cabe en u64
+    let large = (small as u64);
+    
+    // Para operaciones que podrían desbordar, cast primero
+    let result = large * 1000; // Seguro porque usamos u64
+    
+    result
+}
+
+fun checked_downcast_example(large: u64): u8 {
+    // Verificar antes de cast para evitar abort
+    assert!(large <= 255, 1); // u8 máximo es 255
+    (large as u8)
+}
+```
+
+### Constantes
+
+```move
+module math_constants {
+    const MAX_U8: u8 = 255;
+    const MAX_U64: u64 = 18_446_744_073_709_551_615;
+    const SECONDS_PER_DAY: u64 = 24 * 60 * 60;
+    
+    public fun get_max_u8(): u8 { MAX_U8 }
+}
+```
+
+## Buenas Prácticas
+
+1. **Usa el tipo más pequeño posible**: Para eficiencia de almacenamiento, usa el tipo entero más pequeño que pueda contener tus valores.
+
+2. **Verifica desbordamientos**: Para operaciones que podrían desbordar, considera usar tipos más grandes o verificaciones explícitas.
+
+3. **Documentar rangos**: Documenta los rangos esperados de tus valores enteros:
+
+```move
+/// Establece la edad del usuario (debe estar entre 0 y 150)
+public fun set_age(age: u8) {
+    assert!(age <= 150, E_INVALID_AGE);
+    // ...
+}
+```
+
+4. **Usar constantes para valores mágicos**: Define constantes con nombres descriptivos en lugar de usar números literales:
+
+```move
+const MIN_STAKE_AMOUNT: u64 = 1000;
+const MAX_VALIDATORS: u64 = 100;
+```

@@ -1,0 +1,53 @@
+---
+title: "Obtener NFTs Poseídos por una Cuenta"
+description: "Consulta NFTs poseídos por una cuenta usando la API GraphQL con detalles completos de tokens, metadatos de colección e información de propiedad"
+sidebar:
+  label: "Obtener NFTs"
+---
+
+import { GraphQLEditor } from '~/components/react/GraphQLEditor';
+
+import { Aside } from '@astrojs/starlight/components';
+
+`GetAccountNfts` recupera una lista de NFTs poseídos por una dirección de cuenta especificada. Esta consulta proporciona detalles completos sobre cada token, incluyendo sus detalles de colección, descripción e identificadores únicos. Es ideal para plataformas que necesitan mostrar los portafolios de NFT de usuarios o proporcionar insights sobre las tenencias del mercado de NFT.
+
+<Aside type="note">
+  ¡Pruébalo tú mismo! Puedes personalizar las variables en la parte inferior del editor.
+</Aside>
+
+<GraphQLEditor
+  query={`query GetAccountNfts($address: String) {
+  current_token_ownerships_v2(
+    where: { owner_address: { _eq: $address }, amount: { _gt: "0" } }
+  ) {
+    current_token_data {
+      collection_id
+      largest_property_version_v1
+      current_collection {
+        collection_id
+        collection_name
+        description
+        creator_address
+        uri
+        __typename
+      }
+      description
+      token_name
+      token_data_id
+      token_standard
+      token_uri
+      __typename
+    }
+    owner_address
+    amount
+    __typename
+  }
+}`}
+  variables={`{
+  "address": "0x8824ebb6e0d60656f6d4d5bbc408805d9ca6b984aad78b16f42b1dae545d6762"
+}`}
+/>
+
+#### Variables:
+
+- `$address`: **String** - La dirección de cuenta de Aptos para la cual quieres consultar datos de NFT. Ej. `"0x8824ebb6e0d60656f6d4d5bbc408805d9ca6b984aad78b16f42b1dae545d6762"`

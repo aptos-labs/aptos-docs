@@ -1,0 +1,154 @@
+---
+title: "API GraphQL"
+description: "Datos de actividad de marketplace NFT en tiempo real vía API GraphQL con consultas para listings, ofertas, y eventos de marketplace a través del ecosistema Aptos"
+sidebar:
+  label: "API GraphQL"
+---
+
+import { GraphQLEditor } from '~/components/react/GraphQLEditor';
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="note">
+  La API GraphQL proporciona acceso en tiempo real a la actividad de marketplace NFT a través del ecosistema Aptos.
+</Aside>
+
+## Endpoints
+
+- **Consola Hasura:** [Explorador de API](https://cloud.hasura.io/public/graphiql?endpoint=https://api.mainnet.aptoslabs.com/nft-aggregator/v1/graphql)
+- **Endpoint de Mainnet:**\
+  `https://api.mainnet.aptoslabs.com/nft-aggregator/v1/graphql`
+
+## Esquema
+
+La API sigue las convenciones estándar de GraphQL.
+
+Puedes explorar todas las consultas y tipos disponibles usando el Explorador de API enlazado arriba.
+
+Algunos tipos clave:
+
+- `current_nft_marketplace_listings`: Obtener listings activos
+- `current_nft_marketplace_token_offers`: Ver ofertas hechas en tokens específicos
+- `current_nft_marketplace_collection_offers`: Rastrear ofertas hechas a nivel de colección
+- `nft_marketplace_activities`: Monitorear todas las actividades de marketplace
+
+➡️ [Referencia de Esquema Completo](/es/build/indexer/nft-aggregator/nft-aggregator-table)
+
+## Consultas de Ejemplo
+
+### Obtener Listings Activos con Metadata de Token
+
+Recuperar **listings NFT activos** enriquecidos con metadata de token.
+
+<Aside type="note">
+  ¡Pruébalo tú mismo! Ajusta filtros como `marketplace`, `limit`, y ordenamiento para explorar más resultados.
+</Aside>
+
+<GraphQLEditor
+  query={`query ActiveListingsWithMetadata {
+  current_nft_marketplace_listings(
+    limit: 10
+    where: { is_deleted: { _eq: false } }
+    order_by: { last_transaction_timestamp: desc }
+  ) {
+    listing_id
+    price
+    marketplace
+    seller
+    last_transaction_version
+    last_transaction_timestamp
+    token_data_id
+    current_token_data {
+      token_name
+      token_uri
+      description
+      token_properties
+      token_standard
+      supply
+      maximum
+      collection_id
+    }
+  }
+}`}
+  endpoint="https://api.mainnet.aptoslabs.com/nft-aggregator-staging/v1/graphql"
+/>
+
+_No se requieren variables para esta consulta por defecto, pero puedes ajustar el filtro `where` directamente dentro del editor._
+
+***
+
+### Obtener Ofertas de Colección con Metadata de Colección
+
+Recuperar **ofertas activas a nivel de colección** junto con metadata detallada de colección.
+
+<Aside type="note">
+  ¡Pruébalo tú mismo! Ajusta el filtro de marketplace y paginación para explorar más ofertas.
+</Aside>
+
+<GraphQLEditor
+  query={`query CollectionOffersWithMetadata($marketplace: String!) {
+  current_nft_marketplace_collection_offers(
+    where: { is_deleted: { _eq: false }, marketplace: { _eq: $marketplace } }
+    limit: 2
+    order_by: { last_transaction_timestamp: desc }
+  ) {
+    collection_offer_id
+    collection_id
+    price
+    marketplace
+    buyer
+    last_transaction_timestamp
+    token_data_id
+    current_collection {
+      collection_id
+      collection_name
+      creator_address
+      current_supply
+      max_supply
+      description
+    }
+  }
+}`}
+  variables={`{
+  "marketplace": "wapal"
+}`}
+  endpoint="https://api.mainnet.aptoslabs.com/nft-aggregator-staging/v1/graphql"
+/>
+
+### Obtener Ofertas de Token con Metadata de Token
+
+Recuperar **ofertas activas específicas de token** junto con metadata detallada de token.
+
+<Aside type="note">
+  ¡Pruébalo tú mismo! Ajusta el token\_data\_id y otros filtros para explorar ofertas de tokens específicos.
+</Aside>
+
+<GraphQLEditor
+  query={`query TokenOffersWithMetadata($token_data_id: String!) {
+  current_nft_marketplace_token_offers(
+    where: {
+      is_deleted: { _eq: false }
+      token_data_id: { _eq: $token_data_id }
+    }
+    limit: 5
+    order_by: { last_transaction_timestamp: desc }
+  ) {
+    offer_id
+    token_data_id
+    price
+    marketplace
+    buyer
+    last_transaction_timestamp
+    current_token_datas {
+      token_name
+      token_uri
+      description
+      collection_id
+    }
+  }
+}`}
+  variables={`{
+  "token_data_id": "0x8142a7fde5039839509e81615e456413bac1c53a1d6c6447f2daf64e84665948"
+}`}
+  endpoint="https://api.mainnet.aptoslabs.com/nft-aggregator-staging/v1/graphql"
+/>

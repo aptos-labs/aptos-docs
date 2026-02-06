@@ -1,0 +1,396 @@
+---
+title: "Usando GCP"
+description: "Despliega un public fullnode (PFN) en Google Cloud Platform usando Terraform y Kubernetes con instrucciones completas de configuración, validación y monitoreo."
+sidebar:
+  label: "GCP"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Este tutorial explica cómo configurar y desplegar un PFN usando Google Cloud (GCP). Ejecutar un PFN en la nube
+usualmente proporciona mejor estabilidad y disponibilidad comparado con ejecutarlo en tu laptop.
+
+<Aside type="caution">
+  **¿No quieres conectarte a devnet?**<br />
+  Este tutorial por defecto despliega un PFN en la red `devnet` de Aptos. Para conectarte a otras redes
+  (ej., `mainnet` y `testnet`), reemplaza todas las instancias de `devnet` con el nombre de red apropiado.
+</Aside>
+
+## Prerrequisitos
+
+Puedes ejecutar los comandos en esta guía para desplegar tu PFN en Google Kubernetes Engine desde cualquier máquina que quieras, ej.
+una [VM en GCP](https://cloud.google.com/compute), [Google Cloud Shell](https://cloud.google.com/shell), o tu computadora personal.
+
+Los siguientes paquetes están pre-instalados con Cloud Shell. **Asegúrate de revisar** la
+[documentación sobre modo efímero](https://cloud.google.com/shell/docs/using-cloud-shell/#choose_ephemeral_mode) si
+eliges usar Cloud Shell. Sin embargo, si estás ejecutando la instalación desde tu laptop u otra máquina,
+necesitas instalar:
+
+- Terraform 1.3.6: [https://www.terraform.io/downloads.html](https://www.terraform.io/downloads.html)
+- Kubernetes CLI: [https://kubernetes.io/docs/tasks/tools/](https://kubernetes.io/docs/tasks/tools/)
+- Google Cloud CLI: [https://cloud.google.com/sdk/docs/install-sdk](https://cloud.google.com/sdk/docs/install-sdk)
+
+Después de que hayas instalado el CLI gcloud, [inicia sesión en GCP usando gcloud](https://cloud.google.com/sdk/gcloud/reference/auth/login):
+
+```shellscript filename="Terminal"
+gcloud auth login --update-adc
+```
+
+<Aside type="note">
+  **¿Ya tienes una cuenta GCP configurada?**<br />
+  Si ya tienes una cuenta GCP configurada, salta a [Comenzar](#getting-started). Si no tienes una cuenta GCP, entonces sigue
+  las secciones abajo para crear y configurar tu cuenta GCP.
+</Aside>
+
+### Configuración GCP
+
+#### Regístrate para la prueba gratuita de 90 días
+
+Google Cloud ofrece una [prueba gratuita de 90 días, $300 para cada nuevo usuario](https://cloud.google.com/free/docs/gcp-free-tier/#free-trial). Los $300 se dan como créditos a tu
+cuenta y puedes usarlos para tener una idea de los productos de Google Cloud. Algunas características de GCP como GPUs y servidores Windows
+no están disponibles en la prueba gratuita. Regístrate para los créditos, [aquí](https://cloud.google.com/free).
+
+#### Crear un nuevo proyecto GCP
+
+- Crea un nuevo proyecto en la Consola GCP o usando el comando gcloud del CLI de Google Cloud. Asegúrate de
+  familiarizarte con la [jerarquía de recursos en GCP](https://cloud.google.com/resource-manager/docs/cloud-platform-resource-hierarchy).
+- [Sigue estas instrucciones para configurar un nuevo proyecto](https://cloud.google.com/resource-manager/docs/creating-managing-projects#creating_a_project).
+
+#### Habilitar facturación, actualizar tu cuenta
+
+Aún podrás usar los créditos de prueba gratuita, pero habilitar facturación te permite tener acceso completo a todas las
+características de GCP y no experimentar ninguna interrupción a tus nodos. [Actualiza tu cuenta siguiendo los pasos descritos aquí.](https://cloud.google.com/free/docs/gcp-free-tier#how-to-upgrade)
+
+#### Recursos adicionales de GCP
+
+Esto debería ser suficiente para que tu configuración GCP esté lista para comenzar a desplegar tu PFN. Pero si eres nuevo en GCP, podrías querer
+revisar algunas de sus [guías](https://cloud.google.com/docs/get-started/quickstarts) y [Google Cloud Skills Boost](https://www.cloudskillsboost.google/catalog).
+
+## Comenzar
+
+<Aside type="note">
+  **Antes de proceder**<br />
+  De aquí en adelante, esta guía asume que ya has configurado tu cuenta GCP, y has creado un nuevo proyecto para
+  desplegar un PFN de Aptos.
+</Aside>
+
+Puedes desplegar un PFN en GCP usando el módulo Terraform de Aptos.
+
+1. Crea un directorio de trabajo para tu configuración.
+
+   - Elige un nombre de workspace ej. `devnet`. **Nota**: Esto define el nombre del workspace de Terraform, que a su vez se usa
+     para formar nombres de recursos. Siéntete libre de elegir un nombre diferente si te estás conectando a una red diferente.
+
+   ```shellscript filename="Terminal"
+   export WORKSPACE=devnet
+   ```
+
+   - Crea un directorio para el workspace
+
+   ```shellscript filename="Terminal"
+   mkdir -p ~/$WORKSPACE
+   ```
+
+2. Crea un bucket de almacenamiento para almacenar el estado de Terraform en Google Cloud Storage. Usa la consola o este comando gcs
+   para crear el bucket. El nombre del bucket debe ser único. Ver la documentación de Google Cloud Storage,
+   [aquí](https://cloud.google.com/storage/docs/creating-buckets#prereq-cli).
+
+```shellscript filename="Terminal"
+gsutil mb gs://BUCKET_NAME
+# por ejemplo
+gsutil mb gs://<nombre-proyecto>-aptos-terraform-dev
+```
+
+3. Crea un archivo Terraform llamado `main.tf` en tu directorio de trabajo:
+
+```shellscript filename="Terminal"
+cd ~/$WORKSPACE
+touch main.tf
+```
+
+4. Modifica el archivo `main.tf` para configurar Terraform y crear un PFN desde el módulo Terraform.
+
+**Nota:** Si estás usando una versión diferente de Terraform, necesitarás usar el comando `tfenv` para cambiar la versión requerida.
+
+Puedes encontrar el tag de imagen Docker para `devnet` en el [Docker Hub de Aptos](https://hub.docker.com/r/aptoslabs/validator/tags?page=1\&ordering=last_updated\&name=devnet).
+
+<Aside type="caution">
+  **¿Quieres conectarte a una red diferente?**<br />
+  Si deseas conectarte a una red diferente que `devnet`, necesitarás encontrar el tag de imagen Docker
+  apropiado para esa red y reemplazar todas las referencias a él.
+</Aside>
+
+Contenido de ejemplo para `main.tf`:
+
+```terraform filename="main.tf"
+terraform {
+  required_version = "~> 1.3.6"
+  backend "gcs" {
+    bucket = "BUCKET_NAME" # nombre del bucket creado en el paso 2
+    prefix = "state/fullnode"
+  }
+}
+
+module "fullnode" {
+  # descargar módulo Terraform del repo aptos-labs/aptos-core
+  source        = "github.com/aptos-labs/aptos-core.git//terraform/fullnode/gcp?ref=main"
+  region        = "us-central1"  # Especificar la región
+  zone          = "c"            # Especificar el sufijo de zona
+  project       = "gcp-fullnode" # Especificar tu ID de proyecto GCP
+  fullnode_name = "BUCKET_NAME" #nombre del bucket creado en el paso 2
+  era           = 1              # incrementar número de era para limpiar la cadena
+  image_tag     = "devnet" # Especificar el tag de imagen docker
+}
+```
+
+5. Inicializa Terraform en el mismo directorio de tu archivo `main.tf`:
+
+```shellscript filename="Terminal"
+terraform init
+```
+
+Esto descargará todas las dependencias de Terraform en la carpeta `.terraform`.
+
+6. Crea un nuevo workspace de Terraform para aislar tus entornos:
+
+```shellscript filename="Terminal"
+terraform workspace new $WORKSPACE
+# Este comando listará todos los workspaces
+terraform workspace list
+```
+
+7. Aplica la configuración:
+
+```shellscript filename="Terminal"
+terraform apply
+```
+
+Esto puede tomar un tiempo en terminar (10 - 20 minutos), Terraform creará todos los recursos en tu cuenta de nube.
+
+## Validación
+
+Una vez que Terraform apply termine, puedes seguir esta sección para validar tu despliegue.
+
+1. Configura tu cliente Kubernetes para acceder al cluster que acabas de desplegar:
+
+```shellscript filename="Terminal"
+gcloud container clusters get-credentials aptos-$WORKSPACE --zone <nombre_zona_región> --project <nombre_proyecto>
+# por ejemplo:
+gcloud container clusters get-credentials aptos-devnet --zone us-central1-a --project aptos-fullnode
+```
+
+2. Verifica que tus pods PFN ahora estén ejecutándose (esto puede tomar unos minutos):
+
+```shellscript filename="Terminal"
+kubectl get pods -n aptos
+```
+
+Deberías ver esto:
+
+```shellscript filename="Terminal"
+NAME                       READY   STATUS    RESTARTS   AGE
+devnet0-aptos-fullnode-0   1/1     Running   0          56s
+```
+
+3. Obtén tu IP PFN:
+
+```shellscript filename="Terminal"
+kubectl get svc -o custom-columns=IP:status.loadBalancer.ingress -n aptos
+```
+
+Deberías ver algo como esto:
+
+```
+[map[ip:104.198.36.142]]
+```
+
+4. Verifica la API REST, asegúrate de que la versión del ledger esté aumentando:
+
+```shellscript filename="Terminal"
+curl http://<IP>/v1
+# Sintaxis de comando de ejemplo: curl http://104.198.36.142/v1
+```
+
+Deberías ver algo como esto:
+
+```json filename="Terminal"
+{
+  "chain_id": 25,
+  "epoch": "22",
+  "ledger_version": "9019844",
+  "oldest_ledger_version": "0",
+  "ledger_timestamp": "1661620200131348",
+  "node_role": "full_node",
+  "oldest_block_height": "0",
+  "block_height": "1825467"
+}
+```
+
+5. Para verificar la corrección de tu PFN, necesitarás:
+
+   - Configurar un mecanismo de port-forwarding directamente al pod de Aptos en una terminal ssh, y
+   - Probarlo en otra terminal ssh.
+
+   Sigue los pasos abajo:
+
+   - Configura el port-forwarding al pod aptos-fullnode. Usa `kubectl get pods -n aptos` para obtener el nombre del pod:
+
+     ```shellscript filename="Terminal"
+     kubectl port-forward -n aptos <nombre-pod> 9101:9101
+     # por ejemplo:
+     kubectl port-forward -n aptos devnet0-aptos-fullnode-0 9101:9101
+     ```
+
+   - Abre una nueva terminal ssh. Ejecuta las siguientes llamadas curl para verificar la corrección:
+
+     ```shellscript filename="Terminal"
+     curl -v http://0:9101/metrics 2> /dev/null | grep "aptos_state_sync_version{type=\"synced\"}"
+
+     curl -v http://0:9101/metrics 2> /dev/null | grep "aptos_connections{direction=\"outbound\""
+     ```
+
+   - Sal del port-forwarding cuando hayas terminado ingresando control-c en la terminal.
+
+## Identidad PFN y pares semilla
+
+### Identidad estática
+
+Si quieres configurar tu nodo con una identidad estática, primero ver el tutorial [Generar una Identidad PFN](/es/network/nodes/full-node/modify/network-identity-fullnode)
+para generar una identidad estática, y luego sigue las instrucciones abajo para configurar tu archivo Terraform.
+
+1. Genera una identidad estática para tu PFN siguiendo la guía: [Crear una identidad estática para un PFN](/es/network/nodes/full-node/modify/network-identity-fullnode#generate-a-static-identity).
+
+2. Modifica el `main.tf` para agregar entradas `fullnode_identity` en `fullnode_helm_values`. Esto configurará la identidad
+   para el PFN. Inserta los valores correctos para los atributos de identidad de tu PFN. Por ejemplo:
+
+```terraform filename="main.tf"
+module "fullnode" {
+  # descargar módulo Terraform del repo aptos-labs/aptos-core
+  source        = "github.com/aptos-labs/aptos-core.git//terraform/fullnode/gcp?ref=main"
+  region        = "us-central1"  # Especificar la región
+  zone          = "c"            # Especificar el sufijo de zona
+  project       = "gcp-fullnode" # Especificar tu nombre de proyecto GCP
+  era           = 1              # incrementar número de era para limpiar la cadena
+  image_tag     = "devnet"       # Especificar el tag de imagen docker a usar
+
+  fullnode_helm_values = {
+    chain = {
+      name = "devnet"
+    }
+    # crear fullnode desde esta configuración de identidad, por lo que siempre tendrá el mismo peer id y dirección
+    fullnode_identity = {
+      type = "from_config"
+      key = "B8BD811A91D8E6E0C6DAC991009F189337378760B55F3AD05580235325615C74"
+      peer_id = "ca3579457555c80fc7bb39964eb298c414fd60f81a2f8eedb0244ec07a26e575"
+    }
+  }
+}
+```
+
+3. Aplica los cambios de Terraform:
+
+```shellscript filename="Terminal"
+terraform apply
+```
+
+### Pares semilla
+
+Puedes agregar pares semilla para permitir que tu PFN se conecte a nodos específicos. Ver la guía
+[Personalizar Redes PFN](/es/network/nodes/full-node/modify/fullnode-network-connections) para más información.
+
+1. Obtén la información del par semilla.
+
+2. Modifica el `main.tf` para agregar los pares semilla en `fullnode_helm_values`. Esto configurará las semillas para el PFN. Por ejemplo:
+
+```terraform filename="main.tf"
+module "fullnode" {
+  # descargar módulo Terraform del repo aptos-labs/aptos-core
+  source        = "github.com/aptos-labs/aptos-core.git//terraform/fullnode/gcp?ref=main"
+  region        = "us-central1"  # Especificar la región
+  zone          = "c"            # Especificar el sufijo de zona
+  project       = "gcp-fullnode" # Especificar tu nombre de proyecto GCP
+  era           = 1              # incrementar número de era para limpiar la cadena
+  image_tag     = "dev_5b525691" # Especificar el tag de imagen docker a usar
+
+  fullnode_helm_values = {
+    # agregar una lista de pares como upstream
+    aptos_chains = {
+      devnet = {
+        seeds = {
+          "bb14af025d226288a3488b4433cf5cb54d6a710365a2d95ac6ffbd9b9198a86a" = {
+          addresses = ["/dns4/pfn0.node.devnet.aptoslabs.com/tcp/6182/noise-ik/bb14af025d226288a3488b4433cf5cb54d6a710365a2d95ac6ffbd9b9198a86a/handshake/0"]
+          role = "Upstream"
+          },
+          "7fe8523388084607cdf78ff40e3e717652173b436ae1809df4a5fcfc67f8fc61" = {
+          addresses = ["/dns4/pfn1.node.devnet.aptoslabs.com/tcp/6182/noise-ik/7fe8523388084607cdf78ff40e3e717652173b436ae1809df4a5fcfc67f8fc61/handshake/0"]
+          role = "Upstream"
+          },
+          "f6b135a59591677afc98168791551a0a476222516fdc55869d2b649c614d965b" = {
+          addresses = ["/dns4/pfn2.node.devnet.aptoslabs.com/tcp/6182/noise-ik/f6b135a59591677afc98168791551a0a476222516fdc55869d2b649c614d965b/handshake/0"]
+          role = "Upstream"
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+3. Aplica los cambios de Terraform:
+
+```shellscript filename="Terminal"
+terraform apply
+```
+
+## Verificar logging
+
+Para verificar los logs del pod, usa los siguientes comandos:
+
+```shellscript filename="Terminal"
+# Obtener una lista de los pods
+kubectl get pods -n aptos
+
+# Obtener logs del pod
+kubectl logs <nombre-pod> -n aptos
+# por ejemplo:
+kubectl logs devnet0-aptos-fullnode-0 -n aptos
+```
+
+Cuando uses GKE, los logs del cluster y pod aparecerán automáticamente en la consola de Google Cloud. Desde el menú de consola, elige `Kubernetes Engine`. Desde el menú lateral, elige `Workloads`. Verás todos los pods del cluster listados.
+
+![Captura de pantalla GKE Workloads](~/images/tutorial-gcp-logging1.png "Captura de pantalla GKE Workloads")
+
+El `devnet0-aptos-fullnode` es el pod que está ejecutando el contenedor aptos fullnode. Haz clic en el pod para ver detalles. Verás algunas métricas y otros detalles sobre el pod.
+
+![Captura de pantalla Pod GKE Workloads](~/images/tutorial-gcp-logging2.png "Captura de pantalla Pod GKE Workloads")
+
+Haz clic en la pestaña `LOGS` para ver los logs directamente del pod. Si hay errores en el pod, los verás aquí.
+
+![Captura de pantalla Logs Pod GKE Workloads](~/images/tutorial-gcp-logging3.png "Captura de pantalla Logs Pod GKE Workloads")
+
+Haz clic en el icono `abrir en nueva ventana` para ver los logs en el Explorador de Logs. Esta pantalla permite búsqueda avanzada en los logs.
+
+![Captura de pantalla Explorador Logs Pod GKE Workloads](~/images/tutorial-gcp-logging4.png "Captura de pantalla Explorador Logs Pod GKE Workloads")
+
+Otras perspectivas de logging están disponibles en el Dashboard de Logs
+
+![Captura de pantalla Dashboard Logs Pod GKE Workloads](~/images/tutorial-gcp-logging5.png "Captura de pantalla Dashboard Logs Pod GKE Workloads")
+
+[Características](https://cloud.google.com/logging/docs) adicionales están disponibles a través de [Cloud Logging](https://cloud.google.com/logging), incluyendo crear métricas basadas en logs, sinks de logging y buckets de log.
+
+## Verificar monitoreo
+
+Google cloud captura muchas métricas del cluster y las hace fácilmente visibles en la consola. Desde el menú de consola, elige `Kubernetes Engine`. Haz clic en el cluster al que aptos está desplegado. Haz clic en el enlace `Operations` en la parte superior derecha. Haz clic en la sub-pestaña `Metrics` para ver métricas específicas del cluster.
+
+![Captura de pantalla métricas Monitoreo GKE](~/images/tutorial-gcp-mon1.png "Captura de pantalla métricas Monitoreo GKE")
+
+Haz clic en el enlace `View in Cloud Monitoring` en la parte superior para ver el [dashboard](https://cloud.google.com/stackdriver/docs/solutions/gke/observing) GKE incorporado para el cluster.
+
+![Captura de pantalla dashboard Monitoreo GKE](~/images/tutorial-gcp-mon2.png "Captura de pantalla dashboard Monitoreo GKE")
+
+Google Cloud [Monitoring](https://cloud.google.com/monitoring) tiene muchas otras características para monitorear fácilmente el cluster y pods. Puedes configurar [verificaciones de tiempo de actividad](https://cloud.google.com/monitoring/uptime-checks/introduction) para los servicios y configurar [alertas](https://cloud.google.com/monitoring/alerts/using-alerting-ui) para cuando las métricas alcancen cierto [umbral](https://cloud.google.com/stackdriver/docs/solutions/slo-monitoring/sli-metrics/overview).
+
+<Aside type="note">
+  **Verifica tu PFN**<br />
+  Si quieres verificar que tu PFN esté ejecutándose correctamente, puedes seguir las instrucciones en la guía [Verificar un PFN](/es/network/nodes/full-node/verify-pfn).
+</Aside>

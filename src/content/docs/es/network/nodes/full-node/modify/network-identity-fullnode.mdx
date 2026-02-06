@@ -1,0 +1,235 @@
+---
+title: "Generar una Identidad PFN"
+description: "Aprende sobre identidades efímeras vs. estáticas para public fullnodes (PFN) y cómo generar identidades de red únicas para monitoreo y persistencia."
+sidebar:
+  label: "Identidad"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="danger">
+  Los validators y VFNs tienen sus identidades inicializadas cuando son creados por primera vez y sus identidades son de larga duración (inmutables).
+  Las identidades PFN son más efímeras y pueden regenerarse. Como tal, generar una identidad usando esta
+  guía **solo debería hacerse para PFNs**, y no para validators o VFNs.
+</Aside>
+
+## Identidades Efímeras vs. Estáticas
+
+Los public fullnodes (PFNs) automáticamente iniciarán con una identidad de red generada aleatoriamente (efímera) a menos que se proporcione una identidad estática. Esto funciona bien para
+PFNs regulares. Sin embargo, hay casos donde podrías querer generar y asignar una identidad de red estática a tu PFN (ej., para propósitos de monitoreo).
+
+<Aside type="caution">
+  Las identidades PFN deberían ser únicas a través de la red. Si estás ejecutando múltiples PFNs, asegúrate de generar una
+  identidad única para cada PFN. Intentar compartir la misma identidad a través de múltiples PFNs resultará en rendimiento de nodo
+  degradado.
+</Aside>
+
+### Identidad Efímera
+
+- Generada automáticamente al inicio del nodo. La misma identidad efímera se usa a través de reinicios si el archivo de clave de identidad ya existe.
+- Por defecto, el archivo de identidad se almacena en `/opt/aptos/data/db/ephemeral_identity_key`.
+
+### Identidad Estática
+
+Esto es útil cuando:
+
+- Deseas anunciar tu PFN como una semilla (es decir, para que otros PFNs de Aptos se conecten).
+- Deseas agregar tu PFN a una lista de permitidos de identidades conocidas en un PFN o VFN upstream.
+- Deseas fijar la identidad de tu PFN a través de reinicios y lanzamientos para que herramientas de telemetría y otros monitoreos puedan rastrear tu PFN a lo largo del tiempo.
+
+## Generar una identidad estática
+
+Para crear una identidad estática para tu PFN, primero necesitarás generar un par de clave privada y pública. Luego
+necesitarás derivar el `peer_id` de la clave pública, y usar el `peer_id` en tu archivo de configuración
+(ej., `fullnode.yaml`) para configurar la identidad de red estática para tu PFN.
+
+Los pasos abajo te guiarán a través del proceso de generar una identidad estática para tu PFN. Los pasos exactos dependen
+de si estás usando el código fuente `aptos-core` para ejecutar tu PFN, o Docker.
+
+### Usando el código fuente aptos-core
+
+Si usas el código fuente `aptos-core` para ejecutar tu PFN, sigue estos pasos:
+
+1. **Generar la clave privada**
+
+Primero, usa el [CLI de Aptos](/es/build/cli) (`aptos`) para producir una clave privada estática
+x25519 codificada en hex. Esta será la clave privada para tu identidad de red. Ejecuta el siguiente comando CLI `aptos`:
+
+```shellscript filename="Terminal"
+aptos key generate --key-type x25519 --output-file /path/to/private-key.txt
+```
+
+Este comando creará un archivo `private-key.txt` con la clave privada en él, y un archivo correspondiente
+`private-key.txt.pub` con la clave pública en él. Un ejemplo de archivo `private-key.txt` y
+archivo `private-key.txt.pub` se muestran abajo:
+
+```shellscript filename="Terminal"
+cat ~/private-key.txt
+C83110913CBE4583F820FABEB7514293624E46862FAE1FD339B923F0CACC647D%
+
+cat ~/private-key.txt.pub
+B881EA2C174D8211C123E5A91D86227DB116A44BB345A6E66874F83D8993F813%
+```
+
+2. **Recuperar la identidad del par**
+
+Siguiente, recupera la identidad del par de la clave pública usando el CLI `aptos`. La bandera `--host` en
+el comando proporcionará la información del host para generar una dirección de red para tu PFN. Ejecuta el siguiente comando
+(asegúrate de actualizar la bandera `--host` con tu información real del host):
+
+```shellscript filename="Terminal"
+aptos key extract-peer --host example.com:6180 \
+    --public-network-key-file private-key.txt.pub \
+    --output-file peer-info.yaml
+```
+
+Este comando generará la información de identidad pública para tu PFN a un archivo `peer-info.yaml`. Por ejemplo:
+
+```json
+{
+  "Result": {
+    "B881EA2C174D8211C123E5A91D86227DB116A44BB345A6E66874F83D8993F813": {
+      "addresses": [
+        "/dns/example.com/tcp/6180/noise-ik/0xB881EA2C174D8211C123E5A91D86227DB116A44BB345A6E66874F83D8993F813/handshake/0"
+      ],
+      "keys": [
+        "0xB881EA2C174D8211C123E5A91D86227DB116A44BB345A6E66874F83D8993F813"
+      ],
+      "role": "Upstream"
+    }
+  }
+}
+```
+
+En este ejemplo, `B881EA2C174D8211C123E5A91D86227DB116A44BB345A6E66874F83D8993F813` es el `peer_id`.
+
+3. **Iniciar un PFN con la identidad**
+
+Después de extraer la identidad del par de la clave pública, puedes iniciar tu PFN con la identidad usando la
+clave pública en el campo `peer_id` del archivo de configuración (ej., `fullnode.yaml`). Por ejemplo:
+
+```yaml filename="fullnode.yaml"
+full_node_networks:
+  - network_id: "public"
+discovery_method: "onchain"
+identity:
+  type: "from_config"
+  key: "<PRIVATE_KEY>"
+  peer_id: "<PEER_ID>"
+```
+
+En nuestro ejemplo (de arriba), el archivo de configuración (`fullnode.yaml`) ahora debería tener la siguiente información:
+
+```yaml filename="fullnode.yaml"
+full_node_networks:
+  - network_id: "public"
+    discovery_method: "onchain"
+    identity:
+      type: "from_config"
+      key: "C83110913CBE4583F820FABEB7514293624E46862FAE1FD339B923F0CACC647D"
+      peer_id: "B881EA2C174D8211C123E5A91D86227DB116A44BB345A6E66874F83D8993F813"
+```
+
+Iniciar tu PFN con esta configuración asignará a tu PFN la identidad de red estática que generaste.
+
+### Usando Docker
+
+Si usas Docker para ejecutar tu PFN, sigue estos pasos:
+
+1. **Preparar tus herramientas**
+
+Primero, `cd` al directorio para tu PFN local e inicia un contenedor Docker con las últimas herramientas, por ejemplo:
+
+```shellscript filename="Terminal"
+cd ~/my-full-node
+docker run -it aptoslabs/tools:devnet /bin/bash
+```
+
+2. **Generar la clave privada**
+
+Siguiente, sigue los pasos restantes desde dentro del contenedor Docker `aptoslabs/tools`.
+
+Abre una nueva terminal y `cd` al directorio donde iniciaste el contenedor Docker para tu PFN. Asegurándote
+de proporcionar la **ruta completa** a donde quieres que se almacene el archivo de clave privada, ejecuta el comando:
+
+```shellscript filename="Terminal"
+aptos key generate \
+    --key-type x25519 \
+    --output-file /path/to/private-key.txt
+```
+
+3. **Recuperar la identidad del par**
+
+Siguiente, recupera la identidad del par de la clave pública usando el CLI `aptos`. La bandera `--host` en
+el comando proporcionará la información del host para generar una dirección de red para tu PFN. Ejecuta el siguiente comando
+(asegúrate de actualizar la bandera `--host` con tu información real del host):
+
+```shellscript filename="Terminal"
+aptos key extract-peer --host example.com:6180 \
+    --public-network-key-file private-key.txt.pub \
+    --output-file peer-info.yaml
+```
+
+Este comando generará la información de identidad pública para tu PFN a un archivo `peer-info.yaml`. Por ejemplo:
+
+```json
+{
+  "Result": {
+    "B881EA2C174D8211C123E5A91D86227DB116A44BB345A6E66874F83D8993F813": {
+      "addresses": [
+        "/dns/example.com/tcp/6180/noise-ik/0xB881EA2C174D8211C123E5A91D86227DB116A44BB345A6E66874F83D8993F813/handshake/0"
+      ],
+      "keys": [
+        "0xB881EA2C174D8211C123E5A91D86227DB116A44BB345A6E66874F83D8993F813"
+      ],
+      "role": "Upstream"
+    }
+  }
+}
+```
+
+En este ejemplo, `B881EA2C174D8211C123E5A91D86227DB116A44BB345A6E66874F83D8993F813` es el `peer_id`.
+
+4. **Iniciar un PFN con la identidad**
+
+Después de extraer la identidad del par de la clave pública, puedes iniciar tu PFN con la identidad usando la
+clave pública en el campo `peer_id` del archivo de configuración (ej., `fullnode.yaml`). Por ejemplo:
+
+```yaml
+full_node_networks:
+  - network_id: "public"
+discovery_method: "onchain"
+identity:
+  type: "from_config"
+  key: "<PRIVATE_KEY>"
+  peer_id: "<PEER_ID>"
+```
+
+En nuestro ejemplo (de arriba), el archivo de configuración (`fullnode.yaml`) ahora debería tener la siguiente información:
+
+```yaml
+full_node_networks:
+  - network_id: "public"
+    discovery_method: "onchain"
+    identity:
+      type: "from_config"
+      key: "C83110913CBE4583F820FABEB7514293624E46862FAE1FD339B923F0CACC647D"
+      peer_id: "B881EA2C174D8211C123E5A91D86227DB116A44BB345A6E66874F83D8993F813"
+```
+
+Iniciar tu PFN con esta configuración asignará a tu PFN la identidad de red estática que generaste.
+
+## Verificar la identidad de tu nodo
+
+Si quieres verificar la identidad de tu nodo en tiempo de ejecución, hay varias formas de hacerlo. Dos de los métodos más simples
+son:
+
+- **Usando la API REST**: Puedes consultar el endpoint `/v1/info` de la [API REST](/es/build/apis/fullnode-rest-api) de tu nodo
+  para recuperar la información de identidad.
+- **Usando el Servicio de Inspección de Nodos**: Puedes consultar el endpoint `/identity_information` en el servicio de inspección de tu nodo
+  para recuperar la información de identidad de tu nodo. Puedes leer más [aquí](/es/network/nodes/measure/node-inspection-service#examine-identity-information).
+
+<Aside type="note">
+  Los nodos con múltiples tipos de conexión de red (ej., redes `VFN` y `public`) tendrán identidades para cada tipo de conexión.
+  Para public fullnodes (PFNs), solo hay un tipo de conexión de red (`public`), por lo que solo habrá una identidad.
+</Aside>

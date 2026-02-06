@@ -1,0 +1,98 @@
+---
+title: "SDK de Go - Crear y Gestionar Cuentas"
+description: "Aprende cómo generar, financiar y gestionar cuentas de Aptos usando el SDK de Go con diferentes esquemas de firma"
+sidebar:
+  label: "Cuentas"
+---
+
+Hay varias formas de generar credenciales de cuenta usando el SDK de Go. Puedes
+usar:
+
+- `aptos.NewEd25519Account()`
+- `aptos.NewSecp256k1Account()`
+- `aptos.NewEd25519SingleSenderAccount()`
+- `aptos.NewAccountFromSigner()`
+
+`Account.NewEd25519Account()` es el método más comúnmente usado para crear claves
+para una nueva cuenta. Por defecto usa tipos de clave `ED25519`, pero también puedes especificar
+qué esquema de firma prefieres así:
+
+```go
+// Para derivar una cuenta ed25519
+account1 := aptos.NewEd25519Account()
+
+// Para derivar una cuenta secp256k1
+account2 := aptos.NewSecp256k1Account()
+```
+
+Una vez que hayas generado credenciales, **debes** financiarla para que la red sepa que existe.
+
+En entornos de devnet esto se puede hacer con un faucet ejecutando el siguiente comando:
+
+```go filename="fund.go"
+client, err = aptos.NewClient(aptos.DevnetConfig)
+if err != nil {
+  panic("Failed to create client:" + err.Error())
+}
+
+// Financiar una cuenta con 1 APT de Devnet
+client.Fund(account1.Address, 100_000_000)
+```
+
+En testnet puedes acuñar en la [página de acuñación](/es/network/faucet).
+
+## Otras Formas de Representar Cuentas
+
+Si tienes una clave privada, o representación equivalente, puedes usar eso para
+crear una estructura `Account` para gestionar esas credenciales mientras usas el SDK de Go.
+
+Aquí hay varios ejemplos que muestran cómo hacerlo con esquemas de codificación específicos.
+
+### Derivar una cuenta desde clave privada
+
+El SDK soporta derivar una cuenta desde una clave privada con el método `NewAccountFromSigner()`.
+Además, este método soporta derivar una cuenta desde una clave privada y dirección de cuenta.
+Este método usa un cálculo local y por lo tanto se usa para derivar una `Account` que no ha tenido su clave de autenticación rotada.
+
+```go
+// para derivar una cuenta con un esquema de clave Ed25519
+privateKey := &aptos.Ed25519PrivateKey{}
+err := privateKey.FromHex(privateKeyHex)
+if err != nil {
+  panic("Failed to parse private key:" + err.Error())
+}
+account := aptos.NewAccountFromSigner(privateKey)
+
+// para derivar una cuenta con un esquema de clave Single Sender Ed25519
+privateKey := &aptos.Ed25519PrivateKey{}
+err := privateKey.FromHex(privateKeyHex)
+if err != nil {
+  panic("Failed to parse private key:" + err.Error())
+}
+singleSigner := &crypto.SingleSigner{Signer: privateKey}
+account := aptos.NewAccountFromSigner(singleSigner)
+
+// para derivar una cuenta con un esquema de clave Single Sender Secp256k1
+privateKey := &aptos.Secp256k1PrivateKey{}
+err := privateKey.FromHex(privateKeyHex)
+if err != nil {
+  panic("Failed to parse private key:" + err.Error())
+}
+singleSigner := &crypto.SingleSigner{Signer: privateKey}
+account := aptos.NewAccountFromSigner(singleSigner)
+
+// para derivar una cuenta con una clave privada y dirección de cuenta
+address := &aptos.AccountAddress{}
+err := address.ParseStringRelaxed(addressHex)
+if err != nil {
+  panic("Failed to parse address:" + err.Error())
+}
+privateKey := &aptos.Ed25519PrivateKey{}
+err := privateKey.FromHex(privateKeyHex)
+if err != nil {
+  panic("Failed to parse private key:" + err.Error())
+}
+account := aptos.NewAccountFromSigner(privateKey, address.AuthKey())
+```
+
+{/* TODO: Una vez que el path de derivación sea soportado ### Derivar una cuenta desde path de derivación */}

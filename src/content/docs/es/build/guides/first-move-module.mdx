@@ -1,0 +1,536 @@
+---
+title: "Tu Primer Módulo Move"
+description: "Aprende a compilar, testear, publicar e interactuar con smart contracts en Move en la blockchain de Aptos, desde la configuración hasta el deploy."
+sidebar:
+  label: "Tu Primer Módulo Move"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+La blockchain de Aptos permite a los desarrolladores escribir smart contracts Turing complete (llamados "módulos") con el lenguaje Move, que es seguro por diseño. Los smart contracts permiten a los usuarios enviar dinero a través de la blockchain, pero también escribir código arbitrario, ¡incluso juegos! Todo comienza con la CLI de Aptos creando una cuenta que almacenará el módulo Move al que se le hizo deploy ("publicado").
+
+Este tutorial te ayudará a entender los Módulos Move guiándote a través de la configuración de un entorno mínimo de Aptos, y luego cómo compilar, testear, publicar e interactuar con módulos Move en la Blockchain de Aptos. Aprenderás a:
+
+1. Configurar tu entorno e instalar la CLI
+2. Crear una cuenta en devnet y fondearla
+3. Compilar y testear un módulo Move
+4. Publicar (o "hacer deploy") un módulo Move en la blockchain de Aptos
+5. Interactuar con el módulo
+6. Seguir construyendo con Aptos (siguientes pasos)
+
+<Aside type="note">
+  Este tutorial no pretende enseñarte los fundamentos de Move. Ese es un tema más extenso que se aprende mejor a través del [Move Book](/es/build/smart-contracts/book).
+</Aside>
+
+## 1. Configuración
+
+Los cambios en la blockchain se llaman "transacciones", y requieren una cuenta para pagar el network fee ("gas fee"). Necesitaremos crear una cuenta con algo de APT para pagar ese fee y ser dueños del contrato publicado. Para hacer esto, necesitaremos usar la CLI de Aptos.
+
+<Steps>
+  1. Instalar la CLI de Aptos
+
+     [Instala la CLI de Aptos](/es/build/cli) (si aún no lo has hecho).
+
+  2. Abrir una nueva terminal
+
+     Abre una nueva ventana o pestaña de terminal.
+
+  3. Verificar la instalación
+
+     Ejecuta `aptos --version` para verificar que la tienes instalada.
+
+     ```shellscript filename="Terminal"
+     aptos --version
+     ```
+
+     Deberías ver una respuesta como `aptos 4.6.1`.
+
+  4. Crear una carpeta para el proyecto
+
+     Crea una nueva carpeta para este tutorial corriendo:
+
+     ```shellscript filename="Terminal"
+     mkdir my-first-module
+     ```
+
+  5. Navegar a la carpeta del proyecto
+
+     Corre `cd my-first-module` para entrar en tu nueva carpeta.
+
+  6. Inicializar tu cuenta
+
+     Corre `aptos init` y presiona 'enter' en cada paso de la configuración para crear una cuenta de prueba en `devnet`.
+
+     <Aside type="note">
+       Mientras configuramos tu CLI de Aptos para esta carpeta, nota que esta configuración sigue la lógica de la propia blockchain:
+
+       1. ¿Con qué red estamos trabajando? (por defecto `devnet`, que se reinicia cada semana).
+       2. ¿Desde qué cuenta estamos transaccionando? (creando una clave privada única, que a su vez genera una clave pública criptográfica y una address de cuenta).
+       3. ¿Cómo pago el "gas"? (Para devnet, testnet y redes locales, la CLI de Aptos fondeará amablemente esta cuenta con Aptos Coin, APT).
+
+       Por ahora, solo presiona 'enter' repetidamente para aceptar todos los valores predeterminados.
+     </Aside>
+
+     Deberías ver un mensaje de éxito como este:
+
+     ```shellscript filename="Terminal"
+     ---
+     Aptos CLI is now set up for account 0x9ec1cfa30b885a5c9d595f32f3381ec16d208734913b587be9e210f60be9f9ba as profile default!
+     {
+       "Result": "Success"
+     }
+     ```
+
+     <Aside type="note">
+       Lo que quizás no notaste es que la CLI de Aptos ha creado una carpeta oculta `.aptos/` con un `.gitignore` y un `config.yaml` que contiene la información de la cuenta, incluyendo la clave privada, la clave pública y la address de la cuenta.
+
+       Puedes ver los archivos ocultos con `ls -a` en terminales Unix/Mac o `dir /ah` en Windows.
+     </Aside>
+</Steps>
+
+## 2. (Opcional) Explora lo que acabas de hacer On-Chain
+
+<Steps>
+  1. Copia la address de tu cuenta
+
+     Copia la dirección (address) de la línea de comando de tu nueva cuenta.
+
+     La address se ve así `0x9ec1cfa30b885a5c9d595f32f3381ec16d208734913b587be9e210f60be9f9ba` y puedes encontrarla en la línea:
+
+     ```shellscript filename="Terminal"
+     Aptos CLI is now set up for account 0x9ec1cfa30b885a5c9d595f32f3381ec16d208734913b587be9e210f60be9f9ba as profile default!
+     ```
+
+  2. Abre el Aptos Explorer
+
+     Ve al [Aptos Explorer](https://explorer.aptoslabs.com/?network=devnet).
+
+     Esta es la forma principal de chequear rápidamente qué está pasando en devnet, testnet o mainnet. Lo usaremos más adelante para ver nuestros contratos deployados.
+
+  3. Asegúrate de estar en la red Devnet.
+
+     Busca "Devnet" en la esquina superior derecha, o cambia de red haciendo clic en el menú desplegable "Mainnet" y seleccionando Devnet.
+
+     ![Switching to Devnet network in Aptos Explorer](~/images/screenshots/explorer_devnet.png)
+
+  4. Busca tu cuenta
+
+     Pega tu address recién creada en la barra de búsqueda.
+
+     <Aside type="caution">
+       ¡No presiones enter! Hay un bug conocido donde la búsqueda con Enter no funciona correctamente.
+     </Aside>
+
+  5. Ver los resultados de búsqueda
+
+     Espera a que aparezcan los resultados, luego haz clic en el primer resultado.
+
+  6. Chequear la transacción
+
+     Deberías ver tu cuenta recién creada y una transacción con la función faucet, fondeándola con tokens de devnet.
+
+     ![Viewing Account in Aptos Explorer](~/images/screenshots/explorer_account.png)
+
+  7. Verificar tu balance
+
+     Haz clic en la pestaña "Coins" para ver que tienes 1 APT de Aptos Coin. Esto te permitirá publicar e interactuar con smart contracts en la devnet de Aptos.
+
+     <Aside type="note">
+       El explorador es una herramienta importante para ver los contratos que estamos deployando, y también ofrece una forma de buscar qué hace un contrato. Solo busca la address donde está deployado un contrato y podrás ver el código de ese módulo.
+     </Aside>
+</Steps>
+
+## 3. Escribiendo y Compilando Tu Primer Módulo
+
+Ahora que tenemos nuestro entorno configurado y una cuenta creada, escribamos y compilemos nuestro primer módulo Move. A diferencia de Ethereum, donde los contratos existen de forma independiente, Move ata todo a las cuentas: tanto los módulos como sus recursos. Empecemos con un ejemplo simple para entender los conceptos clave.
+
+![Move Blockchain Diagram](~/images/screenshots/move_blockchain.png)
+
+Este diagrama ilustra la relación entre la propiedad del módulo, la propiedad del token y el estado de la blockchain de Move. Ayuda a visualizar cómo los módulos y recursos están atados a las cuentas, enfatizando los aspectos únicos del diseño de Move en comparación con otras plataformas blockchain.
+
+### ¿Qué es un Módulo Move?
+
+Los módulos Move son similares a los smart contracts en otras blockchains, con algunas diferencias clave:
+
+- **Recursos:** A diferencia de Solidity, donde el estado se almacena en variables del contrato, Move usa "recursos" (resources): tipos de datos especiales que solo pueden existir en un lugar a la vez y siempre están atados a una cuenta.
+- **Basado en Módulos**: En lugar de deployar contratos enteros como unidades independientes como en Solidity, el código Move se organiza en módulos reutilizables que pueden compartir y manejar recursos a través de límites. Los módulos son más como paquetes de una librería estándar que pueden publicarse juntos o por separado, ofreciendo un control más granular sobre la organización del código.
+- **Seguridad por diseño:** El sistema de tipos de Move y la semántica de recursos ayudan a prevenir vulnerabilidades comunes de los smart contracts.
+
+<Aside type="note">
+  Si estás familiarizado con Rust, encontrarás la sintaxis de Move muy similar. Si vienes de Solidity, piensa en los módulos como librerías de smart contracts reutilizables.
+</Aside>
+
+### Tu Primer Módulo Move
+
+Antes de empezar, ve a tu VSCode (o Cursor) e instala la extensión de VSCode [Move On Aptos](/es/build/smart-contracts/move-vscode-extension).
+
+<Steps>
+  1. Abre VSCode (o Cursor) y navega a la pestaña de Extensiones.
+  2. Busca `Move On Aptos` publicada por `aptoslabs` e instala la extensión.
+</Steps>
+
+Esta extensión nos ayudará con el resaltado de sintaxis, autocompletado y otras características que harán nuestra experiencia de desarrollo más fácil.
+
+Nuestro primer módulo será un sistema simple de almacenamiento de mensajes que permite a las cuentas guardar y recuperar mensajes. Creemos un nuevo proyecto Move dentro de nuestra carpeta `my-first-module`:
+
+<Steps>
+  1. Inicializar el proyecto
+
+     Inicializa un nuevo proyecto Move con `aptos move init --name my_first_module`
+
+     Esto crea una estructura de proyecto con un directorio `sources` y un archivo `Move.toml`.
+
+  2. Crear el archivo del módulo
+
+     Crea un nuevo archivo `sources/message.move` con el código de nuestro módulo:
+
+     ```move filename="message.move"
+     module my_first_module::message {
+         use std::string;
+         use std::signer;
+
+         struct MessageHolder has key, store, drop {
+             message: string::String,
+         }
+
+         public entry fun set_message(account: &signer, message: string::String) acquires MessageHolder {
+             let account_addr = signer::address_of(account);
+
+             if (exists<MessageHolder>(account_addr)) {
+                 move_from<MessageHolder>(account_addr);
+             };
+
+             move_to(account, MessageHolder { message });
+         }
+
+         public fun get_message(account_addr: address): string::String acquires MessageHolder {
+             assert!(exists<MessageHolder>(account_addr), 0);
+             let message_holder = borrow_global<MessageHolder>(account_addr);
+             message_holder.message
+         }
+     }
+     ```
+
+     Desglosemos este módulo:
+
+     - Definimos un tipo de recurso `MessageHolder` que puede almacenar un mensaje de tipo string.
+     - `set_message` permite a una cuenta almacenar un mensaje.
+     - `get_message` permite a cualquiera recuperar un mensaje almacenado.
+     - La palabra clave `acquires` indica a qué recursos necesitan acceso las funciones (MessageHolder, en este caso).
+     - `move_to` y `move_from` manejan el almacenamiento de recursos bajo las cuentas.
+
+     <Aside type="note">
+       Move tiene algunas características únicas que lo hacen diferente de otros lenguajes de smart contracts:
+
+       1. Los tipos de recursos (Resource types) se usan para representar activos y estados que solo pueden existir en un lugar a la vez.
+       2. Los modificadores de habilidad como `key`, `store`, y `drop` controlan cómo se pueden usar los valores.
+       3. Las anotaciones explícitas de `acquire` nos dicen a qué recursos podría acceder una función.
+     </Aside>
+
+  3. Compilar el módulo
+
+     Compila el módulo Move que acabamos de crear con `aptos move compile --named-addresses my_first_module=default`
+
+     <Aside type="note">
+       La flag `--named-addresses` mapea el nombre de nuestro módulo a la address de nuestra cuenta. En Move, los módulos deben estar asociados con una address en tiempo de compilación; estamos usando `'default'`, que apunta a la cuenta que acabamos de crear.
+     </Aside>
+
+     Deberías ver un mensaje como este si tuvo éxito:
+
+     ```shellscript filename="Terminal"
+     ❯ aptos move compile --named-addresses my_first_module=default
+     Compiling, may take a little while to download git dependencies...
+     UPDATING GIT DEPENDENCY https://github.com/aptos-labs/aptos-framework.git
+     INCLUDING DEPENDENCY AptosFramework
+     INCLUDING DEPENDENCY AptosStdlib
+     INCLUDING DEPENDENCY MoveStdlib
+     BUILDING my_first_module
+     {
+       "Result": [
+         "9ec1cfa30b885a5c9d595f32f3381ec16d208734913b587be9e210f60be9f9ba::message"
+       ]
+     }
+     ```
+</Steps>
+
+¡Buen trabajo! Ahora estamos listos para testear y debuggear.
+
+## 4. Testing y Debugging
+
+Testing y debugging son partes cruciales del desarrollo de módulos Move. Move tiene soporte nativo para unit testing e impresión de debug (debug printing).
+
+<Steps>
+  1. Agregar debug prints
+
+     Primero, modifiquemos nuestro módulo de mensajes para agregar algunos debug prints. Actualiza tu `sources/message.move`:
+
+     ```move filename="message.move"
+     module my_first_module::message {
+         use std::string;
+         use std::signer;
+         use std::debug;  // Agrega esto para los debug prints
+
+         struct MessageHolder has key, store, drop {
+             message: string::String,
+         }
+
+         public entry fun set_message(account: &signer, message: string::String) acquires MessageHolder {
+             let account_addr = signer::address_of(account);
+             debug::print(&message); // Imprimir el mensaje que se está guardando
+
+             if (exists<MessageHolder>(account_addr)) {
+                 debug::print(&string::utf8(b"Updating existing message")); // Imprimir info de debug
+                 move_from<MessageHolder>(account_addr);
+             } else {
+                 debug::print(&string::utf8(b"Creating new message")); // Imprimir al crear nuevo
+             };
+
+             move_to(account, MessageHolder { message });
+         }
+
+         public fun get_message(account_addr: address): string::String acquires MessageHolder {
+             assert!(exists<MessageHolder>(account_addr), 0);
+             let message_holder = borrow_global<MessageHolder>(account_addr);
+             debug::print(&message_holder.message); // Imprimir el mensaje recuperado
+             message_holder.message
+         }
+     }
+     ```
+
+  2. Crear archivo de test
+
+     Crea nuestros tests: un nuevo archivo `sources/message_tests.move` con:
+
+     ```move filename="message_tests.move"
+      #[test_only]
+      module my_first_module::message_tests {
+         use std::string;
+         use std::signer;
+         use my_first_module::message;
+
+         #[test(sender= @my_first_module)]
+         fun test_set_and_get_message(sender: &signer) {
+            // Test setting a message
+            message::set_message(sender, string::utf8(b"Hello World"));
+
+            // Verify the message was set correctly
+            let stored_message = message::get_message(signer::address_of(sender));
+            assert!(stored_message == string::utf8(b"Hello World"), 0)
+         }
+
+         #[test(sender=@my_first_module)]
+         fun test_update_message(sender: &signer) {
+            // Test setting a message
+            message::set_message(sender, string::utf8(b"Hello World"));
+            // Test updating the message
+            message::set_message(sender, string::utf8(b"Hello Aptos"));
+
+            // Verify the message was updated correctly
+            let stored_message = message::get_message(signer::address_of(sender));
+            assert!(stored_message == string::utf8(b"Hello Aptos"), 0)
+         }
+      }
+     ```
+
+  3. Correr los tests
+
+     Ahora corre los tests con `aptos move test --named-addresses my_first_module=default`
+
+     Deberías ver el output si los tests pasan: (Mira abajo para ver cómo manejar errores)
+
+     ```shellscript filename="Terminal"
+      INCLUDING DEPENDENCY AptosFramework
+      INCLUDING DEPENDENCY AptosStdlib
+      INCLUDING DEPENDENCY MoveStdlib
+      BUILDING my_first_module
+      Running Move unit tests
+      [debug] "Hello World"
+      [debug] "Creating new message"
+      [debug] "Hello World"
+      [ PASS    ] 0x852a264419a80b27771f072b5cae8c8b358d4450e135e134e065247376a4357a::message_tests::test_set_and_get_message
+      [debug] "Hello World"
+      [debug] "Creating new message"
+      [debug] "Hello Aptos"
+      [debug] "Updating existing message"
+      [debug] "Hello Aptos"
+      [ PASS    ] 0x852a264419a80b27771f072b5cae8c8b358d4450e135e134e065247376a4357a::message_tests::test_update_message
+      Test result: OK. Total tests: 2; passed: 2; failed: 0
+      {
+      "Result": "Success"
+      }
+     ```
+</Steps>
+
+**Si encuentras errores al testear, aquí hay algunos problemas y soluciones comunes:**
+
+- Asegúrate de que todas las dependencias del módulo estén importadas correctamente.
+- Chequea que la address de tu cuenta coincida en el parámetro `-named-addresses`.
+- Verifica que las funciones de test tengan el atributo `#[test]`.
+- Asegúrate de que los string literals estén codificados correctamente.
+
+<Aside type="note">
+  ### Tips de Debugging
+
+  1. Usa `debug::print()` en funciones de test.
+  2. Los debug prints aparecerán automáticamente durante la ejecución del test.
+  3. Recuerda que los statements de debug solo funcionarán en los tests, no en código de producción. No tendrán impacto en el rendimiento del código.
+  4. Para debuggear el estado del módulo:
+     - Imprime addresses de cuentas con `debug::print(&addr)`
+     - Imprime valores string con `debug::print(&some_string)`
+     - Imprime condiciones booleanas con `debug::print(&some_bool)`
+</Aside>
+
+## 5. Publicando tu Módulo
+
+Después de compilar y testear exitosamente tu módulo, puedes publicarlo en la blockchain de Aptos. Este proceso hace el deploy de tu código para que sea accesible on-chain.
+
+<Steps>
+  1. Publicar el módulo
+
+     Publica tu módulo con `aptos move publish --named-addresses my_first_module=default`
+
+     Verás un output mostrando el proceso de compilación y luego un prompt preguntando sobre los gas fees:
+
+     ```shellscript filename="Terminal"
+     Compiling, may take a little while to download git dependencies...
+     UPDATING GIT DEPENDENCY https://github.com/aptos-labs/aptos-framework.git
+     INCLUDING DEPENDENCY AptosFramework
+     INCLUDING DEPENDENCY AptosStdlib
+     INCLUDING DEPENDENCY MoveStdlib
+     BUILDING my_first_module
+     package size 1271 bytes
+     Do you want to submit a transaction for a range of [141300 - 211900] Octas at a gas unit price of 100 Octas? [yes/no] >
+     ```
+
+  2. Confirmar la transacción
+
+     Escribe `y` y presiona Enter para confirmar la transacción.
+
+     Después de la confirmación, recibirás una respuesta mostrando los detalles de la transacción:
+
+     ```shellscript filename="Terminal"
+     {
+       "Result": {
+         "transaction_hash": "0x95fce7344b066abda10c07dbf1ffa83e0d9c7bd400e2b143682a6c8a5f179dc2",
+         "gas_used": 1413,
+         "gas_unit_price": 100,
+         "sender": "9ec1cfa30b885a5c9d595f32f3381ec16d208734913b587be9e210f60be9f9ba",
+         "sequence_number": 0,
+         "success": true,
+         "timestamp_us": 1735351260227638,
+         "version": 273029731,
+         "vm_status": "Executed successfully"
+       }
+     }
+     ```
+</Steps>
+
+### (Opcional) Ver tu Contrato On-Chain
+
+Después de una publicación exitosa, puedes verificar que tu módulo está on-chain siguiendo estos pasos:
+
+<Steps>
+  1. Abre el Explorer
+
+     Ve al [Aptos Explorer](https://explorer.aptoslabs.com/?network=devnet)
+
+  2. Chequear la transacción
+
+     Busca la address de tu cuenta. Deberías notar que hay una nueva transacción en tu cuenta, la función `code::publish_package_txn`.
+
+  3. Ver tu balance
+
+     Haz clic en la pestaña "Coins" para ver que ahora tienes menos de 1 APT de Aptos Coin.
+
+     ![Explorer Coins View](~/images/screenshots/explorer_coins.png)
+
+     Has gastado una pequeña cantidad en gas para deployar el contrato, así que deberías tener alrededor de `0.99855 APT` restantes.
+
+  4. Encontrar tu módulo
+
+     Busca bajo la pestaña "Modules"
+
+     ![Exporer Modules View](~/images/screenshots/explorer_modules.png)
+
+  5. Verificar el módulo
+
+     Deberías ver tu módulo "message" listado.
+
+     <Aside type="note">
+       Puedes compartir el link del explorador a tu módulo y otros pueden incluso interactuar con el módulo conectando una wallet.
+     </Aside>
+</Steps>
+
+## 6. Interactuando con tu Módulo
+
+Ahora que tu módulo está publicado, puedes interactuar con él a través de la CLI de Aptos:
+
+<Steps>
+  1. Configurar un mensaje
+
+     Configura un mensaje usando la CLI:
+
+     ```shellscript filename="Terminal"
+     aptos move run --function-id 'default::message::set_message' --args 'string:Hello, Aptos!'
+     ```
+
+     Verás un prompt de gas fee similar al que viste durante la publicación.
+
+  2. Confirmar la transacción
+
+     Después de confirmar con `y`, deberías obtener una respuesta de éxito como:
+
+     ```shellscript filename="Terminal"
+     Transaction submitted: https://explorer.aptoslabs.com/txn/0x0c0b1e56a31d037280278327eb8fdfcc469a20213e5e65accf6e7c56af574449?network=devnet
+     {
+       "Result": {
+         "transaction_hash": "0x0c0b1e56a31d037280278327eb8fdfcc469a20213e5e65accf6e7c56af574449",
+         "gas_used": 445,
+         "gas_unit_price": 100,
+         "sender": "9ec1cfa30b885a5c9d595f32f3381ec16d208734913b587be9e210f60be9f9ba",
+         "sequence_number": 1,
+         "success": true,
+         "timestamp_us": 1735351754495208,
+         "version": 273137362,
+         "vm_status": "Executed successfully"
+       }
+     }
+     ```
+
+  3. Ver tu mensaje
+
+     Mira tu mensaje almacenado revisando bajo Resources en el Explorer.
+
+  4. ¡Celebra!
+
+     ¡Lo logramos!
+
+     <Aside type="note">
+       ¿Cuánto tiempo te tomó terminar esta guía? ¡Queremos saber de ti!
+     </Aside>
+</Steps>
+
+## Siguientes Pasos
+
+¡Felicitaciones! Has logrado exitosamente:
+
+1. Compilar tu primer módulo Move
+2. Agregar tests para ayudar a debuggear
+3. Publicar tu módulo on-chain
+4. Usar tu contrato a través de la CLI
+
+¡Ahora tu módulo Move publicado puede ser conectado justo como una API a través de uno de nuestros [muchos SDKs Oficiales](/es/build/sdks)!
+
+Aquí hay algunos **siguientes pasos sugeridos para obtener un entendimiento más profundo de los módulos Move**:
+
+1. Intenta modificar el módulo para agregar una nueva funcionalidad. Puedes usar el [Move Book](/es/build/smart-contracts/book) para construir tu conocimiento sobre cómo escribir módulos Move.
+2. Para entender cómo funciona Move on-chain, puedes aprender sobre el [sistema de recursos de Move](/es/network/blockchain/resources).
+3. Si estás construyendo una aplicación para interactuar con contratos o buscar datos on-chain, aprende cómo usar los SDKs [aquí](/es/build/sdks).
+4. Únete al [Discord de Aptos](https://discord.gg/aptoslabs) para conectar con otros desarrolladores.
+
+## Documentación de soporte
+
+- [Fundamentos de cuentas](/es/network/blockchain/accounts)
+- [TypeScript SDK](/es/build/sdks/ts-sdk)
+- [Python SDK](/es/build/sdks/python-sdk)
+- [Especificación de la REST API](/rest-api)

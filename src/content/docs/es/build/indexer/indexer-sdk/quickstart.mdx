@@ -1,0 +1,101 @@
+---
+title: "Guía de Inicio Rápido del SDK del Indexador de Aptos"
+description: "Comienza con el SDK del Indexador de Aptos para construir procesadores de Rust personalizados para indexar eventos de blockchain en bases de datos PostgreSQL"
+sidebar:
+  label: "Inicio Rápido"
+---
+
+{/* synced with en: 2025-07-29 */}
+
+## Qué esperar de esta guía
+
+Esta guía te llevará a través de la configuración y ejecución de un procesador Rust para indexar eventos en la blockchain de Aptos en PostgreSQL.
+Proporcionamos un procesador de plantilla que puedes personalizar para indexar eventos de tus contratos personalizados.
+Al final de la guía, deberías tener una comprensión básica de cómo funciona un procesador y ser capaz de personalizar el procesador para tus necesidades de indexación.
+
+## Comenzar
+
+Para comenzar, clona el repositorio [aptos-indexer-processor-sdk](https://github.com/aptos-labs/aptos-indexer-processor-sdk).
+
+```text
+# HTTPS
+https://github.com/aptos-labs/aptos-indexer-processor-sdk.git
+ 
+# SSH
+git@github.com:aptos-labs/aptos-indexer-processor-sdk.git
+```
+
+Los procesadores consumen transacciones del Servicio de Stream de Transacciones. Para usar el Servicio de Stream de Transacciones Alojado por Labs necesitas un token de autorización.
+Sigue [esta guía](/es/build/indexer/txn-stream/aptos-hosted-txn-stream#authorization-via-api-key) para obtener un token del Portal de Desarrolladores. Crea una API Key para `Testnet`, ya que este tutorial es para `Testnet`.
+Una vez que hayas terminado, deberías tener un token que se ve así:
+
+```text
+aptoslabs_yj4bocpaKy_Q6RBP4cdBmjA8T51hto1GcVX5ZS9S65dx
+```
+
+También necesitas las siguientes herramientas:
+
+- Rust 1.79: [Guía de Instalación](https://www.rust-lang.org/tools/install)
+- Cargo: [Guía de Instalación](https://doc.rust-lang.org/cargo/getting-started/installation.html#install-rust-and-cargo)
+
+Usamos [PostgreSQL](https://www.postgresql.org/) como nuestra base de datos y [Diesel](https://diesel.rs/guides/getting-started) como nuestro ORM en este tutorial. Eres libre de usar lo que quieras, pero este tutorial está orientado hacia PostgreSQL por simplicidad. Usamos la siguiente configuración de base de datos y herramientas:
+
+### Instalación de PostgreSQL (para macOS)
+
+1. `brew install libpq` ([esta es una biblioteca de API C de postgres](https://formulae.brew.sh/formula/libpq)). También ejecuta todos los comandos de exportación post-instalación
+
+```shellscript
+export PATH="/opt/homebrew/opt/libpq/bin:$PATH"
+export LDFLAGS="-L/opt/homebrew/opt/libpq/lib"
+export CPPFLAGS="-I/opt/homebrew/opt/libpq/include"
+```
+
+2. `brew install postgres`
+3. `pg_ctl -D /opt/homebrew/var/postgres start` o `brew services start postgresql`
+4. `/opt/homebrew/bin/createuser -s postgres`
+5. Asegúrate de poder hacer: `psql postgres`
+6. `cargo install diesel_cli --no-default-features --features postgres`
+7. Asegúrate de estar en la carpeta DB (ejecuta `cd src/db/postgres` desde el directorio base), ejecuta `diesel migration run --database-url postgresql://localhost/postgres`
+   a. Si por alguna razón esta base de datos ya está siendo usada, prueba una db diferente. ej.
+   `DATABASE_URL=postgres://postgres@localhost:5432/indexer_v2 diesel database reset`
+
+- Usaremos una base de datos alojada en `localhost` en el puerto `5432`, que debería ser el predeterminado.
+- Cuando crees tu nombre de usuario, mantén un registro de él y la contraseña que uses para él.
+- Para ver fácilmente los datos de tu base de datos, considera usar una GUI como [DBeaver](https://dbeaver.io/) _recomendado_, [pgAdmin](https://www.pgadmin.org/), o [Postico](https://eggerapps.at/postico2/).
+
+## Configura tu entorno
+
+Asegúrate de iniciar el servicio `postgresql`:
+
+El comando para Linux/WSL podría ser algo como:
+
+```shellscript
+sudo service postgresql start
+```
+
+Para mac, si estás usando brew, inícialo con:
+
+```shellscript
+brew services start postgresql
+```
+
+## **Configura tu procesador**
+
+Ahora vamos a configurar los detalles de configuración para el procesador de indexador real que vamos a usar.
+
+### **Configura tu archivo config.yaml**
+
+En la carpeta de ejemplo, hay un archivo config.yaml de muestra que debería verse algo así:
+
+```yaml
+# Este es un yaml de plantilla para el procesador
+health_check_port: 8085
+server_config:
+  transaction_stream_config:
+    indexer_grpc_data_service_address: "https://grpc.mainnet.aptoslabs.com:443"
+    auth_token: "AUTH_TOKEN"
+    request_name_header: "events-processor"
+    starting_version: 0
+  postgres_config:
+    connection_string: postgresql://postgres:@localhost:5432/example
+```

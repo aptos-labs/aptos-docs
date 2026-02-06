@@ -1,0 +1,145 @@
+---
+title: "Gestiona Activos Fungibles con Multisig"
+description: "Mejora la seguridad de activos fungibles combinando cuentas multisig con el Estándar de Activo Fungible para gestión protegida."
+sidebar:
+  label: "Activos Fungibles Multisig"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Este tutorial introduce un caso de uso práctico que combina la cuenta multisig del framework de Aptos con el estándar de activo fungible para mejorar el margen de seguridad en la gestión de activos fungibles. Asegúrate de haber entendido la publicación de módulos y la cuenta multisig del framework de Aptos antes de continuar con el tutorial. Si no es así, se recomienda encarecidamente probar primero los siguientes tutoriales:
+
+- [Tu Primer Módulo Move](/es/build/guides/first-move-module)
+
+## Paso 1: Elige un SDK
+
+Este tutorial fue creado para el [SDK de TypeScript](/es/build/sdks/ts-sdk).
+
+¡Otros desarrolladores están invitados a agregar soporte para el [SDK de Python](/es/build/sdks/python-sdk), [SDK de Rust](/es/build/sdks/rust-sdk), [SDK de Go](/es/build/sdks/go-sdk) y [SDK de Unity](/es/build/sdks/unity-sdk)!
+
+## Paso 2: Publica el módulo
+
+Para crear un activo fungible controlado por una cuenta multisig del framework de Aptos con todas las operaciones administrativas (acuñar, transferir, quemar, congelar/descongelar), es un requisito previo un contrato inteligente bien diseñado basado en el estándar de activo fungible. El equipo de Aptos proporciona un código de ejemplo en el repositorio `aptos-core`.
+
+Clona el repositorio `aptos-core`:
+
+```shellscript filename="Terminal"
+git clone git@github.com:aptos-labs/aptos-core.git ~/aptos-core
+```
+
+Navega al directorio `managed_fungible_asset` y luego publica este paquete en tu cuenta `default` usando la CLI:
+
+```shellscript filename="Terminal"
+cd ~/aptos-core/aptos-move/move-examples/fungible_asset/managed_fungible_asset
+aptos move publish --named-addresses example_addr=default
+```
+
+Navega al directorio `multisig_managed_coin` y luego publica este paquete en tu cuenta `default` usando la CLI también:
+
+```shellscript filename="Terminal"
+cd ~/aptos-core/aptos-move/move-examples/fungible_asset/multisig_managed_coin
+aptos move publish --named-addresses example_addr=default
+```
+
+Para este tutorial, `multisig_managed_coin` necesita llamar funciones definidas en `managed_fungible_asset` en la misma dirección. Así que ambos módulos deben ser publicados.
+
+<Aside type="note">
+  No olvides financiar la cuenta con faucet antes de publicar los módulos.
+</Aside>
+
+## Paso 3: Inicia el ejemplo
+
+```shellscript filename="Terminal"
+cd ~/aptos-core/ecosystem/typescript/sdk/examples/typescript
+```
+
+Ejecuta el ejemplo `multisig_managed_coin`:
+
+```shellscript filename="Terminal"
+MODULE_ADDR=${DEFAULT_ACCOUNT_ADDRESS} pnpm run multisig_managed_coin
+```
+
+<Aside type="note">
+  Este ejemplo usa la devnet de Aptos, que históricamente se ha reiniciado cada jueves.
+  ¡Asegúrate de que devnet esté activa cuando intentes ejecutar el ejemplo! Si estás ejecutando localnet con faucet, puedes ejecutar el siguiente comando en su lugar:
+
+  ```shellscript filename="Terminal"
+  export APTOS_NODE_URL=http://0.0.0.0:8080
+  export APTOS_FAUCET_URL=http://0.0.0.0:8081
+  export MODULE_ADDR=${DEFAULT_ACCOUNT_ADDRESS}
+  pnpm run multisig_managed_coin
+  ```
+</Aside>
+
+El script de ejemplo debería ejecutarse correctamente sin errores. Luego podrás ver lo que hizo buscando las direcciones `owner1` y `owner2` impresas en la consola en el explorador de Aptos.
+
+Sigamos el script para entender lo que hace:
+
+### Generar cuentas de firmante único
+
+Primero, generaremos tres cuentas de firmante único, owner1, owner2 y owner3, quienes serán copropietarios de una cuenta multisig del framework de Aptos.
+
+{/* TODO Code snippet
+  typescript title=Generate 3 single signers"
+  /sdks/typescript/examples/typescript/multisig_managed_coin.ts
+  section_1
+  */}
+
+### Crear una cuenta multisig del framework de Aptos con un activo fungible gestionado
+
+A continuación, deja que owner1 llame a la función `initialize()` definida en `multisig_managed_coin.move`, que primero crea una cuenta multisig del framework de Aptos propiedad de owner1 y agrega tanto a owner2 como a owner3 como propietarios. También crea un activo fungible llamado "meme coin" con configuraciones personalizadas denotadas en la lista de argumentos y hace que la cuenta multisig sea el administrador del activo fungible. Además, cada propuesta necesita al menos 2 aprobaciones para ejecutarse.
+
+{/* TODO Code snippet
+  typescript title=Query the multisig account and then call the initialize function"
+  /sdks/typescript/examples/typescript/multisig_managed_coin.ts
+  section_2
+  */}
+
+### Acuñar
+
+Luego acuñamos 1000 y 2000 meme coin a owner2 y owner3, respectivamente. La transacción propuesta es enviada por owner2 y obtiene una aprobación adicional de owner3.
+
+{/* TODO Code snippet
+  typescript title="Mint 1000 to owner2 and 2000 to owner3"
+  /sdks/typescript/examples/typescript/multisig_managed_coin.ts
+  section_3
+  */}
+
+### Congelar
+
+Después de acuñar, el ejemplo muestra cómo congelar la cuenta owner1. La transacción propuesta es enviada nuevamente por owner2 y aprobada por owner3 además.
+
+{/* TODO Code snippet
+  typescript title=""Freeze owner1"
+  /sdks/typescript/examples/typescript/multisig_managed_coin.ts
+  section_4
+  */}
+
+<Aside type="note">
+  Descongelar es similar, solo reemplaza el último argumento de la función `set_primary_stores_frozen_status` a `false`.
+</Aside>
+
+### Transferencia forzada
+
+Cuando owner1 está congelado, la transferencia normal no puede retirar de o depositar en esa cuenta. Pero como administrador de "meme coin", la cuenta multisig tiene la capacidad de hacerlo.
+A continuación, Owner2 propone una transacción para transferir forzadamente 1000 meme coins de owner3 a owner1. Esta vez, owner1 la aprueba.
+
+{/* TODO Code snippet
+  typescript title=""Force transfer 1000 meme coins from owner3 to owner1"
+  /sdks/typescript/examples/typescript/multisig_managed_coin.ts
+  section_5
+  */}
+
+### Quemar
+
+Finalmente, todos los tres propietarios tienen 1000 meme coins. ¡Quememos todas las monedas! Owner2 hace la propuesta y owner1 la aprueba.
+
+{/* TODO Code snippet
+  typescript title="Burn 1000 meme coins from all the three owners' accounts"
+  /sdks/typescript/examples/typescript/multisig_managed_coin.ts
+  section_6
+  */}
+
+## Conclusión
+
+Este tutorial muestra un flujo end-to-end de usar una cuenta multisig del framework de Aptos para administrar activos fungibles. De manera similar, puedes crear tu propio módulo y aprovechar nuestro poderoso SDK para crear el esquema de administración que se ajuste a tus necesidades.

@@ -1,0 +1,515 @@
+---
+title: "Signer"
+description: "Comprende el tipo signer en Move para autenticación y autorización de transacciones en contratos inteligentes de Aptos."
+sidebar:
+  label: "Firmante"
+---
+
+`signer` es un tipo de resource integrado en Move. Un `signer` es una [capacidad](https://en.wikipedia.org/wiki/Object-capability_model) que permite al poseedor actuar en nombre de una `address` particular. Puedes pensar en la implementación nativa como siendo:
+
+```move
+module 0x1::signer {
+  struct signer has drop { a: address }
+}
+```
+
+Un `signer` es algo similar a un [UID](https://en.wikipedia.org/wiki/User_identifier) de Unix en que representa un usuario autenticado por código _fuera_ de Move (por ejemplo, verificando una firma criptográfica o contraseña).
+
+## Comparación con `address`
+
+Un programa Move puede crear cualquier valor `address` sin permiso especial usando literales de dirección:
+
+```move
+script {
+  fun example() {
+    let a1 = @0x1;
+    let a2 = @0x2;
+    // ... y así sucesivamente para cualquier otra dirección posible
+  }
+}
+```
+
+Sin embargo, los valores `signer` son especiales porque no pueden ser creados vía literales o instrucciones, solo por la VM de Move. Antes de que la VM ejecute un script con parámetros de tipo `signer`, automáticamente creará valores `signer` y los pasará al script:
+
+```move
+script {
+    use std::signer;
+    fun main(s: signer) {
+        assert!(signer::address_of(&s) == @0x42, 0);
+    }
+}
+```
+
+Este script abortará con código `0` si el script es enviado desde cualquier dirección que no sea `0x42`.
+
+Un script Move puede tener un número arbitrario de `signer`s siempre que los `signer`s sean un prefijo a cualquier otro argumento. En otras palabras, todos los argumentos `signer` deben venir primero:
+
+```move
+script {
+    use std::signer;
+    fun main(s1: signer, s2: signer, x: u64, y: u8) {
+        // ...
+    }
+}
+```
+
+Esto es útil para implementar _scripts multi-signer_ que actúan atómicamente con la autoridad de múltiples partes. Por ejemplo, una extensión del script anterior podría realizar un intercambio atómico de moneda entre `s1` y `s2`.
+
+## Operadores `signer`
+
+El módulo de biblioteca estándar `std::signer` proporciona dos funciones de utilidad sobre valores `signer`:
+
+| Función                                     | Descripción                                                         |
+| ------------------------------------------- | ------------------------------------------------------------------- |
+| `signer::address_of(&signer): address`      | Devuelve la `address` envuelta por este `&signer`.                  |
+| `signer::borrow_address(&signer): &address` | Devuelve una referencia a la `address` envuelta por este `&signer`. |
+
+Además, el [operador de almacenamiento global](/es/build/smart-contracts/book/global-storage-operators) `move_to<T>(&signer, T)` requiere un argumento `&signer` para publicar un resource `T` bajo la cuenta de `signer.address`. Esto asegura que solo un usuario autenticado puede elegir publicar un resource bajo su `address`.
+
+## Propiedad
+
+A diferencia de valores escalares simples, los valores `signer` no son copiables, lo que significa que no pueden ser copiados desde cualquier operación ya sea a través de una instrucción explícita [`copy`](/es/build/smart-contracts/book/variables#move-and-copy) o a través de una [desreferencia `*e`](/es/build/smart-contracts/book/references#reading-and-writing-through-references). También son deseables, lo que significa que pueden ser descartados por la VM al final de la ejecución.
+
+## Ejemplos Prácticos
+
+### Autenticación Básica
+
+```move
+module 0x42::auth_example {
+  use std::signer;
+
+  struct UserAccount has key {
+    balance: u64,
+    is_admin: bool
+  }
+
+  /// Crea una cuenta para el usuario autenticado
+  public fun create_account(user: &signer) {
+    let user_addr = signer::address_of(user);
+    assert!(!exists<UserAccount>(user_addr), 1); // Cuenta ya existe
+    
+    move_to(user, UserAccount {
+      balance: 0,
+      is_admin: false
+    });
+  }
+
+  /// Solo el propietario de la cuenta puede depositar
+  public fun deposit(user: &signer, amount: u64) acquires UserAccount {
+    let user_addr = signer::address_of(user);
+    assert!(exists<UserAccount>(user_addr), 2); // Cuenta no existe
+    
+    let account = borrow_global_mut<UserAccount>(user_addr);
+    account.balance = account.balance + amount;
+  }
+
+  /// Solo el propietario puede retirar de su cuenta
+  public fun withdraw(user: &signer, amount: u64) acquires UserAccount {
+    let user_addr = signer::address_of(user);
+    let account = borrow_global_mut<UserAccount>(user_addr);
+    
+    assert!(account.balance >= amount, 3); // Saldo insuficiente
+    account.balance = account.balance - amount;
+  }
+}
+```
+
+### Control de Acceso Multi-Signer
+
+```move
+module 0x42::multisig {
+  use std::signer;
+  use std::vector;
+
+  struct MultiSigWallet has key {
+    owners: vector<address>,
+    required_signatures: u64,
+    balance: u64
+  }
+
+  struct Transaction has store {
+    to: address,
+    amount: u64,
+    approvers: vector<address>,
+    executed: bool
+  }
+
+  struct PendingTransactions has key {
+    transactions: vector<Transaction>
+  }
+
+  /// Crea una wallet multi-signature
+  public fun create_multisig_wallet(
+    creator: &signer,
+    owners: vector<address>,
+    required_signatures: u64
+  ) {
+    assert!(required_signatures > 0, 1);
+    assert!(required_signatures <= vector::length(&owners), 2);
+    
+    let creator_addr = signer::address_of(creator);
+    move_to(creator, MultiSigWallet {
+      owners,
+      required_signatures,
+      balance: 0
+    });
+    
+    move_to(creator, PendingTransactions {
+      transactions: vector::empty<Transaction>()
+    });
+  }
+
+  /// Propone una transacción (solo owners)
+  public fun propose_transaction(
+    proposer: &signer,
+    wallet_addr: address,
+    to: address,
+    amount: u64
+  ) acquires MultiSigWallet, PendingTransactions {
+    let proposer_addr = signer::address_of(proposer);
+    let wallet = borrow_global<MultiSigWallet>(wallet_addr);
+    
+    // Verificar que el proposer es un owner
+    assert!(vector::contains(&wallet.owners, &proposer_addr), 3);
+    assert!(wallet.balance >= amount, 4);
+    
+    let pending = borrow_global_mut<PendingTransactions>(wallet_addr);
+    let transaction = Transaction {
+      to,
+      amount,
+      approvers: vector[proposer_addr], // El proposer aprueba automáticamente
+      executed: false
+    };
+    
+    vector::push_back(&mut pending.transactions, transaction);
+  }
+
+  /// Aprueba una transacción pendiente
+  public fun approve_transaction(
+    approver: &signer,
+    wallet_addr: address,
+    tx_index: u64
+  ) acquires MultiSigWallet, PendingTransactions {
+    let approver_addr = signer::address_of(approver);
+    let wallet = borrow_global<MultiSigWallet>(wallet_addr);
+    
+    // Verificar que el approver es un owner
+    assert!(vector::contains(&wallet.owners, &approver_addr), 3);
+    
+    let pending = borrow_global_mut<PendingTransactions>(wallet_addr);
+    assert!(tx_index < vector::length(&pending.transactions), 5);
+    
+    let transaction = vector::borrow_mut(&mut pending.transactions, tx_index);
+    assert!(!transaction.executed, 6); // Ya ejecutada
+    
+    // Agregar approver si no ha aprobado ya
+    if (!vector::contains(&transaction.approvers, &approver_addr)) {
+      vector::push_back(&mut transaction.approvers, approver_addr);
+    }
+  }
+
+  /// Ejecuta una transacción si tiene suficientes firmas
+  public fun execute_transaction(
+    executor: &signer,
+    wallet_addr: address,
+    tx_index: u64
+  ) acquires MultiSigWallet, PendingTransactions {
+    let executor_addr = signer::address_of(executor);
+    let wallet = borrow_global_mut<MultiSigWallet>(wallet_addr);
+    
+    // Verificar que el executor es un owner
+    assert!(vector::contains(&wallet.owners, &executor_addr), 3);
+    
+    let pending = borrow_global_mut<PendingTransactions>(wallet_addr);
+    let transaction = vector::borrow_mut(&mut pending.transactions, tx_index);
+    
+    assert!(!transaction.executed, 6);
+    assert!(
+      vector::length(&transaction.approvers) >= wallet.required_signatures,
+      7 // Firmas insuficientes
+    );
+    assert!(wallet.balance >= transaction.amount, 4);
+    
+    // Ejecutar transacción
+    wallet.balance = wallet.balance - transaction.amount;
+    transaction.executed = true;
+    
+    // En una implementación real, aquí transferirías los fondos al destinatario
+  }
+}
+```
+
+### Sistema de Permisos
+
+```move
+module 0x42::permissions {
+  use std::signer;
+
+  struct AdminCap has key {}
+  struct ModeratorCap has key {}
+
+  struct SystemConfig has key {
+    admin: address,
+    maintenance_mode: bool
+  }
+
+  /// Inicializa el sistema (solo llamado una vez)
+  public fun initialize(admin: &signer) {
+    let admin_addr = signer::address_of(admin);
+    
+    // Otorgar capacidad de admin
+    move_to(admin, AdminCap {});
+    
+    // Configuración del sistema
+    move_to(admin, SystemConfig {
+      admin: admin_addr,
+      maintenance_mode: false
+    });
+  }
+
+  /// Solo admin puede otorgar permisos de moderador
+  public fun grant_moderator(
+    admin: &signer,
+    new_moderator_addr: address
+  ) acquires AdminCap {
+    // Verificar que el llamador es admin
+    assert!(exists<AdminCap>(signer::address_of(admin)), 1);
+    
+    // Crear signer para el nuevo moderador (función hipotética)
+    let new_moderator = create_signer(new_moderator_addr);
+    move_to(&new_moderator, ModeratorCap {});
+  }
+
+  /// Solo admin puede cambiar modo de mantenimiento
+  public fun set_maintenance_mode(
+    admin: &signer,
+    enabled: bool
+  ) acquires AdminCap, SystemConfig {
+    let admin_addr = signer::address_of(admin);
+    assert!(exists<AdminCap>(admin_addr), 1);
+    
+    let config = borrow_global_mut<SystemConfig>(admin_addr);
+    config.maintenance_mode = enabled;
+  }
+
+  /// Función que requiere privilegios de moderador
+  public fun moderate_content(
+    moderator: &signer,
+    content_id: u64
+  ) acquires ModeratorCap, SystemConfig {
+    let moderator_addr = signer::address_of(moderator);
+    
+    // Verificar que el sistema no está en mantenimiento
+    let config = borrow_global<SystemConfig>(@admin_address);
+    assert!(!config.maintenance_mode, 2);
+    
+    // Verificar que tiene permisos de moderador O es admin
+    let is_moderator = exists<ModeratorCap>(moderator_addr);
+    let is_admin = exists<AdminCap>(moderator_addr);
+    assert!(is_moderator || is_admin, 3);
+    
+    // Lógica de moderación...
+  }
+
+  /// Función que solo el admin puede llamar
+  public fun admin_only_function(admin: &signer) acquires AdminCap {
+    assert!(exists<AdminCap>(signer::address_of(admin)), 1);
+    
+    // Lógica solo para admin...
+  }
+
+  /// Verifica si una dirección es admin
+  public fun is_admin(addr: address): bool {
+    exists<AdminCap>(addr)
+  }
+
+  /// Verifica si una dirección es moderador
+  public fun is_moderator(addr: address): bool {
+    exists<ModeratorCap>(addr)
+  }
+}
+```
+
+### Transferencia Atómica
+
+```move
+module 0x42::atomic_swap {
+  use std::signer;
+
+  struct SwapOffer has key {
+    creator: address,
+    offered_amount: u64,
+    requested_amount: u64,
+    counterparty: address,
+    is_active: bool
+  }
+
+  struct Balance has key {
+    amount: u64
+  }
+
+  /// Crea una oferta de intercambio
+  public fun create_swap_offer(
+    creator: &signer,
+    offered_amount: u64,
+    requested_amount: u64,
+    counterparty: address
+  ) acquires Balance {
+    let creator_addr = signer::address_of(creator);
+    
+    // Verificar que el creator tiene suficiente balance
+    assert!(exists<Balance>(creator_addr), 1);
+    let creator_balance = borrow_global<Balance>(creator_addr);
+    assert!(creator_balance.amount >= offered_amount, 2);
+    
+    // Crear la oferta
+    move_to(creator, SwapOffer {
+      creator: creator_addr,
+      offered_amount,
+      requested_amount,
+      counterparty,
+      is_active: true
+    });
+  }
+
+  /// Acepta una oferta de intercambio (requiere ambos signers)
+  public fun accept_swap(
+    creator: &signer,
+    counterparty: &signer,
+    offer_addr: address
+  ) acquires SwapOffer, Balance {
+    let creator_addr = signer::address_of(creator);
+    let counterparty_addr = signer::address_of(counterparty);
+    
+    // Obtener la oferta
+    let offer = borrow_global_mut<SwapOffer>(offer_addr);
+    assert!(offer.is_active, 3);
+    assert!(offer.creator == creator_addr, 4);
+    assert!(offer.counterparty == counterparty_addr, 5);
+    
+    // Verificar balances
+    let creator_balance = borrow_global_mut<Balance>(creator_addr);
+    let counterparty_balance = borrow_global_mut<Balance>(counterparty_addr);
+    
+    assert!(creator_balance.amount >= offer.offered_amount, 6);
+    assert!(counterparty_balance.amount >= offer.requested_amount, 7);
+    
+    // Ejecutar intercambio atómico
+    creator_balance.amount = creator_balance.amount - offer.offered_amount;
+    creator_balance.amount = creator_balance.amount + offer.requested_amount;
+    
+    counterparty_balance.amount = counterparty_balance.amount - offer.requested_amount;
+    counterparty_balance.amount = counterparty_balance.amount + offer.offered_amount;
+    
+    // Marcar oferta como completada
+    offer.is_active = false;
+  }
+
+  /// Cancela una oferta (solo el creator)
+  public fun cancel_swap(creator: &signer, offer_addr: address) acquires SwapOffer {
+    let creator_addr = signer::address_of(creator);
+    let offer = borrow_global_mut<SwapOffer>(offer_addr);
+    
+    assert!(offer.creator == creator_addr, 8);
+    assert!(offer.is_active, 9);
+    
+    offer.is_active = false;
+  }
+}
+```
+
+## Buenas Prácticas
+
+### 1. Verificar Propiedad de Resources
+
+```move
+// ✓ Bueno: verificar que el signer es el propietario
+public fun update_profile(user: &signer, new_name: vector<u8>) acquires Profile {
+  let user_addr = signer::address_of(user);
+  assert!(exists<Profile>(user_addr), E_PROFILE_NOT_FOUND);
+  
+  let profile = borrow_global_mut<Profile>(user_addr);
+  profile.name = new_name;
+}
+```
+
+### 2. Usar Capabilities para Permisos
+
+```move
+// ✓ Bueno: usar capabilities en lugar de direcciones hardcoded
+struct AdminCap has key {}
+
+public fun admin_function(admin: &signer) acquires AdminCap {
+  assert!(exists<AdminCap>(signer::address_of(admin)), E_NOT_ADMIN);
+  // lógica de admin...
+}
+```
+
+### 3. Validar Múltiples Signers
+
+```move
+// ✓ Bueno: verificar ambos signers en transferencias
+public fun transfer_between(
+  from: &signer, 
+  to: &signer, 
+  amount: u64
+) acquires Account {
+  let from_addr = signer::address_of(from);
+  let to_addr = signer::address_of(to);
+  
+  assert!(from_addr != to_addr, E_SELF_TRANSFER);
+  
+  // Ambos usuarios deben tener cuentas
+  assert!(exists<Account>(from_addr), E_FROM_ACCOUNT_NOT_FOUND);
+  assert!(exists<Account>(to_addr), E_TO_ACCOUNT_NOT_FOUND);
+  
+  // Ejecutar transferencia...
+}
+```
+
+### 4. Patrón de Inicialización Segura
+
+```move
+// ✓ Bueno: asegurar inicialización única
+public fun initialize_once(admin: &signer) {
+  let admin_addr = signer::address_of(admin);
+  assert!(!exists<Config>(admin_addr), E_ALREADY_INITIALIZED);
+  
+  move_to(admin, Config {
+    // configuración inicial...
+  });
+}
+```
+
+### 5. Separar Autenticación de Autorización
+
+```move
+// ✓ Bueno: verificar autenticación (signer) y autorización (permisos) por separado
+public fun sensitive_operation(user: &signer) acquires UserProfile, AdminCap {
+  // Autenticación: verificar que tenemos un signer válido
+  let user_addr = signer::address_of(user);
+  assert!(exists<UserProfile>(user_addr), E_USER_NOT_FOUND);
+  
+  // Autorización: verificar permisos específicos
+  let profile = borrow_global<UserProfile>(user_addr);
+  assert!(profile.security_level >= REQUIRED_LEVEL, E_INSUFFICIENT_PERMISSIONS);
+  
+  // O alternativamente, verificar capability
+  assert!(exists<AdminCap>(user_addr), E_NOT_AUTHORIZED);
+  
+  // Ejecutar operación...
+}
+```
+
+### 6. Documenta Requisitos de Signer
+
+```move
+/// Actualiza la configuración del sistema
+/// @param admin: Debe ser el administrador del sistema (tener AdminCap)
+/// @param new_config: Nueva configuración a aplicar
+public fun update_system_config(admin: &signer, new_config: Config) acquires AdminCap {
+  // implementación...
+}
+```
+
+El tipo `signer` es fundamental para la seguridad en Move, ya que proporciona autenticación criptográfica y asegura que solo los usuarios autorizados puedan realizar acciones en nombre de sus cuentas.

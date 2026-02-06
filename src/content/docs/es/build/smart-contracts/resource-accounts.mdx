@@ -1,0 +1,85 @@
+---
+title: "Cuentas de Recurso"
+description: "Aprende sobre las cuentas de recurso para el desarrollo de contratos inteligentes Move en Aptos."
+sidebar:
+  label: "Cuentas de Recurso"
+---
+
+[Despliegue de Código de Objeto](/es/build/smart-contracts/deployment) es el método preferido para desplegar y actualizar contratos inteligentes en Aptos. Las cuentas de recurso requieren que los desarrolladores generen semillas
+cada vez que se crea una cuenta de recurso, y actualizar contratos requiere pasos específicos que son propensos a errores.
+
+Una [cuenta de recurso](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/resource_account.move)
+es una característica de desarrollador utilizada para gestionar recursos independientes de una cuenta
+gestionada por un usuario, específicamente publicando módulos y proporcionando control de acceso
+solo en cadena, por ejemplo, signers.
+
+Típicamente, una cuenta de recurso se usa para dos propósitos principales:
+
+- Almacenar y aislar recursos; un módulo crea una cuenta de recurso solo para hospedar
+  recursos específicos.
+- Publicar módulo como una cuenta independiente (recurso), un bloque de construcción en un
+  diseño descentralizado donde ninguna clave privada puede controlar la cuenta de recurso. La
+  propiedad (SignerCap) puede mantenerse en otro módulo, como gobernanza.
+
+## Restricciones
+
+En Aptos, una cuenta de recurso se crea basándose en el hash SHA3-256 de la
+dirección de la fuente y datos de semilla adicionales. Una cuenta de recurso puede ser creada
+solo una vez; para una dirección de fuente y semilla dada, solo puede haber una cuenta de
+recurso. Esto es porque el cálculo de la dirección de la cuenta de recurso está
+completamente determinado por lo anterior.
+
+Una entidad puede llamar `create_account` en un intento de reclamar una cuenta antes de
+la creación de una cuenta de recurso. Pero si se encuentra una cuenta de recurso, Aptos
+transferirá la propiedad de la cuenta a la cuenta de recurso. Esto se hace
+validando que la cuenta aún no ha ejecutado ninguna transacción y que
+`Account::signer_capbility_offer::for` es none. La probabilidad de una
+colisión donde alguien ha producido legítimamente una clave privada que mapea a una
+dirección de cuenta de recurso es improbablemente baja.
+
+## Configuración
+
+La forma más fácil de configurar una cuenta de recurso es:
+
+1. Usando Aptos CLI: `aptos account create-resource-account` crea una cuenta de
+   recurso, y `aptos move create-resource-account-and-publish-package` crea una
+   cuenta de recurso y publica el paquete especificado bajo la dirección de la cuenta de recurso.
+2. Escribiendo código de contratos inteligentes personalizado: en el módulo `resource_account.move`,
+   los desarrolladores pueden encontrar las funciones de creación de cuenta de recurso
+   `create_resource_account`, `create_resource_account_and_fund`, y
+   `create_resource_account_and_publish_package`. Los desarrolladores pueden entonces llamar esas
+   funciones para crear cuentas de recurso en sus contratos inteligentes.
+
+Cada una de esas opciones ofrece funcionalidad ligeramente diferente:
+
+- `create_resource_account` - meramente crea la cuenta de recurso pero no la
+  financia, reteniendo acceso al signer de la cuenta de recurso hasta llamar explícitamente
+  `retrieve_resource_account_cap`.
+- `create_resource_account_and_fund` - crea la cuenta de recurso y la financia,
+  reteniendo acceso al signer de la cuenta de recurso hasta llamar explícitamente
+  `retrieve_resource_account_cap`.
+- `create_resource_account_and_publish_package` - crea la cuenta de recurso
+  y resulta en pérdida de acceso a la cuenta de recurso por diseño, porque
+  las cuentas de recurso se usan para hacer contratos autónomos e inmutables.
+
+En este ejemplo, [inicializarás](https://github.com/aptos-labs/aptos-core/blob/2e9d8ee759fcd3f6e831034f05c1656b1c48efc4/aptos-move/move-examples/mint_nft/sources/minting.move#L73) el módulo `mint_nft` y recuperarás
+la capacidad de signer tanto de la cuenta de recurso como de la cuenta del módulo. Para hacer
+esto, llama `create_resource_account_and_publish_package` para publicar el módulo
+bajo la dirección de la cuenta de recurso.
+
+1. Inicializa el módulo como se muestra en el ejemplo [`minting.move`](https://github.com/aptos-labs/aptos-core/blob/2e9d8ee759fcd3f6e831034f05c1656b1c48efc4/aptos-move/move-examples/mint_nft/sources/minting.move#L73).
+2. Llama `create_resource_account_and_publish_package` para publicar el módulo
+   bajo la dirección de la cuenta de recurso, como en el ejemplo end-to-end [`mint_nft.rs`](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/e2e-move-tests/src/tests/mint_nft.rs#L62).
+3. Recupera la capacidad de signer de la cuenta de recurso + cuenta del módulo como se muestra
+   en el ejemplo [`minting.move`](https://github.com/aptos-labs/aptos-core/blob/2e9d8ee759fcd3f6e831034f05c1656b1c48efc4/aptos-move/move-examples/mint_nft/sources/minting.move#L83).
+
+Nota, si el signer `resource_account` anterior **no** está ya configurado como una
+cuenta de recurso, recuperar la capacidad de signer fallará. El campo `source_addr`
+en la función `retrieve_resource_account_cap` se refiere a la dirección de la
+cuenta fuente, o la cuenta que crea la cuenta de recurso.
+
+Para un ejemplo, ve la `SignerCapability` empleada por la función `mint_nft`
+en [`minting.move`](https://github.com/aptos-labs/aptos-core/blob/2e9d8ee759fcd3f6e831034f05c1656b1c48efc4/aptos-move/move-examples/mint_nft/sources/minting.move#L143-L181).
+
+Para más detalles, ve las referencias de "cuenta de recurso" en [`resource_account.move`](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/resource_account.move)
+y [`account.move`](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/account/account.move).

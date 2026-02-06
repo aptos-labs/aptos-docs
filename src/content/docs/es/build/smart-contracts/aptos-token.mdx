@@ -1,0 +1,193 @@
+---
+title: "Estándar de Token de Aptos (Legacy)"
+description: "Aprende sobre el estándar de tokens de Aptos (legacy) para el desarrollo de contratos inteligentes Move."
+sidebar:
+  label: "Estándar de Token"
+---
+
+import { ThemedImage } from '~/components/ThemedImage';
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Resumen de NFT
+
+Un [NFT](https://en.wikipedia.org/wiki/Non-fungible_token) es un [token](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-token/sources/token.move) no fungible o datos almacenados en una blockchain que
+define únicamente la propiedad de un activo. Los NFTs fueron definidos por primera vez en [EIP-721](https://eips.ethereum.org/EIPS/eip-721)
+y luego expandidos en [EIP-1155](https://eips.ethereum.org/EIPS/eip-1155).
+Los NFTs típicamente se definen usando las siguientes propiedades:
+
+- `name`: El nombre del activo. Debe ser único dentro de una colección.
+- `description`: La descripción del activo.
+- `uri`: Un puntero URL fuera de la cadena para más información sobre el activo. El
+  activo podría ser medios como una imagen o video o más metadatos.
+- `supply`: El número total de unidades de este NFT. Muchos NFTs tienen solo un
+  suministro único, mientras que aquellos que tienen más de uno se conocen como ediciones.
+
+Además, la mayoría de los NFTs son parte de una colección o un conjunto de NFTs con un
+atributo común, por ejemplo, un tema, creador, o mínimo contrato. Cada colección
+tiene un conjunto similar de atributos:
+
+- `name`: El nombre de la colección. El nombre debe ser único dentro de la
+  cuenta del creador.
+- `description`: La descripción de la colección.
+- `uri`: Un puntero URL fuera de la cadena para más información sobre el activo. El
+  activo podría ser medios como una imagen o video o más metadatos.
+- `supply`: El número total de NFTs en esta colección.
+- `maximum`: El número máximo de NFTs que esta colección puede tener. Si
+  `maximum` se establece en 0, entonces el suministro no se rastrea.
+
+## Principios de diseño
+
+El [estándar de token de Aptos](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-token/sources/token.move) se desarrolla con los siguientes principios:
+
+- **Interoperabilidad**: Proporcionar una implementación estándar para mejorar
+  la interoperabilidad entre los proyectos del ecosistema. Además, Move siendo un lenguaje
+  estático sin despacho dinámico hace que este principio sea aún más imperativo.
+- **Liquidez**: Lograr liquidez máxima definiendo el NFT, tokens fungibles
+  (no decimales) y semi-fungibles en un contrato. Estos diferentes tipos de
+  tokens pueden almacenarse, transferirse y transarse fácilmente de la misma manera. Como
+  consecuencia, se vuelve más fácil lograr interoperabilidad máxima entre
+  marketplaces, exchanges y otros métodos de intercambio.
+- **Propiedades de token ricas en cadena**: Habilitar la personalización de propiedades de token
+  en cadena. Los usuarios pueden definir sus propias propiedades y almacenarlas en cadena. Esto
+  puede potencialmente eliminar la necesidad de metadatos fuera de la cadena.
+- **Reducción de sobrecarga**: Reducir el costo de crear grandes cantidades de NFTs desde
+  tokens fungibles. Esto puede llevar a, por ejemplo, reducción de sobrecarga para tokens
+  similares mediante la reutilización de metadatos en cadena para ciertos tokens fungibles.
+
+<Aside type="note">
+  **Token fungible → NFT**<br />
+  El estándar de token de Aptos soporta [mutación de un token fungible a un
+  NFT](#evolucionando-desde-token-fungible-a-nft).
+</Aside>
+
+### Almacenar propiedades de token personalizadas en cadena
+
+El estándar de token de Aptos usa el módulo [`PropertyMap`](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-token/sources/property_map.move) para almacenar propiedades
+de tokens en cadena. `PropertyMap` mapea una clave de cadena a un valor de propiedad
+en cadena, que almacena el valor en formato de Serialización Canónica Binaria (BCS)
+y su tipo. Actualmente, solo los tipos primitivos (bool, u8, u64, u128, address y
+String) son soportados en `PropertyMap`. Aplicaciones, como [Aptos Names](https://www.aptosnames.com/),
+definen propiedades específicas de la aplicación que son leídas y escritas por el
+contrato inteligente de las aplicaciones.
+
+#### Propiedades por defecto
+
+Puedes agregar tus propiedades a [`default_properties`](https://github.com/aptos-labs/aptos-core/blob/e62fd09cb1c916d857fa655b3f174991ef8698b3/aptos-move/framework/aptos-token/sources/token.move#L98) en TokenData. Las
+propiedades definidas aquí son compartidas por todos los tokens por defecto.
+
+El campo `default_properties` es un almacén de clave-valor con información de tipo. Aprovecha
+el módulo PropertyMap que contiene funciones para serializar y
+deserializar diferentes tipos primitivos al valor de propiedad.
+
+#### Propiedades de token
+
+También puedes usar las `token_properties` definidas en el token mismo para
+personalización en cadena. Puedes crear valores personalizados para una propiedad de este
+token específico, permitiendo así que un token tenga un valor de propiedad diferente de
+su valor por defecto.
+
+Ten en cuenta que existen límites para almacenar propiedades de token personalizadas en cadena, específicamente
+1000 propiedades por token con nombres de campo limitados a 128 caracteres.
+
+### Evolucionando desde token fungible a NFT
+
+Los tokens fungibles comparten los mismos valores de propiedad por defecto. Sin embargo, estos valores de propiedad
+pueden evolucionar con el tiempo y volverse diferentes entre sí. Para soportar
+tal evolución de propiedades de token, el estándar de token de Aptos proporciona el
+campo `property_version`. Aquí está cómo funciona:
+
+- Durante la creación del token (acuñación), todos los tokens inicialmente tienen
+  `property_version` establecido en `0` y estos tokens pueden apilarse juntos como
+  token fungible.
+- Cuando los creadores mutan las propiedades por defecto de un token, el token mutado
+  será asignado un `property_version` único para crear un nuevo [`token_id`](https://github.com/aptos-labs/aptos-core/blob/bba1690d7268759bd86ccd7459d7967172f1da24/aptos-move/framework/aptos-token/sources/token.move#L288)
+  para diferenciarlo de otros tokens fungibles. Este `token_id` único permite
+  que el token tenga sus propios valores de propiedad, y toda mutación posterior de este
+  token **no** cambia el `property_version` nuevamente. Este token esencialmente
+  se convierte en un NFT ahora.
+
+#### Configurar mutabilidad
+
+Para hacer la mutabilidad explícita tanto para el creador como para el propietario, el estándar de token de Aptos
+proporciona [`mutability_config`](https://github.com/aptos-labs/aptos-core/blob/bba1690d7268759bd86ccd7459d7967172f1da24/aptos-move/framework/aptos-token/sources/token.move#L100)
+tanto a nivel de colección como a nivel de token para controlar qué campos son
+mutables. Configurable aquí significa que el creador puede configurar este campo para ser
+mutable o inmutable durante la creación.
+
+### Almacenar metadatos fuera de la cadena
+
+Sigue el estándar a continuación para asegurar que tu NFT pueda ser mostrado correctamente por
+varias wallets.
+
+Debes almacenar los metadatos en un archivo JSON ubicado en una solución de datos en cadena como [Irys](https://docs.irys.xyz/), y proporcionar la URL al
+archivo JSON en el campo `uri` del token o la colección. Recomendamos que los
+desarrolladores sigan el esquema de [datos fuera de la cadena ERC-1155](https://eips.ethereum.org/EIPS/eip-1155)
+para formatear sus archivos JSON.
+
+```json
+{
+  "image": "https://gateway.irys.xyz/QH3rksVhbFg5L9vvjGzb4POUibCEG-TGPInmofp-O-o",
+  "animation_url": "https://gateway.irys.xyz/QH3rksVhbFg5L9vvjHzb4POUibCEG-TGPInmofp-O-o",
+  "external_url": "https://petra.app/",
+  "attributes": [
+    {
+      "trait_type": "web",
+      "value": "yes"
+    },
+    {
+      "trait_type": "mobile",
+      "value": "yes"
+    },
+    {
+      "trait_type": "extension",
+      "value": "yes"
+    }
+  ],
+  "properties": {
+    "files": [
+      {
+        "uri": "https://gateway.irys.xyz/QH3rksVhbFg5L9vvjGzb4POUibCEG-ENXUnmofp-O-o",
+        "type": "image/png"
+      },
+      {
+        "uri": "https://gateway.irys.xyz/QH3rksVhbFg5L9vvjGzb4POUibCEG-UENCnmofp-O-o",
+        "type": "unknown",
+        "cdn": true
+      },
+      {
+        "uri": "https://gateway.irys.xyz/QH3rksVhbFg5L9vvjGzb4POUibCEG-DJHUUnmofp-O-o",
+        "type": "video/mp4"
+      }
+    ],
+    "category": "video"
+  }
+}
+```
+
+- `image`: URL al activo de imagen. Puedes usar la consulta `?ext={file_extension}`
+  para proporcionar información sobre el tipo de archivo.
+- `animation_url`: URL al adjunto multimedia del activo. Puedes usar
+  la misma consulta `file_extension` para proporcionar el tipo de archivo.
+- `external_url`: URL a un sitio web externo donde el usuario también puede ver la
+  imagen.
+- `attributes` - Array de objetos, donde un objeto debe contener campos `trait_type` y
+  `value`. `value` puede ser una cadena o un número.
+- `properties.files`: Array de objetos, donde un objeto debe contener la URI y
+  tipo del archivo que es parte del activo. El tipo debe coincidir con la extensión
+  del archivo. El array también debe incluir archivos especificados en los campos `image` y
+  `animation_url`, así como cualquier otro archivo asociado con el activo.
+  Puedes usar la consulta `?ext={file_extension}` para proporcionar información sobre el tipo de archivo.
+- `properties.category`: Tiene categorías soportadas:
+- `image` - PNG, GIF, JPG
+- `video` - MP4, MOV
+- `audio` - MP3, FLAC, WAV
+- `vr` - Modelos 3D; GLB, GLTF
+- `html` - Páginas HTML; scripts y rutas relativas dentro de la página HTML también son
+  soportados
+
+También puedes hospedar tus archivos en CDN para proporcionar tiempo de carga más rápido usando la
+bandera `cdn` en el objeto de archivo. Cuando el archivo existe, esta debería ser la ubicación
+primaria para leer el archivo multimedia (`video`, `audio`, `vr`) por la wallet. Si el archivo
+ya no está disponible, la wallet puede recurrir a usar `animation_url` para
+cargar el archivo.

@@ -1,0 +1,71 @@
+---
+title: "Instalar el Move Prover"
+description: "Guía paso a paso para instalar y configurar las dependencias del Move Prover para verificación formal de contratos inteligentes Move usando el CLI de Aptos."
+sidebar:
+  label: "Instalación del Move Prover"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Si quieres usar el [Move Prover](/es/build/smart-contracts/prover), instala las dependencias del Move Prover después de [instalar el binario del CLI](/es/build/cli/setup-cli).
+Hay dos formas de instalar las dependencias del Prover.
+
+## Instalación a través del CLI de Aptos (Recomendado)
+
+1. [Instala el binario más reciente del CLI de Aptos](/es/build/cli/install-cli/install-cli-mac).
+
+2. Ejecuta el comando `aptos update prover-dependencies`.
+
+<Aside type="note">
+  Las variables de entorno `BOOGIE_EXE` y `Z3_EXE` se establecerán automáticamente después de la instalación. Por favor asegúrate
+  de que estén en efecto en el entorno actual.
+</Aside>
+
+## Instalación a través de `aptos-core` (No Recomendado)
+
+1. Ver [Construir Aptos Desde el Código Fuente](/es/network/nodes/building-from-source)
+
+2. Luego, en el directorio aptos-core clonado, instala herramientas Move adicionales:
+
+   <details>
+     <summary>Linux / macOS</summary>
+
+     1. Abre una sesión de Terminal.
+     2. Ejecuta el script de configuración de desarrollo para preparar tu entorno: `./scripts/dev_setup.sh -yp`
+     3. Actualiza tu entorno de shell actual: `source ~/.profile`
+
+     <Aside type="note" emoji="ℹ️">
+       `dev_setup.sh -p` actualiza tu `~./profile` con variables de entorno para soportar las herramientas del Move Prover instaladas. Es posible que necesites establecer `.bash_profile` o `.zprofile` u otros archivos de configuración para tu shell.
+     </Aside>
+   </details>
+
+   <details>
+     <summary>Windows</summary>
+
+     1. Abre una terminal de PowerShell como administrador.
+     2. Ejecuta el script de configuración de desarrollo para preparar tu entorno: `PowerShell -ExecutionPolicy Bypass -File ./scripts/windows_dev_setup.ps1 -y`
+   </details>
+
+Después de la instalación, puedes ejecutar el Move Prover para probar un [ejemplo](https://github.com/aptos-labs/aptos-core/tree/main/aptos-move/move-examples/hello_prover):
+
+```shellscript filename="Terminal"
+aptos move prove --package-dir aptos-move/move-examples/hello_prover/
+```
+
+## Resolución de Problemas
+
+Si encuentras errores como el de abajo al ejecutar el comando, verifica tu versión del CLI de Aptos o verifica que estés usando la herramienta `aptos` correcta, especialmente si tienes múltiples versiones instaladas.
+
+```shellscript filename="Terminal
+error: unexpected token
+   ┌─ ~/.move/https___github_com_aptos-labs_aptos-core_git_main/aptos-move/framework/aptos-framework/sources/randomness.move:515:16
+   │
+515 │         for (i in 0..n) {
+   │             -  ^ Expected ')'
+   │             │
+   │             To match this '('
+
+{
+  "Error": "Move Prover failed: exiting with model building errors"
+}
+```

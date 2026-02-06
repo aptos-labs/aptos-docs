@@ -1,0 +1,111 @@
+---
+title: "Métricas Importantes del Nodo"
+description: "Métricas y contadores clave para monitorear la salud del nodo Aptos incluyendo indicadores de rendimiento de consenso, sincronización de estado, redes, y almacenamiento."
+sidebar:
+  label: "Métricas Clave"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Cuando visites el endpoint de métricas (ver [Servicio de Inspección de Nodos](/es/network/nodes/measure/node-inspection-service)), notarás que
+hay un gran número de métricas y contadores siendo producidos por tu nodo. La mayoría de estas métricas y contadores son
+útiles solo para desarrollo de blockchain y diagnosticar problemas difíciles de encontrar. Como resultado, recomendamos que los operadores de nodos
+ignoren la mayoría de métricas y presten atención solo a las métricas clave presentadas abajo:
+
+<Aside type="note">
+  **Inestabilidad de métricas**<br />
+  Mientras Aptos continúa creciendo y desarrollando el software de blockchain, muchas métricas vendrán e irán.
+  Como resultado, recomendamos depender de la presencia solo de las métricas explícitamente mencionadas abajo.
+  Todas las otras métricas deberían considerarse inestables y pueden cambiarse/removerse sin advertencia.
+</Aside>
+
+### Consenso
+
+Si estás ejecutando un nodo validator, las siguientes
+métricas de [consenso](/es/network/blockchain/blockchain-deep-dive#consensus) son importantes:
+
+1. `aptos_consensus_proposals_count`: Cuenta el número de veces que el nodo envió una propuesta de bloque
+   a la red. El conteo aumentará solo cuando el validator sea elegido para ser un proponente,
+   lo cual depende del stake del nodo y reputación de elección de líder. Deberías esperar que esta métrica
+   aumente al menos una vez por hora.
+2. `aptos_consensus_last_committed_round`: Cuenta la última ronda confirmada del nodo.
+   Durante consenso, esperamos que este valor aumente una vez por ronda de consenso, lo cual debería ser múltiples
+   veces por segundo. Si esto no ocurre, es probable que el nodo no esté participando en consenso.
+3. `aptos_consensus_timeout_count`: Cuenta el número de veces que el nodo localmente expiró mientras trataba
+   de participar en consenso. Si este contador aumenta, es probable que el nodo no esté participando
+   en consenso y pueda estar teniendo problemas, ej., dificultades de red.
+4. `aptos_state_sync_executing_component_counters{label="consensus"`: Este contador aumenta
+   unas pocas veces por segundo mientras el nodo esté participando en consenso. Cuando este contador deja de
+   aumentar, significa que el nodo no está participando en consenso, y probablemente ha recurrido a sincronización de estado
+   (ej., porque se quedó atrás del resto de validators y necesita ponerse al día).
+
+### Sincronización de estado
+
+Si estás ejecutando un fullnode (o un validator que aún necesita sincronizar al último estado de blockchain
+), las siguientes métricas de [sincronización de estado](/es/network/nodes/configure/state-sync) son importantes:
+
+1. `aptos_state_sync_version{type="synced"}`: Esta métrica muestra la versión sincronizada actual del nodo,
+   es decir, el número de transacciones que el nodo ha procesado. Si esta métrica deja de aumentar, significa que el
+   nodo no está sincronizando. Igualmente, si esta métrica no aumenta más rápido que la tasa a la cual nuevas transacciones
+   son confirmadas a la blockchain, significa que el nodo es poco probable que se ponga y se mantenga actualizado con el resto de
+   la red. Nota: si has seleccionado usar [sincronización rápida](/es/network/nodes/configure/state-sync#fast-syncing),
+   esta métrica no aumentará hasta que todos los estados hayan sido descargados, lo cual puede tomar algún tiempo. Ver (3) abajo.
+2. `aptos_data_client_highest_advertised_data{data_type="transactions"}`: Esta métrica muestra la versión más alta
+   sincronizada y anunciada por los pares a los que tu nodo está conectado. Como resultado, cuando esta métrica es
+   más alta que `aptos_state_sync_version{type="synced"}` (arriba) significa que tu nodo puede ver nuevos datos de blockchain y
+   sincronizará los datos de sus pares.
+3. `aptos_state_sync_version{type="synced_states"}`: Esta métrica cuenta el número de estados que han sido
+   descargados mientras un nodo está [sincronizando rápido](/es/network/nodes/configure/state-sync#fast-syncing). Si esta métrica no aumenta,
+   y `aptos_state_sync_version{type="synced"}` no aumenta (de arriba), significa que el nodo no está sincronizando
+   para nada y probablemente ha ocurrido un problema.
+4. `aptos_state_sync_bootstrapper_errors` y `aptos_state_sync_continuous_syncer_errors`: Si tu nodo está
+   enfrentando problemas sincronizando (o está viendo fallas transitorias), estas métricas aumentarán cada vez que ocurra un error.
+   El `error_label` dentro de estas métricas mostrará el tipo de error.
+
+<Aside type="note">
+  Compara la versión sincronizada mostrada por `aptos_state_sync_version{type="synced"}` con la versión más alta mostrada en el [Explorador de Aptos](https://explorer.aptoslabs.com/?network=mainnet) para ver qué tan atrás de la última versión de blockchain está tu nodo. Recuerda seleccionar la red correcta a la que tu nodo está sincronizando (ej., `mainnet`).
+</Aside>
+
+### Redes
+
+Las siguientes métricas de red son importantes, tanto para validators como fullnodes:
+
+1. `aptos_connections{direction="inbound"` y `aptos_connections{direction="outbound"`: Estas métricas cuentan
+   el número de pares a los que tu nodo está conectado, así como la dirección de la conexión de red. Una conexión `inbound`
+   significa que un par (ej., otro fullnode) se ha conectado a ti. Una conexión `outbound` significa que
+   tu nodo se ha conectado a otro nodo (ej., conectado a un validator fullnode).
+   1. Si tu nodo es un validator, la suma de ambas conexiones `inbound` y `outbound` debería ser igual al
+      número de otros validators en la red. Nota que solo la suma de estas conexiones importa. Si todas las conexiones
+      son `inbound`, o todas son `outbound`, esto no importa.
+   2. Si tu nodo es un fullnode, el número de conexiones `outbound` debería ser `> 0`. Esto asegurará que tu nodo pueda
+      sincronizar. Nota que el número de conexiones `inbound` importa solo si quieres actuar como una semilla en
+      la red y permitir que otros nodos se conecten a ti como se discute en
+      [Conexiones de Red Fullnode](/es/network/nodes/full-node/modify/fullnode-network-connections#allowing-pfn-connections).
+
+### Mempool
+
+Las siguientes métricas de [mempool](/es/network/blockchain/blockchain-deep-dive#mempool) son importantes:
+
+1. `core_mempool_index_size{index="system_ttl"`: Esta métrica muestra el número de transacciones actualmente sentadas en
+   el mempool del nodo y esperando ser confirmadas a la blockchain:
+   1. Si tu nodo es un fullnode, es altamente improbable que esta métrica sea `> 0`, a menos que las transacciones estén siendo
+      enviadas activamente a tu nodo vía la API REST y/o otros fullnodes que se hayan conectado a ti. La mayoría de operadores de fullnode
+      deberían ignorar esta métrica.
+   2. Si tu nodo es un validator, puedes usar esta métrica para ver si las transacciones del mempool de tu nodo están siendo
+      incluidas en la blockchain (ej., si el conteo disminuye). Igualmente, si esta métrica solo aumenta, significa
+      que ya sea: (i) tu nodo no puede reenviar transacciones a otros validators para ser incluidas en la blockchain; o
+      (ii) que toda la blockchain está bajo carga pesada y puede pronto congestionarse.
+
+### API REST
+
+Las siguientes métricas de [API REST](/es/build/apis/fullnode-rest-api) son importantes:
+
+1. `aptos_api_requests_count{method="GET"` y `aptos_api_requests_count{method="POST"`: Estas métricas cuentan
+   el número de solicitudes `GET` y `POST` de API REST que han sido recibidas vía la API REST del nodo. Esto
+   te permite monitorear y rastrear la cantidad de tráfico de API REST en tu nodo. También puedes usar además el
+   `operation_id` en la métrica para monitorear los tipos de operaciones que las solicitudes están realizando.
+
+2. `aptos_api_response_status_count`: Esta métrica cuenta el número de tipos de respuesta que fueron enviados para
+   la API REST. Por ejemplo, `aptos_api_response_status_count{status="200"}` cuenta el número de solicitudes
+   que fueron manejadas exitosamente con un código de respuesta `200`. Puedes usar esta métrica para rastrear la tasa de éxito y
+   falla del tráfico de API REST.

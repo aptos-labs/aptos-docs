@@ -1,0 +1,408 @@
+---
+title: "Almacenamiento Global - Operadores"
+description: "Domina las operaciones de almacenamiento global incluyendo borrow_global, move_to, move_from para gestión de recursos en Aptos."
+sidebar:
+  label: "Operadores de Almacenamiento"
+---
+
+Los programas Move pueden crear, eliminar y actualizar [resources](/es/build/smart-contracts/book/structs-and-resources) en almacenamiento global usando las siguientes cinco instrucciones:
+
+| Operación                               | Descripción                                                        | ¿Aborta?                               |
+| --------------------------------------- | ------------------------------------------------------------------ | -------------------------------------- |
+| `move_to<T>(&signer,T)`                 | Publica `T` bajo `signer.address`                                  | Si `signer.address` ya contiene un `T` |
+| `move_from<T>(address): T`              | Remueve `T` de `address` y lo devuelve                             | Si `address` no contiene un `T`        |
+| `borrow_global_mut<T>(address): &mut T` | Devuelve una referencia mutable al `T` almacenado bajo `address`   | Si `address` no contiene un `T`        |
+| `borrow_global<T>(address): &T`         | Devuelve una referencia inmutable al `T` almacenado bajo `address` | Si `address` no contiene un `T`        |
+| `exists<T>(address): bool`              | Devuelve `true` si un `T` está almacenado bajo `address`           | Nunca                                  |
+
+Cada una de estas instrucciones es parametrizada por un tipo `T` con la [habilidad `key`](/es/build/smart-contracts/book/abilities). Sin embargo, cada tipo `T` _debe ser declarado en el módulo actual_. Esto asegura que un resource solo puede ser manipulado vía la API expuesta por su módulo que lo define. Las instrucciones también toman ya sea una [`address`](/es/build/smart-contracts/book/address) o [`&signer`](/es/build/smart-contracts/book/signer) representando la dirección de cuenta donde el resource de tipo `T` está almacenado.
+
+Ver también [notación de índice (`[]`)](#index-notation-for-storage-operators) para acceder al almacenamiento global.
+
+## Referencias a Resources
+
+Las referencias a resources globales devueltas por `borrow_global` o `borrow_global_mut` se comportan mayormente como referencias a almacenamiento local: pueden ser extendidas, leídas y escritas usando [operadores de referencia](/es/build/smart-contracts/book/references) ordinarios y pasadas como argumentos a otras funciones. Sin embargo, hay una diferencia importante entre referencias locales y globales: **una función no puede devolver una referencia que apunte al almacenamiento global**. Por ejemplo, estas dos funciones fallarán al compilar:
+
+```move
+module 0x42::example {
+  struct R has key { f: u64 }
+  // no compilará
+  fun ret_direct_resource_ref_bad(a: address): &R {
+    borrow_global<R>(a) // error!
+  }
+  // tampoco compilará
+  fun ret_resource_field_ref_bad(a: address): &u64 {
+    &borrow_global<R>(a).f // error!
+  }
+}
+```
+
+Move debe hacer cumplir esta restricción para garantizar la ausencia de referencias colgantes al almacenamiento global. [Esta sección](#reference-safety-for-global-resources) contiene mucho más detalle para el lector interesado.
+
+## Operadores de Almacenamiento Global con Genéricos
+
+Las operaciones de almacenamiento global pueden ser aplicadas a resources genéricos con parámetros de tipo genérico tanto instanciados como no instanciados:
+
+```move
+module 0x42::example {
+  struct Container<T> has key { t: T }
+
+  // Publica un Container almacenando un tipo T de la elección del llamador
+  fun publish_generic_container<T>(account: &signer, t: T) {
+    move_to<Container<T>>(account, Container { t })
+  }
+
+  /// Publica un container almacenando un u64
+  fun publish_instantiated_generic_container(account: &signer, t: u64) {
+    move_to<Container<u64>>(account, Container { t })
+  }
+}
+```
+
+La capacidad de indexar en almacenamiento global vía un parámetro de tipo elegido en tiempo de ejecución es una característica poderosa de Move conocida como _polimorfismo de almacenamiento_. Para más sobre los patrones de diseño habilitados por esta característica, ver [Genéricos de Move](/es/build/smart-contracts/book/generics).
+
+## Ejemplo: `Counter`
+
+El módulo simple `Counter` de abajo ejercita cada uno de los cinco operadores de almacenamiento global. La API expuesta por este módulo permite:
+
+- A cualquiera publicar un resource `Counter` bajo su cuenta
+- A cualquiera verificar si un `Counter` existe bajo cualquier dirección
+- A cualquiera leer o incrementar el valor de un resource `Counter` bajo cualquier dirección
+- A una cuenta que almacena un resource `Counter` resetearlo a cero
+- A una cuenta que almacena un resource `Counter` removerlo y eliminarlo
+
+```move
+module 0x42::counter {
+  use std::signer;
+
+  /// Resource que envuelve un contador entero
+  struct Counter has key { i: u64 }
+
+  /// Publica un resource `Counter` con valor `i` bajo la `account` dada
+  public fun publish(account: &signer, i: u64) {
+    // "Empaqueta" (crea) un resource Counter. Esta es una operación privilegiada que
+    // solo puede ser hecha dentro del módulo que declara el resource `Counter`
+    move_to(account, Counter { i })
+  }
+
+  /// Lee el valor en el resource `Counter` almacenado en `addr`
+  public fun get_count(addr: address): u64 acquires Counter {
+    borrow_global<Counter>(addr).i
+  }
+
+  /// Incrementa el valor del resource `Counter` de `addr`
+  public fun increment(addr: address) acquires Counter {
+    let c_ref = &mut borrow_global_mut<Counter>(addr).i;
+    *c_ref = *c_ref + 1
+  }
+
+  /// Resetea el valor del `Counter` de `account` a 0
+  public fun reset(account: &signer) acquires Counter {
+    let c_ref = &mut borrow_global_mut<Counter>(signer::address_of(account)).i;
+    *c_ref = 0
+  }
+
+  /// Elimina el resource `Counter` bajo `account` y devuelve su valor
+  public fun delete(account: &signer): u64 acquires Counter {
+    // remueve el resource Counter
+    let c = move_from<Counter>(signer::address_of(account));
+    // "Desempaqueta" el resource `Counter` en sus campos. Esta es una
+    // operación privilegiada que solo puede ser hecha dentro del módulo
+    // que declara el resource `Counter`
+    let Counter { i } = c;
+    i
+  }
+
+  /// Devuelve `true` si `addr` contiene un resource `Counter`
+  public fun exists_at(addr: address): bool {
+    exists<Counter>(addr)
+  }
+}
+```
+
+## Anotación `acquires`
+
+En el ejemplo `Counter` arriba, nota que las funciones `get_count`, `increment`, `reset`, y `delete` están todas anotadas con `acquires Counter`. Una función debe ser anotada con `acquires T` si y solo si:
+
+- La función contiene una instrucción `move_from<T>`, `borrow_global_mut<T>`, o `borrow_global<T>`
+- La función llama a otra función que está anotada con `acquires T`
+
+`acquires` es utilizado por el sistema de tipos de Move para asegurar que las referencias no se vuelvan colgantes. Esto es verificado estáticamente, por lo que no hay costo de tiempo de ejecución.
+
+## Ejemplos Prácticos
+
+### Sistema de Tokens Básico
+
+```move
+module 0x42::simple_token {
+  struct Token has key {
+    value: u64
+  }
+
+  /// Crea un nuevo token para el usuario
+  public fun mint(account: &signer, value: u64) {
+    assert!(!exists<Token>(std::signer::address_of(account)), 1);
+    move_to(account, Token { value });
+  }
+
+  /// Transfiere tokens entre cuentas
+  public fun transfer(from: &signer, to: address, amount: u64) acquires Token {
+    let from_addr = std::signer::address_of(from);
+    
+    // Verificar que from tiene tokens
+    assert!(exists<Token>(from_addr), 2);
+    let from_token = borrow_global_mut<Token>(from_addr);
+    assert!(from_token.value >= amount, 3);
+    
+    // Deducir de from
+    from_token.value = from_token.value - amount;
+    
+    // Agregar a to
+    if (exists<Token>(to)) {
+      let to_token = borrow_global_mut<Token>(to);
+      to_token.value = to_token.value + amount;
+    } else {
+      // Crear nueva cuenta de token para el destinatario
+      let new_account = create_signer(to); // función hipotética
+      move_to(&new_account, Token { value: amount });
+    }
+  }
+
+  /// Obtiene el saldo de una cuenta
+  public fun balance(addr: address): u64 acquires Token {
+    if (exists<Token>(addr)) {
+      borrow_global<Token>(addr).value
+    } else {
+      0
+    }
+  }
+}
+```
+
+### Sistema de Perfil de Usuario
+
+```move
+module 0x42::user_profile {
+  struct Profile has key {
+    name: vector<u8>,
+    age: u8,
+    reputation: u64,
+    is_verified: bool
+  }
+
+  /// Crea un perfil de usuario
+  public fun create_profile(
+    account: &signer, 
+    name: vector<u8>, 
+    age: u8
+  ) {
+    let addr = std::signer::address_of(account);
+    assert!(!exists<Profile>(addr), 1); // El perfil ya existe
+    
+    move_to(account, Profile {
+      name,
+      age,
+      reputation: 0,
+      is_verified: false
+    });
+  }
+
+  /// Actualiza el nombre del perfil
+  public fun update_name(account: &signer, new_name: vector<u8>) acquires Profile {
+    let addr = std::signer::address_of(account);
+    assert!(exists<Profile>(addr), 2); // Perfil no existe
+    
+    let profile = borrow_global_mut<Profile>(addr);
+    profile.name = new_name;
+  }
+
+  /// Incrementa la reputación (solo admin puede llamar)
+  public fun increment_reputation(user_addr: address, points: u64) acquires Profile {
+    assert!(exists<Profile>(user_addr), 2);
+    let profile = borrow_global_mut<Profile>(user_addr);
+    profile.reputation = profile.reputation + points;
+  }
+
+  /// Verifica un usuario (solo admin puede llamar)
+  public fun verify_user(user_addr: address) acquires Profile {
+    assert!(exists<Profile>(user_addr), 2);
+    let profile = borrow_global_mut<Profile>(user_addr);
+    profile.is_verified = true;
+  }
+
+  /// Obtiene información del perfil
+  public fun get_profile_info(addr: address): (vector<u8>, u8, u64, bool) acquires Profile {
+    assert!(exists<Profile>(addr), 2);
+    let profile = borrow_global<Profile>(addr);
+    (profile.name, profile.age, profile.reputation, profile.is_verified)
+  }
+}
+```
+
+### Sistema de Configuración Global
+
+```move
+module 0x42::config {
+  struct GlobalConfig has key {
+    admin: address,
+    fee_rate: u64,
+    max_supply: u64,
+    is_paused: bool
+  }
+
+  /// Inicializa la configuración global (solo admin)
+  public fun initialize(admin: &signer, fee_rate: u64, max_supply: u64) {
+    let admin_addr = std::signer::address_of(admin);
+    assert!(!exists<GlobalConfig>(admin_addr), 1);
+    
+    move_to(admin, GlobalConfig {
+      admin: admin_addr,
+      fee_rate,
+      max_supply,
+      is_paused: false
+    });
+  }
+
+  /// Actualiza la tarifa (solo admin)
+  public fun update_fee_rate(admin: &signer, new_rate: u64) acquires GlobalConfig {
+    let admin_addr = std::signer::address_of(admin);
+    assert!(exists<GlobalConfig>(admin_addr), 2);
+    
+    let config = borrow_global_mut<GlobalConfig>(admin_addr);
+    assert!(config.admin == admin_addr, 3); // No autorizado
+    config.fee_rate = new_rate;
+  }
+
+  /// Pausa el sistema
+  public fun pause(admin: &signer) acquires GlobalConfig {
+    let admin_addr = std::signer::address_of(admin);
+    let config = borrow_global_mut<GlobalConfig>(admin_addr);
+    assert!(config.admin == admin_addr, 3);
+    config.is_paused = true;
+  }
+
+  /// Verifica si el sistema está pausado
+  public fun is_paused(admin_addr: address): bool acquires GlobalConfig {
+    if (exists<GlobalConfig>(admin_addr)) {
+      borrow_global<GlobalConfig>(admin_addr).is_paused
+    } else {
+      false
+    }
+  }
+}
+```
+
+## Patrones de Diseño
+
+### Patrón Singleton
+
+```move
+module 0x42::singleton {
+  struct Singleton has key {
+    value: u64
+  }
+
+  /// Solo puede ser llamado una vez
+  public fun initialize(account: &signer) {
+    assert!(!exists<Singleton>(std::signer::address_of(account)), 1);
+    move_to(account, Singleton { value: 0 });
+  }
+
+  /// Acceso singleton
+  public fun get_value(addr: address): u64 acquires Singleton {
+    assert!(exists<Singleton>(addr), 2);
+    borrow_global<Singleton>(addr).value
+  }
+}
+```
+
+### Patrón Factory
+
+```move
+module 0x42::factory {
+  struct Item has key {
+    id: u64,
+    owner: address
+  }
+
+  struct Factory has key {
+    next_id: u64,
+    total_created: u64
+  }
+
+  /// Crea un nuevo item
+  public fun create_item(factory_owner: &signer, new_owner: address) acquires Factory {
+    let factory_addr = std::signer::address_of(factory_owner);
+    assert!(exists<Factory>(factory_addr), 1);
+    
+    let factory = borrow_global_mut<Factory>(factory_addr);
+    let item_id = factory.next_id;
+    factory.next_id = factory.next_id + 1;
+    factory.total_created = factory.total_created + 1;
+    
+    // Crear item para el nuevo propietario
+    let new_account = create_signer(new_owner); // función hipotética
+    move_to(&new_account, Item {
+      id: item_id,
+      owner: new_owner
+    });
+  }
+}
+```
+
+## Buenas Prácticas
+
+### 1. Siempre Verificar Existencia
+
+```move
+// ✓ Bueno: verificar antes de acceder
+public fun safe_access(addr: address): u64 acquires MyResource {
+  assert!(exists<MyResource>(addr), E_RESOURCE_NOT_FOUND);
+  borrow_global<MyResource>(addr).value
+}
+```
+
+### 2. Usar Anotaciones Acquires Correctamente
+
+```move
+// ✓ Bueno: acquires anotado correctamente
+public fun update_value(addr: address, new_value: u64) acquires MyResource {
+  let resource = borrow_global_mut<MyResource>(addr);
+  resource.value = new_value;
+}
+```
+
+### 3. Prevenir Doble Inicialización
+
+```move
+// ✓ Bueno: verificar que el resource no existe
+public fun initialize(account: &signer) {
+  assert!(!exists<MyResource>(std::signer::address_of(account)), E_ALREADY_EXISTS);
+  move_to(account, MyResource { value: 0 });
+}
+```
+
+### 4. Manejar Casos de Resource No Existente
+
+```move
+// ✓ Bueno: manejar caso cuando resource no existe
+public fun get_value_or_default(addr: address): u64 acquires MyResource {
+  if (exists<MyResource>(addr)) {
+    borrow_global<MyResource>(addr).value
+  } else {
+    0 // valor por defecto
+  }
+}
+```
+
+### 5. Usar Pattern de Admin Seguro
+
+```move
+// ✓ Bueno: verificar permisos de admin
+public fun admin_function(admin: &signer) acquires Config {
+  let admin_addr = std::signer::address_of(admin);
+  let config = borrow_global<Config>(@config_address);
+  assert!(config.admin == admin_addr, E_NOT_AUTHORIZED);
+  // ... lógica de admin
+}
+```

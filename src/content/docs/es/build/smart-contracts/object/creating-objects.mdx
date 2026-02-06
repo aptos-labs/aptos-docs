@@ -1,0 +1,412 @@
+---
+title: "Creando Objetos"
+description: "Domina los patrones de creación de objetos, modelos de propiedad y gestión del ciclo de vida en el desarrollo de Move para Aptos."
+sidebar:
+  label: "Creando Objetos"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Crear un Objeto involucra dos pasos:
+
+1. Crear el grupo de recursos `ObjectCore` (que tiene una dirección que puedes usar para referirte al Objeto más tarde).
+2. Personalizar cómo se comportará el Objeto usando permisos llamados `Ref`s.
+
+<Aside type="note">
+  Configurar un Objeto generando `Ref`s tiene que suceder en la misma
+  transacción en la que lo creas. Más tarde es imposible cambiar esas configuraciones.
+</Aside>
+
+## Creando un Objeto
+
+Hay tres tipos de Objetos que puedes crear:
+
+1. Un **Objeto normal.** Este tipo es eliminable y tiene una dirección aleatoria. Puedes crearlo usando: `0x1::object::create_object(owner_address: address)`. Por ejemplo:
+
+```move filename="object_playground.move"
+module my_addr::object_playground {
+  use std::signer;
+  use aptos_framework::object;
+
+  entry fun create_my_object(caller: &signer) {
+    let caller_address = signer::address_of(caller);
+    let constructor_ref = object::create_object(caller_address);
+    // ...
+  }
+}
+```
+
+2. Un **Objeto nombrado.** Este tipo **no** es eliminable y tiene una dirección determinística. Puedes crearlo usando: `0x1::object::create_named_object(creator: &signer, seed: vector<u8>)`. Por ejemplo:
+
+```move filename="object_playground.move"
+module my_addr::object_playground {
+  use std::signer;
+  use aptos_framework::object;
+
+  /// Semilla para mi objeto nombrado, debe ser globalmente único para la cuenta creadora
+  const NAME: vector<u8> = b"MyAwesomeObject";
+
+  entry fun create_my_object(caller: &signer) {
+    let caller_address = signer::address_of(caller);
+    let constructor_ref = object::create_named_object(caller, NAME);
+    // ...
+  }
+
+  #[view]
+  fun has_object(creator: address): bool {
+    let object_address = object::create_object_address(&creator, NAME);
+    object::object_exists<0x1::object::ObjectCore>(object_address)
+  }
+}
+```
+
+3. Un **Objeto sticky.** Este tipo también **no** es eliminable y tiene una dirección aleatoria. Puedes crearlo usando `0x1::object::create_sticky_object(owner_address: address)`. Por ejemplo:
+
+```move filename="object_playground.move"
+module my_addr::object_playground {
+  use std::signer;
+  use aptos_framework::object;
+
+  entry fun create_my_object(caller: &signer) {
+    let caller_address = signer::address_of(caller);
+    let constructor_ref = object::create_sticky_object(caller_address);
+    // ...
+  }
+}
+```
+
+## Personalizando Características del Objeto
+
+Una vez que crees tu objeto, recibirás un `ConstructorRef` que puedes usar para generar `Ref`s adicionales. Los `Ref`s pueden ser usados en el futuro para habilitar / deshabilitar / ejecutar ciertas funciones del Objeto como transferir recursos, transferir el objeto mismo, o eliminar el Objeto.
+
+Las siguientes secciones te guiarán a través de los `Ref`s comúnmente usados y las características que habilitan.
+
+<Aside type="note">
+  Nota: El `ConstructorRef` no puede ser almacenado. Se destruye al final de la
+  transacción usada para crear el Objeto, así que cualquier otro `Ref` **debe** ser
+  generado durante la creación del Objeto.
+</Aside>
+
+### Agregando Recursos
+
+Puedes usar el `ConstructorRef` con `object::generate_signer` para crear un signer que te permite transferir recursos al Objeto. Esto usa `move_to`, la misma función que para agregar recursos a una cuenta.
+
+```move filename="Example.move"
+module my_addr::object_playground {
+  use std::signer;
+  use aptos_framework::object;
+
+  #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
+  struct MyStruct has key {
+    num: u8
+  }
+
+  entry fun create_my_object(caller: &signer) {
+    let caller_address = signer::address_of(caller);
+
+    // Creates the object
+    let constructor_ref = object::create_object(caller_address);
+
+    // Retrieves a signer for the object
+    let object_signer = object::generate_signer(&constructor_ref);
+
+    // Moves the MyStruct resource into the object
+    move_to(&object_signer, MyStruct { num: 0 });
+
+    // ...
+  }
+}
+```
+
+### Agregando Extensibilidad (`ExtendRef`)
+
+A veces quieres que un Objeto sea editable más tarde. En ese caso, puedes generar un `ExtendRef` con `object::generate_extend_ref`. Este ref puede ser usado para generar un signer para el objeto.
+
+Puedes controlar quién tiene permiso para usar el `ExtendRef` a través de la lógica del contrato inteligente como en el ejemplo a continuación.
+
+```move filename="Example.move"
+module my_addr::object_playground {
+  use std::signer;
+  use std::string::{Self, String};
+  use aptos_framework::object::{Self, Object};
+
+  /// Caller is not the owner of the object
+  const E_NOT_OWNER: u64 = 1;
+  /// Caller is not the publisher of the contract
+  const E_NOT_PUBLISHER: u64 = 2;
+
+  #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
+  struct MyStruct has key {
+    num: u8
+  }
+
+  #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
+  struct Message has key {
+    message: string::String
+  }
+
+  #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
+  struct ObjectController has key {
+    extend_ref: object::ExtendRef,
+  }
+
+  entry fun create_my_object(caller: &signer) {
+    let caller_address = signer::address_of(caller);
+
+    // Creates the object
+    let constructor_ref = object::create_object(caller_address);
+
+    // Retrieves a signer for the object
+    let object_signer = object::generate_signer(&constructor_ref);
+
+    // Moves the MyStruct resource into the object
+    move_to(&object_signer, MyStruct { num: 0 });
+
+    // Creates an extend ref, and moves it to the object
+    let extend_ref = object::generate_extend_ref(&constructor_ref);
+    move_to(&object_signer, ObjectController { extend_ref });
+    // ...
+  }
+
+  entry fun add_message(
+    caller: &signer,
+    object: Object<MyStruct>,
+    message: String
+  ) acquires ObjectController {
+    let caller_address = signer::address_of(caller);
+    // There are a couple ways to go about permissions
+
+    // Allow only the owner of the object
+    assert!(object::is_owner(object, caller_address), E_NOT_OWNER);
+    // Allow only the publisher of the contract
+    assert!(caller_address == @my_addr, E_NOT_PUBLISHER);
+    // Or any other permission scheme you can think of, the possibilities are endless!
+
+    // Use the extend ref to get a signer
+    let object_address = object::object_address(&object);
+    let extend_ref = &borrow_global<ObjectController>(object_address).extend_ref;
+    let object_signer = object::generate_signer_for_extending(extend_ref);
+
+    // Extend the object to have a message
+    move_to(&object_signer, Message { message });
+  }
+}
+```
+
+### Deshabilitando / Alternando Transferencias (`TransferRef`)
+
+Por defecto, todos los Objetos son transferibles. Esto puede ser cambiado a través de un `TransferRef` que puedes generar con `object::generate_transfer_ref`.
+
+El ejemplo a continuación muestra cómo podrías generar y gestionar permisos para determinar si un Objeto es transferible.
+
+```move filename="Example.move"
+module my_addr::object_playground {
+  use std::signer;
+  use aptos_framework::object::{Self, Object};
+
+  /// Caller is not the publisher of the contract
+  const E_NOT_PUBLISHER: u64 = 1;
+
+  #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
+  struct ObjectController has key {
+    transfer_ref: object::TransferRef,
+  }
+
+  entry fun create_my_object(
+    caller: &signer,
+    transferrable: bool,
+    controllable: bool
+  ) {
+    let caller_address = signer::address_of(caller);
+
+    // Creates the object
+    let constructor_ref = object::create_object(caller_address);
+
+    // Retrieves a signer for the object
+    let object_signer = object::generate_signer(&constructor_ref);
+
+    // Creates a transfer ref for controlling transfers
+    let transfer_ref = object::generate_transfer_ref(&constructor_ref);
+
+    // We now have a choice, we can make it so the object can be transferred
+    // and we can decide if we want to allow it to change later.  By default, it
+    // is transferrable
+    if (!transferrable) {
+      object::disable_ungated_transfer(&transfer_ref);
+    };
+
+    // If we want it to be controllable, we must store the transfer ref for later
+    if (controllable) {
+      move_to(&object_signer, ObjectController { transfer_ref });
+    }
+    // ...
+  }
+
+  /// In this example, we'll only let the publisher of the contract change the
+  /// permissions of transferring
+  entry fun toggle_transfer(
+    caller: &signer,
+    object: Object<ObjectController>
+  ) acquires ObjectController {
+    // Only let the publisher toggle transfers
+    let caller_address = signer::address_of(caller);
+    assert!(caller_address == @my_addr, E_NOT_PUBLISHER);
+
+    // Retrieve the transfer ref
+    let object_address = object::object_address(&object);
+    let transfer_ref = &borrow_global<ObjectController>(
+      object_address
+    ).transfer_ref;
+
+    // Toggle it based on its current state
+    if (object::ungated_transfer_allowed(object)) {
+      object::disable_ungated_transfer(transfer_ref);
+    } else {
+      object::enable_ungated_transfer(transfer_ref);
+    }
+  }
+}
+```
+
+### Transferencias de Una Vez (`LinearTransferRef`)
+
+Además, si el creador quiere controlar todas las transferencias, un `LinearTransferRef` puede ser creado desde el `TransferRef` para proporcionar una funcionalidad de transferencia de una sola vez. Esto puede ser usado para crear “soulbound” objects al tener una transferencia de una vez desde el creador del Objeto al destinatario. El `LinearTransferRef` debe ser usado por el propietario del Objeto.
+
+```move filename="Example.move"
+module my_addr::object_playground {
+  use std::signer;
+  use aptos_framework::object::{Self, Object};
+
+  /// Caller is not the publisher of the contract
+  const E_NOT_PUBLISHER: u64 = 1;
+
+  #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
+  struct ObjectController has key {
+    transfer_ref: object::TransferRef,
+  }
+
+  entry fun create_my_object(
+    caller: &signer,
+  ) {
+    let caller_address = signer::address_of(caller);
+
+    // Creates the object
+    let constructor_ref = object::create_object(caller_address);
+
+    // Retrieves a signer for the object
+    let object_signer = object::generate_signer(&constructor_ref);
+
+    // Creates a transfer ref for controlling transfers
+    let transfer_ref = object::generate_transfer_ref(&constructor_ref);
+
+    // Disable ungated transfer
+    object::disable_ungated_transfer(&transfer_ref);
+    move_to(&object_signer, ObjectController {
+      transfer_ref,
+    });
+    // ...
+  }
+
+  /// In this example, we'll only let the publisher of the contract change the
+  /// permissions of transferring
+  /// Now only owner can transfer exactly once
+  entry fun transfer(
+    caller: &signer,
+    object: Object<ObjectController>,
+    new_owner: address
+  ) acquires ObjectController {
+    // Only let the publisher toggle transfers
+    let caller_address = signer::address_of(caller);
+    assert!(caller_address == @my_addr, E_NOT_PUBLISHER);
+
+    let object_address = object::object_address(&object);
+
+    // Retrieve the transfer ref
+    let transfer_ref = &borrow_global<ObjectController>(
+      object_address
+    ).transfer_ref;
+
+    // Generate a one time use `LinearTransferRef`
+    let linear_transfer_ref = object::generate_linear_transfer_ref(
+      transfer_ref
+    );
+
+    object::transfer_with_ref(linear_transfer_ref, new_owner);
+  }
+}
+```
+
+## Permitiendo la Eliminación de un Objeto (`DeleteRef`)
+
+Para Objetos creados con el método por defecto (permitiendo la eliminación) puedes generar un `DeleteRef` que puede ser usado más tarde. Esto puede ayudar a eliminar el desorden así como recibir un reembolso de almacenamiento.
+
+No puedes crear un `DeleteRef` para un Objeto no eliminable.
+
+```move filename="Example.move"
+module my_addr::object_playground {
+  use std::signer;
+  use aptos_framework::object::{Self, Object};
+
+  /// Caller is not the owner of the object
+  const E_NOT_OWNER: u64 = 1;
+
+  #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
+  struct ObjectController has key {
+    delete_ref: object::DeleteRef,
+  }
+
+  entry fun create_my_object(
+    caller: &signer,
+    _transferrable: bool,
+    _controllable: bool
+  ) {
+    let caller_address = signer::address_of(caller);
+
+    // Creates the object
+    let constructor_ref = object::create_object(caller_address);
+
+    // Retrieves a signer for the object
+    let object_signer = object::generate_signer(&constructor_ref);
+
+    // Creates and store the delete ref
+    let delete_ref = object::generate_delete_ref(&constructor_ref);
+    move_to(&object_signer, ObjectController {
+      delete_ref
+    });
+    // ...
+  }
+
+  /// Now only let the owner delete the object
+  entry fun delete(
+    caller: &signer,
+    object: Object<ObjectController>,
+  ) acquires ObjectController {
+    // Only let caller delete
+    let caller_address = signer::address_of(caller);
+    assert!(object::is_owner(object, caller_address), E_NOT_OWNER);
+
+    let object_address = object::object_address(&object);
+
+    // Retrieve the delete ref, it is consumed so it must be extracted
+    // from the resource
+    let ObjectController {
+      delete_ref
+    } = move_from<ObjectController>(
+      object_address
+    );
+
+    // Delete the object forever!
+    object::delete(delete_ref);
+  }
+}
+```
+
+## Haciendo un Objeto Inmutable
+
+Un objeto puede ser hecho inmutable haciendo el contrato asociado inmutable, y eliminando cualquier capacidad de extensión o mutación del objeto. Por defecto, los contratos no son inmutables, y los objetos pueden ser extendidos con un `ExtendRef`, y los recursos pueden ser mutados si el contrato lo permite.
+
+## Lectura Adicional
+
+Puedes encontrar documentación para todos los posibles `Refs` mirando la documentación de referencia de Move para `0x1::object` [aquí](/es/move-reference/mainnet/aptos-framework/object).
+
+También puedes explorar cómo usar Objetos una vez que están construidos [aquí](/es/build/smart-contracts/object/using-objects).

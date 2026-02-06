@@ -1,0 +1,207 @@
+---
+title: "5. Manejar Tareas"
+description: "Completa la dapp implementando funcionalidad de gestión de tareas para obtener tareas existentes y agregar nuevas."
+sidebar:
+  label: "5. Manejar Tareas"
+---
+
+En el quinto y último capítulo del tutorial sobre [construir una dapp de extremo a extremo en Aptos](/es/build/guides/build-e2e-dapp), agregarás funcionalidad a la aplicación para que la interfaz de usuario pueda manejar casos donde una cuenta ha creado una lista.
+
+Hemos cubierto cómo [obtener datos](/es/build/guides/build-e2e-dapp/3-fetch-data-from-chain) (una lista de tareas de cuenta) de la cadena y cómo [enviar una transacción](/es/build/guides/build-e2e-dapp/4-submit-data-to-chain) (nueva lista de tareas) a la cadena usando Billetera.
+
+Terminemos de construir nuestra aplicación implementando obtener tareas y agregar una función de tarea.
+
+## Obtener tareas
+
+1. Crea un estado local `tasks` que contendrá nuestras tareas. Será un estado de tipo Task (que tiene las mismas propiedades que establecimos en nuestro contrato inteligente):
+
+```typescript filename="App.tsx"
+type Task = {
+  address: string;
+  completed: boolean;
+  content: string;
+  task_id: string;
+};
+
+function App() {
+	const [tasks, setTasks] = useState<Task[]>([]);
+	...
+}
+```
+
+2. Actualiza nuestra función `fetchList` para obtener las tareas en el recurso `TodoList` de la cuenta:
+
+```typescript filename="App.tsx"
+const fetchList = async () => {
+  if (!account) return [];
+  try {
+    const todoListResource = await aptosClient().getAccountResource({
+      accountAddress:account?.address,
+      resourceType:`${moduleAddress}::todolist::TodoList`
+    });
+    setAccountHasList(true);
+    
+    // Obtener tareas usando la función de vista
+    const tasks = await aptosClient().view({
+      payload: {
+        function: `${moduleAddress}::todolist::get_tasks`,
+        functionArguments: [account?.address]
+      }
+    });
+    
+    // establecer tareas en estado local
+    setTasks(tasks[0] as Task[]);
+  } catch (e: any) {
+    setAccountHasList(false);
+  }
+};
+```
+
+**¡Esta parte es un poco confusa, así que mantente con nosotros!**
+
+Actualizamos nuestra función para usar la función de vista `get_tasks` que definimos en nuestro contrato inteligente. Esta función devuelve todas las tareas para una dirección de cuenta dada.
+
+3. Ahora actualicemos nuestra interfaz de usuario para mostrar las tareas cuando una cuenta tiene una lista:
+
+```tsx filename="App.tsx"
+function App() {
+  ...
+  return (
+    <>
+      <TopBanner />
+      <Header />
+      <div className="flex items-center justify-center flex-col">
+        {!accountHasList ? (
+          <div>
+            <h2>Crear una nueva lista</h2>
+            <Button onClick={addNewList}>Agregar nueva lista</Button>
+          </div>
+        ) : (
+          <div className="w-full max-w-md">
+            <h2 className="text-2xl font-bold mb-4">Mi Lista de Tareas</h2>
+            
+            {/* Formulario para agregar nueva tarea */}
+            <div className="mb-4">
+              <input
+                type="text"
+                placeholder="Agregar nueva tarea..."
+                value={newTask}
+                onChange={(e) => setNewTask(e.target.value)}
+                className="w-full p-2 border rounded"
+              />
+              <Button 
+                onClick={addNewTask}
+                className="mt-2 w-full"
+                disabled={!newTask.trim()}
+              >
+                Agregar Tarea
+              </Button>
+            </div>
+            
+            {/* Lista de tareas */}
+            <div className="space-y-2">
+              {tasks.map((task) => (
+                <div 
+                  key={task.task_id} 
+                  className={`p-3 border rounded ${task.completed ? 'bg-gray-100' : 'bg-white'}`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className={task.completed ? 'line-through text-gray-500' : ''}>
+                      {task.content}
+                    </span>
+                    {!task.completed && (
+                      <Button 
+                        onClick={() => completeTask(task.task_id)}
+                        size="sm"
+                      >
+                        Completar
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+            
+            {tasks.length === 0 && (
+              <p className="text-gray-500 text-center">No hay tareas aún. ¡Agrega tu primera tarea!</p>
+            )}
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+```
+
+4. Necesitamos agregar el estado `newTask` y las funciones para manejar agregar y completar tareas:
+
+```tsx filename="App.tsx"
+function App() {
+  ...
+  const [newTask, setNewTask] = useState<string>("");
+  
+  const addNewTask = async () => {
+    if (!account || !newTask.trim()) return;
+    
+    const transaction: InputTransactionData = {
+      data: {
+        function: `${moduleAddress}::todolist::create_task`,
+        functionArguments: [newTask]
+      }
+    };
+    
+    try {
+      const response = await signAndSubmitTransaction(transaction);
+      await aptosClient().waitForTransaction({transactionHash: response.hash});
+      setNewTask("");
+      fetchList(); // Refrescar la lista de tareas
+    } catch (error: any) {
+      console.error("Error agregando tarea:", error);
+    }
+  };
+  
+  const completeTask = async (taskId: string) => {
+    if (!account) return;
+    
+    const transaction: InputTransactionData = {
+      data: {
+        function: `${moduleAddress}::todolist::complete_task`,
+        functionArguments: [taskId]
+      }
+    };
+    
+    try {
+      const response = await signAndSubmitTransaction(transaction);
+      await aptosClient().waitForTransaction({transactionHash: response.hash});
+      fetchList(); // Refrescar la lista de tareas
+    } catch (error: any) {
+      console.error("Error completando tarea:", error);
+    }
+  };
+  
+  ...
+}
+```
+
+**¡Felicidades!** 🎉
+
+Has construido exitosamente una dapp de extremo a extremo en Aptos que puede:
+
+1. ✅ Conectar una billetera
+2. ✅ Crear una nueva lista de tareas
+3. ✅ Obtener tareas existentes de la cadena
+4. ✅ Agregar nuevas tareas a la lista
+5. ✅ Marcar tareas como completadas
+6. ✅ Mostrar el estado de las tareas en la interfaz de usuario
+
+Tu aplicación ahora interactúa completamente con la blockchain de Aptos, permitiendo a los usuarios gestionar sus listas de tareas de manera descentralizada. Los usuarios pueden conectar sus billeteras, crear listas, agregar tareas y marcarlas como completadas, todo mientras sus datos se almacenan de forma segura en la blockchain.
+
+## Próximos pasos
+
+Ahora que has completado tu primera dapp de extremo a extremo, considera explorar:
+
+- Agregar más funcionalidades como editar tareas o eliminar listas
+- Implementar mejores manejo de errores y estados de carga
+- Agregar pruebas para tu contrato inteligente
+- Desplegar tu aplicación a una red en vivo (testnet o mainnet)
+- Explorar funcionalidades más avanzadas de Move como eventos y recursos más complejos

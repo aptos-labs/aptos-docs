@@ -1,18 +1,19 @@
-import {
-  GithubAuthProvider,
-  GoogleAuthProvider,
-  onAuthStateChanged,
-  signInWithPopup,
-  signOut,
-  type AuthProvider,
-  type User,
-} from "@firebase/auth";
+import type { User } from "@firebase/auth";
 import { atom, onMount } from "nanostores";
 
 import { getFirebaseAuth } from "~/lib/firebase/auth";
 import { singletonGetter } from "~/lib/singletonGetter";
 
 export type { User } from "@firebase/auth";
+
+/**
+ * Lazily loads @firebase/auth providers and methods.
+ * This avoids pulling the full Firebase Auth SDK into the initial bundle --
+ * it is only fetched when the user actually interacts with auth.
+ */
+async function loadFirebaseAuth() {
+  return import("@firebase/auth");
+}
 
 export class AuthStore {
   $user = atom<User | null>(null);
@@ -21,56 +22,67 @@ export class AuthStore {
 
   constructor() {
     onMount(this.$user, () => {
-      try {
-        return onAuthStateChanged(getFirebaseAuth(), (currentUser) => {
-          this.$isLoading.set(false);
-          this.$user.set(currentUser);
-        });
-      } catch {
-        this.$error.set("Could not instantiate a connection with firebase");
-      }
-
+      void this.initAuthListener();
       return;
     });
   }
 
+  private async initAuthListener(): Promise<void> {
+    try {
+      const [{ onAuthStateChanged }, auth] = await Promise.all([
+        loadFirebaseAuth(),
+        getFirebaseAuth(),
+      ]);
+      onAuthStateChanged(auth, (currentUser) => {
+        this.$isLoading.set(false);
+        this.$user.set(currentUser);
+      });
+    } catch {
+      this.$error.set("Could not instantiate a connection with firebase");
+    }
+  }
+
   // Auth methods
   loginByGithub = (): void => {
-    this.loginByProvider(new GithubAuthProvider());
+    void this.loginByProvider("github");
   };
 
   loginByGoogle = (): void => {
-    this.loginByProvider(new GoogleAuthProvider());
+    void this.loginByProvider("google");
   };
 
   logout = (): void => {
     this.$error.set(null);
     this.$isLoading.set(true);
-    signOut(getFirebaseAuth())
-      .then(() => {
+    void (async () => {
+      try {
+        const [{ signOut }, auth] = await Promise.all([loadFirebaseAuth(), getFirebaseAuth()]);
+        await signOut(auth);
         this.$user.set(null);
-      })
-      .catch((e: unknown) => {
+      } catch (e: unknown) {
         this.$error.set(String(e));
-      })
-      .finally(() => {
+      } finally {
         this.$isLoading.set(false);
-      });
+      }
+    })();
   };
 
-  private loginByProvider(provider: AuthProvider): void {
+  private async loginByProvider(provider: "github" | "google"): Promise<void> {
     this.$error.set(null);
     this.$isLoading.set(true);
-    signInWithPopup(getFirebaseAuth(), provider)
-      .then((creds) => {
-        this.$user.set(creds.user);
-      })
-      .catch((e: unknown) => {
-        this.$error.set(String(e));
-      })
-      .finally(() => {
-        this.$isLoading.set(false);
-      });
+    try {
+      const [firebaseAuth, auth] = await Promise.all([loadFirebaseAuth(), getFirebaseAuth()]);
+      const authProvider =
+        provider === "github"
+          ? new firebaseAuth.GithubAuthProvider()
+          : new firebaseAuth.GoogleAuthProvider();
+      const creds = await firebaseAuth.signInWithPopup(auth, authProvider);
+      this.$user.set(creds.user);
+    } catch (e: unknown) {
+      this.$error.set(String(e));
+    } finally {
+      this.$isLoading.set(false);
+    }
   }
 }
 

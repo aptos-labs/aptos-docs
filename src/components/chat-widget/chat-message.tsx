@@ -3,7 +3,6 @@ import type React from "react";
 import { type ComponentProps, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { PrismLight as SyntaxHighlighter } from "react-syntax-highlighter";
-import oneDark from "react-syntax-highlighter/dist/cjs/styles/prism/one-dark";
 import bashLang from "react-syntax-highlighter/dist/cjs/languages/prism/bash";
 import goLang from "react-syntax-highlighter/dist/cjs/languages/prism/go";
 import javascriptLang from "react-syntax-highlighter/dist/cjs/languages/prism/javascript";
@@ -15,8 +14,9 @@ import tomlLang from "react-syntax-highlighter/dist/cjs/languages/prism/toml";
 import tsxLang from "react-syntax-highlighter/dist/cjs/languages/prism/tsx";
 import typescriptLang from "react-syntax-highlighter/dist/cjs/languages/prism/typescript";
 import yamlLang from "react-syntax-highlighter/dist/cjs/languages/prism/yaml";
-import moveLang from "./prism-move";
+import oneDark from "react-syntax-highlighter/dist/cjs/styles/prism/one-dark";
 import remarkGfm from "remark-gfm";
+import moveLang from "./prism-move";
 import type { Message } from "./types";
 
 // CJS modules export as { default: fn }, extract the actual language function

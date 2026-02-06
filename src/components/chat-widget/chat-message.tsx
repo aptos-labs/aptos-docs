@@ -15,6 +15,7 @@ import tomlLang from "react-syntax-highlighter/dist/cjs/languages/prism/toml";
 import tsxLang from "react-syntax-highlighter/dist/cjs/languages/prism/tsx";
 import typescriptLang from "react-syntax-highlighter/dist/cjs/languages/prism/typescript";
 import yamlLang from "react-syntax-highlighter/dist/cjs/languages/prism/yaml";
+import moveLang from "./prism-move";
 import remarkGfm from "remark-gfm";
 import type { Message } from "./types";
 
@@ -37,6 +38,7 @@ SyntaxHighlighter.registerLanguage("toml", getLang(tomlLang));
 SyntaxHighlighter.registerLanguage("tsx", getLang(tsxLang));
 SyntaxHighlighter.registerLanguage("typescript", getLang(typescriptLang));
 SyntaxHighlighter.registerLanguage("yaml", getLang(yamlLang));
+SyntaxHighlighter.registerLanguage("move", moveLang);
 
 function CodeBlock({ className, children }: { className?: string; children?: React.ReactNode }) {
   const [isCopied, setIsCopied] = useState(false);
@@ -57,8 +59,8 @@ function CodeBlock({ className, children }: { className?: string; children?: Rea
     return <code>{children}</code>;
   }
 
-  const language = match ? match[1] : "move";
-  const finalLanguage = language === "move" ? "rust" : language;
+  // Default to "move" for unspecified languages (common in Aptos docs)
+  const finalLanguage = match ? match[1] : "move";
 
   const childArray = Array.isArray(children) ? children : [children];
   const content = childArray

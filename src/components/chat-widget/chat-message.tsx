@@ -15,12 +15,15 @@ import tomlLang from "react-syntax-highlighter/dist/cjs/languages/prism/toml";
 import tsxLang from "react-syntax-highlighter/dist/cjs/languages/prism/tsx";
 import typescriptLang from "react-syntax-highlighter/dist/cjs/languages/prism/typescript";
 import yamlLang from "react-syntax-highlighter/dist/cjs/languages/prism/yaml";
+import type { Message } from "./types";
 
 // CJS modules export as { default: fn }, extract the actual language function
-const getLang = (mod: { default?: unknown }) =>
-  (typeof mod === "function" ? mod : mod.default) as Parameters<
-    typeof SyntaxHighlighter.registerLanguage
-  >[1];
+type LangMod = Parameters<typeof SyntaxHighlighter.registerLanguage>[1];
+const getLang = (mod: unknown): LangMod => {
+  if (typeof mod === "function") return mod as LangMod;
+  const m = mod as { default: LangMod };
+  return m.default;
+};
 
 SyntaxHighlighter.registerLanguage("bash", getLang(bashLang));
 SyntaxHighlighter.registerLanguage("go", getLang(goLang));
@@ -33,7 +36,6 @@ SyntaxHighlighter.registerLanguage("toml", getLang(tomlLang));
 SyntaxHighlighter.registerLanguage("tsx", getLang(tsxLang));
 SyntaxHighlighter.registerLanguage("typescript", getLang(typescriptLang));
 SyntaxHighlighter.registerLanguage("yaml", getLang(yamlLang));
-import type { Message } from "./types";
 
 interface ChatMessageProps extends ComponentProps<"div"> {
   message: Message;

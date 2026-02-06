@@ -330,6 +330,7 @@ export default defineConfig({
         provider: "local",
         name: "Atkinson Hyperlegible Next",
         cssVariable: "--font-atkinson-hyperlegible-next",
+        optimizedFallbacks: false,
         variants: [
           {
             weight: "200 800",

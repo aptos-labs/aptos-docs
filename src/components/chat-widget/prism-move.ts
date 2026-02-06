@@ -8,9 +8,8 @@
  * Compatible with react-syntax-highlighter's PrismLight (refractor-based).
  */
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// biome-ignore lint/suspicious/noExplicitAny: Prism's refractor registration API is untyped
 function move(Prism: any) {
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
   Prism.languages.move = {
     comment: [
       { pattern: /\/\/\/.*/, greedy: true, alias: "doc-comment" },

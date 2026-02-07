@@ -1,14 +1,17 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import * as ScrollArea from "@radix-ui/react-scroll-area";
 import { ChevronRight, ChevronLeft, Pencil, Trash2, X, Share2 } from "lucide-react";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, lazy, Suspense } from "react";
 import { useChatbot } from "@aptos-labs/ai-chatbot-client";
 import { ShareModal } from "./share-modal";
 import type { Message, Chat, ChatWidgetProps } from "./types";
 import { ChatSidebar } from "./chat-sidebar";
-import { ChatMessage } from "./chat-message";
 import { ChatInput } from "./chat-input";
 import type { ChatInputRef } from "./chat-input";
+
+// Lazy-load ChatMessage to defer react-markdown, react-syntax-highlighter,
+// and all Prism language grammars until a message actually needs rendering.
+const ChatMessage = lazy(() => import("./chat-message").then((m) => ({ default: m.ChatMessage })));
 
 export interface ChatDialogProps extends Omit<ChatWidgetProps, "chats"> {
   open: boolean;
@@ -225,17 +228,19 @@ export function ChatDialog({
                             </div>
                           </div>
                         )}
-                        {convertedMessages.map((message: Message) => (
-                          <ChatMessage
-                            key={message.id}
-                            message={message}
-                            onCopy={() => onCopyMessage?.(message.id)}
-                            onFeedback={(messageId, feedback) =>
-                              onMessageFeedback?.(messageId, feedback)
-                            }
-                            className={messageClassName}
-                          />
-                        ))}
+                        <Suspense fallback={null}>
+                          {convertedMessages.map((message: Message) => (
+                            <ChatMessage
+                              key={message.id}
+                              message={message}
+                              onCopy={() => onCopyMessage?.(message.id)}
+                              onFeedback={(messageId, feedback) =>
+                                onMessageFeedback?.(messageId, feedback)
+                              }
+                              className={messageClassName}
+                            />
+                          ))}
+                        </Suspense>
                         {isGenerating && !isTyping && (
                           <div className="chat-message">
                             <div className="chat-message-content">

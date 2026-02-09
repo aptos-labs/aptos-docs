@@ -21,6 +21,7 @@ $BIN_DIR = "$env:USERPROFILE\.aptoscli\bin"
 $FORCE = $false
 $ACCEPT_ALL = $false
 $VERSION = ""
+$UNDO = $false
 
 # Print colored message
 function Write-ColorMessage {
@@ -65,6 +66,36 @@ function Test-MajorVersionUpgrade {
         Write-ColorMessage -Color $YELLOW -Message "Please review the CHANGELOG before continuing:"
         Write-ColorMessage -Color $CYAN -Message "  https://github.com/aptos-labs/aptos-core/blob/main/crates/aptos/CHANGELOG.md"
         Write-Host ""
+    }
+}
+
+# Backup the current CLI binary before overwriting (keeps only one backup)
+function Backup-CurrentBinary {
+    $cliPath = Join-Path $BIN_DIR $SCRIPT
+    if (Test-Path $cliPath) {
+        $backupPath = "$cliPath.backup"
+        Write-ColorMessage -Color $CYAN -Message "Backing up current CLI binary to $backupPath..."
+        Copy-Item -Path $cliPath -Destination $backupPath -Force
+        Write-ColorMessage -Color $GREEN -Message "Backup complete. Use --undo to restore the previous version."
+    }
+}
+
+# Restore the previously backed up CLI binary
+function Undo-Upgrade {
+    $cliPath = Join-Path $BIN_DIR $SCRIPT
+    $backupPath = "$cliPath.backup"
+    if (-not (Test-Path $backupPath)) {
+        Die "No backup found at $backupPath. Nothing to undo."
+    }
+
+    Write-ColorMessage -Color $CYAN -Message "Restoring previous CLI version..."
+    Move-Item -Path $backupPath -Destination $cliPath -Force
+
+    $restoredVersion = (& $cliPath --version | Select-String -Pattern '\d+\.\d+\.\d+').Matches.Value
+    if ($restoredVersion) {
+        Write-ColorMessage -Color $GREEN -Message "Successfully restored Aptos CLI version $restoredVersion."
+    } else {
+        Write-ColorMessage -Color $GREEN -Message "Previous CLI version restored."
     }
 }
 
@@ -118,6 +149,9 @@ function Install-CLI {
             curl.exe -L $url -o $zipPath
         }
         
+        # Backup current binary before overwriting
+        Backup-CurrentBinary
+
         # Extract the zip file
         Expand-Archive -Path $zipPath -DestinationPath $BIN_DIR -Force
         
@@ -158,10 +192,17 @@ function Main {
                     Die "No version specified for --cli-version"
                 }
             }
+            '--undo' { $UNDO = $true }
             default {
                 Die "Unknown option: $($args[$i])"
             }
         }
+    }
+
+    # Handle undo (no network needed)
+    if ($UNDO) {
+        Undo-Upgrade
+        return
     }
     
     # Get version if not specified

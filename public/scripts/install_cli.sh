@@ -23,6 +23,7 @@ ACCEPT_ALL=false
 VERSION=""
 GENERIC_LINUX=false
 FROM_SOURCE=false
+UNDO=false
 UNIVERSAL_INSTALLER_URL="https://raw.githubusercontent.com/gregnazario/universal-installer/main/scripts/install_pkg.sh"
 APTOS_REPO_URL="https://github.com/aptos-labs/aptos-core.git"
 
@@ -127,6 +128,35 @@ warn_major_upgrade() {
     fi
 }
 
+# Backup the current CLI binary before overwriting (keeps only one backup)
+backup_current_binary() {
+    if [ -x "$BIN_DIR/$SCRIPT" ]; then
+        backup_path="$BIN_DIR/$SCRIPT.backup"
+        print_message "$CYAN" "Backing up current CLI binary to $backup_path..."
+        cp "$BIN_DIR/$SCRIPT" "$backup_path" || die "Failed to backup current binary"
+        print_message "$GREEN" "Backup complete. Use --undo to restore the previous version."
+    fi
+}
+
+# Restore the previously backed up CLI binary
+undo_upgrade() {
+    backup_path="$BIN_DIR/$SCRIPT.backup"
+    if [ ! -f "$backup_path" ]; then
+        die "No backup found at $backup_path. Nothing to undo."
+    fi
+
+    print_message "$CYAN" "Restoring previous CLI version..."
+    mv "$backup_path" "$BIN_DIR/$SCRIPT" || die "Failed to restore backup"
+    chmod +x "$BIN_DIR/$SCRIPT"
+
+    if "$BIN_DIR/$SCRIPT" --version >/dev/null 2>&1; then
+        restored_version=$("$BIN_DIR/$SCRIPT" --version 2>/dev/null | awk '{print $NF}')
+        print_message "$GREEN" "Successfully restored Aptos CLI version $restored_version."
+    else
+        print_message "$GREEN" "Previous CLI version restored."
+    fi
+}
+
 # Sort version tags - with fallback for systems without GNU sort -V
 sort_version_tags() {
     # Try GNU sort -V first, fall back to basic sort if not available
@@ -211,6 +241,7 @@ install_from_source() {
     
     # Move the binary to the bin directory
     if [ -f "target/release/aptos" ]; then
+        backup_current_binary
         mv "target/release/aptos" "$BIN_DIR/" || die "Failed to move binary to $BIN_DIR"
         chmod +x "$BIN_DIR/aptos"
         print_message "$GREEN" "Aptos CLI version $version installed successfully from source!"
@@ -325,6 +356,9 @@ install_cli() {
         die "unzip is not installed. Please install it."
     fi
     
+    # Backup current binary before overwriting
+    backup_current_binary
+
     # Move the binary to the bin directory
     mv "$tmp_dir/aptos" "$BIN_DIR/"
     chmod +x "$BIN_DIR/aptos"
@@ -334,9 +368,6 @@ install_cli() {
 
 # Main installation process
 main() {
-    # Install required packages first
-    install_required_packages
-
     # Parse command line arguments
     while [ $# -gt 0 ]; do
         case "$1" in
@@ -364,11 +395,24 @@ main() {
                 FROM_SOURCE=true
                 shift
                 ;;
+            --undo)
+                UNDO=true
+                shift
+                ;;
             *)
                 die "Unknown option: $1"
                 ;;
         esac
     done
+
+    # Handle undo (no packages or network needed)
+    if [ "$UNDO" = true ]; then
+        undo_upgrade
+        exit 0
+    fi
+
+    # Install required packages
+    install_required_packages
     
     # Handle installation from source
     if [ "$FROM_SOURCE" = true ]; then

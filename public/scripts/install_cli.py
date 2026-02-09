@@ -441,6 +441,39 @@ class Installer:
             )
         )
 
+    def _warn_major_upgrade(self, current_version: str, new_version: str) -> None:
+        """Warn the user if this is a major version upgrade."""
+        if not current_version or not new_version:
+            return
+
+        try:
+            current_major = current_version.split(".")[0]
+            new_major = new_version.split(".")[0]
+        except (IndexError, AttributeError):
+            return
+
+        if current_major != new_major:
+            self._write("")
+            self._write(
+                colorize(
+                    "warning",
+                    f"WARNING: This is a major version upgrade (v{current_major}.x.x -> v{new_major}.x.x).",
+                )
+            )
+            self._write(
+                colorize("warning", "Major version upgrades may include breaking changes.")
+            )
+            self._write(
+                colorize("warning", "Please review the CHANGELOG before continuing:")
+            )
+            self._write(
+                colorize(
+                    "info",
+                    "  https://github.com/aptos-labs/aptos-core/blob/main/crates/aptos/CHANGELOG.md",
+                )
+            )
+            self._write("")
+
     def get_version(self):
         if self._version:
             version_to_install = self._version
@@ -484,6 +517,8 @@ class Installer:
 
                 return None, current_version
             else:
+                if current_version:
+                    self._warn_major_upgrade(current_version, version_to_install)
                 self._write(f"Installing {colorize('b', version_to_install)}")
 
         return version_to_install, current_version
@@ -772,6 +807,7 @@ class Installer:
                             if current_version == latest_version:
                                 self._write(colorize("warning", f"Aptos CLI version {latest_version} is already installed."))
                                 return 0
+                            self._warn_major_upgrade(current_version, latest_version)
                         except (FileNotFoundError, PermissionError, subprocess.CalledProcessError, OSError):
                             pass  # CLI not installed, proceed
 
@@ -876,6 +912,7 @@ class Installer:
                 if current_version == version:
                     self._write(colorize("warning", f"Aptos CLI version {version} is already installed."))
                     return 0
+                self._warn_major_upgrade(current_version, version)
             except (FileNotFoundError, PermissionError, subprocess.CalledProcessError, OSError):
                 # CLI not installed or not runnable, proceed with installation
                 pass

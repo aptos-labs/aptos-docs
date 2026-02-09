@@ -44,6 +44,30 @@ function Test-CommandExists {
     return [bool](Get-Command -Name $Command -ErrorAction SilentlyContinue)
 }
 
+# Check for major version upgrade and warn user
+function Test-MajorVersionUpgrade {
+    param(
+        [string]$OldVersion,
+        [string]$NewVersion
+    )
+
+    if (-not $OldVersion -or -not $NewVersion) {
+        return
+    }
+
+    $oldMajor = $OldVersion.Split('.')[0]
+    $newMajor = $NewVersion.Split('.')[0]
+
+    if ($oldMajor -ne $newMajor) {
+        Write-Host ""
+        Write-ColorMessage -Color $YELLOW -Message "WARNING: This is a major version upgrade (v${oldMajor}.x.x -> v${newMajor}.x.x)."
+        Write-ColorMessage -Color $YELLOW -Message "Major version upgrades may include breaking changes."
+        Write-ColorMessage -Color $YELLOW -Message "Please review the CHANGELOG before continuing:"
+        Write-ColorMessage -Color $CYAN -Message "  https://github.com/aptos-labs/aptos-core/blob/main/crates/aptos/CHANGELOG.md"
+        Write-Host ""
+    }
+}
+
 # Get the latest version from GitHub API
 function Get-LatestVersion {
     try {
@@ -156,6 +180,7 @@ function Main {
             Write-ColorMessage -Color $YELLOW -Message "Aptos CLI version $VERSION is already installed."
             return
         }
+        Test-MajorVersionUpgrade -OldVersion $currentVersion -NewVersion $VERSION
     }
     
     # Install the CLI

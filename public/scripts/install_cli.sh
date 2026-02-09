@@ -105,6 +105,28 @@ validate_version() {
     fi
 }
 
+# Check for major version upgrade and warn user
+warn_major_upgrade() {
+    old_version=$1
+    new_version=$2
+
+    if [ -z "$old_version" ] || [ -z "$new_version" ]; then
+        return
+    fi
+
+    old_major=$(echo "$old_version" | cut -d. -f1)
+    new_major=$(echo "$new_version" | cut -d. -f1)
+
+    if [ "$old_major" != "$new_major" ]; then
+        printf "\n"
+        print_message "$YELLOW" "WARNING: This is a major version upgrade (v${old_major}.x.x -> v${new_major}.x.x)."
+        print_message "$YELLOW" "Major version upgrades may include breaking changes."
+        print_message "$YELLOW" "Please review the CHANGELOG before continuing:"
+        print_message "$CYAN" "  https://github.com/aptos-labs/aptos-core/blob/main/crates/aptos/CHANGELOG.md"
+        printf "\n"
+    fi
+}
+
 # Sort version tags - with fallback for systems without GNU sort -V
 sort_version_tags() {
     # Try GNU sort -V first, fall back to basic sort if not available
@@ -162,6 +184,9 @@ install_from_source() {
             if [ -n "$installed_version" ] && [ "$installed_version" = "$version" ]; then
                 print_message "$GREEN" "Aptos CLI version $version is already installed. Use --force to rebuild."
                 exit 0
+            fi
+            if [ -n "$installed_version" ]; then
+                warn_major_upgrade "$installed_version" "$version"
             fi
         fi
         
@@ -356,6 +381,7 @@ main() {
                     print_message "$YELLOW" "Aptos CLI version $VERSION is already installed."
                     exit 0
                 fi
+                warn_major_upgrade "$current_version" "$VERSION"
             fi
         fi
         
@@ -376,6 +402,7 @@ main() {
                 print_message "$YELLOW" "Aptos CLI version $VERSION is already installed."
                 exit 0
             fi
+            warn_major_upgrade "$current_version" "$VERSION"
         fi
         
         # Install the CLI

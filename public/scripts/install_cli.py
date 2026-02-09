@@ -987,40 +987,58 @@ def main():
         return 1
 
     parser = argparse.ArgumentParser(
-        description="Installs the latest version of the Aptos CLI"
+        description="Installs the latest version of the Aptos CLI.",
+        epilog=(
+            "UPGRADE BEHAVIOR:\n"
+            "  During upgrades, the installer automatically backs up the current\n"
+            "  binary so you can roll back with --undo. If the upgrade crosses a\n"
+            "  major version boundary (e.g. v1.x.x -> v2.x.x), a warning is\n"
+            "  displayed with a link to the CHANGELOG for breaking changes:\n"
+            "    https://github.com/aptos-labs/aptos-core/blob/main/crates/aptos/CHANGELOG.md\n"
+            "\n"
+            "EXAMPLES:\n"
+            "  python install_cli.py                        # Install latest version\n"
+            "  python install_cli.py --cli-version 3.5.0    # Install specific version\n"
+            "  python install_cli.py --undo                 # Roll back last upgrade\n"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
         "-f",
         "--force",
-        help="Forcibly install on top of existing version",
+        help="install even if the same version is already installed",
         action="store_true",
         default=False,
     )
     parser.add_argument(
         "-y",
         "--yes",
-        help="Accept all prompts",
+        help="accept all prompts automatically",
         dest="accept_all",
         action="store_true",
         default=False,
     )
     parser.add_argument(
         "--bin-dir",
-        help="If given, the CLI binary will be downloaded here instead",
+        help="install the CLI binary to this directory instead of the default",
     )
     parser.add_argument(
         "--cli-version",
-        help="If given, the CLI version to install",
+        help="install a specific CLI version instead of the latest",
     )
     parser.add_argument(
         "--from-source",
-        help="Build and install from source instead of downloading pre-built binary",
+        help="build and install from source instead of downloading a pre-built binary (requires git)",
         action="store_true",
         default=False,
     )
     parser.add_argument(
         "--undo",
-        help="Restore the previously installed CLI version from backup",
+        help=(
+            "restore the previous CLI version from the backup created during "
+            "the last upgrade. Only one backup is kept at a time. "
+            "No network access is required"
+        ),
         action="store_true",
         default=False,
     )

@@ -23,6 +23,42 @@ $ACCEPT_ALL = $false
 $VERSION = ""
 $UNDO = $false
 
+# Show usage information
+function Show-Usage {
+    Write-Host @"
+Usage: install_cli.ps1 [OPTIONS]
+
+Installs the latest version of the Aptos CLI on Windows.
+
+During upgrades, the installer automatically backs up the current binary
+so you can roll back with --undo. If the upgrade crosses a major version
+boundary (e.g. v1.x.x -> v2.x.x), a warning is displayed with a link to
+the CHANGELOG for breaking changes:
+  https://github.com/aptos-labs/aptos-core/blob/main/crates/aptos/CHANGELOG.md
+
+OPTIONS:
+  -f, --force          Install even if the same version is already installed
+  -y, --yes            Accept all prompts automatically
+  --bin-dir DIR        Install the CLI binary to DIR
+                       (default: %USERPROFILE%\.aptoscli\bin)
+  --cli-version VER    Install a specific version instead of the latest
+  --undo               Restore the previous CLI version from the backup
+                       created during the last upgrade. Only one backup is
+                       kept at a time. No network access is required.
+  -h, --help           Show this help message and exit
+
+EXAMPLES:
+  # Install the latest version
+  .\install_cli.ps1
+
+  # Install a specific version
+  .\install_cli.ps1 --cli-version 3.5.0
+
+  # Roll back to the previously installed version
+  .\install_cli.ps1 --undo
+"@
+}
+
 # Print colored message
 function Write-ColorMessage {
     param(
@@ -193,8 +229,16 @@ function Main {
                 }
             }
             '--undo' { $UNDO = $true }
+            '-h' {
+                Show-Usage
+                return
+            }
+            '--help' {
+                Show-Usage
+                return
+            }
             default {
-                Die "Unknown option: $($args[$i])"
+                Die "Unknown option: $($args[$i]). Use --help for usage information."
             }
         }
     }

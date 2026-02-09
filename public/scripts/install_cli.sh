@@ -27,6 +27,45 @@ UNDO=false
 UNIVERSAL_INSTALLER_URL="https://raw.githubusercontent.com/gregnazario/universal-installer/main/scripts/install_pkg.sh"
 APTOS_REPO_URL="https://github.com/aptos-labs/aptos-core.git"
 
+# Show usage information
+show_usage() {
+    cat <<EOF
+Usage: install_cli.sh [OPTIONS]
+
+Installs the latest version of the Aptos CLI.
+
+During upgrades, the installer automatically backs up the current binary
+so you can roll back with --undo. If the upgrade crosses a major version
+boundary (e.g. v1.x.x -> v2.x.x), a warning is displayed with a link to
+the CHANGELOG for breaking changes:
+  https://github.com/aptos-labs/aptos-core/blob/main/crates/aptos/CHANGELOG.md
+
+OPTIONS:
+  -f, --force          Install even if the same version is already installed
+  -y, --yes            Accept all prompts automatically
+  --bin-dir DIR        Install the CLI binary to DIR (default: ~/.local/bin)
+  --cli-version VER    Install a specific version instead of the latest
+  --generic-linux      Use the generic Linux binary instead of a
+                       distro-specific build
+  --from-source        Build and install from source instead of downloading
+                       a pre-built binary (requires git)
+  --undo               Restore the previous CLI version from the backup
+                       created during the last upgrade. Only one backup is
+                       kept at a time. No network access is required.
+  -h, --help           Show this help message and exit
+
+EXAMPLES:
+  # Install the latest version
+  curl -fsSL https://aptos.dev/scripts/install_cli.sh | sh
+
+  # Install a specific version
+  curl -fsSL https://aptos.dev/scripts/install_cli.sh | sh -s -- --cli-version 3.5.0
+
+  # Roll back to the previously installed version
+  curl -fsSL https://aptos.dev/scripts/install_cli.sh | sh -s -- --undo
+EOF
+}
+
 # Print colored message
 print_message() {
     color=$1
@@ -399,8 +438,12 @@ main() {
                 UNDO=true
                 shift
                 ;;
+            -h|--help)
+                show_usage
+                exit 0
+                ;;
             *)
-                die "Unknown option: $1"
+                die "Unknown option: $1. Use --help for usage information."
                 ;;
         esac
     done

@@ -21,6 +21,43 @@ $BIN_DIR = "$env:USERPROFILE\.aptoscli\bin"
 $FORCE = $false
 $ACCEPT_ALL = $false
 $VERSION = ""
+$UNDO = $false
+
+# Show usage information
+function Show-Usage {
+    Write-Host @"
+Usage: install_cli.ps1 [OPTIONS]
+
+Installs the latest version of the Aptos CLI on Windows.
+
+During upgrades, the installer automatically backs up the current binary
+so you can roll back with --undo. If the upgrade crosses a major version
+boundary (e.g. v1.x.x -> v2.x.x), a warning is displayed with a link to
+the CHANGELOG for breaking changes:
+  https://github.com/aptos-labs/aptos-core/blob/main/crates/aptos/CHANGELOG.md
+
+OPTIONS:
+  -f, --force          Install even if the same version is already installed
+  -y, --yes            Accept all prompts automatically
+  --bin-dir DIR        Install the CLI binary to DIR
+                       (default: %USERPROFILE%\.aptoscli\bin)
+  --cli-version VER    Install a specific version instead of the latest
+  --undo               Restore the previous CLI version from the backup
+                       created during the last upgrade. Only one backup is
+                       kept at a time. No network access is required.
+  -h, --help           Show this help message and exit
+
+EXAMPLES:
+  # Install the latest version
+  .\install_cli.ps1
+
+  # Install a specific version
+  .\install_cli.ps1 --cli-version 3.5.0
+
+  # Roll back to the previously installed version
+  .\install_cli.ps1 --undo
+"@
+}
 
 # Print colored message
 function Write-ColorMessage {
@@ -42,6 +79,60 @@ function Die {
 function Test-CommandExists {
     param([string]$Command)
     return [bool](Get-Command -Name $Command -ErrorAction SilentlyContinue)
+}
+
+# Check for major version upgrade and warn user
+function Test-MajorVersionUpgrade {
+    param(
+        [string]$OldVersion,
+        [string]$NewVersion
+    )
+
+    if (-not $OldVersion -or -not $NewVersion) {
+        return
+    }
+
+    $oldMajor = $OldVersion.Split('.')[0]
+    $newMajor = $NewVersion.Split('.')[0]
+
+    if ($oldMajor -ne $newMajor) {
+        Write-Host ""
+        Write-ColorMessage -Color $YELLOW -Message "WARNING: This is a major version upgrade (v${oldMajor}.x.x -> v${newMajor}.x.x)."
+        Write-ColorMessage -Color $YELLOW -Message "Major version upgrades may include breaking changes."
+        Write-ColorMessage -Color $YELLOW -Message "Please review the CHANGELOG before continuing:"
+        Write-ColorMessage -Color $CYAN -Message "  https://github.com/aptos-labs/aptos-core/blob/main/crates/aptos/CHANGELOG.md"
+        Write-Host ""
+    }
+}
+
+# Backup the current CLI binary before overwriting (keeps only one backup)
+function Backup-CurrentBinary {
+    $cliPath = Join-Path $BIN_DIR $SCRIPT
+    if (Test-Path $cliPath) {
+        $backupPath = "$cliPath.backup"
+        Write-ColorMessage -Color $CYAN -Message "Backing up current CLI binary to $backupPath..."
+        Copy-Item -Path $cliPath -Destination $backupPath -Force
+        Write-ColorMessage -Color $GREEN -Message "Backup complete. Use --undo to restore the previous version."
+    }
+}
+
+# Restore the previously backed up CLI binary
+function Undo-Upgrade {
+    $cliPath = Join-Path $BIN_DIR $SCRIPT
+    $backupPath = "$cliPath.backup"
+    if (-not (Test-Path $backupPath)) {
+        Die "No backup found at $backupPath. Nothing to undo."
+    }
+
+    Write-ColorMessage -Color $CYAN -Message "Restoring previous CLI version..."
+    Move-Item -Path $backupPath -Destination $cliPath -Force
+
+    $restoredVersion = (& $cliPath --version | Select-String -Pattern '\d+\.\d+\.\d+').Matches.Value
+    if ($restoredVersion) {
+        Write-ColorMessage -Color $GREEN -Message "Successfully restored Aptos CLI version $restoredVersion."
+    } else {
+        Write-ColorMessage -Color $GREEN -Message "Previous CLI version restored."
+    }
 }
 
 # Get the latest version from GitHub API
@@ -94,6 +185,9 @@ function Install-CLI {
             curl.exe -L $url -o $zipPath
         }
         
+        # Backup current binary before overwriting
+        Backup-CurrentBinary
+
         # Extract the zip file
         Expand-Archive -Path $zipPath -DestinationPath $BIN_DIR -Force
         
@@ -134,10 +228,25 @@ function Main {
                     Die "No version specified for --cli-version"
                 }
             }
+            '--undo' { $UNDO = $true }
+            '-h' {
+                Show-Usage
+                return
+            }
+            '--help' {
+                Show-Usage
+                return
+            }
             default {
-                Die "Unknown option: $($args[$i])"
+                Die "Unknown option: $($args[$i]). Use --help for usage information."
             }
         }
+    }
+
+    # Handle undo (no network needed)
+    if ($UNDO) {
+        Undo-Upgrade
+        return
     }
     
     # Get version if not specified
@@ -156,6 +265,7 @@ function Main {
             Write-ColorMessage -Color $YELLOW -Message "Aptos CLI version $VERSION is already installed."
             return
         }
+        Test-MajorVersionUpgrade -OldVersion $currentVersion -NewVersion $VERSION
     }
     
     # Install the CLI

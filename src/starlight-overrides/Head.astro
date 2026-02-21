@@ -90,6 +90,28 @@ const keywords = Object.fromEntries(
 );
 
 const lastUpdatedDate = lastUpdated ? lastUpdated.toISOString() : new Date().toISOString();
+
+// Generate BreadcrumbList structured data from URL path segments
+const basePath = Astro.site?.href.replace(/\/$/, "") || "";
+const pathWithoutLocale = Astro.url.pathname.replace(langPathRegex, "/");
+const pathSegments = pathWithoutLocale.split("/").filter(Boolean);
+
+function formatSegmentName(segment: string): string {
+  return segment
+    .split("-")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+// Build breadcrumb items: Home + each path segment
+const localePrefix = lang !== "en" ? `/${lang}` : "";
+const breadcrumbItems = [
+  { name: "Home", url: `${basePath}${localePrefix || "/"}` },
+  ...pathSegments.map((segment, index) => ({
+    name: formatSegmentName(segment),
+    url: `${basePath}${localePrefix}/${pathSegments.slice(0, index + 1).join("/")}`,
+  })),
+];
 ---
 
 {/* Critical font preload with high priority */}
@@ -109,6 +131,9 @@ const lastUpdatedDate = lastUpdated ? lastUpdated.toISOString() : new Date().toI
 
 {/* Critical CSS with high fetch priority */}
 <link rel="preload" href={globalCssUrl} as="style" fetchpriority="high" />
+
+{/* hreflang x-default: tells search engines which URL to serve when no locale matches */}
+<link rel="alternate" hreflang="x-default" href={getLanguageUrl("en")} />
 
 <Schema
   item={{
@@ -177,6 +202,24 @@ const lastUpdatedDate = lastUpdated ? lastUpdated.toISOString() : new Date().toI
     // datePublished: entryData.publishDate ? new Date(entryData.publishDate).toISOString() : undefined,
   }}
 />
+
+{/* BreadcrumbList structured data for page hierarchy */}
+{
+  breadcrumbItems.length > 1 && (
+    <Schema
+      item={{
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        itemListElement: breadcrumbItems.map((crumb, index) => ({
+          "@type": "ListItem",
+          position: index + 1,
+          name: crumb.name,
+          item: crumb.url,
+        })),
+      }}
+    />
+  )
+}
 
 <Default {...Astro.props}><slot /></Default>
 

@@ -152,7 +152,15 @@ export default defineConfig({
         }),
         starlightLlmsTxt({
           rawContent: true,
-          promote: ["index*", "get-started"],
+          promote: [
+            "index*",
+            "get-started",
+            "network/glossary",
+            "build/smart-contracts*",
+            "network/blockchain*",
+            "build/sdks*",
+            "build/apis*",
+          ],
           demote: ["404"],
           exclude: ["404"],
         }),

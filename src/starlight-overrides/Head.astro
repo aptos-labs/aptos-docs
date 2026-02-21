@@ -103,13 +103,28 @@ function formatSegmentName(segment: string): string {
     .join(" ");
 }
 
+// Translated "Home" label for breadcrumbs
+const homeLabelByLang: Record<string, string> = {
+  zh: "首页",
+  es: "Inicio",
+};
+const homeLabel = homeLabelByLang[lang] || "Home";
+
 // Build breadcrumb items: Home + each path segment
 const localePrefix = lang !== "en" ? `/${lang}` : "";
+
+function buildBreadcrumbUrl(index: number): string {
+  const segments = [localePrefix.replace(/^\//, ""), ...pathSegments.slice(0, index + 1)].filter(
+    Boolean,
+  );
+  return `${basePath}/${segments.join("/")}`;
+}
+
 const breadcrumbItems = [
-  { name: "Home", url: `${basePath}${localePrefix || "/"}` },
+  { name: homeLabel, url: `${basePath}${localePrefix || "/"}` },
   ...pathSegments.map((segment, index) => ({
     name: formatSegmentName(segment),
-    url: `${basePath}${localePrefix}/${pathSegments.slice(0, index + 1).join("/")}`,
+    url: buildBreadcrumbUrl(index),
   })),
 ];
 ---

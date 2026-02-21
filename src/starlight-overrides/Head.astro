@@ -35,7 +35,7 @@ function getLanguageUrl(targetLang: string): string {
 
   // If we're in a language path and the target is English, remove the language prefix
   if (targetLang === "en" && currentPath.match(langPathRegex)) {
-    return `${basePath}${currentPath.replace(langPathRegex, "")}`;
+    return `${basePath}${currentPath.replace(langPathRegex, "/")}`;
   }
 
   // If we're targeting a non-English language
@@ -93,7 +93,9 @@ const lastUpdatedDate = lastUpdated ? lastUpdated.toISOString() : new Date().toI
 
 // Generate BreadcrumbList structured data from URL path segments
 const basePath = Astro.site?.href.replace(/\/$/, "") || "";
-const pathWithoutLocale = Astro.url.pathname.replace(langPathRegex, "/");
+// Use a broader regex that also matches locale roots without trailing slash (e.g., /es, /zh)
+const breadcrumbLangRegex = new RegExp(`^/(${nonEnglishLangCodes.join("|")})(?=/|$)`);
+const pathWithoutLocale = Astro.url.pathname.replace(breadcrumbLangRegex, "") || "/";
 const pathSegments = pathWithoutLocale.split("/").filter(Boolean);
 
 function formatSegmentName(segment: string): string {

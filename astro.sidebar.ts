@@ -817,6 +817,7 @@ export const sidebar = [
 
   group("ai", {
     items: [
+      "build/ai",
       group("ai.group.aptos-mcp", {
         collapsed: true,
         items: ["build/ai/aptos-mcp", "build/ai/aptos-mcp/claude", "build/ai/aptos-mcp/cursor"],

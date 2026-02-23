@@ -276,6 +276,28 @@ export default defineConfig({
         "~/images": fileURLToPath(new URL("./src/assets/images", import.meta.url)),
       },
     },
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            // Split Firebase into its own chunk for better caching
+            if (id.includes("@firebase")) {
+              return "vendor-firebase";
+            }
+            // Split React ecosystem into its own chunk
+            if (
+              id.includes("node_modules/react/") ||
+              id.includes("node_modules/react-dom/") ||
+              id.includes("node_modules/react-markdown/") ||
+              id.includes("node_modules/react-syntax-highlighter/")
+            ) {
+              return "vendor-react";
+            }
+            return undefined;
+          },
+        },
+      },
+    },
   },
   markdown: {
     remarkPlugins: [

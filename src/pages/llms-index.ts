@@ -3,7 +3,7 @@ import { getCollection } from "astro:content";
 
 export const prerender = true;
 
-const SITE_URL = "https://aptos.dev";
+const SITE_URL = import.meta.env.SITE;
 
 // Pages to exclude from the index entirely
 const EXCLUDE_PAGES = new Set(["contribute/components/themed-image"]);

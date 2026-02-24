@@ -26,6 +26,7 @@ import { SITE_TITLES, SUPPORTED_LANGUAGES } from "./src/config/i18n";
 import onDemandDirective from "./src/integrations/client-on-demand/register.js";
 import { devServerFileWatcher } from "./src/integrations/dev-server-file-watcher";
 import { firebaseIntegration } from "./src/integrations/firebase";
+import { llmsTxtIndex } from "./src/integrations/llms-txt-index";
 import { monacoEditorIntegration } from "./src/integrations/monacoEditor";
 import { ogImagesIntegration } from "./src/integrations/ogImages";
 import { ENV } from "./src/lib/env";
@@ -152,6 +153,20 @@ export default defineConfig({
         }),
         starlightLlmsTxt({
           rawContent: true,
+          description:
+            "Developer documentation for the Aptos blockchain — Move smart contracts, SDKs, APIs, indexer, node operations, and AI tools.",
+          optionalLinks: [
+            {
+              label: "Aptos MCP Server",
+              url: "https://www.npmjs.com/package/@anthropic-ai/aptos-mcp",
+              description: "MCP server for AI coding tools",
+            },
+            {
+              label: "Aptos GitHub",
+              url: "https://github.com/aptos-labs",
+              description: "Official source code repositories",
+            },
+          ],
           promote: [
             "index*",
             "get-started",
@@ -197,6 +212,10 @@ export default defineConfig({
       sidebar,
       customCss: ["./src/styles/global.css", "katex/dist/katex.min.css"],
     }),
+    // Override the starlight-llms-txt plugin's /llms.txt index with a structured
+    // version that lists page titles, descriptions, and per-page .md URLs.
+    // Must be after Starlight so our injected route takes priority.
+    llmsTxtIndex(),
     sitemap({
       serialize(item) {
         item.lastmod = new Date().toISOString();

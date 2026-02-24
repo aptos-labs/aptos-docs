@@ -3,7 +3,7 @@ import { getCollection } from "astro:content";
 
 export const prerender = true;
 
-const SITE_URL = "https://aptos.dev";
+const SITE_URL = import.meta.env.SITE;
 
 // Pages to exclude from the index entirely
 const EXCLUDE_PAGES = new Set(["contribute/components/themed-image"]);
@@ -62,7 +62,6 @@ function formatEntry(doc: Doc): string {
 }
 
 export const GET: APIRoute = async () => {
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
   const docs = await getCollection("docs");
 
   // Filter to English-only, exclude 404, locale roots, and excluded pages

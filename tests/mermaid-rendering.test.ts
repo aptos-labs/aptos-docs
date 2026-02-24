@@ -24,7 +24,7 @@ function findMdxFilesWithMermaid(dir: string): string[] {
   const entries = readdirSync(dir, { withFileTypes: true, recursive: true });
   for (const entry of entries) {
     if (!entry.isFile() || !entry.name.endsWith(".mdx")) continue;
-    const fullPath = join(entry.parentPath || dir, entry.name);
+    const fullPath = join(entry.parentPath, entry.name);
     const content = readFileSync(fullPath, "utf-8");
     if (/^```mermaid/m.test(content)) {
       results.push(fullPath);

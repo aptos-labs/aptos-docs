@@ -5,8 +5,7 @@
  * - /en -> /
  */
 
-// eslint-disable-next-line @typescript-eslint/no-invalid-void-type
-export default function middleware(request: Request): Response | void {
+export default function middleware(request: Request): Response | undefined {
   const url = new URL(request.url);
   const pathname = url.pathname;
 

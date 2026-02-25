@@ -1,5 +1,4 @@
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Newable<T> = new (...args: any[]) => T;
+type Newable<T> = new (...args: unknown[]) => T;
 
 export function invariant(
   condition: unknown,

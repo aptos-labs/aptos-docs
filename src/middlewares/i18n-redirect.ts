@@ -65,8 +65,7 @@ function isCrawler(userAgent: string | null): boolean {
   return MOST_COMMON_CRAWLERS.some((regexp) => regexp.test(userAgent));
 }
 
-// eslint-disable-next-line @typescript-eslint/no-invalid-void-type
-export default function middleware(request: Request): Response | void {
+export default function middleware(request: Request): Response | undefined {
   const url = new URL(request.url);
   const pathname = url.pathname;
 

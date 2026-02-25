@@ -810,7 +810,6 @@ export const sidebar = [
       "network/glossary",
       "build/external-resources",
       "build/indexer/indexer-api/indexer-reference",
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       ...(openAPISidebarGroups as never[]),
     ],
   }),

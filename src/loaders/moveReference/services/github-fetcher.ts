@@ -1,8 +1,8 @@
+import { GITHUB_TOKEN } from "astro:env/server";
+import { graphql } from "@octokit/graphql";
 import type { LoaderContext } from "astro/loaders";
 import { blue, dim, red } from "kleur/colors";
-import { graphql } from "@octokit/graphql";
-import { GITHUB_TOKEN } from "astro:env/server";
-import type { GitHubConfig, BranchConfig, ModuleConfig, GitHubGraphQLResponse } from "../types.js";
+import type { BranchConfig, GitHubConfig, GitHubGraphQLResponse, ModuleConfig } from "../types.js";
 
 const GET_MODULE_CONTENT = `
   query getModuleContent($owner: String!, $repo: String!, $expression: String!, $ref: String!, $path: String!) {

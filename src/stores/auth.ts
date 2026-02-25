@@ -1,10 +1,10 @@
 import {
+  type AuthProvider,
   GithubAuthProvider,
   GoogleAuthProvider,
   onAuthStateChanged,
   signInWithPopup,
   signOut,
-  type AuthProvider,
   type User,
 } from "firebase/auth";
 import { atom, onMount } from "nanostores";

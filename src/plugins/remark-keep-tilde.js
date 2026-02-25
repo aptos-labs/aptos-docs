@@ -2,7 +2,10 @@ const PHRASE_CONSTRUCT = "phrasing";
 
 function remarkKeepTilde() {
   const data = this.data();
-  const extensions = data.toMarkdownExtensions || (data.toMarkdownExtensions = []);
+  if (!data.toMarkdownExtensions) {
+    data.toMarkdownExtensions = [];
+  }
+  const extensions = data.toMarkdownExtensions;
 
   for (const extension of extensions) {
     pruneUnsafe(extension);

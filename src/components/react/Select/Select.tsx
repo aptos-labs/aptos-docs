@@ -1,5 +1,5 @@
-import { useCallback, type ChangeEvent, type CSSProperties } from "react";
-import { type VariantProps, cva, cx } from "class-variance-authority";
+import { cva, cx, type VariantProps } from "class-variance-authority";
+import { type ChangeEvent, type CSSProperties, useCallback } from "react";
 
 const selectStyles = cva("cursor-pointer appearance-none text-inherit truncate bg-transparent", {
   variants: {

@@ -1,16 +1,20 @@
+import {
+  PUBLIC_FIREBASE_API_KEY,
+  PUBLIC_FIREBASE_APP_ID,
+  PUBLIC_FIREBASE_AUTH_DOMAIN,
+  PUBLIC_FIREBASE_PROJECT_ID,
+} from "astro:env/client";
 import { initializeApp } from "firebase/app";
-import * as CLIENT_ENV from "astro:env/client";
-import { API_KEY_ENV, APP_ID_ENV, AUTH_DOMAIN_ENV, PROJECT_ID_ENV } from "./constants";
-import { FirebaseError } from "./error";
 import { singletonGetter } from "~/lib/singletonGetter";
+import { FirebaseError } from "./error";
 
 export const getFirebaseApp = singletonGetter(() => {
   try {
     return initializeApp({
-      apiKey: CLIENT_ENV[API_KEY_ENV],
-      authDomain: CLIENT_ENV[AUTH_DOMAIN_ENV],
-      projectId: CLIENT_ENV[PROJECT_ID_ENV],
-      appId: CLIENT_ENV[APP_ID_ENV],
+      apiKey: PUBLIC_FIREBASE_API_KEY,
+      authDomain: PUBLIC_FIREBASE_AUTH_DOMAIN,
+      projectId: PUBLIC_FIREBASE_PROJECT_ID,
+      appId: PUBLIC_FIREBASE_APP_ID,
     });
   } catch (e) {
     throw new FirebaseError("Could not instantiate firebase", { cause: e });

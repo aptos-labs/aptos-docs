@@ -2,7 +2,14 @@ import type { SVGProps } from "react";
 
 export const IconGoogle = (props: SVGProps<SVGSVGElement>) => {
   return (
-    <svg width="1.5rem" height="1.5rem" viewBox="0 0 24 24" fill="none" {...props}>
+    <svg
+      aria-hidden="true"
+      width="1.5rem"
+      height="1.5rem"
+      viewBox="0 0 24 24"
+      fill="none"
+      {...props}
+    >
       <path
         fillRule="evenodd"
         clipRule="evenodd"

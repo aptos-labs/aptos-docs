@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { ChatbotProvider, useChatbot, RagProvider } from "@aptos-labs/ai-chatbot-client";
+import { ChatbotProvider, RagProvider, useChatbot } from "@aptos-labs/ai-chatbot-client";
+import { useEffect, useState } from "react";
 import { ChatDialog } from "./chat-dialog";
 
 function ChatDialogContainer() {
@@ -98,44 +98,42 @@ function ChatDialogContainer() {
   };
 
   return (
-    <>
-      <ChatDialog
-        open={isOpen}
-        onOpenChange={setIsOpen}
-        messages={messages}
-        onSendMessage={handleSendMessage}
-        isLoading={isLoading}
-        isGenerating={isGenerating}
-        isTyping={isTyping}
-        hasMoreMessages={hasMoreMessages}
-        fastMode={fastMode}
-        showSidebar={true}
-        onStopGenerating={stopGenerating}
-        onLoadMore={loadPreviousMessages}
-        onCopyMessage={copyMessage}
-        onMessageFeedback={provideFeedback}
-        onNewChat={createNewChat}
-        chats={chats}
-        currentChatId={currentChatId}
-        onSelectChat={(chatId: string) => {
-          selectChat(chatId);
-        }}
-        onDeleteChat={(chatId: string) => deleteChat(chatId)}
-        onUpdateChatTitle={updateChatTitle}
-        onToggleFastMode={(enabled) => {
-          setFastMode(enabled);
-          updateConfig({ fastMode: enabled });
-        }}
-        error={error}
-        onDismissError={() => {
-          setError(null);
-          // Keep isRateLimited true until we successfully make a new request
-        }}
-        isRateLimited={isRateLimited}
-        isSharedChatMode={isSharedChatMode}
-        sharedChatId={sharedChatId}
-      />
-    </>
+    <ChatDialog
+      open={isOpen}
+      onOpenChange={setIsOpen}
+      messages={messages}
+      onSendMessage={handleSendMessage}
+      isLoading={isLoading}
+      isGenerating={isGenerating}
+      isTyping={isTyping}
+      hasMoreMessages={hasMoreMessages}
+      fastMode={fastMode}
+      showSidebar={true}
+      onStopGenerating={stopGenerating}
+      onLoadMore={loadPreviousMessages}
+      onCopyMessage={copyMessage}
+      onMessageFeedback={provideFeedback}
+      onNewChat={createNewChat}
+      chats={chats}
+      currentChatId={currentChatId}
+      onSelectChat={(chatId: string) => {
+        selectChat(chatId);
+      }}
+      onDeleteChat={(chatId: string) => deleteChat(chatId)}
+      onUpdateChatTitle={updateChatTitle}
+      onToggleFastMode={(enabled) => {
+        setFastMode(enabled);
+        updateConfig({ fastMode: enabled });
+      }}
+      error={error}
+      onDismissError={() => {
+        setError(null);
+        // Keep isRateLimited true until we successfully make a new request
+      }}
+      isRateLimited={isRateLimited}
+      isSharedChatMode={isSharedChatMode}
+      sharedChatId={sharedChatId}
+    />
   );
 }
 

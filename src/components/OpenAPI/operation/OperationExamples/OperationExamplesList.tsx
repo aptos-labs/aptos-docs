@@ -1,4 +1,4 @@
-import { useEffect, useContext, useRef, type PropsWithChildren, type ReactNode } from "react";
+import { type PropsWithChildren, type ReactNode, useContext, useEffect, useRef } from "react";
 import { OperationExamplesContext } from "./OperationExamplesContext";
 
 interface OperationExamplesListProps {
@@ -21,7 +21,7 @@ export function OperationExamplesList({ examples }: PropsWithChildren<OperationE
 
     currentActiveExample?.setAttribute("active", "false");
     targetExample?.setAttribute("active", "true");
-  }, [ctx?.target, ctx?.client]); // Add dependencies for the effect
+  }, [ctx?.target, ctx?.client, ctx]); // Add dependencies for the effect
 
   return (
     <div ref={containerRef} className="contents">

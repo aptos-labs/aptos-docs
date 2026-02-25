@@ -1,8 +1,8 @@
 import { type FormEvent, useState } from "react";
-import type { User } from "~/stores/auth";
 import { Button } from "~/components/react/Button/Button";
 import { IconCheck } from "~/components/react/Icon/IconCheck";
 import { IconWarning } from "~/components/react/Icon/IconWarning";
+import type { User } from "~/stores/auth";
 
 function truncateHash(input: string) {
   return input.length <= 10 ? input : `${input.slice(0, 6)}...${input.slice(-4)}`;

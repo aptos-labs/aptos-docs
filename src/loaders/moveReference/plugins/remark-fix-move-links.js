@@ -1,5 +1,5 @@
-import { visit } from "unist-util-visit";
 import { slug } from "github-slugger";
+import { visit } from "unist-util-visit";
 
 /**
  * A more aggressive remark plugin to fix internal Move reference links.
@@ -30,7 +30,7 @@ export default function remarkFixMoveLinks() {
 
       // If the hash doesn't start with #, add it
       if (!cleanedHash.startsWith("#")) {
-        cleanedHash = "#" + cleanedHash;
+        cleanedHash = `#${cleanedHash}`;
       }
 
       // If the hash has multiple # at the beginning, reduce to one
@@ -41,7 +41,7 @@ export default function remarkFixMoveLinks() {
       // Remove 0x1_ prefix if present
       const oxMatch = cleanedHash.match(/#0x[0-9a-f]+_(.+)$/);
       if (oxMatch) {
-        cleanedHash = "#" + oxMatch[1];
+        cleanedHash = `#${oxMatch[1]}`;
       }
 
       // Remove module_ prefix if present
@@ -50,7 +50,7 @@ export default function remarkFixMoveLinks() {
         const modulePrefix = new RegExp(`^#${moduleName}_(.+)$`);
         const moduleMatch = cleanedHash.match(modulePrefix);
         if (moduleMatch) {
-          cleanedHash = "#" + moduleMatch[1];
+          cleanedHash = `#${moduleMatch[1]}`;
         }
       }
 
@@ -65,7 +65,7 @@ export default function remarkFixMoveLinks() {
         // If the possible module is all lowercase and the identifier starts with uppercase,
         // it's likely a module_Identifier pattern
         if (/^[a-z0-9_]+$/.test(possibleModule) && /^[A-Z]/.test(identifier)) {
-          cleanedHash = "#" + identifier;
+          cleanedHash = `#${identifier}`;
         }
       }
 
@@ -80,7 +80,7 @@ export default function remarkFixMoveLinks() {
       // Only apply GitHub slugger if there's actual content
       if (textPart.trim()) {
         // Generate a GitHub-style slug and restore the # prefix
-        return "#" + slug(textPart);
+        return `#${slug(textPart)}`;
       }
 
       return cleanedHash;
@@ -132,7 +132,7 @@ export default function remarkFixMoveLinks() {
       if (!node.value) return;
 
       // Replace any occurrences of href="*.md#*" with href="#*"
-      let newValue = node.value.replace(/href="[^"]*\.md(#[^"]*)?"/g, (match, hash) => {
+      let newValue = node.value.replace(/href="[^"]*\.md(#[^"]*)?"/g, (_match, hash) => {
         if (!hash) return 'href="#"';
         return `href="${cleanHash(hash, moduleName)}"`;
       });

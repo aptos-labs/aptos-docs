@@ -1,10 +1,10 @@
 import type { AstroMarkdownOptions } from "@astrojs/markdown-remark";
 import { createMarkdownProcessor } from "@astrojs/markdown-remark";
 import matter from "gray-matter";
-import remarkRemoveAnchorLinks from "../plugins/remark-remove-anchor-links.js";
-import remarkGroupMoveDefinitions from "../plugins/remark-group-move-definitions.js";
 import remarkConvertCodeBlocks from "../plugins/remark-convert-codeblocks.js";
 import remarkFixMoveLinks from "../plugins/remark-fix-move-links.js";
+import remarkGroupMoveDefinitions from "../plugins/remark-group-move-definitions.js";
+import remarkRemoveAnchorLinks from "../plugins/remark-remove-anchor-links.js";
 import type { ContentEntry } from "../types.js";
 
 export class MarkdownProcessor {

@@ -1,12 +1,12 @@
-import type { Loader, LoaderContext } from "astro/loaders";
-import { blue, dim, bold, yellow, red, green } from "kleur/colors";
 import { ENABLE_MOVE_REFERENCE, GITHUB_TOKEN } from "astro:env/server";
+import type { Loader, LoaderContext } from "astro/loaders";
+import { blue, bold, dim, green, red, yellow } from "kleur/colors";
+import { IS_GITHUB_CI } from "~/lib/env";
 import { octokit } from "../../lib/octokit.js";
-import type { GitHubConfig, ProcessingStats } from "./types";
 import { GitHubFetcher } from "./services/github-fetcher";
 import { MarkdownProcessor } from "./services/markdown-processor";
+import type { GitHubConfig, ProcessingStats } from "./types";
 import { getPluginHash } from "./utils/plugin-hash.js";
-import { IS_GITHUB_CI } from "~/lib/env";
 
 export function moveReferenceLoader(config: GitHubConfig): Loader {
   async function loadContent(context: LoaderContext): Promise<void> {

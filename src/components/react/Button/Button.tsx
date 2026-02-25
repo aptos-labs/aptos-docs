@@ -1,5 +1,5 @@
-import { type VariantProps, cva, cx } from "class-variance-authority";
-import { type ComponentPropsWithRef } from "react";
+import { cva, cx, type VariantProps } from "class-variance-authority";
+import type { ComponentPropsWithRef } from "react";
 
 const buttonStyles = cva(
   "flex items-center justify-center gap-2 rounded-none cursor-pointer disabled:cursor-not-allowed transition-colors border no-underline",

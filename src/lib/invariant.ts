@@ -1,4 +1,5 @@
-type Newable<T> = new (...args: unknown[]) => T;
+// biome-ignore lint/suspicious/noExplicitAny: constructor spread args require any[]
+type Newable<T> = new (...args: any[]) => T;
 
 export function invariant(
   condition: unknown,

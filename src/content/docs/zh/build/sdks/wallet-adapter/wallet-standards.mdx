@@ -1,0 +1,228 @@
+---
+title: "Aptos 钱包标准"
+description: "钱包互操作性指南，确保所有 Aptos 钱包类型的 dapp 集成一致性"
+sidebar:
+  label: "钱包标准"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="caution" title="旧版钱包 API 已弃用">
+  通过浏览器全局变量（如 `window.aptos` 或 `window.petra`）直接访问钱包的方式已**弃用**，不应再使用。这些旧版 API 不再维护，钱包可能随时将其移除。所有 dapp 应使用 [Aptos 钱包适配器](/zh/build/sdks/wallet-adapter) 配合 [AIP-62](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-62.md) 标准进行钱包集成。
+</Aside>
+
+钱包标准为不同类型的钱包之间的互操作性提供指南。这确保 dapp 开发者无需更改其应用程序来处理不同的钱包。该标准为所有 dapp 开发者提供统一接口，方便添加新钱包并为每个应用带来更多用户。这种互操作性允许用户选择他们想要的钱包，而无需担心应用是否支持他们的用例。
+
+为确保 Aptos 钱包之间的互操作性，需要满足以下条件：
+
+1. 助记词 - 一组可用于派生账户私钥的单词
+2. dapp API - 钱包的入口点，支持访问由钱包管理的身份
+3. 密钥轮换 - 处理助记词相关关系和不同钱包中账户恢复的功能
+
+## 助记词短语
+
+助记词短语是一个多单词短语，可用于生成账户地址。我们建议每个账户使用一个助记词，以更好地处理密钥轮换。然而，一些来自其他链的钱包可能希望支持一个助记词对应多个账户。为支持这两种用例，Aptos 钱包标准使用 [比特币改进提案 (BIP44)](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki) 来派生助记词到账户的路径。
+
+### 创建 Aptos 账户
+
+Aptos 账户创建可以通过以下方式在各钱包之间得到支持：
+
+1. 生成助记词短语，例如使用 BIP39。
+2. 从该助记词短语获取主种子。
+3. 使用 BIP44 派生路径检索账户地址（例如 `m/44'/637'/0'/0'/0'`）
+
+- 参见 [Aptos TypeScript SDK 的派生路径实现](https://github.com/aptos-labs/aptos-ts-sdk/blob/main/src/account/Account.ts#L181-L202)
+- 例如，Petra Wallet 始终使用路径 `m/44'/637'/0'/0'/0'`，因为每个助记词对应一个账户。
+
+```typescript
+/**
+  * 使用 bip44 路径和助记词创建新账户，
+  * @param path. (例如 m/44'/637'/0'/0'/0')
+  * 详细描述: {@link https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki}
+  * @param mnemonics.
+  * @returns AptosAccount
+  */
+  static fromDerivePath(path: string, mnemonics: string): AptosAccount {
+   if (!AptosAccount.isValidPath(path)) {
+     throw new Error("Invalid derivation path");
+   }
+
+   const normalizeMnemonics = mnemonics
+     .trim()
+     .split(/\s+/)
+     .map((part) => part.toLowerCase())
+     .join(" ");
+
+   const { key } = derivePath(path, bytesToHex(bip39.mnemonicToSeedSync(normalizeMnemonics)));
+
+   return new AptosAccount(new Uint8Array(key));
+}
+```
+
+### 支持一个助记词对应多账户的钱包
+
+不建议这样做，因为一个助记词对应多个账户的模式使得处理密钥轮换更加困难（一个账户的助记词改变了，但其他账户的没有）。然而，许多其他生态系统的钱包使用这种模式，并通过以下步骤生成账户：
+
+1. 生成助记词短语，例如使用 BIP39。
+2. 从该助记词短语获取主种子。
+3. 使用 BIP44 派生路径检索私钥（例如 `m/44'/637'/i'/0'/0'`），其中 `i` 是账户索引。
+
+- 参见 [Aptos TypeScript SDK 的派生路径实现](https://github.com/aptos-labs/aptos-core/blob/1bc5fd1f5eeaebd2ef291ac741c0f5d6f75ddaef/ecosystem/typescript/sdk/src/aptos_account.ts#L49-L69)
+
+4. 递增 `i` 直到找到用户想要导入的所有账户。
+
+- 注意：迭代应该有限制，如果在迭代过程中账户不存在，继续迭代一个常量 `address_gap_limit`（目前为 10），以查看是否有其他账户。如果找到账户，则继续正常迭代。
+
+例如：
+
+```typescript
+const gapLimit = 10;
+let currentGap = 0;
+
+for (let i = 0; currentGap < gapLimit; i += 1) {
+  const derivationPath = `m/44'/637'/${i}'/0'/0'`;
+  const account = fromDerivePath(derivationPath, mnemonic);
+  const response = account.getResources();
+  if (response.status !== 404) {
+    wallet.addAccount(account);
+    currentGap = 0;
+  } else {
+    currentGap += 1;
+  }
+}
+```
+
+## 钱包与 dapp 通信
+
+比账户创建更重要的是钱包和 dapp 之间如何通信。
+
+[遵循 AIP-62](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-62.md)，钱包标准定义了钱包和应用程序交互的 API。
+
+### 钱包接口标准
+
+钱包必须实现 [AptosWallet 接口](https://github.com/aptos-labs/wallet-standard/blob/main/src/wallet.ts)，包含钱包提供者信息和功能特性：
+
+```typescript
+class MyWallet implements AptosWallet {
+  url: string;
+  version: "1.0.0";
+  name: string;
+  icon:
+    | `data:image/svg+xml;base64,${string}`
+    | `data:image/webp;base64,${string}`
+    | `data:image/png;base64,${string}`
+    | `data:image/gif;base64,${string}`;
+  chains: AptosChain;
+  features: AptosFeatures;
+  accounts: readonly AptosWalletAccount[];
+}
+```
+
+钱包必须实现 [AptosWalletAccount 接口](https://github.com/aptos-labs/wallet-standard/blob/main/src/account.ts)，表示已被 dapp 授权的账户。
+
+```typescript
+enum AptosAccountVariant {
+  Ed25519,
+  MultiEd25519,
+  SingleKey,
+  MultiKey,
+}
+
+class AptosWalletAccount implements WalletAccount {
+  address: string;
+
+  publicKey: Uint8Array;
+
+  chains: AptosChain;
+
+  features: AptosFeatures;
+
+  variant: AptosAccountVariant;
+
+  label?: string;
+
+  icon?:
+    | `data:image/svg+xml;base64,${string}`
+    | `data:image/webp;base64,${string}`
+    | `data:image/png;base64,${string}`
+    | `data:image/gif;base64,${string}`
+    | undefined;
+}
+```
+
+如果钱包是 Web 扩展钱包（即通过 Chrome 扩展商店安装），钱包必须使用 [registerWallet](https://github.com/wallet-standard/wallet-standard/blob/master/packages/core/wallet/src/register.ts#L25) 方法注册自己，以通知 dapp 它已准备好使用。
+
+```typescript
+const myWallet = new MyWallet();
+
+registerWallet(myWallet);
+```
+
+如果钱包实现了标准[必需功能](https://github.com/aptos-labs/wallet-standard/blob/main/src/detect.ts#L16)，则被视为有效的 Aptos 钱包。
+
+钱包必须抛出 [AptosWalletError](https://github.com/aptos-labs/wallet-standard/blob/main/src/errors.ts)。标准要求支持 `Unauthorized` 和 `InternalError`，但钱包可以抛出自定义的 `AptosWalletError` 错误。
+
+```typescript
+if (error) {
+  throw new AptosWalletError(AptosWalletErrorCode.Unauthorized);
+}
+if (error) {
+  throw new AptosWalletError(
+    AptosWalletErrorCode.Unauthorized,
+    "自定义未授权消息"
+  );
+}
+if (error) {
+  throw new AptosWalletError(-32000, "无效输入");
+}
+```
+
+### Dapp API
+
+<Aside type="note">
+  为了使 dapp 轻松与钱包集成，建议使用 [Aptos 钱包适配器标准](/zh/build/sdks/wallet-adapter)。
+</Aside>
+
+如果由于某种原因，dapp 决定实现自定义钱包集成：
+
+dapp 使用 [getAptosWallets()](https://github.com/aptos-labs/wallet-standard/blob/main/src/detect.ts#L40) 函数获取所有符合 Aptos 标准的钱包。
+
+```typescript
+import { getAptosWallets } from "@aptos-labs/wallet-standard";
+
+let { aptosWallets, on } = getAptosWallets();
+```
+
+在首次加载时，在 dapp 加载之前，它会获取到目前为止已注册的所有钱包。要在此之后继续获取所有注册的钱包，dapp 必须添加事件监听器来监听新注册的钱包，并接收一个取消订阅函数，稍后可用于移除监听器。
+
+```typescript
+const removeRegisterListener = on("register", function () {
+  let { aptosWallets } = getAptosWallets();
+});
+
+const removeUnregisterListener = on("unregister", function () {
+  let { aptosWallets } = getAptosWallets();
+});
+```
+
+dapp 现在有了事件监听器，因此可以立即看到新钱包，无需轮询或重新列出。即使 dapp 在任何钱包之前加载也能正常工作（它会初始化，看不到钱包，然后在钱包加载时看到它们）。
+
+dapp 通过调用与所需操作对应的功能名称来发出钱包请求。例如，要使用 `connect` 功能：
+
+```typescript
+const onConnect = () => {
+  this.wallet.features["aptos:connect"].connect();
+};
+```
+
+## 密钥轮换
+
+密钥轮换目前尚未在任何钱包中实现。轮换密钥的映射已[实现](https://github.com/aptos-labs/aptos-core/pull/2972)，但 SDK 集成正在进行中。
+
+导入私钥的钱包需要执行以下操作：
+
+1. 派生认证密钥。
+2. 在链上的账户来源表中查找认证密钥。
+
+- 如果账户不存在，则为新账户。要使用的地址是认证密钥。
+- 如果账户存在，则为密钥已轮换的账户，要使用的地址将来自该表。

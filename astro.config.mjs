@@ -9,7 +9,7 @@ import starlight from "@astrojs/starlight";
 import starlightDocSearch from "@astrojs/starlight-docsearch";
 import vercel from "@astrojs/vercel";
 import tailwindcss from "@tailwindcss/vite";
-import { defineConfig, envField } from "astro/config";
+import { defineConfig, envField, fontProviders } from "astro/config";
 import favicons from "astro-favicons";
 import icon from "astro-icon";
 import mermaid from "astro-mermaid";
@@ -339,26 +339,28 @@ export default defineConfig({
     csp: cspConfig,
     fonts: [
       {
-        provider: "local",
+        provider: fontProviders.local(),
         name: "Atkinson Hyperlegible Next",
         cssVariable: "--font-atkinson-hyperlegible-next",
         optimizedFallbacks: false,
-        variants: [
-          {
-            weight: "200 800",
-            style: "normal",
-            src: ["./src/assets/fonts/AtkinsonHyperlegibleNext-VariableFont_wght.woff2"],
-            variationSettings: "normal",
-            display: "swap",
-          },
-          {
-            weight: "200 800",
-            style: "italic",
-            src: ["./src/assets/fonts/AtkinsonHyperlegibleNext-Italic-VariableFont_wght.woff2"],
-            variationSettings: "normal",
-            display: "swap",
-          },
-        ],
+        options: {
+          variants: [
+            {
+              weight: "200 800",
+              style: "normal",
+              src: ["./src/assets/fonts/AtkinsonHyperlegibleNext-VariableFont_wght.woff2"],
+              variationSettings: "normal",
+              display: "swap",
+            },
+            {
+              weight: "200 800",
+              style: "italic",
+              src: ["./src/assets/fonts/AtkinsonHyperlegibleNext-Italic-VariableFont_wght.woff2"],
+              variationSettings: "normal",
+              display: "swap",
+            },
+          ],
+        },
       },
     ],
   },

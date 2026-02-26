@@ -1,5 +1,5 @@
-import { visit } from "unist-util-visit";
 import { format } from "prettier";
+import { visit } from "unist-util-visit";
 
 /**
  * @typedef {import('unified').Plugin} Plugin

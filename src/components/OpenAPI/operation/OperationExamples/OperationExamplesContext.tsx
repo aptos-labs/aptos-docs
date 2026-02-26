@@ -1,4 +1,4 @@
-import { type ClientId, type TargetId } from "@scalar/snippetz";
+import type { ClientId, TargetId } from "@scalar/snippetz";
 import { createContext } from "react";
 
 export const OperationExamplesContext = createContext<{

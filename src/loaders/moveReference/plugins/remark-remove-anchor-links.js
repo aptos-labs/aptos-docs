@@ -1,6 +1,6 @@
-import { visit } from "unist-util-visit";
+import { toString as mdastToString } from "mdast-util-to-string";
 import { remove } from "unist-util-remove";
-import { toString } from "mdast-util-to-string";
+import { visit } from "unist-util-visit";
 
 /**
  * A Remark plugin that:
@@ -15,7 +15,7 @@ export default function remarkRemoveTOCAndAnchors() {
     // First pass: Remove all heading nodes that contain "Module" text
     remove(tree, (node) => {
       if (node.type === "heading" && node.depth === 1) {
-        const text = toString(node);
+        const text = mdastToString(node);
         // console.log("🔍 Checking heading:", text);
         if (text.includes("Module")) {
           // console.log("🔴 Removing module heading");

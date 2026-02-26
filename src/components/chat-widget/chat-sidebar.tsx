@@ -1,6 +1,6 @@
-import * as React from "react";
-import { Root as ScrollAreaRoot, Viewport, Scrollbar, Thumb } from "@radix-ui/react-scroll-area";
+import { Root as ScrollAreaRoot, Scrollbar, Thumb, Viewport } from "@radix-ui/react-scroll-area";
 import { MessageCircle, Pencil } from "lucide-react";
+import * as React from "react";
 import type { Chat } from "./types";
 
 export interface ChatSidebarProps {
@@ -88,10 +88,10 @@ const ChatList = ({
                   }}
                   onKeyDown={handleKeyDown}
                   className="chat-sidebar-input"
-                  autoFocus
                 />
               ) : (
                 <button
+                  type="button"
                   onClick={() => {
                     if (chat.id) {
                       onSelectChat?.(chat.id);
@@ -104,6 +104,7 @@ const ChatList = ({
               )}
               <div className="chat-sidebar-actions">
                 <button
+                  type="button"
                   onClick={() => {
                     handleEditStart(chat);
                   }}

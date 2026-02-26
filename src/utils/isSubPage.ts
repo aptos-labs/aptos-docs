@@ -16,6 +16,6 @@ const categoryParents: Partial<Record<ReturnType<typeof getPageCategory>, string
  */
 export function isSubPage(currentPage: string, parentSlug: string): boolean {
   // Test: is there a known parent page for this page category?
-  const category = getPageCategory({ pathname: "/" + currentPage + "/" });
+  const category = getPageCategory({ pathname: `/${currentPage}/` });
   return categoryParents[category] === parentSlug;
 }

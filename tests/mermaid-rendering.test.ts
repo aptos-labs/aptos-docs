@@ -9,10 +9,10 @@
  * regression guard.
  */
 
-import { readFileSync, existsSync, readdirSync } from "fs";
-import { join, resolve } from "path";
-import { fileURLToPath } from "url";
-import { describe, it, expect } from "vitest";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { describe, expect, it } from "vitest";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const ROOT = resolve(__dirname, "..");

@@ -30,7 +30,7 @@ function removePrefix(node, prefix, depth) {
  */
 function getDefinitionType(headingText, definitionTypes) {
   for (const defType of definitionTypes) {
-    if (headingText && headingText.startsWith(defType.prefix + " ")) {
+    if (headingText?.startsWith(`${defType.prefix} `)) {
       return defType;
     }
   }

@@ -1,5 +1,5 @@
+import { ALGOLIA_APP_ID, ALGOLIA_INDEX_NAME, ALGOLIA_SEARCH_API_KEY } from "astro:env/client";
 import type { DocSearchClientOptions } from "@astrojs/starlight-docsearch";
-import { ALGOLIA_APP_ID, ALGOLIA_SEARCH_API_KEY, ALGOLIA_INDEX_NAME } from "astro:env/client";
 
 const getFacetFilters = (): string[] =>
   typeof document !== "undefined" ? [`lang:${document.documentElement.lang}`] : [];

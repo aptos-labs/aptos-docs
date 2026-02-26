@@ -1,14 +1,14 @@
+import { useChatbot } from "@aptos-labs/ai-chatbot-client";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as ScrollArea from "@radix-ui/react-scroll-area";
-import { ChevronRight, ChevronLeft, Pencil, Trash2, X, Share2 } from "lucide-react";
-import { useState, useRef, useEffect } from "react";
-import { useChatbot } from "@aptos-labs/ai-chatbot-client";
-import { ShareModal } from "./share-modal";
-import type { Message, Chat, ChatWidgetProps } from "./types";
-import { ChatSidebar } from "./chat-sidebar";
-import { ChatMessage } from "./chat-message";
-import { ChatInput } from "./chat-input";
+import { ChevronLeft, ChevronRight, Pencil, Share2, Trash2, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChatInputRef } from "./chat-input";
+import { ChatInput } from "./chat-input";
+import { ChatMessage } from "./chat-message";
+import { ChatSidebar } from "./chat-sidebar";
+import { ShareModal } from "./share-modal";
+import type { Chat, ChatWidgetProps, Message } from "./types";
 
 export interface ChatDialogProps extends Omit<ChatWidgetProps, "chats"> {
   open: boolean;
@@ -65,29 +65,31 @@ export function ChatDialog({
     timestamp: typeof msg.timestamp === "string" ? Date.parse(msg.timestamp) : msg.timestamp,
   }));
 
-  const scrollToBottom = (smooth = true) => {
+  const scrollToBottom = useCallback((smooth = true) => {
     if (viewportRef.current) {
       viewportRef.current.scrollTo({
         top: viewportRef.current.scrollHeight,
         behavior: smooth ? "smooth" : "instant",
       });
     }
-  };
+  }, []);
 
-  // Only scroll to bottom when opening a new chat
+  // Scroll to bottom with a short delay when the dialog opens
   useEffect(() => {
+    if (!open) return;
     const timeoutId = setTimeout(() => {
       scrollToBottom(true);
     }, 100);
     return () => {
       clearTimeout(timeoutId);
     };
-  }, [open]);
+  }, [open, scrollToBottom]);
 
   // Scroll to bottom when switching chats
+  // biome-ignore lint/correctness/useExhaustiveDependencies: currentChatId is an intentional trigger
   useEffect(() => {
     scrollToBottom(false);
-  }, [currentChatId]);
+  }, [currentChatId, scrollToBottom]);
 
   const handleNewChat = () => {
     onNewChat?.();
@@ -115,6 +117,7 @@ export function ChatDialog({
                 </Dialog.Title>
                 {showSidebar && (
                   <button
+                    type="button"
                     onClick={() => {
                       setIsSidebarCollapsed(!isSidebarCollapsed);
                     }}
@@ -129,7 +132,7 @@ export function ChatDialog({
                 )}
               </div>
               <div className="chat-dialog-actions">
-                <button onClick={handleNewChat} className="chat-new-button">
+                <button type="button" onClick={handleNewChat} className="chat-new-button">
                   <div className="chat-button-content">
                     <Pencil className="chat-icon" />
                     <span className="chat-button-text">New chat</span>
@@ -140,6 +143,7 @@ export function ChatDialog({
                     {!isSharedChatMode && currentChatId && (
                       <>
                         <button
+                          type="button"
                           onClick={() => {
                             setIsShareModalOpen(true);
                           }}
@@ -158,12 +162,16 @@ export function ChatDialog({
                         />
                       </>
                     )}
-                    <button onClick={() => onDeleteChat?.(currentChatId)} className="chat-button">
+                    <button
+                      type="button"
+                      onClick={() => onDeleteChat?.(currentChatId)}
+                      className="chat-button"
+                    >
                       <Trash2 className="h-5 w-5" />
                     </button>
                   </>
                 )}
-                <Dialog.Close className="chat-button">
+                <Dialog.Close type="button" className="chat-button">
                   <X className="h-5 w-5" />
                 </Dialog.Close>
               </div>
@@ -193,7 +201,7 @@ export function ChatDialog({
                     <ScrollArea.Viewport ref={viewportRef} className="chat-scroll-viewport">
                       <div className="flex flex-col gap-4 p-4">
                         {hasMoreMessages && (
-                          <button onClick={onLoadMore} className="chat-load-more">
+                          <button type="button" onClick={onLoadMore} className="chat-load-more">
                             Load more messages
                           </button>
                         )}
@@ -276,6 +284,7 @@ export function ChatDialog({
                       >
                         <span>{error}</span>
                         <button
+                          type="button"
                           onClick={(e) => {
                             e.currentTarget.parentElement?.classList.add("fade-out");
                           }}

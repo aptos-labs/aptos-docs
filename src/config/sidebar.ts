@@ -29,7 +29,8 @@ type BadgeConfig =
     };
 
 // Forward declaration to allow for recursive types
-export type NestedSidebarItem = // Export the type
+export type NestedSidebarItem =
+  // Export the type
   string | SidebarLinkItem | SidebarGroupWithItems | SidebarGroupWithAutogenerate;
 
 // A sidebar group with manual items
@@ -80,7 +81,7 @@ const translations = (() => {
 
       // Add translations to our result
       Object.keys(dict).forEach((key) => {
-        if (Object.prototype.hasOwnProperty.call(result, key)) {
+        if (Object.hasOwn(result, key)) {
           const navKey = key as NavKey;
           result[navKey][lang] = dict[navKey];
         }

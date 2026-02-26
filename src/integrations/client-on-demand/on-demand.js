@@ -44,7 +44,7 @@ const onDemandDirective = (load, opts, el) => {
         // After hydration and render completion, trigger the primary event
         window.dispatchEvent(new CustomEvent(events[0]));
       } catch (error) {
-        console.error(`client:on-demand - Failed to hydrate component:`, error);
+        console.error("client:on-demand - Failed to hydrate component:", error);
         hasHydrated = false;
       }
     }

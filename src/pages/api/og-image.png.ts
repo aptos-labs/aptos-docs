@@ -1,7 +1,7 @@
+import { z } from "astro:schema";
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { APIRoute } from "astro";
-import { z } from "astro:schema";
 import { generateImage } from "~/lib/og-image/generateImage";
 import { parseTokenOptions } from "~/lib/og-image/parseTokenOptions";
 

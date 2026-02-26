@@ -1,8 +1,8 @@
 import type { z } from "astro:schema";
 import { jwtVerify } from "jose";
-import { getOgImageSecret } from "./getOgImageSecret";
 import { invariant } from "~/lib/invariant";
 import { OGImageError } from "~/lib/og-image/errors";
+import { getOgImageSecret } from "./getOgImageSecret";
 
 export async function parseTokenOptions<Schema extends z.AnyZodObject>(
   signedJWTToken: string | null,

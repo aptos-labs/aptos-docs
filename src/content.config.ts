@@ -1,8 +1,8 @@
 // src/content/config.ts
 
+import { type CollectionEntry, defineCollection, z } from "astro:content";
 import { docsLoader, i18nLoader } from "@astrojs/starlight/loaders";
 import { docsSchema, i18nSchema } from "@astrojs/starlight/schema";
-import { defineCollection, z, type CollectionEntry } from "astro:content";
 import type { StarlightIcon } from "@astrojs/starlight/types";
 import { moveReferenceLoader } from "./loaders/moveReference";
 import type { BranchConfig, ModuleConfig } from "./loaders/moveReference/types";
@@ -70,12 +70,11 @@ export type DocsEntry<T extends DocsEntryType> = CollectionEntry<"docs"> & {
 };
 
 export function createIsDocsEntry<T extends DocsEntryType>(type: T) {
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   return (entry: CollectionEntry<"docs">): entry is DocsEntry<T> => entry.data.type === type;
 }
 
 export function createIsLangEntry(lang: string) {
-  return (entry: CollectionEntry<"docs">): boolean => entry.id.startsWith(lang + "/");
+  return (entry: CollectionEntry<"docs">): boolean => entry.id.startsWith(`${lang}/`);
 }
 
 export const isEnglishEntry = createIsLangEntry("en");

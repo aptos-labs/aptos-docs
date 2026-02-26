@@ -1,7 +1,7 @@
 import type { AstroIntegration } from "astro";
 import { envField } from "astro/config";
-import { OG_IMAGES_ENV_NAME } from "../lib/og-image/constants";
 import { ENV, IS_VERCEL } from "../lib/env";
+import { OG_IMAGES_ENV_NAME } from "../lib/og-image/constants";
 
 export function ogImagesIntegration(): AstroIntegration {
   return {

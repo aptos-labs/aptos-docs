@@ -17,11 +17,11 @@
     "prepush": "astro check --noSync",
     "sync": "astro sync",
     "lint": "pnpm run --parallel --filter='.' /^lint:*/",
-    "lint:eslint": "eslint . --cache --cache-location=.astro/eslint/.cache",
-    "lint:prettier": "prettier --check .",
+    "lint:biome": "biome check .",
+    "lint:prettier": "prettier --check \"**/*.astro\"",
     "format": "pnpm run --parallel --filter='.' /^format:*/",
-    "format:eslint": "pnpm run lint --fix",
-    "format:prettier": "prettier . --write",
+    "format:biome": "biome check --fix .",
+    "format:prettier": "prettier --write \"**/*.astro\"",
     "format:content": "remark \"src/content/**/*.{md,mdx}\" --output",
     "postinstall": "pnpm exec simple-git-hooks",
     "tools:audit-sidebar": "tsx scripts/audit-sidebar.ts",
@@ -74,8 +74,8 @@
   "devDependencies": {
     "@astrojs/check": "^0.9.6",
     "@astrojs/markdown-remark": "^6.3.10",
+    "@biomejs/biome": "2.4.4",
     "@crowdin/cli": "^4.12.0",
-    "@eslint/js": "^9.39.2",
     "@expressive-code/plugin-collapsible-sections": "^0.41.5",
     "@graphiql/toolkit": "^0.11.3",
     "@iconify-json/ph": "^1.2.2",
@@ -91,21 +91,12 @@
     "@types/react-syntax-highlighter": "^15.5.13",
     "@vercel/node": "^5.5.16",
     "astro-embed": "^0.10.0",
-    "astro-eslint-parser": "^1.2.2",
     "astro-favicons": "^3.1.5",
     "astro-icon": "^1.1.5",
     "astro-seo-schema": "^5.1.0",
     "baseline-browser-mapping": "^2.9.11",
-    "eslint": "^9.39.2",
-    "eslint-config-flat-gitignore": "^2.1.0",
-    "eslint-config-prettier": "^10.1.8",
-    "eslint-import-resolver-typescript": "^4.4.4",
-    "eslint-plugin-astro": "^1.5.0",
-    "eslint-plugin-import-x": "^4.16.1",
-    "eslint-plugin-jsx-a11y": "^6.10.2",
     "fast-glob": "^3.3.3",
     "github-slugger": "^2.0.0",
-    "globals": "^17.0.0",
     "graphiql": "^5.2.2",
     "gray-matter": "^4.0.3",
     "katex": "^0.16.27",
@@ -132,7 +123,6 @@
     "starlight-package-managers": "^0.11.1",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.52.0",
     "unist-util-remove": "^4.0.0",
     "unist-util-visit": "^5.0.0",
     "vite": "^7.3.0",
@@ -177,10 +167,14 @@
     "pre-push": "pnpm prepush"
   },
   "nano-staged": {
-    "*.{js,cjs,mjs,jsx,ts,mts,tsx}": [
-      "eslint --fix",
+    "*.{js,cjs,mjs,jsx,ts,mts,tsx,json}": [
+      "biome check --fix --no-errors-on-unmatched"
+    ],
+    "*.astro": [
       "prettier --write"
     ],
-    "src/content/**/*.mdx": []
+    "src/content/**/*.mdx": [
+      "remark \"src/content/**/*.{md,mdx}\" --output"
+    ]
   }
 }

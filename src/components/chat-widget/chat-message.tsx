@@ -1,10 +1,91 @@
-import { type ComponentProps, useState } from "react";
-import { Copy, ThumbsUp, ThumbsDown } from "lucide-react";
+import { Copy, ThumbsDown, ThumbsUp } from "lucide-react";
+import type React from "react";
+import { type ComponentProps, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/cjs/styles/prism";
+import remarkGfm from "remark-gfm";
 import type { Message } from "./types";
+
+function CodeBlock({ className, children }: { className?: string; children?: React.ReactNode }) {
+  const [isCopied, setIsCopied] = useState(false);
+  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout>>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const isInline = !className;
+  const match = /language-(\w+)/.exec(className ?? "");
+
+  if (isInline) {
+    return <code>{children}</code>;
+  }
+
+  const language = match ? match[1] : "move";
+  const finalLanguage = language === "move" ? "rust" : language;
+
+  const childArray = Array.isArray(children) ? children : [children];
+  const content = childArray
+    .map((child) => (typeof child === "string" ? child : ""))
+    .join("")
+    .trim();
+
+  const handleCopy = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(content);
+      setIsCopied(true);
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current);
+      }
+      copyTimeoutRef.current = setTimeout(() => {
+        setIsCopied(false);
+      }, 2000);
+    } catch (err) {
+      console.error("Failed to copy:", err);
+    }
+  };
+
+  return (
+    <div className="code-block-wrapper">
+      <button
+        type="button"
+        className="code-copy-button"
+        onClick={handleCopy}
+        aria-label="Copy code"
+      >
+        <Copy className={`code-copy-icon ${isCopied ? "copied" : ""}`} />
+      </button>
+      <SyntaxHighlighter
+        style={oneDark}
+        language={finalLanguage}
+        PreTag="div"
+        customStyle={{
+          margin: "0",
+          padding: "0.75rem 1rem",
+          borderRadius: "0.5rem",
+          display: "inline-block",
+          minWidth: "100%",
+        }}
+        codeTagProps={{
+          style: {
+            fontSize: "0.9em",
+            lineHeight: "1.5",
+          },
+        }}
+        wrapLines={true}
+        showLineNumbers={false}
+      >
+        {content.replace(/\n$/, "")}
+      </SyntaxHighlighter>
+    </div>
+  );
+}
 
 interface ChatMessageProps extends ComponentProps<"div"> {
   message: Message;
@@ -41,74 +122,7 @@ export function ChatMessage({
                     {children}
                   </a>
                 ),
-                code: ({ className, children }) => {
-                  // Check if code is inline by seeing if it's a single line
-                  const isInline = !className;
-                  const match = /language-(\w+)/.exec(className ?? "");
-                  // Use the inline prop to determine if it's inline code
-                  if (isInline) {
-                    return <code>{children}</code>;
-                  }
-
-                  // For code blocks, use syntax highlighting
-                  const language = match ? match[1] : "move";
-                  const finalLanguage = language === "move" ? "rust" : language;
-
-                  const childArray = Array.isArray(children) ? children : [children];
-                  const content = childArray
-                    .map((child) => (typeof child === "string" ? child : ""))
-                    .join("")
-                    .trim();
-
-                  const [isCopied, setIsCopied] = useState(false);
-
-                  const handleCopy = async (e: React.MouseEvent) => {
-                    e.stopPropagation();
-                    try {
-                      await navigator.clipboard.writeText(content);
-                      setIsCopied(true);
-                      setTimeout(() => {
-                        setIsCopied(false);
-                      }, 2000);
-                    } catch (err) {
-                      console.error("Failed to copy:", err);
-                    }
-                  };
-
-                  return (
-                    <div className="code-block-wrapper">
-                      <button
-                        className="code-copy-button"
-                        onClick={handleCopy}
-                        aria-label="Copy code"
-                      >
-                        <Copy className={`code-copy-icon ${isCopied ? "copied" : ""}`} />
-                      </button>
-                      <SyntaxHighlighter
-                        style={oneDark}
-                        language={finalLanguage}
-                        PreTag="div"
-                        customStyle={{
-                          margin: "0",
-                          padding: "0.75rem 1rem",
-                          borderRadius: "0.5rem",
-                          display: "inline-block",
-                          minWidth: "100%",
-                        }}
-                        codeTagProps={{
-                          style: {
-                            fontSize: "0.9em",
-                            lineHeight: "1.5",
-                          },
-                        }}
-                        wrapLines={true}
-                        showLineNumbers={false}
-                      >
-                        {content.replace(/\n$/, "")}
-                      </SyntaxHighlighter>
-                    </div>
-                  );
-                },
+                code: CodeBlock,
               }}
             >
               {message.content}
@@ -121,6 +135,7 @@ export function ChatMessage({
           {message.role === "assistant" && (
             <>
               <button
+                type="button"
                 onClick={() => {
                   onFeedback?.(message.id, "positive");
                 }}
@@ -129,6 +144,7 @@ export function ChatMessage({
                 <ThumbsUp className="chat-button-icon" />
               </button>
               <button
+                type="button"
                 onClick={() => {
                   onFeedback?.(message.id, "negative");
                 }}
@@ -138,7 +154,7 @@ export function ChatMessage({
               </button>
             </>
           )}
-          <button onClick={onCopy} className="chat-message-action">
+          <button type="button" onClick={onCopy} className="chat-message-action">
             <Copy className="chat-button-icon" />
           </button>
         </div>

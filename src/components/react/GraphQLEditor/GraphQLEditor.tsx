@@ -1,7 +1,8 @@
 // src/components/GraphQLEditor.tsx
-import { useState, useEffect } from "react";
-import { GraphiQL } from "graphiql";
+
 import { createGraphiQLFetcher } from "@graphiql/toolkit";
+import { GraphiQL } from "graphiql";
+import { useEffect, useState } from "react";
 // import type { Storage } from "@graphiql/toolkit";
 import GraphQLLogo from "./GraphQLLogo";
 import "graphiql/style.css";
@@ -167,6 +168,7 @@ export const GraphQLEditor: React.FC<GraphQLEditorProps> = ({
 
             {showFullscreenButton && (
               <button
+                type="button"
                 onClick={toggleFullscreen}
                 className="graphiql-fullscreen-button text-[rgb(var(--color-neutral))] opacity-[var(--alpha-secondary)] hover:cursor-pointer"
                 aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}

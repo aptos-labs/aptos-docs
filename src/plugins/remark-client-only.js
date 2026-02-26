@@ -39,10 +39,10 @@
  *
  * @type {RemarkPlugin}
  */
-export const remarkClientOnly = function (options = { components: {} }) {
+export const remarkClientOnly = (options = { components: {} }) => {
   const { components } = options;
 
-  return function (tree) {
+  return (tree) => {
     function visit(node) {
       if (
         (node.type === "mdxJsxFlowElement" || node.type === "mdxJsxTextElement") &&

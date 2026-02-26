@@ -1,4 +1,4 @@
-import { useEffect, useContext, useRef, type PropsWithChildren, type ReactNode } from "react";
+import { type PropsWithChildren, type ReactNode, useContext, useEffect, useRef } from "react";
 import { OperationExamplesContext } from "./OperationExamplesContext";
 
 interface OperationExamplesListProps {
@@ -7,21 +7,23 @@ interface OperationExamplesListProps {
 
 export function OperationExamplesList({ examples }: PropsWithChildren<OperationExamplesListProps>) {
   const ctx = useContext(OperationExamplesContext);
+  const target = ctx?.target;
+  const client = ctx?.client;
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!containerRef.current || !ctx) return;
+    if (!containerRef.current || !target || !client) return;
 
     const currentActiveExample = containerRef.current.querySelector(
       `operation-example[active="true"]`,
     );
     const targetExample = containerRef.current.querySelector(
-      `operation-example[target="${ctx.target}"][client="${ctx.client}"]`,
+      `operation-example[target="${target}"][client="${client}"]`,
     );
 
     currentActiveExample?.setAttribute("active", "false");
     targetExample?.setAttribute("active", "true");
-  }, [ctx?.target, ctx?.client]); // Add dependencies for the effect
+  }, [target, client]);
 
   return (
     <div ref={containerRef} className="contents">

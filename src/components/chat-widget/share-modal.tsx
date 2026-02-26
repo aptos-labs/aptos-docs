@@ -1,7 +1,7 @@
+import type { ShareChatResponse } from "@aptos-labs/ai-chatbot-client";
 import * as Dialog from "@radix-ui/react-dialog";
 import { Copy, X } from "lucide-react";
 import { useState } from "react";
-import type { ShareChatResponse } from "@aptos-labs/ai-chatbot-client";
 
 interface ShareModalProps {
   open: boolean;
@@ -69,7 +69,7 @@ export function ShareModal({ open, onOpenChange, onShare }: ShareModalProps) {
         <Dialog.Content className="chat-share-modal">
           <div className="chat-share-header">
             <Dialog.Title className="chat-share-title">Share Chat</Dialog.Title>
-            <Dialog.Close className="chat-button">
+            <Dialog.Close type="button" className="chat-button">
               <X className="h-5 w-5" />
             </Dialog.Close>
           </div>
@@ -120,10 +120,15 @@ export function ShareModal({ open, onOpenChange, onShare }: ShareModalProps) {
               </div>
 
               <div className="chat-share-actions">
-                <button onClick={handleClose} className="chat-button-secondary">
+                <button type="button" onClick={handleClose} className="chat-button-secondary">
                   Cancel
                 </button>
-                <button onClick={handleShare} disabled={isLoading} className="chat-button-primary">
+                <button
+                  type="button"
+                  onClick={handleShare}
+                  disabled={isLoading}
+                  className="chat-button-primary"
+                >
                   Create Share Link
                 </button>
               </div>
@@ -131,10 +136,18 @@ export function ShareModal({ open, onOpenChange, onShare }: ShareModalProps) {
           ) : (
             <div className="chat-share-content">
               <div className="chat-share-field">
-                <label className="chat-share-label">Share URL</label>
+                <label htmlFor="share-url-input" className="chat-share-label">
+                  Share URL
+                </label>
                 <div className="chat-share-url">
-                  <input type="text" value={shareUrl} readOnly className="chat-share-input" />
-                  <button onClick={handleCopy} className="chat-button-icon">
+                  <input
+                    id="share-url-input"
+                    type="text"
+                    value={shareUrl}
+                    readOnly
+                    className="chat-share-input"
+                  />
+                  <button type="button" onClick={handleCopy} className="chat-button-icon">
                     <Copy className={`h-5 w-5 ${isCopied ? "text-green-500" : ""}`} />
                   </button>
                 </div>
@@ -148,7 +161,7 @@ export function ShareModal({ open, onOpenChange, onShare }: ShareModalProps) {
               </div>
 
               <div className="chat-share-actions">
-                <button onClick={handleClose} className="chat-button-primary">
+                <button type="button" onClick={handleClose} className="chat-button-primary">
                   Done
                 </button>
               </div>

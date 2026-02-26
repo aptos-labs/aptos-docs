@@ -1,11 +1,11 @@
 import type { ClientId, Target, TargetId } from "@scalar/snippetz";
 import { type PropsWithChildren, type ReactNode, useState } from "react";
+import { Button } from "~/components/react/Button/Button";
+import { Select } from "~/components/react/Select/Select";
+import { invariant } from "~/lib/invariant";
 import { OperationExamplesContext } from "./OperationExamplesContext";
 import { OperationExamplesList } from "./OperationExamplesList";
 import type { ExampleData } from "./types";
-import { Select } from "~/components/react/Select/Select";
-import { invariant } from "~/lib/invariant";
-import { Button } from "~/components/react/Button/Button";
 
 type OperationExamplesIslandProps = PropsWithChildren<{
   example: ExampleData;
@@ -76,8 +76,15 @@ export function OperationExamplesIsland({
           onChange={setCurrentClient}
           options={clientOptions}
         />
-        <Button variant="secondary" size="sm" onClick={openScalarModal} className="self-stretch">
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={openScalarModal}
+          className="self-stretch"
+        >
           <svg
+            aria-hidden="true"
             xmlns="http://www.w3.org/2000/svg"
             fill="currentColor"
             stroke="currentColor"

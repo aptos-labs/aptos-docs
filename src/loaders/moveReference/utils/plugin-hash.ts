@@ -1,6 +1,6 @@
-import { createHash } from "crypto";
-import { readFile, readdir } from "fs/promises";
-import { join } from "path";
+import { createHash } from "node:crypto";
+import { readdir, readFile } from "node:fs/promises";
+import { join } from "node:path";
 
 /**
  * Generates a hash of all plugin files in the specified directory.

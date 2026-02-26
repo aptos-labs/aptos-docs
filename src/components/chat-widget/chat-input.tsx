@@ -1,5 +1,5 @@
-import { forwardRef, useRef, useState, useImperativeHandle } from "react";
 import { ArrowRight, StopCircle } from "lucide-react";
+import { forwardRef, useImperativeHandle, useRef, useState } from "react";
 
 export interface ChatInputRef {
   focus: () => void;

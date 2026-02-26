@@ -1,6 +1,6 @@
 import { Copy, ThumbsDown, ThumbsUp } from "lucide-react";
 import type React from "react";
-import { type ComponentProps, useState } from "react";
+import { type ComponentProps, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/cjs/styles/prism";
@@ -9,6 +9,15 @@ import type { Message } from "./types";
 
 function CodeBlock({ className, children }: { className?: string; children?: React.ReactNode }) {
   const [isCopied, setIsCopied] = useState(false);
+  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout>>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const isInline = !className;
   const match = /language-(\w+)/.exec(className ?? "");
@@ -31,7 +40,10 @@ function CodeBlock({ className, children }: { className?: string; children?: Rea
     try {
       await navigator.clipboard.writeText(content);
       setIsCopied(true);
-      setTimeout(() => {
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current);
+      }
+      copyTimeoutRef.current = setTimeout(() => {
         setIsCopied(false);
       }, 2000);
     } catch (err) {

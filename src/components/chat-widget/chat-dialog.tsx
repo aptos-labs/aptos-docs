@@ -2,7 +2,7 @@ import { useChatbot } from "@aptos-labs/ai-chatbot-client";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as ScrollArea from "@radix-ui/react-scroll-area";
 import { ChevronLeft, ChevronRight, Pencil, Share2, Trash2, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChatInputRef } from "./chat-input";
 import { ChatInput } from "./chat-input";
 import { ChatMessage } from "./chat-message";
@@ -65,29 +65,31 @@ export function ChatDialog({
     timestamp: typeof msg.timestamp === "string" ? Date.parse(msg.timestamp) : msg.timestamp,
   }));
 
-  const scrollToBottom = (smooth = true) => {
+  const scrollToBottom = useCallback((smooth = true) => {
     if (viewportRef.current) {
       viewportRef.current.scrollTo({
         top: viewportRef.current.scrollHeight,
         behavior: smooth ? "smooth" : "instant",
       });
     }
-  };
+  }, []);
 
-  // Only scroll to bottom when opening a new chat
+  // Scroll to bottom with a short delay when the dialog opens
   useEffect(() => {
+    if (!open) return;
     const timeoutId = setTimeout(() => {
       scrollToBottom(true);
     }, 100);
     return () => {
       clearTimeout(timeoutId);
     };
-  }, [scrollToBottom]);
+  }, [open, scrollToBottom]);
 
   // Scroll to bottom when switching chats
+  // biome-ignore lint/correctness/useExhaustiveDependencies: currentChatId is an intentional trigger
   useEffect(() => {
     scrollToBottom(false);
-  }, [scrollToBottom]);
+  }, [currentChatId, scrollToBottom]);
 
   const handleNewChat = () => {
     onNewChat?.();

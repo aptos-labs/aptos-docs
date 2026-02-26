@@ -2,25 +2,29 @@
 title: "Fetch Data via the Kotlin SDK"
 description: "Retrieve on-chain data and network information using the Kaptos client with idiomatic Option-based error handling"
 sidebar:
-  label: "Fetch Data"
+  label: "Via the SDK"
 ---
 
 You can use the Aptos client to fetch all sorts of data from on-chain such as
 information about the network itself or account-specific information.
 
 ```kotlin
-val modules = aptos.getAccountModules("0x123").expect("Failed to fetch account modules")
-val option = aptos.getChainTopUserTransactions(10)
+val result = aptos.getChainTopUserTransactions(10)
 ```
 
-Kaptos returns an `Option` type for all network requests. This allows you to handle
-both successful and failed requests in a more idiomatic way.
+Kaptos returns a `Result` type for all network requests. This allows you to handle
+both successful and failed requests in a more idiomatic way:
 
 ```kotlin
-val ledgerInfo = aptos.getLedgerInfo()
-when (ledgerInfo) {
-    is Some -> println("Ledger Info: ${ledgerInfo.value}")
-    is None -> println("Failed to fetch ledger info")
+val result = aptos.getLedgerInfo()
+
+when (result) {
+    is Result.Ok -> {
+        println("Ledger Info: ${result.value}")
+    }
+    is Result.Err -> {
+        println("Failed to fetch ledger info: ${result.error.message}")
+    }
 }
 ```
 
@@ -29,6 +33,8 @@ If you trust the result exists, you can use the `.expect` function to unwrap the
 ```kotlin
 val ledgerInfo = aptos.getLedgerInfo().expect("Failed to fetch ledger info")
 ```
+
+You can find more information on handling responses in [Handle SDK Data Fetch Responses](../response-handling).
 
 ### Using Move View Functions
 
@@ -48,3 +54,5 @@ val inputViewFunctionData = InputViewFunctionData(
       .view<List<MoveValue.MoveListType<MoveValue.String>>>(inputViewFunctionData)
       .expect("Failed to fetch view")
 ```
+
+For more information on how to handle responses, see [Handle SDK Data Fetch Responses](../response-handling).

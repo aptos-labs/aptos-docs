@@ -128,7 +128,12 @@ describe("Mermaid Rendering Validation", () => {
       // Verify the integration source contains the view transitions handler.
       // This is the key fix: the handler must be registered unconditionally
       // so that navigating from a page without diagrams to one with them works.
-      const entrypoint = fileURLToPath(import.meta.resolve("astro-mermaid"));
+      const entrypoint = join(
+        ROOT,
+        "node_modules",
+        "astro-mermaid",
+        "astro-mermaid-integration.js",
+      );
       const content = readFileSync(entrypoint, "utf-8");
       expect(content).toContain("astro:after-swap");
     });

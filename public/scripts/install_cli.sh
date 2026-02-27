@@ -23,8 +23,48 @@ ACCEPT_ALL=false
 VERSION=""
 GENERIC_LINUX=false
 FROM_SOURCE=false
+UNDO=false
 UNIVERSAL_INSTALLER_URL="https://raw.githubusercontent.com/gregnazario/universal-installer/main/scripts/install_pkg.sh"
 APTOS_REPO_URL="https://github.com/aptos-labs/aptos-core.git"
+
+# Show usage information
+show_usage() {
+    cat <<EOF
+Usage: install_cli.sh [OPTIONS]
+
+Installs the latest version of the Aptos CLI.
+
+During upgrades, the installer automatically backs up the current binary
+so you can roll back with --undo. If the upgrade crosses a major version
+boundary (e.g. v1.x.x -> v2.x.x), a warning is displayed with a link to
+the CHANGELOG for breaking changes:
+  https://github.com/aptos-labs/aptos-core/blob/main/crates/aptos/CHANGELOG.md
+
+OPTIONS:
+  -f, --force          Install even if the same version is already installed
+  -y, --yes            Accept all prompts automatically
+  --bin-dir DIR        Install the CLI binary to DIR (default: ~/.local/bin)
+  --cli-version VER    Install a specific version instead of the latest
+  --generic-linux      Use the generic Linux binary instead of a
+                       distro-specific build
+  --from-source        Build and install from source instead of downloading
+                       a pre-built binary (requires git)
+  --undo               Restore the previous CLI version from the backup
+                       created during the last upgrade. Only one backup is
+                       kept at a time. No network access is required.
+  -h, --help           Show this help message and exit
+
+EXAMPLES:
+  # Install the latest version
+  curl -fsSL https://aptos.dev/scripts/install_cli.sh | sh
+
+  # Install a specific version
+  curl -fsSL https://aptos.dev/scripts/install_cli.sh | sh -s -- --cli-version 3.5.0
+
+  # Roll back to the previously installed version
+  curl -fsSL https://aptos.dev/scripts/install_cli.sh | sh -s -- --undo
+EOF
+}
 
 # Print colored message
 print_message() {
@@ -105,6 +145,57 @@ validate_version() {
     fi
 }
 
+# Check for major version upgrade and warn user
+warn_major_upgrade() {
+    old_version=$1
+    new_version=$2
+
+    if [ -z "$old_version" ] || [ -z "$new_version" ]; then
+        return
+    fi
+
+    old_major=$(echo "$old_version" | cut -d. -f1)
+    new_major=$(echo "$new_version" | cut -d. -f1)
+
+    if [ "$old_major" != "$new_major" ]; then
+        printf "\n"
+        print_message "$YELLOW" "WARNING: This is a major version upgrade (v${old_major}.x.x -> v${new_major}.x.x)."
+        print_message "$YELLOW" "Major version upgrades may include breaking changes."
+        print_message "$YELLOW" "Please review the CHANGELOG before continuing:"
+        print_message "$CYAN" "  https://github.com/aptos-labs/aptos-core/blob/main/crates/aptos/CHANGELOG.md"
+        printf "\n"
+    fi
+}
+
+# Backup the current CLI binary before overwriting (keeps only one backup)
+backup_current_binary() {
+    if [ -x "$BIN_DIR/$SCRIPT" ]; then
+        backup_path="$BIN_DIR/$SCRIPT.backup"
+        print_message "$CYAN" "Backing up current CLI binary to $backup_path..."
+        cp "$BIN_DIR/$SCRIPT" "$backup_path" || die "Failed to backup current binary"
+        print_message "$GREEN" "Backup complete. Use --undo to restore the previous version."
+    fi
+}
+
+# Restore the previously backed up CLI binary
+undo_upgrade() {
+    backup_path="$BIN_DIR/$SCRIPT.backup"
+    if [ ! -f "$backup_path" ]; then
+        die "No backup found at $backup_path. Nothing to undo."
+    fi
+
+    print_message "$CYAN" "Restoring previous CLI version..."
+    mv "$backup_path" "$BIN_DIR/$SCRIPT" || die "Failed to restore backup"
+    chmod +x "$BIN_DIR/$SCRIPT"
+
+    if "$BIN_DIR/$SCRIPT" --version >/dev/null 2>&1; then
+        restored_version=$("$BIN_DIR/$SCRIPT" --version 2>/dev/null | awk '{print $NF}')
+        print_message "$GREEN" "Successfully restored Aptos CLI version $restored_version."
+    else
+        print_message "$GREEN" "Previous CLI version restored."
+    fi
+}
+
 # Sort version tags - with fallback for systems without GNU sort -V
 sort_version_tags() {
     # Try GNU sort -V first, fall back to basic sort if not available
@@ -163,6 +254,9 @@ install_from_source() {
                 print_message "$GREEN" "Aptos CLI version $version is already installed. Use --force to rebuild."
                 exit 0
             fi
+            if [ -n "$installed_version" ]; then
+                warn_major_upgrade "$installed_version" "$version"
+            fi
         fi
         
         print_message "$CYAN" "Checking out $latest_tag..."
@@ -186,6 +280,7 @@ install_from_source() {
     
     # Move the binary to the bin directory
     if [ -f "target/release/aptos" ]; then
+        backup_current_binary
         mv "target/release/aptos" "$BIN_DIR/" || die "Failed to move binary to $BIN_DIR"
         chmod +x "$BIN_DIR/aptos"
         print_message "$GREEN" "Aptos CLI version $version installed successfully from source!"
@@ -300,6 +395,9 @@ install_cli() {
         die "unzip is not installed. Please install it."
     fi
     
+    # Backup current binary before overwriting
+    backup_current_binary
+
     # Move the binary to the bin directory
     mv "$tmp_dir/aptos" "$BIN_DIR/"
     chmod +x "$BIN_DIR/aptos"
@@ -309,9 +407,6 @@ install_cli() {
 
 # Main installation process
 main() {
-    # Install required packages first
-    install_required_packages
-
     # Parse command line arguments
     while [ $# -gt 0 ]; do
         case "$1" in
@@ -339,11 +434,28 @@ main() {
                 FROM_SOURCE=true
                 shift
                 ;;
+            --undo)
+                UNDO=true
+                shift
+                ;;
+            -h|--help)
+                show_usage
+                exit 0
+                ;;
             *)
-                die "Unknown option: $1"
+                die "Unknown option: $1. Use --help for usage information."
                 ;;
         esac
     done
+
+    # Handle undo (no packages or network needed)
+    if [ "$UNDO" = true ]; then
+        undo_upgrade
+        exit 0
+    fi
+
+    # Install required packages
+    install_required_packages
     
     # Handle installation from source
     if [ "$FROM_SOURCE" = true ]; then
@@ -356,6 +468,7 @@ main() {
                     print_message "$YELLOW" "Aptos CLI version $VERSION is already installed."
                     exit 0
                 fi
+                warn_major_upgrade "$current_version" "$VERSION"
             fi
         fi
         
@@ -376,6 +489,7 @@ main() {
                 print_message "$YELLOW" "Aptos CLI version $VERSION is already installed."
                 exit 0
             fi
+            warn_major_upgrade "$current_version" "$VERSION"
         fi
         
         # Install the CLI

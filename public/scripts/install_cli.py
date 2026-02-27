@@ -248,12 +248,14 @@ class Installer:
         accept_all: bool = False,
         bin_dir: Optional[str] = None,
         from_source: bool = False,
+        undo: bool = False,
     ) -> None:
         self._version = version
         self._force = force
         self._accept_all = accept_all
         self._bin_dir = Path(bin_dir).expanduser() if bin_dir else None
         self._from_source = from_source
+        self._undo = undo
 
         self._release_info = None
         self._latest_release_info = None
@@ -267,6 +269,10 @@ class Installer:
     @property
     def bin_path(self):
         return self.bin_dir.joinpath(SCRIPT)
+
+    @property
+    def backup_path(self):
+        return self.bin_dir.joinpath(SCRIPT + ".backup")
 
     @property
     def release_info(self):
@@ -283,6 +289,10 @@ class Installer:
         raise RuntimeError("Failed to find latest CLI release")
 
     def run(self) -> int:
+        # Handle undo (no network needed)
+        if self._undo:
+            return self._undo_upgrade()
+
         # Handle installation from source
         if self._from_source:
             return self.run_from_source()
@@ -322,6 +332,10 @@ class Installer:
         self._install_comment(version, "Downloading...")
 
         self.bin_dir.mkdir(parents=True, exist_ok=True)
+
+        # Backup current binary before overwriting
+        self._backup_current_binary()
+
         if self.bin_path.exists():
             self.bin_path.unlink()
 
@@ -441,6 +455,80 @@ class Installer:
             )
         )
 
+    def _backup_current_binary(self) -> None:
+        """Backup the current CLI binary before overwriting (keeps only one backup)."""
+        if self.bin_path.exists():
+            self._write(
+                colorize("info", f"Backing up current CLI binary to {self.backup_path}...")
+            )
+            shutil.copy2(self.bin_path, self.backup_path)
+            self._write(
+                colorize("success", "Backup complete. Use --undo to restore the previous version.")
+            )
+
+    def _undo_upgrade(self) -> int:
+        """Restore the previously backed up CLI binary."""
+        if not self.backup_path.exists():
+            self._write(
+                colorize("error", f"No backup found at {self.backup_path}. Nothing to undo.")
+            )
+            return 1
+
+        self._write(colorize("info", "Restoring previous CLI version..."))
+
+        # Replace current binary with backup
+        if self.bin_path.exists():
+            self.bin_path.unlink()
+        shutil.move(str(self.backup_path), str(self.bin_path))
+        os.chmod(self.bin_path, 0o755)
+
+        try:
+            out = subprocess.check_output(
+                [self.bin_path, "--version"],
+                universal_newlines=True,
+            )
+            restored_version = out.split(" ")[-1].rstrip().lstrip()
+            self._write(
+                colorize("success", f"Successfully restored Aptos CLI version {restored_version}.")
+            )
+        except Exception:
+            self._write(colorize("success", "Previous CLI version restored."))
+
+        return 0
+
+    def _warn_major_upgrade(self, current_version: str, new_version: str) -> None:
+        """Warn the user if this is a major version upgrade."""
+        if not current_version or not new_version:
+            return
+
+        try:
+            current_major = current_version.split(".")[0]
+            new_major = new_version.split(".")[0]
+        except (IndexError, AttributeError):
+            return
+
+        if current_major != new_major:
+            self._write("")
+            self._write(
+                colorize(
+                    "warning",
+                    f"WARNING: This is a major version upgrade (v{current_major}.x.x -> v{new_major}.x.x).",
+                )
+            )
+            self._write(
+                colorize("warning", "Major version upgrades may include breaking changes.")
+            )
+            self._write(
+                colorize("warning", "Please review the CHANGELOG before continuing:")
+            )
+            self._write(
+                colorize(
+                    "info",
+                    "  https://github.com/aptos-labs/aptos-core/blob/main/crates/aptos/CHANGELOG.md",
+                )
+            )
+            self._write("")
+
     def get_version(self):
         if self._version:
             version_to_install = self._version
@@ -484,6 +572,8 @@ class Installer:
 
                 return None, current_version
             else:
+                if current_version:
+                    self._warn_major_upgrade(current_version, version_to_install)
                 self._write(f"Installing {colorize('b', version_to_install)}")
 
         return version_to_install, current_version
@@ -772,6 +862,7 @@ class Installer:
                             if current_version == latest_version:
                                 self._write(colorize("warning", f"Aptos CLI version {latest_version} is already installed."))
                                 return 0
+                            self._warn_major_upgrade(current_version, latest_version)
                         except (FileNotFoundError, PermissionError, subprocess.CalledProcessError, OSError):
                             pass  # CLI not installed, proceed
 
@@ -826,6 +917,9 @@ class Installer:
             # Move the binary to the bin directory
             dest_binary = self.bin_path
             try:
+                # Backup current binary before overwriting
+                self._backup_current_binary()
+
                 if dest_binary.exists():
                     dest_binary.unlink()
                 shutil.copy2(source_binary, dest_binary)
@@ -876,6 +970,7 @@ class Installer:
                 if current_version == version:
                     self._write(colorize("warning", f"Aptos CLI version {version} is already installed."))
                     return 0
+                self._warn_major_upgrade(current_version, version)
             except (FileNotFoundError, PermissionError, subprocess.CalledProcessError, OSError):
                 # CLI not installed or not runnable, proceed with installation
                 pass
@@ -892,34 +987,58 @@ def main():
         return 1
 
     parser = argparse.ArgumentParser(
-        description="Installs the latest version of the Aptos CLI"
+        description="Installs the latest version of the Aptos CLI.",
+        epilog=(
+            "UPGRADE BEHAVIOR:\n"
+            "  During upgrades, the installer automatically backs up the current\n"
+            "  binary so you can roll back with --undo. If the upgrade crosses a\n"
+            "  major version boundary (e.g. v1.x.x -> v2.x.x), a warning is\n"
+            "  displayed with a link to the CHANGELOG for breaking changes:\n"
+            "    https://github.com/aptos-labs/aptos-core/blob/main/crates/aptos/CHANGELOG.md\n"
+            "\n"
+            "EXAMPLES:\n"
+            "  python install_cli.py                        # Install latest version\n"
+            "  python install_cli.py --cli-version 3.5.0    # Install specific version\n"
+            "  python install_cli.py --undo                 # Roll back last upgrade\n"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
         "-f",
         "--force",
-        help="Forcibly install on top of existing version",
+        help="install even if the same version is already installed",
         action="store_true",
         default=False,
     )
     parser.add_argument(
         "-y",
         "--yes",
-        help="Accept all prompts",
+        help="accept all prompts automatically",
         dest="accept_all",
         action="store_true",
         default=False,
     )
     parser.add_argument(
         "--bin-dir",
-        help="If given, the CLI binary will be downloaded here instead",
+        help="install the CLI binary to this directory instead of the default",
     )
     parser.add_argument(
         "--cli-version",
-        help="If given, the CLI version to install",
+        help="install a specific CLI version instead of the latest",
     )
     parser.add_argument(
         "--from-source",
-        help="Build and install from source instead of downloading pre-built binary",
+        help="build and install from source instead of downloading a pre-built binary (requires git)",
+        action="store_true",
+        default=False,
+    )
+    parser.add_argument(
+        "--undo",
+        help=(
+            "restore the previous CLI version from the backup created during "
+            "the last upgrade. Only one backup is kept at a time. "
+            "No network access is required"
+        ),
         action="store_true",
         default=False,
     )
@@ -932,6 +1051,7 @@ def main():
         bin_dir=args.bin_dir,
         version=args.cli_version,
         from_source=args.from_source,
+        undo=args.undo,
     )
 
     try:

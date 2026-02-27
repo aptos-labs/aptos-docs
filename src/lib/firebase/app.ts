@@ -4,7 +4,7 @@ import {
   PUBLIC_FIREBASE_AUTH_DOMAIN,
   PUBLIC_FIREBASE_PROJECT_ID,
 } from "astro:env/client";
-import { initializeApp } from "@firebase/app";
+import { initializeApp } from "firebase/app";
 import { singletonGetter } from "~/lib/singletonGetter";
 import { FirebaseError } from "./error";
 

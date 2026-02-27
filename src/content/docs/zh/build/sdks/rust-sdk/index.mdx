@@ -1,0 +1,90 @@
+---
+title: "Rust SDK"
+description: "Aptos 区块链官方 Rust SDK——惯用异步设计、功能丰富，支持多种签名方案"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+[Aptos Rust SDK](https://github.com/aptos-labs/aptos-rust-sdk) 是一个用户友好的、符合 Rust 惯用风格的 Aptos 区块链 SDK，功能与 TypeScript SDK 对等。它提供了与 Aptos 网络交互所需的一切：账户管理、交易构建、数据查询和智能合约交互。
+
+## 安装
+
+将 SDK 添加到您的 `Cargo.toml`：
+
+```toml filename="Cargo.toml"
+[dependencies]
+aptos-sdk = { git = "https://github.com/aptos-labs/aptos-rust-sdk", package = "aptos-sdk" }
+tokio = { version = "1", features = ["full"] }
+anyhow = "1"
+```
+
+<Aside type="note">
+  SDK 需要异步运行时。本文档中的所有示例均使用 [tokio](https://tokio.rs/)。
+</Aside>
+
+## 功能特性标志
+
+SDK 使用 Cargo 功能特性标志来保持构建精简。只启用您需要的功能：
+
+| 功能特性        | 默认启用 | 描述                                      |
+| ----------- | ---- | --------------------------------------- |
+| `ed25519`   | 是    | Ed25519 签名方案（最常用）                       |
+| `secp256k1` | 是    | Secp256k1 ECDSA 签名（兼容 Bitcoin/Ethereum） |
+| `secp256r1` | 是    | P-256 ECDSA 签名（兼容 WebAuthn/passkey）     |
+| `mnemonic`  | 是    | BIP-39 助记词支持                            |
+| `indexer`   | 是    | GraphQL 索引器客户端，用于查询索引数据                 |
+| `faucet`    | 是    | 测试网水龙头集成，用于为账户充值                        |
+| `bls`       | 否    | BLS12-381 签名                            |
+| `keyless`   | 否    | 基于 OIDC 的无密钥认证                          |
+| `macros`    | 否    | 用于类型安全合约绑定的过程宏（`aptos_contract!`）       |
+
+仅使用 Ed25519 支持的最小构建：
+
+```toml filename="Cargo.toml"
+[dependencies]
+aptos-sdk = { git = "https://github.com/aptos-labs/aptos-rust-sdk", package = "aptos-sdk", default-features = false, features = ["ed25519"] }
+```
+
+启用所有功能特性：
+
+```toml filename="Cargo.toml"
+[dependencies]
+aptos-sdk = { git = "https://github.com/aptos-labs/aptos-rust-sdk", package = "aptos-sdk", features = ["full"] }
+```
+
+## 快速示例
+
+```rust
+use aptos_sdk::{Aptos, AptosConfig};
+use aptos_sdk::account::Ed25519Account;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    // Connect to testnet
+    let aptos = Aptos::new(AptosConfig::testnet())?;
+
+    // Generate a new account
+    let account = Ed25519Account::generate();
+    println!("Address: {}", account.address());
+
+    // Check balance
+    let balance = aptos.get_balance(account.address()).await?;
+    println!("Balance: {} octas", balance);
+
+    Ok(())
+}
+```
+
+## API 参考
+
+完整的 API 文档请参阅 [docs.rs 参考](https://docs.rs/aptos-sdk/latest/aptos_sdk/)。
+
+## 系统要求
+
+- **Rust：** 1.90 或更高版本
+- **异步运行时：** tokio（推荐）
+- **网络访问：** 连接到 Aptos 全节点 REST 端点
+
+<Aside type="caution" title="旧版 SDK">
+  位于 [aptos-core 仓库](https://github.com/aptos-labs/aptos-core/tree/main/sdk) 中的旧版 Rust SDK 已不再积极维护。新项目应使用此独立 SDK（`aptos-rust-sdk`）。如果您正在从旧版 SDK 迁移，API 已经过重新设计以提高易用性——请参阅 [GitHub 仓库](https://github.com/aptos-labs/aptos-rust-sdk) 获取迁移指南。
+</Aside>

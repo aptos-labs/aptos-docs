@@ -1,0 +1,210 @@
+---
+title: "创建和管理账户"
+description: "学习如何使用 Rust SDK 通过不同的签名方案生成、加载和管理 Aptos 账户"
+sidebar:
+  label: "管理账户"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Aptos Rust SDK 提供了多种账户类型用于管理链上身份。所有账户类型都实现了 `Account` trait，提供了统一的交易签名和地址派生接口。本页介绍如何生成新账户、加载现有账户以及在网络上为账户充值。
+
+## 生成账户
+
+创建新账户最常见的方式是使用 `Ed25519Account::generate()`，它会生成一个随机的 Ed25519 密钥对：
+
+```rust
+use aptos_sdk::account::Ed25519Account;
+
+let account = Ed25519Account::generate();
+println!("Address:    {}", account.address());
+println!("Public Key: {}", account.public_key());
+```
+
+`address()` 方法返回从公钥派生的链上地址，`public_key()` 返回密钥对的公钥部分。除非您显式导出，否则私钥不会离开账户对象。
+
+## 其他签名方案
+
+除了 Ed25519，SDK 还支持其他加密签名方案。每种方案都通过 Cargo 功能特性标志控制，默认启用（BLS12-381 除外）：
+
+```rust
+use aptos_sdk::account::{Secp256k1Account, Secp256r1Account};
+
+// Generate a Secp256k1 account (Bitcoin/Ethereum compatible)
+let secp256k1_account = Secp256k1Account::generate();
+println!("Secp256k1 Address: {}", secp256k1_account.address());
+
+// Generate a Secp256r1 account (WebAuthn/passkey compatible)
+let secp256r1_account = Secp256r1Account::generate();
+println!("Secp256r1 Address: {}", secp256r1_account.address());
+```
+
+下表总结了可用的签名方案：
+
+| 方案                | 账户类型               | 功能特性标志      | 默认启用 | 典型使用场景                  |
+| ----------------- | ------------------ | ----------- | ---- | ----------------------- |
+| Ed25519           | `Ed25519Account`   | `ed25519`   | 是    | 通用，最常见                  |
+| Secp256k1         | `Secp256k1Account` | `secp256k1` | 是    | Bitcoin/Ethereum 生态系统兼容 |
+| Secp256r1 (P-256) | `Secp256r1Account` | `secp256r1` | 是    | WebAuthn、passkey、安全飞地   |
+| BLS12-381         | `Bls12381Account`  | `bls`       | 否    | 聚合签名、验证器操作              |
+
+要使用 BLS12-381，请在 `Cargo.toml` 中启用 `bls` 功能特性：
+
+```toml filename="Cargo.toml"
+[dependencies]
+aptos-sdk = { git = "https://github.com/aptos-labs/aptos-rust-sdk", package = "aptos-sdk", features = ["bls"] }
+```
+
+## 从私钥加载
+
+如果您已有私钥（例如来自现有钱包或配置文件），可以通过十六进制编码的私钥重建账户对象：
+
+```rust
+use aptos_sdk::account::Ed25519Account;
+
+let private_key_hex = "0xYOUR_PRIVATE_KEY_HEX";
+let account = Ed25519Account::from_private_key_hex(private_key_hex)?;
+println!("Loaded account: {}", account.address());
+```
+
+<Aside type="caution" title="切勿硬编码私钥">
+  不要将私钥直接嵌入源代码中。请将其存储在环境变量、密钥管理器或加密配置文件中。提交到版本控制的硬编码密钥可能导致不可逆转的资金损失。
+</Aside>
+
+更安全的方式是在运行时从环境变量加载密钥：
+
+```rust
+use aptos_sdk::account::Ed25519Account;
+
+let private_key_hex = std::env::var("APTOS_PRIVATE_KEY")
+    .expect("APTOS_PRIVATE_KEY environment variable must be set");
+let account = Ed25519Account::from_private_key_hex(&private_key_hex)?;
+```
+
+## 从助记词加载
+
+SDK 在启用 `mnemonic` 功能特性（默认启用）时支持 BIP-39 助记词。这允许您从 12 或 24 个单词的恢复短语生成确定性账户。
+
+### 生成新助记词
+
+使用 `generate_with_mnemonic()` 创建一个全新的账户及其助记词：
+
+```rust
+use aptos_sdk::account::Ed25519Account;
+
+let (account, mnemonic) = Ed25519Account::generate_with_mnemonic()?;
+println!("Address:  {}", account.address());
+println!("Mnemonic: {}", mnemonic);
+```
+
+<Aside type="caution">
+  请妥善保管助记词。任何获得助记词的人都可以重建账户并控制其资金。
+</Aside>
+
+### 从现有助记词恢复
+
+要从助记词恢复账户，请使用 `from_mnemonic()`。您可以指定派生索引来从同一助记词派生不同的账户：
+
+```rust
+use aptos_sdk::account::Ed25519Account;
+
+let mnemonic = "your twelve or twenty four word mnemonic phrase goes here ...";
+
+// Derive the first account (index 0)
+let account_0 = Ed25519Account::from_mnemonic(mnemonic, 0)?;
+println!("Account 0: {}", account_0.address());
+
+// Derive the second account (index 1)
+let account_1 = Ed25519Account::from_mnemonic(mnemonic, 1)?;
+println!("Account 1: {}", account_1.address());
+```
+
+### 派生多个账户
+
+单个助记词可以通过改变派生索引生成无限数量的确定性账户。这对于从单一种子管理多个账户的应用非常有用：
+
+```rust
+use aptos_sdk::account::Ed25519Account;
+
+let mnemonic = "your mnemonic phrase ...";
+
+// Derive 10 accounts from the same mnemonic
+for index in 0..10 {
+    let account = Ed25519Account::from_mnemonic(mnemonic, index)?;
+    println!("Account {}: {}", index, account.address());
+}
+```
+
+每个索引始终生成相同的账户，因此只要您知道助记词和使用的索引，就可以可靠地重建任何账户。
+
+## `AnyAccount` 枚举
+
+当您需要以统一方式处理不同签名方案的账户时，SDK 提供了 `AnyAccount` 枚举。这是一个多态包装器，无论底层密钥类型如何，都实现了 `Account` trait：
+
+```rust
+use aptos_sdk::account::{AnyAccount, Ed25519Account, Secp256k1Account};
+
+let ed25519 = Ed25519Account::generate();
+let secp256k1 = Secp256k1Account::generate();
+
+// Store different account types in the same collection
+let accounts: Vec<AnyAccount> = vec![
+    AnyAccount::Ed25519(ed25519),
+    AnyAccount::Secp256k1(secp256k1),
+];
+
+for account in &accounts {
+    println!("Address: {}", account.address());
+}
+```
+
+`AnyAccount` 在构建支持多种签名方案的应用时，或者当您需要通过泛型接口传递账户而在编译时不知道具体类型时特别有用。
+
+## 为账户充值
+
+新生成的账户仅作为本地密钥对存在，直到在网络上注册。要让网络识别账户，您必须用 APT 为其充值。
+
+### 在测试网或开发网上使用水龙头
+
+在测试网和开发网上，您可以使用内置的水龙头集成（需要 `faucet` 功能特性，默认启用）：
+
+```rust
+use aptos_sdk::{Aptos, AptosConfig};
+use aptos_sdk::account::Ed25519Account;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let aptos = Aptos::new(AptosConfig::testnet())?;
+
+    let account = Ed25519Account::generate();
+
+    // Fund an existing account with 100_000_000 octas (1 APT)
+    aptos.fund_account(account.address(), 100_000_000).await?;
+    println!("Funded account: {}", account.address());
+
+    Ok(())
+}
+```
+
+### 创建预充值账户
+
+为了方便，SDK 还提供了 `create_funded_account()`，可以在一次调用中生成新账户并充值：
+
+```rust
+use aptos_sdk::{Aptos, AptosConfig};
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let aptos = Aptos::new(AptosConfig::testnet())?;
+
+    // Generate and fund a new Ed25519 account in one step
+    let account = aptos.create_funded_account(100_000_000).await?;
+    println!("New funded account: {}", account.address());
+
+    Ok(())
+}
+```
+
+<Aside type="note" title="水龙头可用性">
+  水龙头仅在**开发网**和**测试网**上可用。在主网上，您必须通过交易所或其他账户转账来获取 APT。
+</Aside>

@@ -1,0 +1,158 @@
+---
+title: "Obtener Datos mediante el SDK"
+description: "Aprende a consultar saldos de cuentas, funciones de vista, informacion del ledger y datos indexados usando el SDK de Rust para Aptos"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Puedes usar el cliente `Aptos` para obtener datos on-chain usando una variedad de metodos auxiliares. Los ejemplos a continuacion asumen que ya has creado una instancia del cliente `Aptos`:
+
+```rust
+use aptos_sdk::{Aptos, AptosConfig};
+
+let aptos = Aptos::new(AptosConfig::testnet())?;
+```
+
+## Saldos de Cuentas
+
+Obtiene el saldo de APT para cualquier direccion de cuenta. El saldo se devuelve en octas (1 APT = 100,000,000 octas).
+
+```rust
+let address = "0x1".parse()?;
+let balance = aptos.get_balance(address).await?;
+println!("Balance: {} octas", balance);
+```
+
+## Informacion de Cuentas
+
+Verifica si una cuenta existe on-chain y obtiene su numero de secuencia actual. El numero de secuencia es necesario al construir transacciones manualmente.
+
+```rust
+let address = "0x1".parse()?;
+
+// Check if an account exists
+let exists = aptos.account_exists(address).await?;
+println!("Account exists: {}", exists);
+
+// Get the current sequence number
+let sequence_number = aptos.get_sequence_number(address).await?;
+println!("Sequence number: {}", sequence_number);
+```
+
+## Informacion del Ledger
+
+Obtiene el estado actual de la blockchain, incluyendo la ultima version del ledger, la altura del bloque y la epoca.
+
+```rust
+let info = aptos.ledger_info().await?;
+println!("Ledger version: {}", info.ledger_version);
+println!("Block height: {}", info.block_height);
+println!("Epoch: {}", info.epoch);
+```
+
+## Funciones de Vista (JSON)
+
+Las funciones de vista permiten llamar funciones Move on-chain que estan marcadas como `#[view]` sin enviar una transaccion. La variante JSON devuelve resultados como `serde_json::Value`, lo cual es util para consultas rapidas y datos dinamicos.
+
+### Sin argumentos de tipo
+
+Llama a una funcion de vista simple sin argumentos de tipo ni parametros:
+
+```rust
+let result = aptos
+    .view("0x1::timestamp::now_seconds", vec![], vec![])
+    .await?;
+println!("Current timestamp: {:?}", result);
+```
+
+### Con argumentos de tipo
+
+Para consultar un saldo de moneda especifico, pasa el tipo de moneda como argumento de tipo y la direccion de la cuenta como argumento de funcion:
+
+```rust
+let result = aptos
+    .view(
+        "0x1::coin::balance",
+        vec!["0x1::aptos_coin::AptosCoin"],
+        vec![serde_json::json!("0x1")],
+    )
+    .await?;
+println!("Coin balance: {:?}", result);
+```
+
+## Funciones de Vista (BCS)
+
+El metodo `view_bcs` devuelve resultados como bytes codificados en BCS, que puedes deserializar en structs de Rust con tipado fuerte. Esto es mas eficiente y seguro en tipos que la variante JSON.
+
+```rust
+let timestamp: Vec<u64> = aptos
+    .view_bcs("0x1::timestamp::now_seconds", vec![], vec![])
+    .await?;
+println!("Current timestamp: {} seconds", timestamp[0]);
+```
+
+<Aside type="tip">
+  Usa `view_bcs` cuando conoces el tipo de retorno en tiempo de compilacion y quieres evitar parsear JSON manualmente. Usa `view` cuando trabajes con tipos de retorno dinamicos o desconocidos.
+</Aside>
+
+## Estimacion de Gas
+
+Estima el costo de gas de una transaccion antes de enviarla. Esto es util para mostrar estimaciones de tarifas a los usuarios o validar que una transaccion no excedera un presupuesto de gas.
+
+```rust
+use aptos_sdk::types::InputEntryFunctionData;
+
+let payload = InputEntryFunctionData {
+    function: "0x1::aptos_account::transfer".to_string(),
+    type_arguments: vec![],
+    arguments: vec![
+        serde_json::json!("0xrecipient_address"),
+        serde_json::json!("1000"),
+    ],
+};
+
+let gas_estimate = aptos.estimate_gas(payload).await?;
+println!("Estimated gas units: {}", gas_estimate);
+```
+
+## Cliente REST del Fullnode
+
+Para consultas avanzadas no cubiertas por los metodos de alto nivel de `Aptos`, puedes acceder al cliente REST del fullnode directamente. Esto te da acceso al conjunto completo de endpoints de la API del fullnode.
+
+```rust
+let address = "0x1".parse()?;
+
+// Retrieve all modules published under an account
+let modules = aptos.fullnode().get_account_modules(address).await?;
+for module in &modules {
+    println!("Module: {}", module.abi.as_ref().unwrap().name);
+}
+```
+
+<Aside type="note">
+  El cliente del fullnode expone metodos que se mapean directamente a la [API REST del fullnode de Aptos](https://api.mainnet.aptoslabs.com/v1/spec#/). Usalo cuando necesites acceso a endpoints como `get_account_resources`, `get_transactions` o `get_block_by_height`.
+</Aside>
+
+## Consultas al Indexador
+
+El SDK incluye un cliente de indexador para consultar datos on-chain agregados y enriquecidos. El indexador proporciona acceso a tipos de datos que no estan disponibles a traves de la API del fullnode por si sola, como el historial de propiedad de tokens, agregaciones de eventos y resumenes de transacciones de cuentas.
+
+```rust
+let indexer = aptos.indexer();
+```
+
+<Aside type="caution">
+  El cliente del indexador requiere que el feature flag `indexer` este habilitado en tu `Cargo.toml`. Este feature esta incluido en el conjunto de features por defecto, pero debe habilitarse explicitamente si estas usando `default-features = false`.
+</Aside>
+
+El cliente del indexador proporciona acceso a:
+
+- **Datos de tokens** -- propiedad, metadatos e historial de transferencias para activos digitales.
+- **Saldos de monedas** -- saldos actuales e historicos de todos los tipos de monedas.
+- **Transacciones de cuentas** -- datos de transacciones enriquecidos con payloads decodificados.
+- **Datos de eventos** -- flujos de eventos agregados y filtrables.
+- **Datos de colecciones** -- metadatos y estadisticas de colecciones NFT.
+
+<Aside type="note">
+  Los datos del indexador pueden tener un ligero retraso respecto a la ultima version del ledger porque requieren procesamiento adicional. Si necesitas los datos mas recientes, consulta el cliente del fullnode o usa parametros de version del ledger donde esten disponibles.
+</Aside>

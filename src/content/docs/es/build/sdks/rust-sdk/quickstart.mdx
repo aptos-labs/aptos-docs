@@ -1,0 +1,225 @@
+---
+title: "Inicio Rapido con el SDK de Rust"
+description: "Comienza con el SDK de Rust para Aptos creando cuentas, financiandolas y transfiriendo tokens APT"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+<Aside type="note">
+  El codigo completo del ejemplo se encuentra en [Codigo Completo del Inicio Rapido](#codigo-completo-del-inicio-rapido) al final de la pagina.
+</Aside>
+
+<Steps>
+  1. Crear un Nuevo Proyecto
+
+     Usa Cargo para crear un nuevo proyecto de Rust:
+
+     ```shellscript
+     cargo new aptos-quickstart && cd aptos-quickstart
+     ```
+
+  2. Agregar Dependencias
+
+     Abre `Cargo.toml` y agrega el SDK de Aptos junto con `tokio` para el runtime asincrono y `anyhow` para el manejo de errores:
+
+     ```toml filename="Cargo.toml"
+     [dependencies]
+     aptos-sdk = { git = "https://github.com/aptos-labs/aptos-rust-sdk", package = "aptos-sdk" }
+     tokio = { version = "1", features = ["full"] }
+     anyhow = "1"
+     ```
+
+  3. Configurar el Cliente de Aptos
+
+     El cliente `Aptos` maneja toda la comunicacion con la red de Aptos. Crealo pasando un `AptosConfig` que especifique a que red conectarse.
+
+     ```rust filename="src/main.rs"
+     use aptos_sdk::{Aptos, AptosConfig};
+     use aptos_sdk::account::Ed25519Account;
+
+     #[tokio::main]
+     async fn main() -> anyhow::Result<()> {
+         println!("This example will create two accounts (Alice and Bob), fund them, and transfer APT between them.");
+
+         // Connect to testnet
+         let aptos = Aptos::new(AptosConfig::testnet())?;
+
+         Ok(())
+     }
+     ```
+
+     <Aside type="note">
+       Puedes conectarte a diferentes redes usando `AptosConfig::devnet()`, `AptosConfig::mainnet()` o `AptosConfig::local()` en lugar de `AptosConfig::testnet()`.
+     </Aside>
+
+  4. Crear y Financiar Cuentas
+
+     Genera dos nuevas cuentas Ed25519. En testnet y devnet, puedes financiar cuentas programaticamente usando el faucet, que envia APT de prueba a tus nuevas cuentas. Financiar una cuenta tambien la crea on-chain.
+
+     ```rust filename="src/main.rs"
+     // Generate two new accounts
+     let alice = Ed25519Account::generate();
+     let bob = Ed25519Account::generate();
+
+     println!("\n=== Addresses ===\n");
+     println!("Alice's address is: {}", alice.address());
+     println!("Bob's address is: {}", bob.address());
+
+     // Fund the accounts using the testnet faucet
+     println!("\n=== Funding accounts ===\n");
+     aptos.fund_account(alice.address(), 100_000_000).await?;
+     aptos.fund_account(bob.address(), 100_000_000).await?;
+     println!("Alice and Bob's accounts have been funded!");
+     ```
+
+     <Aside type="note">
+       Las cantidades anteriores se especifican en **octas**, la unidad mas pequenia de APT. 1 APT = 100,000,000 octas (10^8). Asi que `100_000_000` octas equivalen a 1 APT.
+     </Aside>
+
+  5. Obtener Datos On-Chain
+
+     Usa el cliente `Aptos` para consultar los saldos de las cuentas. El metodo `get_balance` devuelve el saldo de APT en octas.
+
+     ```rust filename="src/main.rs"
+     println!("\n=== Initial Balances ===\n");
+     let alice_balance = aptos.get_balance(alice.address()).await?;
+     let bob_balance = aptos.get_balance(bob.address()).await?;
+     println!("Alice's balance: {} octas", alice_balance);
+     println!("Bob's balance: {} octas", bob_balance);
+     ```
+
+  6. Transferir APT
+
+     Usa el metodo de conveniencia `transfer_apt` para enviar APT de una cuenta a otra. Este metodo construye, firma, envia y espera la transaccion en una sola llamada.
+
+     ```rust filename="src/main.rs"
+     // Transfer 0.1 APT (10_000_000 octas) from Alice to Bob
+     println!("\n=== Transfer transaction ===\n");
+     let result = aptos.transfer_apt(&alice, bob.address(), 10_000_000).await?;
+
+     // Verify the transaction succeeded
+     let success = result.data.get("success").and_then(|v| v.as_bool()).unwrap_or(false);
+     println!("Transaction success: {}", success);
+     ```
+
+     <Aside type="note">
+       El monto de la transferencia esta en octas. Aqui, `10_000_000` octas equivalen a 0.1 APT.
+     </Aside>
+
+  7. Verificar la Transferencia
+
+     Obtiene los saldos actualizados para confirmar que la transferencia se realizo. El saldo de Alice sera menor de lo esperado debido a la tarifa de gas pagada por la transaccion.
+
+     ```rust filename="src/main.rs"
+     println!("\n=== Balances after transfer ===\n");
+     let new_alice_balance = aptos.get_balance(alice.address()).await?;
+     let new_bob_balance = aptos.get_balance(bob.address()).await?;
+     println!("Alice's balance: {} octas", new_alice_balance);
+     println!("Bob's balance: {} octas", new_bob_balance);
+     ```
+</Steps>
+
+## Codigo Completo del Inicio Rapido
+
+### Ejecutar el Inicio Rapido
+
+```shellscript
+cargo run
+```
+
+```rust filename="src/main.rs"
+/// This example shows how to use the Aptos Rust SDK to create accounts,
+/// fund them, and transfer APT between them on testnet.
+use aptos_sdk::{Aptos, AptosConfig};
+use aptos_sdk::account::Ed25519Account;
+
+const ALICE_INITIAL_BALANCE: u64 = 100_000_000;
+const BOB_INITIAL_BALANCE: u64 = 100_000_000;
+const TRANSFER_AMOUNT: u64 = 10_000_000;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    println!(
+        "This example will create two accounts (Alice and Bob), fund them, \
+         and transfer APT between them."
+    );
+
+    // Setup the client
+    let aptos = Aptos::new(AptosConfig::testnet())?;
+
+    // Generate two new accounts
+    let alice = Ed25519Account::generate();
+    let bob = Ed25519Account::generate();
+
+    println!("\n=== Addresses ===\n");
+    println!("Alice's address is: {}", alice.address());
+    println!("Bob's address is: {}", bob.address());
+
+    // Fund the accounts using the testnet faucet.
+    // Funding an account creates it on-chain.
+    println!("\n=== Funding accounts ===\n");
+    aptos.fund_account(alice.address(), ALICE_INITIAL_BALANCE).await?;
+    aptos.fund_account(bob.address(), BOB_INITIAL_BALANCE).await?;
+    println!("Alice and Bob's accounts have been funded!");
+
+    // Look up the newly funded account balances
+    println!("\n=== Initial Balances ===\n");
+    let alice_balance = aptos.get_balance(alice.address()).await?;
+    let bob_balance = aptos.get_balance(bob.address()).await?;
+    println!("Alice's balance: {} octas", alice_balance);
+    println!("Bob's balance: {} octas", bob_balance);
+
+    // Transfer APT from Alice to Bob
+    println!("\n=== Transfer transaction ===\n");
+    let result = aptos.transfer_apt(&alice, bob.address(), TRANSFER_AMOUNT).await?;
+
+    // Verify the transaction succeeded
+    let success = result
+        .data
+        .get("success")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    println!("Transaction success: {}", success);
+
+    // Check updated balances
+    println!("\n=== Balances after transfer ===\n");
+    let new_alice_balance = aptos.get_balance(alice.address()).await?;
+    let new_bob_balance = aptos.get_balance(bob.address()).await?;
+    println!("Alice's balance: {} octas", new_alice_balance);
+    println!("Bob's balance: {} octas", new_bob_balance);
+
+    // Bob should have received the transfer amount
+    assert_eq!(
+        new_bob_balance,
+        BOB_INITIAL_BALANCE + TRANSFER_AMOUNT,
+        "Bob's balance after transfer is incorrect"
+    );
+
+    // Alice should have less than her initial balance minus the transfer,
+    // because gas fees are also deducted
+    assert!(
+        new_alice_balance < ALICE_INITIAL_BALANCE - TRANSFER_AMOUNT,
+        "Alice's balance after transfer is incorrect"
+    );
+
+    println!("\nQuickstart complete!");
+
+    Ok(())
+}
+```
+
+## Resumen
+
+En este inicio rapido aprendiste como:
+
+1. Configurar un proyecto de Rust con el SDK de Aptos.
+2. Conectarte a la testnet de Aptos usando el cliente `Aptos`.
+3. Generar nuevas cuentas Ed25519.
+4. Financiar cuentas usando el faucet de testnet.
+5. Consultar saldos de cuentas on-chain.
+6. Transferir APT entre cuentas usando el metodo de conveniencia `transfer_apt`.
+7. Verificar los resultados de transacciones y los saldos actualizados.
+
+<Aside type="note">
+  Para la documentacion completa de la API, consulta la [referencia en docs.rs](https://docs.rs/aptos-sdk/latest/aptos_sdk/). El struct [`Aptos`](https://docs.rs/aptos-sdk/latest/aptos_sdk/struct.Aptos.html) es el punto de entrada principal para la mayoria de las operaciones.
+</Aside>

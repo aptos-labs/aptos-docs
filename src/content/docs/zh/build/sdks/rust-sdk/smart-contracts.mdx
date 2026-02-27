@@ -1,0 +1,205 @@
+---
+title: "智能合约"
+description: "学习如何使用 Aptos Rust SDK 部署 Move 模块、调用入口函数、读取合约状态以及使用类型安全绑定"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+Rust SDK 提供了在 Aptos 上部署、交互和查询 Move 智能合约的工具。
+
+## 调用入口函数
+
+入口函数是与智能合约交互的主要方式。使用 `InputEntryFunctionData` 进行类型安全的负载构造：
+
+```rust
+use aptos_sdk::transaction::InputEntryFunctionData;
+
+// Simple function call
+let payload = InputEntryFunctionData::new("0x1::aptos_account::transfer")
+    .arg(recipient.address())
+    .arg(1_000_000u64)
+    .build()?;
+
+let result = aptos.sign_submit_and_wait(&sender, payload, None).await?;
+```
+
+### 带类型参数的函数
+
+对于泛型函数，使用 `.type_arg()`：
+
+```rust
+let payload = InputEntryFunctionData::new("0x1::coin::transfer")
+    .type_arg("0x1::aptos_coin::AptosCoin")
+    .arg(recipient.address())
+    .arg(500_000u64)
+    .build()?;
+```
+
+### 便捷辅助函数
+
+```rust
+// Quick APT transfer
+let payload = InputEntryFunctionData::transfer_apt(recipient.address(), 1_000_000)?;
+
+// Generic coin transfer
+let payload = InputEntryFunctionData::transfer_coin(
+    "0x1::aptos_coin::AptosCoin",
+    recipient.address(),
+    1_000_000,
+)?;
+```
+
+### 手动构造 EntryFunction
+
+如需完全控制，可直接使用 BCS 编码参数构造 `EntryFunction`：
+
+```rust
+use aptos_sdk::transaction::{EntryFunction, TransactionPayload};
+use aptos_sdk::types::MoveModuleId;
+
+let entry_fn = EntryFunction::new(
+    MoveModuleId::from_str_strict("0x1::aptos_account")?,
+    "transfer",
+    vec![], // No type arguments
+    vec![
+        aptos_bcs::to_bytes(&recipient.address())?,
+        aptos_bcs::to_bytes(&100_000u64)?,
+    ],
+);
+
+let payload = TransactionPayload::EntryFunction(entry_fn);
+let result = aptos.sign_submit_and_wait(&sender, payload, None).await?;
+```
+
+## 读取合约状态
+
+### 视图函数
+
+视图函数是只读的，不会修改状态：
+
+```rust
+// JSON-encoded call
+let result = aptos
+    .view(
+        "0x1::coin::balance",
+        vec!["0x1::aptos_coin::AptosCoin".to_string()],
+        vec![serde_json::json!(account.address())],
+    )
+    .await?;
+println!("Balance: {:?} octas", result);
+
+// BCS-encoded call with typed output
+let balance: u64 = aptos
+    .view_bcs(
+        "0x1::coin::balance",
+        vec!["0x1::aptos_coin::AptosCoin".to_string()],
+        vec![aptos_bcs::to_bytes(&account.address())?],
+    )
+    .await?;
+```
+
+### 查询账户模块
+
+列出部署到某个账户的所有模块：
+
+```rust
+let modules = aptos.fullnode().get_account_modules(address).await?;
+for module in &modules.data {
+    if let Some(abi) = &module.abi {
+        let entry_count = abi.exposed_functions.iter().filter(|f| f.is_entry).count();
+        let view_count = abi.exposed_functions.iter().filter(|f| f.is_view).count();
+        println!("{}::{} ({} entry, {} view functions)", abi.address, abi.name, entry_count, view_count);
+    }
+}
+```
+
+## 部署 Move 模块
+
+部署 Move 模块需要先编译，然后将字节码发布到链上。
+
+<Steps>
+  1. 编写 Move 模块并编译
+
+     ```bash
+     aptos move compile --save-metadata
+     ```
+
+     这将在 `build/` 目录中生成字节码文件（`.mv`）和 `package-metadata.bcs` 文件。
+
+  2. 读取编译后的字节码
+
+     ```rust
+     use std::fs;
+
+     let metadata = fs::read("build/MyModule/package-metadata.bcs")?;
+     let module_bytecode = fs::read("build/MyModule/bytecode_modules/my_module.mv")?;
+     ```
+
+  3. 创建发布交易
+
+     ```rust
+     use aptos_sdk::transaction::EntryFunction;
+     use aptos_sdk::types::MoveModuleId;
+
+     let payload = EntryFunction::new(
+         MoveModuleId::from_str_strict("0x1::code")?,
+         "publish_package_txn",
+         vec![],
+         vec![
+             aptos_bcs::to_bytes(&metadata)?,
+             aptos_bcs::to_bytes(&vec![module_bytecode])?,
+         ],
+     );
+     ```
+
+  4. 提交部署
+
+     ```rust
+     let result = aptos
+         .sign_submit_and_wait(&deployer, payload.into(), None)
+         .await?;
+     ```
+</Steps>
+
+<Aside type="note">
+  模块部署需要部署者账户拥有足够的 APT 来支付 gas 费用。在测试网上，请先使用水龙头为账户充值。
+</Aside>
+
+## 类型安全的合约绑定
+
+`aptos_contract!` 宏从 Move 模块的 ABI 生成类型安全的 Rust 绑定。这需要 `macros` 功能特性标志。
+
+```toml filename="Cargo.toml"
+[dependencies]
+aptos-sdk = { git = "https://github.com/aptos-labs/aptos-rust-sdk", package = "aptos-sdk", features = ["macros"] }
+```
+
+```rust
+use aptos_sdk::aptos_contract;
+
+// Generate bindings from an ABI JSON string or file
+aptos_contract!(MyContract, "path/to/abi.json");
+```
+
+该宏为模块中所有入口和视图函数生成类型安全的函数，提供参数类型和数量的编译时检查。
+
+<Aside type="note">
+  完整用法请参阅 [contract\_bindings](https://github.com/aptos-labs/aptos-rust-sdk/blob/main/crates/aptos-sdk/examples/contract_bindings.rs) 和 [codegen](https://github.com/aptos-labs/aptos-rust-sdk/blob/main/crates/aptos-sdk/examples/codegen.rs) 示例。
+</Aside>
+
+## NFT 操作
+
+SDK 通过 Aptos 代币标准上的入口函数支持 NFT 操作：
+
+```rust
+// NFT operations use the standard entry function pattern
+let payload = InputEntryFunctionData::new("0x4::collection::create_unlimited_collection")
+    .arg(move_string("My Collection"))      // collection name
+    .arg(move_string("A cool collection"))   // description
+    .arg(move_string("https://example.com")) // URI
+    .build()?;
+```
+
+<Aside type="note">
+  完整的 NFT 工作流程（包括创建集合、铸造代币和转移 NFT）请参阅 [nft\_operations](https://github.com/aptos-labs/aptos-rust-sdk/blob/main/crates/aptos-sdk/examples/nft_operations.rs) 示例。
+</Aside>

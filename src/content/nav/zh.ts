@@ -33,6 +33,8 @@ export default navDictionary({
   "build.group.sdks.unity-sdk": "Unity SDK",
   "build.group.sdks.cpp-sdk": "C++ SDK",
   "build.group.sdks.rust-sdk": "Rust SDK",
+  "build.group.sdks.rust-sdk.accounts": "账户",
+  "build.group.sdks.rust-sdk.building-transactions": "构建交易",
   "build.group.sdks.wallet-adapter": "钱包适配器",
   "build.group.sdks.community-sdks": "社区 SDK",
   "build.group.sdks.react-hooks": "React Hooks",

@@ -1,0 +1,189 @@
+---
+title: "批量交易"
+description: "使用 Aptos Rust SDK 高效地并行提交多笔交易"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+当您需要从单个账户执行多笔独立交易时，Rust SDK 提供了批量提交方法，可自动处理序列号管理和并行提交。这比逐一提交交易要高效得多，因为 SDK 可以流水线化请求，无需等待每笔交易完成即可发送下一笔。
+
+## 使用 `submit_batch`
+
+`submit_batch` 方法接受一个发送者账户和一个负载向量，然后并行构建、签名和提交所有交易。它在交易提交到网络后立即返回，不等待链上确认。
+
+```rust
+use aptos_sdk::types::EntryFunctionPayload;
+
+// Build multiple payloads
+let payloads: Vec<EntryFunctionPayload> = recipients
+    .iter()
+    .map(|recipient| {
+        EntryFunctionPayload::new(
+            "0x1::aptos_account::transfer".parse().unwrap(),
+            vec![],
+            vec![recipient.address().into(), 1_000_000u64.into()],
+        )
+    })
+    .collect();
+
+// Submit all transactions in parallel
+let results = aptos.submit_batch(&alice, payloads).await?;
+```
+
+<Aside type="note">
+  SDK 在批量处理时自动管理序列号。批次中的每笔交易都会收到一个唯一的、连续的序列号，以便 Aptos 网络可以按顺序处理它们。
+</Aside>
+
+## 使用 `submit_batch_and_wait`
+
+如果您需要在继续之前确认所有交易都已提交，请使用 `submit_batch_and_wait`。此方法提交所有交易，然后等待每笔交易在链上完成。
+
+```rust
+let results = aptos.submit_batch_and_wait(&alice, payloads).await?;
+
+for result in &results {
+    let success = result
+        .data
+        .get("success")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    println!("Transaction success: {}", success);
+}
+```
+
+<Aside type="caution">
+  `submit_batch_and_wait` 会阻塞直到所有交易被确认。对于大批量交易，这可能需要相当长的时间。如果不需要即时确认，请使用 `submit_batch`。
+</Aside>
+
+## 使用 `batch_transfer_apt` 批量转账 APT
+
+对于向多个接收者发送 APT 的常见情况，SDK 提供了一个便捷方法，接受 `(AccountAddress, u64)` 元组向量，表示接收者地址和以 octas 为单位的金额。
+
+```rust
+use aptos_sdk::types::AccountAddress;
+
+let transfers: Vec<(AccountAddress, u64)> = vec![
+    (bob.address(), 5_000_000),
+    (carol.address(), 3_000_000),
+    (dave.address(), 2_000_000),
+];
+
+let results = aptos.batch_transfer_apt(&alice, transfers).await?;
+```
+
+此方法为每个接收者构建适当的 `0x1::aptos_account::transfer` 负载，然后并行提交整个批次并等待所有交易完成。
+
+## 处理批量结果
+
+批量方法返回一个 `Vec` 结果，批次中的每笔交易对应一个结果。您应该遍历结果以检查各个失败情况，因为批次中的某些交易可能成功而其他交易可能失败。
+
+```rust
+let results = aptos.submit_batch_and_wait(&alice, payloads).await?;
+
+for (i, result) in results.iter().enumerate() {
+    let success = result
+        .data
+        .get("success")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let vm_status = result
+        .data
+        .get("vm_status")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown");
+
+    if success {
+        println!("Transaction {} succeeded", i);
+    } else {
+        eprintln!("Transaction {} failed: {}", i, vm_status);
+    }
+}
+```
+
+## 完整工作示例
+
+```rust filename="src/main.rs"
+/// This example demonstrates batching multiple APT transfers to
+/// different recipients in a single efficient operation.
+use aptos_sdk::{Aptos, AptosConfig};
+use aptos_sdk::account::Ed25519Account;
+use aptos_sdk::types::{AccountAddress, EntryFunctionPayload};
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    // Connect to testnet
+    let aptos = Aptos::new(AptosConfig::testnet())?;
+
+    // Generate and fund the sender
+    let alice = Ed25519Account::generate();
+    aptos.fund_account(alice.address(), 500_000_000).await?;
+    println!("Alice: {}", alice.address());
+
+    // Generate multiple recipients
+    let bob = Ed25519Account::generate();
+    let carol = Ed25519Account::generate();
+    let dave = Ed25519Account::generate();
+
+    // Fund recipients so their accounts exist on-chain
+    aptos.fund_account(bob.address(), 100_000_000).await?;
+    aptos.fund_account(carol.address(), 100_000_000).await?;
+    aptos.fund_account(dave.address(), 100_000_000).await?;
+
+    println!("Bob: {}", bob.address());
+    println!("Carol: {}", carol.address());
+    println!("Dave: {}", dave.address());
+
+    // --- Method 1: batch_transfer_apt ---
+    println!("\n=== Batch Transfer APT ===\n");
+
+    let transfers: Vec<(AccountAddress, u64)> = vec![
+        (bob.address(), 5_000_000),
+        (carol.address(), 3_000_000),
+        (dave.address(), 2_000_000),
+    ];
+
+    let results = aptos.batch_transfer_apt(&alice, transfers).await?;
+    for (i, result) in results.iter().enumerate() {
+        let success = result
+            .data
+            .get("success")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        println!("Transfer {} success: {}", i, success);
+    }
+
+    // --- Method 2: submit_batch_and_wait with custom payloads ---
+    println!("\n=== Batch Custom Payloads ===\n");
+
+    let recipients = vec![&bob, &carol, &dave];
+    let payloads: Vec<EntryFunctionPayload> = recipients
+        .iter()
+        .map(|recipient| {
+            EntryFunctionPayload::new(
+                "0x1::aptos_account::transfer".parse().unwrap(),
+                vec![],
+                vec![recipient.address().into(), 1_000_000u64.into()],
+            )
+        })
+        .collect();
+
+    let results = aptos.submit_batch_and_wait(&alice, payloads).await?;
+    for (i, result) in results.iter().enumerate() {
+        let success = result
+            .data
+            .get("success")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        println!("Transaction {} success: {}", i, success);
+    }
+
+    // Verify final balances
+    println!("\n=== Final Balances ===\n");
+    println!("Alice: {} octas", aptos.get_balance(alice.address()).await?);
+    println!("Bob: {} octas", aptos.get_balance(bob.address()).await?);
+    println!("Carol: {} octas", aptos.get_balance(carol.address()).await?);
+    println!("Dave: {} octas", aptos.get_balance(dave.address()).await?);
+
+    Ok(())
+}
+```

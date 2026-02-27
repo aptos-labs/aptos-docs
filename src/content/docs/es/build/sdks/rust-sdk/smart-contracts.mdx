@@ -1,0 +1,205 @@
+---
+title: "Contratos Inteligentes"
+description: "Aprende a desplegar modulos Move, llamar funciones entry, leer el estado de contratos y usar bindings con tipado seguro con el SDK de Rust para Aptos"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+El SDK de Rust proporciona herramientas para desplegar, interactuar con y consultar contratos inteligentes Move en Aptos.
+
+## Llamar Funciones Entry
+
+Las funciones entry son la forma principal de interactuar con contratos inteligentes. Usa `InputEntryFunctionData` para la construccion de payloads con tipado seguro:
+
+```rust
+use aptos_sdk::transaction::InputEntryFunctionData;
+
+// Simple function call
+let payload = InputEntryFunctionData::new("0x1::aptos_account::transfer")
+    .arg(recipient.address())
+    .arg(1_000_000u64)
+    .build()?;
+
+let result = aptos.sign_submit_and_wait(&sender, payload, None).await?;
+```
+
+### Funciones con Argumentos de Tipo
+
+Para funciones genericas, usa `.type_arg()`:
+
+```rust
+let payload = InputEntryFunctionData::new("0x1::coin::transfer")
+    .type_arg("0x1::aptos_coin::AptosCoin")
+    .arg(recipient.address())
+    .arg(500_000u64)
+    .build()?;
+```
+
+### Helpers de Conveniencia
+
+```rust
+// Quick APT transfer
+let payload = InputEntryFunctionData::transfer_apt(recipient.address(), 1_000_000)?;
+
+// Generic coin transfer
+let payload = InputEntryFunctionData::transfer_coin(
+    "0x1::aptos_coin::AptosCoin",
+    recipient.address(),
+    1_000_000,
+)?;
+```
+
+### Construccion Manual de EntryFunction
+
+Para control total, construye `EntryFunction` directamente con argumentos codificados en BCS:
+
+```rust
+use aptos_sdk::transaction::{EntryFunction, TransactionPayload};
+use aptos_sdk::types::MoveModuleId;
+
+let entry_fn = EntryFunction::new(
+    MoveModuleId::from_str_strict("0x1::aptos_account")?,
+    "transfer",
+    vec![], // No type arguments
+    vec![
+        aptos_bcs::to_bytes(&recipient.address())?,
+        aptos_bcs::to_bytes(&100_000u64)?,
+    ],
+);
+
+let payload = TransactionPayload::EntryFunction(entry_fn);
+let result = aptos.sign_submit_and_wait(&sender, payload, None).await?;
+```
+
+## Leer el Estado del Contrato
+
+### Funciones de Vista
+
+Las funciones de vista son de solo lectura y no modifican el estado:
+
+```rust
+// JSON-encoded call
+let result = aptos
+    .view(
+        "0x1::coin::balance",
+        vec!["0x1::aptos_coin::AptosCoin".to_string()],
+        vec![serde_json::json!(account.address())],
+    )
+    .await?;
+println!("Balance: {:?} octas", result);
+
+// BCS-encoded call with typed output
+let balance: u64 = aptos
+    .view_bcs(
+        "0x1::coin::balance",
+        vec!["0x1::aptos_coin::AptosCoin".to_string()],
+        vec![aptos_bcs::to_bytes(&account.address())?],
+    )
+    .await?;
+```
+
+### Consultar Modulos de Cuentas
+
+Lista todos los modulos desplegados en una cuenta:
+
+```rust
+let modules = aptos.fullnode().get_account_modules(address).await?;
+for module in &modules.data {
+    if let Some(abi) = &module.abi {
+        let entry_count = abi.exposed_functions.iter().filter(|f| f.is_entry).count();
+        let view_count = abi.exposed_functions.iter().filter(|f| f.is_view).count();
+        println!("{}::{} ({} entry, {} view functions)", abi.address, abi.name, entry_count, view_count);
+    }
+}
+```
+
+## Desplegar Modulos Move
+
+Desplegar un modulo Move requiere compilarlo primero y luego publicar el bytecode on-chain.
+
+<Steps>
+  1. Escribe tu modulo Move y compilalo
+
+     ```bash
+     aptos move compile --save-metadata
+     ```
+
+     Esto produce archivos de bytecode (`.mv`) y un archivo `package-metadata.bcs` en el directorio `build/`.
+
+  2. Lee el bytecode compilado
+
+     ```rust
+     use std::fs;
+
+     let metadata = fs::read("build/MyModule/package-metadata.bcs")?;
+     let module_bytecode = fs::read("build/MyModule/bytecode_modules/my_module.mv")?;
+     ```
+
+  3. Crea la transaccion de publicacion
+
+     ```rust
+     use aptos_sdk::transaction::EntryFunction;
+     use aptos_sdk::types::MoveModuleId;
+
+     let payload = EntryFunction::new(
+         MoveModuleId::from_str_strict("0x1::code")?,
+         "publish_package_txn",
+         vec![],
+         vec![
+             aptos_bcs::to_bytes(&metadata)?,
+             aptos_bcs::to_bytes(&vec![module_bytecode])?,
+         ],
+     );
+     ```
+
+  4. Envia el despliegue
+
+     ```rust
+     let result = aptos
+         .sign_submit_and_wait(&deployer, payload.into(), None)
+         .await?;
+     ```
+</Steps>
+
+<Aside type="note">
+  El despliegue de modulos requiere que la cuenta del desplegador tenga suficiente APT para cubrir las tarifas de gas. En testnet, usa el faucet para financiar la cuenta primero.
+</Aside>
+
+## Bindings de Contrato con Tipado Seguro
+
+La macro `aptos_contract!` genera bindings de Rust con tipado seguro a partir del ABI de un modulo Move. Esto requiere el feature flag `macros`.
+
+```toml filename="Cargo.toml"
+[dependencies]
+aptos-sdk = { git = "https://github.com/aptos-labs/aptos-rust-sdk", package = "aptos-sdk", features = ["macros"] }
+```
+
+```rust
+use aptos_sdk::aptos_contract;
+
+// Generate bindings from an ABI JSON string or file
+aptos_contract!(MyContract, "path/to/abi.json");
+```
+
+La macro genera funciones con tipado seguro para todas las funciones entry y de vista en el modulo, proporcionando verificaciones en tiempo de compilacion para tipos y cantidades de argumentos.
+
+<Aside type="note">
+  Consulta los ejemplos [contract\_bindings](https://github.com/aptos-labs/aptos-rust-sdk/blob/main/crates/aptos-sdk/examples/contract_bindings.rs) y [codegen](https://github.com/aptos-labs/aptos-rust-sdk/blob/main/crates/aptos-sdk/examples/codegen.rs) para uso completo.
+</Aside>
+
+## Operaciones con NFT
+
+El SDK soporta operaciones con NFT a traves de funciones entry en los estandares de tokens de Aptos:
+
+```rust
+// NFT operations use the standard entry function pattern
+let payload = InputEntryFunctionData::new("0x4::collection::create_unlimited_collection")
+    .arg(move_string("My Collection"))      // collection name
+    .arg(move_string("A cool collection"))   // description
+    .arg(move_string("https://example.com")) // URI
+    .build()?;
+```
+
+<Aside type="note">
+  Consulta el ejemplo [nft\_operations](https://github.com/aptos-labs/aptos-rust-sdk/blob/main/crates/aptos-sdk/examples/nft_operations.rs) para flujos de trabajo completos con NFT incluyendo crear colecciones, acuniar tokens y transferir NFTs.
+</Aside>

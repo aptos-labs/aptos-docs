@@ -1,0 +1,373 @@
+---
+title: "Building Transactions"
+description: "Comprehensive guide to building, signing, submitting, and waiting for transactions on Aptos using the Rust SDK"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+Transactions allow you to change on-chain data or trigger events. Generally, transactions follow a four-step flow from construction to execution on chain: **build**, **sign**, **submit**, and **wait**.
+
+<Aside type="note">
+  For these examples, `aptos` is an instance of the [`Aptos`](https://github.com/aptos-labs/aptos-rust-sdk) client object, created with a configuration such as `Aptos::new(AptosConfig::testnet())?`.
+</Aside>
+
+## Convenience Methods
+
+The Rust SDK provides several high-level methods on the `Aptos` client that combine multiple steps into a single call. These are the fastest way to get a transaction on chain when you do not need fine-grained control over each step.
+
+### `sign_submit_and_wait`
+
+Builds, signs, submits, and waits for a transaction to complete in one call. This is the most common method for straightforward transactions.
+
+```rust
+let payload = InputEntryFunctionData::new("0x1::aptos_account::transfer")
+    .arg(recipient.address())
+    .arg(1_000_000u64)
+    .build()?;
+
+let response = aptos
+    .sign_submit_and_wait(&sender, payload, None)
+    .await?;
+
+println!("Transaction succeeded: {}", response.data.success);
+```
+
+The optional third argument is a timeout duration. Pass `None` to use the default.
+
+### `sign_and_submit`
+
+Signs and submits a transaction without waiting for confirmation. Use this when you want to track the result yourself or fire-and-forget.
+
+```rust
+let payload = InputEntryFunctionData::new("0x1::aptos_account::transfer")
+    .arg(recipient.address())
+    .arg(1_000_000u64)
+    .build()?;
+
+let pending = aptos.sign_and_submit(&sender, payload).await?;
+println!("Submitted transaction hash: {}", pending.hash);
+```
+
+### `simulate_and_submit`
+
+Simulates the transaction first to verify it will succeed, then submits it. This is useful for catching errors before spending gas.
+
+```rust
+let payload = InputEntryFunctionData::new("0x1::aptos_account::transfer")
+    .arg(recipient.address())
+    .arg(1_000_000u64)
+    .build()?;
+
+let pending = aptos
+    .simulate_and_submit(&sender, payload)
+    .await?;
+```
+
+### `transfer_apt`
+
+A purpose-built convenience method for transferring APT between accounts.
+
+```rust
+let response = aptos
+    .transfer_apt(&sender, recipient.address(), 10_000_000)
+    .await?;
+
+println!("Transfer succeeded: {}", response.data.success);
+```
+
+### `transfer_coin`
+
+Transfers any coin type by specifying the coin's type tag as a string.
+
+```rust
+let response = aptos
+    .transfer_coin(
+        &sender,
+        recipient.address(),
+        "0x1::aptos_coin::AptosCoin",
+        10_000_000,
+    )
+    .await?;
+
+println!("Coin transfer succeeded: {}", response.data.success);
+```
+
+### Building Payloads with `InputEntryFunctionData`
+
+All of the convenience methods above (except `transfer_apt` and `transfer_coin`) accept a `TransactionPayload` built from `InputEntryFunctionData`. This builder gives you a clean, chainable API for constructing entry function calls:
+
+```rust
+use aptos_sdk::transaction::InputEntryFunctionData;
+
+let payload = InputEntryFunctionData::new("0x1::aptos_account::transfer")
+    .arg(recipient.address())
+    .arg(1_000_000u64)
+    .build()?;
+```
+
+To call a generic function that requires type arguments, use `.type_arg()`:
+
+```rust
+let payload = InputEntryFunctionData::new("0x1::coin::transfer")
+    .type_arg("0x1::aptos_coin::AptosCoin")
+    .arg(recipient.address())
+    .arg(1_000_000u64)
+    .build()?;
+```
+
+## Step-by-Step Transaction Flow
+
+When you need full control over each stage of a transaction, such as customizing gas parameters, inspecting the raw transaction before signing, or separating concerns across services, use the step-by-step approach.
+
+<Steps>
+  1. **Build the Payload**
+
+     Start by constructing the transaction payload. This defines which on-chain function to call and what arguments to pass.
+
+     ```rust
+     use aptos_sdk::transaction::InputEntryFunctionData;
+
+     let payload = InputEntryFunctionData::new("0x1::aptos_account::transfer")
+         .arg(recipient.address())
+         .arg(1_000_000u64)
+         .build()?;
+     ```
+
+     If the function requires type arguments (generics), add them with `.type_arg()`:
+
+     ```rust
+     let payload = InputEntryFunctionData::new("0x1::coin::transfer")
+         .type_arg("0x1::aptos_coin::AptosCoin")
+         .arg(recipient.address())
+         .arg(1_000_000u64)
+         .build()?;
+     ```
+
+  2. **Build the Raw Transaction**
+
+     Use `TransactionBuilder` to assemble a `RawTransaction` with the sender, sequence number, payload, chain ID, and optional gas parameters.
+
+     ```rust
+     use aptos_sdk::transaction::TransactionBuilder;
+
+     let chain_id = aptos.chain_id().await?;
+     let sequence_number = aptos.get_sequence_number(sender.address()).await?;
+
+     let raw_txn = TransactionBuilder::new()
+         .sender(sender.address())
+         .sequence_number(sequence_number)
+         .payload(payload)
+         .chain_id(chain_id)
+         .max_gas_amount(100_000)
+         .gas_unit_price(100)
+         .expiration_from_now(600)
+         .build()?;
+     ```
+
+     The builder requires `sender`, `sequence_number`, `payload`, and `chain_id`. The remaining fields have sensible defaults:
+
+     | Field                 | Default | Description                                   |
+     | --------------------- | ------- | --------------------------------------------- |
+     | `max_gas_amount`      | 200,000 | Maximum gas units the transaction can consume |
+     | `gas_unit_price`      | 100     | Price per gas unit in octas                   |
+     | `expiration_from_now` | 600     | Seconds until the transaction expires         |
+
+  3. **Sign the Transaction**
+
+     Sign the raw transaction with the sender's account using the `sign_transaction` function.
+
+     ```rust
+     use aptos_sdk::transaction::sign_transaction;
+
+     let signed_txn = sign_transaction(&raw_txn, &sender)?;
+     ```
+
+     This produces a `SignedTransaction` that includes both the raw transaction data and the cryptographic signature. The SDK supports signing with Ed25519, Secp256k1, and Secp256r1 account types.
+
+  4. **Submit and Wait**
+
+     Submit the signed transaction to the network and wait for it to be committed on chain.
+
+     ```rust
+     let response = aptos.submit_and_wait(&signed_txn, None).await?;
+
+     if response.data.success {
+         println!("Transaction succeeded at version {}", response.data.version);
+     } else {
+         println!("Transaction failed: {}", response.data.vm_status);
+     }
+     ```
+
+     The second argument is an optional timeout. Pass `None` to use the default timeout, or provide a `Duration` for custom behavior.
+
+     If you only want to submit without waiting, use `submit_transaction` instead:
+
+     ```rust
+     let pending = aptos.submit_transaction(&signed_txn).await?;
+     println!("Submitted hash: {}", pending.hash);
+     ```
+</Steps>
+
+## Move Argument Helpers
+
+The SDK provides helper functions for encoding common Move types as transaction arguments. These are necessary when a Move function expects a `String`, `Option<T>`, or `vector<T>` argument.
+
+### `move_string`
+
+Encodes a Rust `&str` as a Move `String` argument.
+
+```rust
+use aptos_sdk::transaction::move_string;
+
+let payload = InputEntryFunctionData::new("0x1::my_module::set_name")
+    .arg(move_string("Alice"))
+    .build()?;
+```
+
+### `move_some` and `move_none`
+
+Encode values as Move `Option<T>` types. Use `move_some` to wrap a value in `Some` and `move_none` for `None`.
+
+```rust
+use aptos_sdk::transaction::{move_some, move_none};
+
+// Pass Some(100u64)
+let payload = InputEntryFunctionData::new("0x1::my_module::set_optional_value")
+    .arg(move_some(100u64))
+    .build()?;
+
+// Pass None
+let payload = InputEntryFunctionData::new("0x1::my_module::set_optional_value")
+    .arg(move_none())
+    .build()?;
+```
+
+### `move_vec`
+
+Encodes a slice of values as a Move `vector<T>` argument.
+
+```rust
+use aptos_sdk::transaction::move_vec;
+
+let recipients = vec![alice.address(), bob.address(), carol.address()];
+
+let payload = InputEntryFunctionData::new("0x1::my_module::batch_process")
+    .arg(move_vec(&recipients))
+    .build()?;
+```
+
+## Predefined Function Constants
+
+The SDK ships with constants for commonly used on-chain functions in the `functions` module. These prevent hardcoded string typos and make your code more readable.
+
+| Constant                     | Value                                  |
+| ---------------------------- | -------------------------------------- |
+| `functions::APT_TRANSFER`    | `"0x1::aptos_account::transfer"`       |
+| `functions::COIN_TRANSFER`   | `"0x1::coin::transfer"`                |
+| `functions::CREATE_ACCOUNT`  | `"0x1::aptos_account::create_account"` |
+| `functions::REGISTER_COIN`   | `"0x1::managed_coin::register"`        |
+| `functions::PUBLISH_PACKAGE` | `"0x1::code::publish_package_txn"`     |
+
+Use them anywhere you would pass a function identifier string:
+
+```rust
+use aptos_sdk::transaction::{functions, InputEntryFunctionData};
+
+let payload = InputEntryFunctionData::new(functions::APT_TRANSFER)
+    .arg(recipient.address())
+    .arg(1_000_000u64)
+    .build()?;
+```
+
+## Full Rust Example
+
+```rust
+/// This example demonstrates the complete transaction lifecycle:
+/// building, signing, submitting, and waiting for an APT transfer.
+
+use aptos_sdk::{Aptos, AptosConfig};
+use aptos_sdk::account::Ed25519Account;
+use aptos_sdk::transaction::{
+    functions, sign_transaction, InputEntryFunctionData, TransactionBuilder,
+};
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    // 0. Setup the client and test accounts
+    let aptos = Aptos::new(AptosConfig::testnet())?;
+
+    let sender = Ed25519Account::generate();
+    let recipient = Ed25519Account::generate();
+
+    println!("Sender:    {}", sender.address());
+    println!("Recipient: {}", recipient.address());
+
+    // Fund the sender account on testnet
+    aptos.fund_account(sender.address(), 100_000_000).await?;
+    println!("Funded sender account.");
+
+    // 1. Build the payload
+    let payload = InputEntryFunctionData::new(functions::APT_TRANSFER)
+        .arg(recipient.address())
+        .arg(10_000_000u64)
+        .build()?;
+
+    // 2. Build the raw transaction
+    let chain_id = aptos.chain_id().await?;
+    let sequence_number = aptos.get_sequence_number(sender.address()).await?;
+
+    let raw_txn = TransactionBuilder::new()
+        .sender(sender.address())
+        .sequence_number(sequence_number)
+        .payload(payload)
+        .chain_id(chain_id)
+        .max_gas_amount(100_000)
+        .gas_unit_price(100)
+        .expiration_from_now(600)
+        .build()?;
+
+    // 3. Sign the transaction
+    let signed_txn = sign_transaction(&raw_txn, &sender)?;
+
+    // 4. Submit and wait for confirmation
+    let response = aptos.submit_and_wait(&signed_txn, None).await?;
+
+    if response.data.success {
+        println!(
+            "Transaction succeeded at version {}",
+            response.data.version
+        );
+    } else {
+        println!("Transaction failed: {}", response.data.vm_status);
+    }
+
+    // Verify the recipient balance
+    let balance = aptos.get_balance(recipient.address()).await?;
+    println!("Recipient balance: {} octas", balance);
+
+    Ok(())
+}
+```
+
+<Aside type="tip">
+  For most use cases, the convenience method `sign_submit_and_wait` accomplishes the same result with less code:
+
+  ```rust
+  let payload = InputEntryFunctionData::new(functions::APT_TRANSFER)
+      .arg(recipient.address())
+      .arg(10_000_000u64)
+      .build()?;
+
+  let response = aptos.sign_submit_and_wait(&sender, payload, None).await?;
+  ```
+</Aside>
+
+## Explore Advanced Transaction Features
+
+Transactions support several advanced features to adapt to different use cases:
+
+1. [Simulating Transactions](/build/sdks/rust-sdk/building-transactions/simulating-transactions) - Preview transaction costs and effects before committing on chain.
+2. [Multi-Agent Transactions](/build/sdks/rust-sdk/building-transactions/multi-agent-transactions) - Allow multiple accounts to participate in a single transaction with coordinated signatures.
+3. [Sponsoring Transactions](/build/sdks/rust-sdk/building-transactions/sponsoring-transactions) - Have another account pay the gas fees for a transaction.
+4. [Batching Transactions](/build/sdks/rust-sdk/building-transactions/batching-transactions) - Submit multiple independent transactions quickly from a single account.
+5. [Script Transactions](/build/sdks/rust-sdk/building-transactions/script-transactions) - Execute custom Move script bytecode for one-off or multi-step atomic operations.

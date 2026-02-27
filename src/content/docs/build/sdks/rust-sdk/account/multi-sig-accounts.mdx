@@ -1,0 +1,164 @@
+---
+title: "Multi-Signature and Keyless Accounts"
+description: "Learn how to create and use multi-signature and keyless accounts with the Aptos Rust SDK"
+sidebar:
+  label: "Multi-Sig & Keyless"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+The Aptos Rust SDK supports advanced account types beyond single-key accounts. This page covers multi-signature accounts that require multiple parties to authorize a transaction, and keyless accounts that authenticate through OpenID Connect (OIDC) providers instead of private keys.
+
+## MultiEd25519Account
+
+A `MultiEd25519Account` implements an M-of-N threshold signing scheme using Ed25519 keys. This means you define N total signers, and any M of them must sign a transaction for it to be valid. This is useful for shared custody, organizational wallets, and governance scenarios where no single party should have unilateral control.
+
+### Creating a Multi-Signature Account
+
+To create a `MultiEd25519Account`, generate the individual Ed25519 key pairs first, then combine their public keys with a signing threshold:
+
+```rust
+use aptos_sdk::account::{Ed25519Account, MultiEd25519Account};
+
+// Generate three individual signers
+let signer_1 = Ed25519Account::generate();
+let signer_2 = Ed25519Account::generate();
+let signer_3 = Ed25519Account::generate();
+
+// Create a 2-of-3 multi-signature account
+let multi_account = MultiEd25519Account::new(
+    vec![
+        signer_1.public_key().clone(),
+        signer_2.public_key().clone(),
+        signer_3.public_key().clone(),
+    ],
+    2, // signatures_required
+)?;
+
+println!("Multi-sig address: {}", multi_account.address());
+```
+
+In this example, any two of the three signers can authorize a transaction. The `signatures_required` parameter must be between 1 and the total number of public keys (inclusive).
+
+### Signing with a MultiEd25519Account
+
+When signing a transaction, you provide the individual signers that will participate. The number of signers must meet or exceed the threshold:
+
+```rust
+// Sign with signer_1 and signer_3 (2-of-3 threshold met)
+let signature = multi_account.sign_with_signers(
+    &message,
+    vec![&signer_1, &signer_3],
+)?;
+```
+
+<Aside type="note">
+  All public keys used in a `MultiEd25519Account` must be Ed25519 keys. If you need to mix different key types, use `MultiKeyAccount` instead.
+</Aside>
+
+## MultiKeyAccount
+
+A `MultiKeyAccount` extends the multi-signature concept by allowing different cryptographic key types in the same threshold scheme. You can combine Ed25519, Secp256k1, and Secp256r1 keys in a single account. This is useful when signers use different wallet software or hardware with different cryptographic capabilities.
+
+### Creating a Mixed-Key Multi-Signature Account
+
+```rust
+use aptos_sdk::account::{
+    Ed25519Account, Secp256k1Account, MultiKeyAccount, AnyPublicKey,
+};
+
+// Generate signers with different key types
+let ed25519_signer = Ed25519Account::generate();
+let secp256k1_signer = Secp256k1Account::generate();
+
+// Create a 2-of-2 multi-key account with mixed key types
+let multi_key_account = MultiKeyAccount::new(
+    vec![
+        AnyPublicKey::Ed25519(ed25519_signer.public_key().clone()),
+        AnyPublicKey::Secp256k1(secp256k1_signer.public_key().clone()),
+    ],
+    2, // signatures_required
+)?;
+
+println!("Multi-key address: {}", multi_key_account.address());
+```
+
+### Signing with a MultiKeyAccount
+
+Similar to `MultiEd25519Account`, you provide the individual signers that will participate:
+
+```rust
+let signature = multi_key_account.sign_with_signers(
+    &message,
+    vec![&ed25519_signer, &secp256k1_signer],
+)?;
+```
+
+The key advantage of `MultiKeyAccount` over `MultiEd25519Account` is flexibility: one signer might use an Ed25519 key stored in a software wallet, while another uses a Secp256k1 key from a hardware device that only supports Bitcoin-style cryptography.
+
+## Keyless Accounts
+
+Keyless accounts allow users to authenticate with their existing identity provider (such as Google or Apple) instead of managing private keys. Under the hood, the SDK uses OpenID Connect (OIDC) tokens combined with ephemeral key pairs and zero-knowledge proofs to produce valid transaction signatures.
+
+<Aside type="note">
+  Keyless accounts require the `keyless` feature flag, which is not enabled by default. Add it to your `Cargo.toml`:
+
+  ```toml filename="Cargo.toml"
+  [dependencies]
+  aptos-sdk = { git = "https://github.com/aptos-labs/aptos-rust-sdk", package = "aptos-sdk", features = ["keyless"] }
+  ```
+</Aside>
+
+### How Keyless Authentication Works
+
+1. **Ephemeral Key Pair** -- The SDK generates a short-lived `EphemeralKeyPair` that is used for signing during a single session.
+2. **OIDC Authentication** -- The user authenticates with their identity provider (Google, Apple, etc.) and receives a JWT token.
+3. **Proof Generation** -- A zero-knowledge proof is generated that links the OIDC identity to the ephemeral key pair without revealing the user's identity on-chain.
+4. **Transaction Signing** -- The ephemeral key pair signs the transaction, and the proof is included in the authenticator.
+
+### Creating a Keyless Account
+
+```rust
+use aptos_sdk::account::keyless::{EphemeralKeyPair, KeylessAccount};
+
+// Step 1: Generate an ephemeral key pair
+let ephemeral_key_pair = EphemeralKeyPair::generate();
+
+// Step 2: Get the nonce to include in the OIDC authentication request
+let nonce = ephemeral_key_pair.nonce();
+
+// Step 3: Use the nonce in your OIDC flow to obtain a JWT token
+// This step happens externally (redirect user to identity provider)
+// let jwt_token = authenticate_with_provider(nonce);
+
+// Step 4: Create the keyless account using the JWT and ephemeral key pair
+// let keyless_account = KeylessAccount::new(jwt_token, ephemeral_key_pair)?;
+// println!("Keyless address: {}", keyless_account.address());
+```
+
+<Aside type="caution" title="External Service Dependency">
+  Keyless accounts depend on external OIDC providers and the Aptos pepper and prover services. Your application must handle the OIDC redirect flow and token exchange outside of the SDK. The SDK handles the cryptographic operations once you have a valid JWT token.
+</Aside>
+
+For a complete walkthrough of setting up keyless authentication, including the OIDC integration and proof generation, see the [Aptos Keyless guide](/build/guides/aptos-keyless).
+
+## Choosing an Account Type
+
+The following table compares the available account types to help you select the right one for your use case:
+
+| Account Type          | Signers Required | Key Types Supported           | Best For                                                 |
+| --------------------- | ---------------- | ----------------------------- | -------------------------------------------------------- |
+| `Ed25519Account`      | 1                | Ed25519 only                  | General purpose wallets and applications                 |
+| `Secp256k1Account`    | 1                | Secp256k1 only                | Interoperability with Bitcoin/Ethereum tooling           |
+| `Secp256r1Account`    | 1                | Secp256r1 (P-256) only        | WebAuthn, passkeys, and secure hardware enclaves         |
+| `MultiEd25519Account` | M-of-N           | Ed25519 only                  | Shared custody with uniform key infrastructure           |
+| `MultiKeyAccount`     | M-of-N           | Ed25519, Secp256k1, Secp256r1 | Shared custody across diverse signer environments        |
+| `KeylessAccount`      | 1 (OIDC)         | Ephemeral + OIDC proof        | Consumer applications where users should not manage keys |
+
+### Decision Guidelines
+
+- **Single user, standard wallet** -- Use `Ed25519Account`. It is the most widely supported and has the best performance.
+- **Cross-chain compatibility** -- Use `Secp256k1Account` if your users come from the Bitcoin or Ethereum ecosystem and already have Secp256k1 keys.
+- **Hardware-backed authentication** -- Use `Secp256r1Account` for passkey and WebAuthn integrations where the private key lives in a secure enclave.
+- **Organizational or shared funds** -- Use `MultiEd25519Account` when all signers use Ed25519 keys, or `MultiKeyAccount` when signers use different key types.
+- **Consumer-facing applications** -- Use `KeylessAccount` to let users sign in with Google, Apple, or other OIDC providers without needing to understand private keys or mnemonics.

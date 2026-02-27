@@ -1,0 +1,210 @@
+---
+title: "Crear y Gestionar Cuentas"
+description: "Aprende a generar, cargar y gestionar cuentas de Aptos usando el SDK de Rust con diferentes esquemas de firma"
+sidebar:
+  label: "Gestion de Cuentas"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+El SDK de Rust para Aptos proporciona varios tipos de cuentas para gestionar identidades on-chain. Todos los tipos de cuenta implementan el trait `Account`, que proporciona una interfaz comun para firmar transacciones y derivar direcciones. Esta pagina cubre como generar nuevas cuentas, cargar cuentas existentes y financiarlas en la red.
+
+## Generar Cuentas
+
+La forma mas comun de crear una nueva cuenta es con `Ed25519Account::generate()`, que produce un par de claves Ed25519 aleatorio:
+
+```rust
+use aptos_sdk::account::Ed25519Account;
+
+let account = Ed25519Account::generate();
+println!("Address:    {}", account.address());
+println!("Public Key: {}", account.public_key());
+```
+
+El metodo `address()` devuelve la direccion on-chain derivada de la clave publica, y `public_key()` devuelve la mitad publica del par de claves. La clave privada nunca abandona el objeto de cuenta a menos que la exportes explicitamente.
+
+## Otros Esquemas de Firma
+
+Ademas de Ed25519, el SDK soporta esquemas de firma criptografica adicionales. Cada uno esta protegido detras de un feature flag de Cargo que esta habilitado por defecto (excepto BLS12-381):
+
+```rust
+use aptos_sdk::account::{Secp256k1Account, Secp256r1Account};
+
+// Generate a Secp256k1 account (Bitcoin/Ethereum compatible)
+let secp256k1_account = Secp256k1Account::generate();
+println!("Secp256k1 Address: {}", secp256k1_account.address());
+
+// Generate a Secp256r1 account (WebAuthn/passkey compatible)
+let secp256r1_account = Secp256r1Account::generate();
+println!("Secp256r1 Address: {}", secp256r1_account.address());
+```
+
+La siguiente tabla resume los esquemas de firma disponibles:
+
+| Esquema           | Tipo de Cuenta     | Feature Flag | Por defecto | Casos de Uso Tipicos                              |
+| ----------------- | ------------------ | ------------ | ----------- | ------------------------------------------------- |
+| Ed25519           | `Ed25519Account`   | `ed25519`    | Si          | Proposito general, el mas comun                   |
+| Secp256k1         | `Secp256k1Account` | `secp256k1`  | Si          | Compatibilidad con el ecosistema Bitcoin/Ethereum |
+| Secp256r1 (P-256) | `Secp256r1Account` | `secp256r1`  | Si          | WebAuthn, passkeys, enclaves seguros              |
+| BLS12-381         | `Bls12381Account`  | `bls`        | No          | Firmas agregadas, operaciones de validadores      |
+
+Para usar BLS12-381, habilita el feature `bls` en tu `Cargo.toml`:
+
+```toml filename="Cargo.toml"
+[dependencies]
+aptos-sdk = { git = "https://github.com/aptos-labs/aptos-rust-sdk", package = "aptos-sdk", features = ["bls"] }
+```
+
+## Cargar desde una Clave Privada
+
+Si ya tienes una clave privada (por ejemplo, de una wallet existente o un archivo de configuracion), puedes reconstruir el objeto de cuenta desde su clave privada codificada en hexadecimal:
+
+```rust
+use aptos_sdk::account::Ed25519Account;
+
+let private_key_hex = "0xYOUR_PRIVATE_KEY_HEX";
+let account = Ed25519Account::from_private_key_hex(private_key_hex)?;
+println!("Loaded account: {}", account.address());
+```
+
+<Aside type="caution" title="Nunca Codifiques Claves Privadas en el Codigo">
+  No incrustes claves privadas directamente en tu codigo fuente. Almacenalas en variables de entorno, gestores de secretos o archivos de configuracion cifrados. Las claves codificadas en el codigo que se envian al control de versiones pueden llevar a una perdida irreversible de fondos.
+</Aside>
+
+Un patron mas seguro es cargar la clave desde una variable de entorno en tiempo de ejecucion:
+
+```rust
+use aptos_sdk::account::Ed25519Account;
+
+let private_key_hex = std::env::var("APTOS_PRIVATE_KEY")
+    .expect("APTOS_PRIVATE_KEY environment variable must be set");
+let account = Ed25519Account::from_private_key_hex(&private_key_hex)?;
+```
+
+## Cargar desde una Frase Mnemonica
+
+El SDK soporta frases mnemonicas BIP-39 cuando el feature `mnemonic` esta habilitado (activado por defecto). Esto permite generar cuentas deterministicas a partir de una frase de recuperacion de 12 o 24 palabras.
+
+### Generar una Nueva Frase Mnemonica
+
+Usa `generate_with_mnemonic()` para crear una cuenta nueva junto con su frase mnemonica:
+
+```rust
+use aptos_sdk::account::Ed25519Account;
+
+let (account, mnemonic) = Ed25519Account::generate_with_mnemonic()?;
+println!("Address:  {}", account.address());
+println!("Mnemonic: {}", mnemonic);
+```
+
+<Aside type="caution">
+  Almacena la frase mnemonica de forma segura. Cualquier persona con acceso a la frase mnemonica puede reconstruir la cuenta y controlar sus fondos.
+</Aside>
+
+### Restaurar desde una Frase Mnemonica Existente
+
+Para restaurar una cuenta a partir de una frase mnemonica, usa `from_mnemonic()`. Puedes especificar un indice de derivacion para derivar diferentes cuentas de la misma frase mnemonica:
+
+```rust
+use aptos_sdk::account::Ed25519Account;
+
+let mnemonic = "your twelve or twenty four word mnemonic phrase goes here ...";
+
+// Derive the first account (index 0)
+let account_0 = Ed25519Account::from_mnemonic(mnemonic, 0)?;
+println!("Account 0: {}", account_0.address());
+
+// Derive the second account (index 1)
+let account_1 = Ed25519Account::from_mnemonic(mnemonic, 1)?;
+println!("Account 1: {}", account_1.address());
+```
+
+### Derivar Multiples Cuentas
+
+Una sola frase mnemonica puede producir un numero ilimitado de cuentas deterministicas variando el indice de derivacion. Esto es util para aplicaciones que gestionan muchas cuentas a partir de una sola semilla:
+
+```rust
+use aptos_sdk::account::Ed25519Account;
+
+let mnemonic = "your mnemonic phrase ...";
+
+// Derive 10 accounts from the same mnemonic
+for index in 0..10 {
+    let account = Ed25519Account::from_mnemonic(mnemonic, index)?;
+    println!("Account {}: {}", index, account.address());
+}
+```
+
+Cada indice siempre produce la misma cuenta, por lo que puedes reconstruir de forma fiable cualquier cuenta siempre que conozcas la frase mnemonica y el indice que se utilizo.
+
+## El Enum `AnyAccount`
+
+Cuando necesitas trabajar con cuentas de diferentes esquemas de firma de manera uniforme, el SDK proporciona el enum `AnyAccount`. Este es un wrapper polimorfico que implementa el trait `Account` independientemente del tipo de clave subyacente:
+
+```rust
+use aptos_sdk::account::{AnyAccount, Ed25519Account, Secp256k1Account};
+
+let ed25519 = Ed25519Account::generate();
+let secp256k1 = Secp256k1Account::generate();
+
+// Store different account types in the same collection
+let accounts: Vec<AnyAccount> = vec![
+    AnyAccount::Ed25519(ed25519),
+    AnyAccount::Secp256k1(secp256k1),
+];
+
+for account in &accounts {
+    println!("Address: {}", account.address());
+}
+```
+
+`AnyAccount` es particularmente util al construir aplicaciones que soportan multiples esquemas de firma o cuando necesitas pasar cuentas a traves de una interfaz generica sin conocer el tipo concreto en tiempo de compilacion.
+
+## Financiar Cuentas
+
+Una cuenta recien generada existe solo como un par de claves local hasta que se registra en la red. Para que la red reconozca una cuenta, debes financiarla con APT.
+
+### Usando el Faucet en Testnet o Devnet
+
+En testnet y devnet, puedes usar la integracion de faucet incorporada (requiere el feature `faucet`, que esta activado por defecto):
+
+```rust
+use aptos_sdk::{Aptos, AptosConfig};
+use aptos_sdk::account::Ed25519Account;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let aptos = Aptos::new(AptosConfig::testnet())?;
+
+    let account = Ed25519Account::generate();
+
+    // Fund an existing account with 100_000_000 octas (1 APT)
+    aptos.fund_account(account.address(), 100_000_000).await?;
+    println!("Funded account: {}", account.address());
+
+    Ok(())
+}
+```
+
+### Crear una Cuenta Pre-Financiada
+
+Para mayor comodidad, el SDK tambien ofrece `create_funded_account()`, que genera una nueva cuenta y la financia en una sola llamada:
+
+```rust
+use aptos_sdk::{Aptos, AptosConfig};
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let aptos = Aptos::new(AptosConfig::testnet())?;
+
+    // Generate and fund a new Ed25519 account in one step
+    let account = aptos.create_funded_account(100_000_000).await?;
+    println!("New funded account: {}", account.address());
+
+    Ok(())
+}
+```
+
+<Aside type="note" title="Disponibilidad del Faucet">
+  El faucet solo esta disponible en **devnet** y **testnet**. En mainnet, debes adquirir APT a traves de un exchange o mediante transferencia desde otra cuenta.
+</Aside>

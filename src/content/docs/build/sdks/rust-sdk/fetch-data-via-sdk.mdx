@@ -1,0 +1,158 @@
+---
+title: "Fetch Data via SDK"
+description: "Learn how to query account balances, view functions, ledger info, and indexed data using the Aptos Rust SDK"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+You can use the `Aptos` client to retrieve on-chain data using a variety of helper methods. The examples below assume you have already created an `Aptos` client instance:
+
+```rust
+use aptos_sdk::{Aptos, AptosConfig};
+
+let aptos = Aptos::new(AptosConfig::testnet())?;
+```
+
+## Account Balances
+
+Fetch the APT balance for any account address. The balance is returned in octas (1 APT = 100,000,000 octas).
+
+```rust
+let address = "0x1".parse()?;
+let balance = aptos.get_balance(address).await?;
+println!("Balance: {} octas", balance);
+```
+
+## Account Information
+
+Check whether an account exists on-chain and retrieve its current sequence number. The sequence number is needed when building transactions manually.
+
+```rust
+let address = "0x1".parse()?;
+
+// Check if an account exists
+let exists = aptos.account_exists(address).await?;
+println!("Account exists: {}", exists);
+
+// Get the current sequence number
+let sequence_number = aptos.get_sequence_number(address).await?;
+println!("Sequence number: {}", sequence_number);
+```
+
+## Ledger Info
+
+Retrieve the current state of the blockchain, including the latest ledger version, block height, and epoch.
+
+```rust
+let info = aptos.ledger_info().await?;
+println!("Ledger version: {}", info.ledger_version);
+println!("Block height: {}", info.block_height);
+println!("Epoch: {}", info.epoch);
+```
+
+## View Functions (JSON)
+
+View functions let you call on-chain Move functions that are marked as `#[view]` without submitting a transaction. The JSON variant returns results as `serde_json::Value`, which is useful for quick lookups and dynamic data.
+
+### No type arguments
+
+Call a simple view function with no type arguments or parameters:
+
+```rust
+let result = aptos
+    .view("0x1::timestamp::now_seconds", vec![], vec![])
+    .await?;
+println!("Current timestamp: {:?}", result);
+```
+
+### With type arguments
+
+To query a specific coin balance, pass the coin type as a type argument and the account address as a function argument:
+
+```rust
+let result = aptos
+    .view(
+        "0x1::coin::balance",
+        vec!["0x1::aptos_coin::AptosCoin"],
+        vec![serde_json::json!("0x1")],
+    )
+    .await?;
+println!("Coin balance: {:?}", result);
+```
+
+## View Functions (BCS)
+
+The `view_bcs` method returns results as BCS-encoded bytes, which you can deserialize into strongly typed Rust structs. This is more efficient and type-safe than the JSON variant.
+
+```rust
+let timestamp: Vec<u64> = aptos
+    .view_bcs("0x1::timestamp::now_seconds", vec![], vec![])
+    .await?;
+println!("Current timestamp: {} seconds", timestamp[0]);
+```
+
+<Aside type="tip">
+  Use `view_bcs` when you know the return type at compile time and want to avoid manually parsing JSON. Use `view` when working with dynamic or unknown return types.
+</Aside>
+
+## Gas Estimation
+
+Estimate the gas cost of a transaction before submitting it. This is helpful for displaying fee estimates to users or validating that a transaction will not exceed a gas budget.
+
+```rust
+use aptos_sdk::types::InputEntryFunctionData;
+
+let payload = InputEntryFunctionData {
+    function: "0x1::aptos_account::transfer".to_string(),
+    type_arguments: vec![],
+    arguments: vec![
+        serde_json::json!("0xrecipient_address"),
+        serde_json::json!("1000"),
+    ],
+};
+
+let gas_estimate = aptos.estimate_gas(payload).await?;
+println!("Estimated gas units: {}", gas_estimate);
+```
+
+## Fullnode REST Client
+
+For advanced queries not covered by the high-level `Aptos` methods, you can access the fullnode REST client directly. This gives you access to the complete set of fullnode API endpoints.
+
+```rust
+let address = "0x1".parse()?;
+
+// Retrieve all modules published under an account
+let modules = aptos.fullnode().get_account_modules(address).await?;
+for module in &modules {
+    println!("Module: {}", module.abi.as_ref().unwrap().name);
+}
+```
+
+<Aside type="note">
+  The fullnode client exposes methods that map directly to the [Aptos fullnode REST API](https://api.mainnet.aptoslabs.com/v1/spec#/). Use it when you need access to endpoints such as `get_account_resources`, `get_transactions`, or `get_block_by_height`.
+</Aside>
+
+## Indexer Queries
+
+The SDK includes an indexer client for querying aggregated and enriched on-chain data. The indexer provides access to data types that are not available through the fullnode API alone, such as token ownership history, event aggregations, and account transaction summaries.
+
+```rust
+let indexer = aptos.indexer();
+```
+
+<Aside type="caution">
+  The indexer client requires the `indexer` feature flag to be enabled in your `Cargo.toml`. This feature is included in the default feature set but must be explicitly enabled if you are using `default-features = false`.
+</Aside>
+
+The indexer client provides access to:
+
+- **Token data** -- ownership, metadata, and transfer history for digital assets.
+- **Coin balances** -- current and historical balances across all coin types.
+- **Account transactions** -- enriched transaction data with decoded payloads.
+- **Event data** -- aggregated and filterable event streams.
+- **Collection data** -- NFT collection metadata and statistics.
+
+<Aside type="note">
+  Indexer data may lag slightly behind the latest ledger version because it requires additional processing. If you need the freshest data, query the fullnode client or use ledger version parameters where available.
+</Aside>

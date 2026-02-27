@@ -1,0 +1,90 @@
+---
+title: "Rust SDK"
+description: "Official Rust SDK for the Aptos blockchain - idiomatic, async, and feature-rich with support for multiple signature schemes"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+The [Aptos Rust SDK](https://github.com/aptos-labs/aptos-rust-sdk) is a user-friendly, idiomatic Rust SDK for the Aptos blockchain with feature parity to the TypeScript SDK. It provides everything you need to interact with the Aptos network: account management, transaction building, data querying, and smart contract interaction.
+
+## Installation
+
+Add the SDK to your `Cargo.toml`:
+
+```toml filename="Cargo.toml"
+[dependencies]
+aptos-sdk = { git = "https://github.com/aptos-labs/aptos-rust-sdk", package = "aptos-sdk" }
+tokio = { version = "1", features = ["full"] }
+anyhow = "1"
+```
+
+<Aside type="note">
+  The SDK requires an async runtime. All examples in this documentation use [tokio](https://tokio.rs/).
+</Aside>
+
+## Feature Flags
+
+The SDK uses Cargo feature flags to keep builds lean. Enable only what you need:
+
+| Feature     | Default | Description                                                     |
+| ----------- | ------- | --------------------------------------------------------------- |
+| `ed25519`   | Yes     | Ed25519 signature scheme (most common)                          |
+| `secp256k1` | Yes     | Secp256k1 ECDSA signatures (Bitcoin/Ethereum compatible)        |
+| `secp256r1` | Yes     | P-256 ECDSA signatures (WebAuthn/passkey compatible)            |
+| `mnemonic`  | Yes     | BIP-39 mnemonic phrase support                                  |
+| `indexer`   | Yes     | GraphQL indexer client for querying indexed data                |
+| `faucet`    | Yes     | Testnet faucet integration for funding accounts                 |
+| `bls`       | No      | BLS12-381 signatures                                            |
+| `keyless`   | No      | OIDC-based keyless authentication                               |
+| `macros`    | No      | Proc macros for type-safe contract bindings (`aptos_contract!`) |
+
+For a minimal build with only Ed25519 support:
+
+```toml filename="Cargo.toml"
+[dependencies]
+aptos-sdk = { git = "https://github.com/aptos-labs/aptos-rust-sdk", package = "aptos-sdk", default-features = false, features = ["ed25519"] }
+```
+
+To enable all features:
+
+```toml filename="Cargo.toml"
+[dependencies]
+aptos-sdk = { git = "https://github.com/aptos-labs/aptos-rust-sdk", package = "aptos-sdk", features = ["full"] }
+```
+
+## Quick Example
+
+```rust
+use aptos_sdk::{Aptos, AptosConfig};
+use aptos_sdk::account::Ed25519Account;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    // Connect to testnet
+    let aptos = Aptos::new(AptosConfig::testnet())?;
+
+    // Generate a new account
+    let account = Ed25519Account::generate();
+    println!("Address: {}", account.address());
+
+    // Check balance
+    let balance = aptos.get_balance(account.address()).await?;
+    println!("Balance: {} octas", balance);
+
+    Ok(())
+}
+```
+
+## API Reference
+
+For complete API documentation, see the [docs.rs reference](https://docs.rs/aptos-sdk/latest/aptos_sdk/).
+
+## Requirements
+
+- **Rust:** 1.90 or later
+- **Async runtime:** tokio (recommended)
+- **Network access:** Connection to an Aptos fullnode REST endpoint
+
+<Aside type="caution" title="Legacy SDK">
+  The older Rust SDK located in the [aptos-core repository](https://github.com/aptos-labs/aptos-core/tree/main/sdk) is no longer actively maintained. New projects should use this standalone SDK (`aptos-rust-sdk`). If you are migrating from the old SDK, the API has been redesigned to be more ergonomic — see the [GitHub repository](https://github.com/aptos-labs/aptos-rust-sdk) for migration guidance.
+</Aside>

@@ -1,0 +1,225 @@
+---
+title: "Rust SDK Quickstart"
+description: "Get started with the Aptos Rust SDK by creating accounts, funding them, and transferring APT tokens"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+<Aside type="note">
+  The complete example code can be found at [Full Quickstart Code](#full-quickstart-code) at the bottom of the page.
+</Aside>
+
+<Steps>
+  1. Create a New Project
+
+     Use Cargo to scaffold a new Rust project:
+
+     ```shellscript
+     cargo new aptos-quickstart && cd aptos-quickstart
+     ```
+
+  2. Add Dependencies
+
+     Open `Cargo.toml` and add the Aptos SDK along with `tokio` for the async runtime and `anyhow` for error handling:
+
+     ```toml filename="Cargo.toml"
+     [dependencies]
+     aptos-sdk = { git = "https://github.com/aptos-labs/aptos-rust-sdk", package = "aptos-sdk" }
+     tokio = { version = "1", features = ["full"] }
+     anyhow = "1"
+     ```
+
+  3. Set Up the Aptos Client
+
+     The `Aptos` client handles all communication with the Aptos network. Create one by passing an `AptosConfig` that specifies which network to connect to.
+
+     ```rust filename="src/main.rs"
+     use aptos_sdk::{Aptos, AptosConfig};
+     use aptos_sdk::account::Ed25519Account;
+
+     #[tokio::main]
+     async fn main() -> anyhow::Result<()> {
+         println!("This example will create two accounts (Alice and Bob), fund them, and transfer APT between them.");
+
+         // Connect to testnet
+         let aptos = Aptos::new(AptosConfig::testnet())?;
+
+         Ok(())
+     }
+     ```
+
+     <Aside type="note">
+       You can connect to different networks by using `AptosConfig::devnet()`, `AptosConfig::mainnet()`, or `AptosConfig::local()` instead of `AptosConfig::testnet()`.
+     </Aside>
+
+  4. Create and Fund Accounts
+
+     Generate two new Ed25519 accounts. On testnet and devnet, you can fund accounts programmatically using the faucet, which sends test APT to your new accounts. Funding an account also creates it on-chain.
+
+     ```rust filename="src/main.rs"
+     // Generate two new accounts
+     let alice = Ed25519Account::generate();
+     let bob = Ed25519Account::generate();
+
+     println!("\n=== Addresses ===\n");
+     println!("Alice's address is: {}", alice.address());
+     println!("Bob's address is: {}", bob.address());
+
+     // Fund the accounts using the testnet faucet
+     println!("\n=== Funding accounts ===\n");
+     aptos.fund_account(alice.address(), 100_000_000).await?;
+     aptos.fund_account(bob.address(), 100_000_000).await?;
+     println!("Alice and Bob's accounts have been funded!");
+     ```
+
+     <Aside type="note">
+       The amounts above are specified in **octas**, the smallest unit of APT. 1 APT = 100,000,000 octas (10^8). So `100_000_000` octas equals 1 APT.
+     </Aside>
+
+  5. Fetch Data from On-Chain
+
+     Use the `Aptos` client to query account balances. The `get_balance` method returns the APT balance in octas.
+
+     ```rust filename="src/main.rs"
+     println!("\n=== Initial Balances ===\n");
+     let alice_balance = aptos.get_balance(alice.address()).await?;
+     let bob_balance = aptos.get_balance(bob.address()).await?;
+     println!("Alice's balance: {} octas", alice_balance);
+     println!("Bob's balance: {} octas", bob_balance);
+     ```
+
+  6. Transfer APT
+
+     Use the `transfer_apt` convenience method to send APT from one account to another. This method builds, signs, submits, and waits for the transaction in a single call.
+
+     ```rust filename="src/main.rs"
+     // Transfer 0.1 APT (10_000_000 octas) from Alice to Bob
+     println!("\n=== Transfer transaction ===\n");
+     let result = aptos.transfer_apt(&alice, bob.address(), 10_000_000).await?;
+
+     // Verify the transaction succeeded
+     let success = result.data.get("success").and_then(|v| v.as_bool()).unwrap_or(false);
+     println!("Transaction success: {}", success);
+     ```
+
+     <Aside type="note">
+       The transfer amount is in octas. Here, `10_000_000` octas equals 0.1 APT.
+     </Aside>
+
+  7. Verify the Transfer
+
+     Fetch the updated balances to confirm that the transfer went through. Alice's balance will be lower than expected due to the gas fee paid for the transaction.
+
+     ```rust filename="src/main.rs"
+     println!("\n=== Balances after transfer ===\n");
+     let new_alice_balance = aptos.get_balance(alice.address()).await?;
+     let new_bob_balance = aptos.get_balance(bob.address()).await?;
+     println!("Alice's balance: {} octas", new_alice_balance);
+     println!("Bob's balance: {} octas", new_bob_balance);
+     ```
+</Steps>
+
+## Full Quickstart Code
+
+### Run Quickstart
+
+```shellscript
+cargo run
+```
+
+```rust filename="src/main.rs"
+/// This example shows how to use the Aptos Rust SDK to create accounts,
+/// fund them, and transfer APT between them on testnet.
+use aptos_sdk::{Aptos, AptosConfig};
+use aptos_sdk::account::Ed25519Account;
+
+const ALICE_INITIAL_BALANCE: u64 = 100_000_000;
+const BOB_INITIAL_BALANCE: u64 = 100_000_000;
+const TRANSFER_AMOUNT: u64 = 10_000_000;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    println!(
+        "This example will create two accounts (Alice and Bob), fund them, \
+         and transfer APT between them."
+    );
+
+    // Setup the client
+    let aptos = Aptos::new(AptosConfig::testnet())?;
+
+    // Generate two new accounts
+    let alice = Ed25519Account::generate();
+    let bob = Ed25519Account::generate();
+
+    println!("\n=== Addresses ===\n");
+    println!("Alice's address is: {}", alice.address());
+    println!("Bob's address is: {}", bob.address());
+
+    // Fund the accounts using the testnet faucet.
+    // Funding an account creates it on-chain.
+    println!("\n=== Funding accounts ===\n");
+    aptos.fund_account(alice.address(), ALICE_INITIAL_BALANCE).await?;
+    aptos.fund_account(bob.address(), BOB_INITIAL_BALANCE).await?;
+    println!("Alice and Bob's accounts have been funded!");
+
+    // Look up the newly funded account balances
+    println!("\n=== Initial Balances ===\n");
+    let alice_balance = aptos.get_balance(alice.address()).await?;
+    let bob_balance = aptos.get_balance(bob.address()).await?;
+    println!("Alice's balance: {} octas", alice_balance);
+    println!("Bob's balance: {} octas", bob_balance);
+
+    // Transfer APT from Alice to Bob
+    println!("\n=== Transfer transaction ===\n");
+    let result = aptos.transfer_apt(&alice, bob.address(), TRANSFER_AMOUNT).await?;
+
+    // Verify the transaction succeeded
+    let success = result
+        .data
+        .get("success")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    println!("Transaction success: {}", success);
+
+    // Check updated balances
+    println!("\n=== Balances after transfer ===\n");
+    let new_alice_balance = aptos.get_balance(alice.address()).await?;
+    let new_bob_balance = aptos.get_balance(bob.address()).await?;
+    println!("Alice's balance: {} octas", new_alice_balance);
+    println!("Bob's balance: {} octas", new_bob_balance);
+
+    // Bob should have received the transfer amount
+    assert_eq!(
+        new_bob_balance,
+        BOB_INITIAL_BALANCE + TRANSFER_AMOUNT,
+        "Bob's balance after transfer is incorrect"
+    );
+
+    // Alice should have less than her initial balance minus the transfer,
+    // because gas fees are also deducted
+    assert!(
+        new_alice_balance < ALICE_INITIAL_BALANCE - TRANSFER_AMOUNT,
+        "Alice's balance after transfer is incorrect"
+    );
+
+    println!("\nQuickstart complete!");
+
+    Ok(())
+}
+```
+
+## Summary
+
+In this quickstart you learned how to:
+
+1. Set up a Rust project with the Aptos SDK.
+2. Connect to the Aptos testnet using the `Aptos` client.
+3. Generate new Ed25519 accounts.
+4. Fund accounts using the testnet faucet.
+5. Query account balances from on-chain.
+6. Transfer APT between accounts using the `transfer_apt` convenience method.
+7. Verify transaction results and updated balances.
+
+<Aside type="note">
+  For complete API documentation, see the [docs.rs reference](https://docs.rs/aptos-sdk/latest/aptos_sdk/). The [`Aptos`](https://docs.rs/aptos-sdk/latest/aptos_sdk/struct.Aptos.html) struct is the main entry point for most operations.
+</Aside>

@@ -1,0 +1,206 @@
+---
+title: "Transacciones de Script"
+description: "Ejecuta scripts Move compilados como transacciones usando el SDK de Rust para Aptos"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+Ademas de llamar funciones entry publicadas, puedes enviar scripts Move compilados como transacciones. Los scripts son piezas independientes de bytecode Move que se ejecutan una vez y no se almacenan on-chain. Ofrecen mas flexibilidad que las llamadas a funciones entry porque un script puede invocar multiples funciones publicas, usar logica arbitraria y trabajar con tipos de diferentes modulos, todo dentro de una sola transaccion.
+
+## Scripts vs. Funciones Entry
+
+| Aspecto           | Funciones Entry                                                           | Scripts                                                                                     |
+| ----------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| **Despliegue**    | Deben publicarse como parte de un modulo Move on-chain                    | No se despliegan; el bytecode se incluye directamente en la transaccion                     |
+| **Reutilizacion** | Invocables por cualquier transaccion que referencie el modulo             | De un solo uso; deben incluirse en cada transaccion                                         |
+| **Flexibilidad**  | Limitadas a la firma y logica definidas por la funcion                    | Pueden llamar multiples funciones publicas, usar condicionales y componer logica libremente |
+| **Compilacion**   | Compiladas y publicadas con el modulo                                     | Compiladas por separado usando el CLI de Aptos                                              |
+| **Casos de uso**  | Operaciones estandar (transferencias, staking, interacciones con modulos) | Operaciones complejas de un solo uso, llamadas por lotes, migraciones                       |
+
+<Aside type="note">
+  Los scripts pueden llamar cualquier funcion `public` en cualquier modulo Move publicado. No estan limitados a funciones `public entry`. Esto hace que los scripts sean estrictamente mas poderosos que los payloads de funciones entry para operaciones de un solo uso.
+</Aside>
+
+## Compilar un Script Move
+
+Antes de poder enviar una transaccion de script, necesitas compilar el codigo fuente Move en bytecode. Usa el CLI de Aptos para compilar tu script.
+
+<Steps>
+  1. Escribe tu script Move.
+
+     Crea un archivo llamado `my_script.move` con la siguiente estructura:
+
+     ```move filename="my_script.move"
+     script {
+         use std::signer;
+         use aptos_framework::aptos_account;
+         use aptos_framework::coin;
+         use aptos_framework::aptos_coin::AptosCoin;
+
+         fun main(sender: &signer, recipient: address, amount: u64) {
+             // Transfer APT from sender to recipient
+             aptos_account::transfer(sender, recipient, amount);
+
+             // Check the sender's remaining balance
+             let _balance = coin::balance<AptosCoin>(signer::address_of(sender));
+         }
+     }
+     ```
+
+  2. Compila el script usando el CLI de Aptos.
+
+     ```shellscript
+     aptos move compile --named-addresses std=0x1,aptos_framework=0x1
+     ```
+
+     Esto produce un archivo de bytecode compilado (`.mv`) en el directorio `build/`. Incluiras este bytecode en el payload de tu transaccion de script.
+</Steps>
+
+## Enviar una Transaccion de Script
+
+Una vez que tienes el bytecode compilado, usa la variante `TransactionPayload::Script` para construir y enviar la transaccion.
+
+<Steps>
+  1. Cargar el bytecode del script compilado.
+
+     Lee el archivo `.mv` producido por el compilador en un vector de bytes.
+
+     ```rust
+     let script_bytes = std::fs::read("build/my_script/bytecode_scripts/main.mv")?;
+     ```
+
+  2. Construir el payload del script.
+
+     Construye un `TransactionPayload::Script` con el bytecode, argumentos de tipo y argumentos del script.
+
+     ```rust
+     use aptos_sdk::types::{TransactionPayload, ScriptPayload, ScriptArgument};
+
+     let script_payload = TransactionPayload::Script(ScriptPayload::new(
+         script_bytes,
+         vec![],  // Type arguments (empty if the script has no type parameters)
+         vec![
+             ScriptArgument::Address(bob.address()),
+             ScriptArgument::U64(10_000_000),
+         ],
+     ));
+     ```
+
+  3. Construir, firmar y enviar usando el flujo de transaccion estandar.
+
+     ```rust
+     use aptos_sdk::transaction_builder::TransactionBuilder;
+
+     let raw_txn = TransactionBuilder::new_with_payload(
+             script_payload,
+             aptos.get_chain_id().await?,
+         )
+         .sender(alice.address())
+         .sequence_number(aptos.get_sequence_number(alice.address()).await?)
+         .max_gas_amount(10_000)
+         .gas_unit_price(100)
+         .expiration_timestamp_secs(
+             aptos.get_latest_ledger_info().await?.timestamp() + 60,
+         )
+         .build();
+
+     let signed_txn = aptos.sign_transaction(&alice, raw_txn)?;
+     let result = aptos.submit_and_wait(signed_txn).await?;
+
+     let success = result
+         .data
+         .get("success")
+         .and_then(|v| v.as_bool())
+         .unwrap_or(false);
+     println!("Script transaction success: {}", success);
+     ```
+</Steps>
+
+## Cuando Usar Scripts
+
+Considera usar scripts en lugar de llamadas a funciones entry cuando:
+
+- Necesitas **llamar multiples funciones** de diferentes modulos en una sola transaccion atomica.
+- Necesitas **usar valores de retorno** de una llamada a funcion como entrada a otra dentro de la misma transaccion.
+- Estas realizando una **operacion de un solo uso** (como una migracion de datos o un airdrop) que no justifica desplegar un nuevo modulo.
+- Necesitas invocar una funcion `public` que **no esta marcada como `entry`**, la cual no puede ser llamada directamente mediante payloads de funciones entry.
+
+<Aside type="caution">
+  Los scripts agregan el bytecode completo a la transaccion, lo que aumenta el tamanio de la transaccion y el costo de gas comparado con llamar a una funcion entry publicada. Para operaciones que realizas repetidamente, publicar un modulo Move dedicado es mas eficiente.
+</Aside>
+
+## Ejemplo Completo Funcional
+
+```rust filename="src/main.rs"
+/// This example demonstrates how to submit a compiled Move script as
+/// a transaction using the Aptos Rust SDK.
+use aptos_sdk::{Aptos, AptosConfig};
+use aptos_sdk::account::Ed25519Account;
+use aptos_sdk::types::{TransactionPayload, ScriptPayload, ScriptArgument};
+use aptos_sdk::transaction_builder::TransactionBuilder;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    // Connect to testnet
+    let aptos = Aptos::new(AptosConfig::testnet())?;
+
+    // Generate and fund accounts
+    let alice = Ed25519Account::generate();
+    let bob = Ed25519Account::generate();
+    aptos.fund_account(alice.address(), 100_000_000).await?;
+    aptos.fund_account(bob.address(), 100_000_000).await?;
+
+    println!("Alice: {}", alice.address());
+    println!("Bob: {}", bob.address());
+
+    // Load compiled script bytecode
+    // Replace this path with the actual path to your compiled .mv file
+    let script_bytes = std::fs::read("build/my_script/bytecode_scripts/main.mv")?;
+
+    // Build the script payload
+    let script_payload = TransactionPayload::Script(ScriptPayload::new(
+        script_bytes,
+        vec![],
+        vec![
+            ScriptArgument::Address(bob.address()),
+            ScriptArgument::U64(10_000_000),
+        ],
+    ));
+
+    // Build the raw transaction
+    let raw_txn = TransactionBuilder::new_with_payload(
+            script_payload,
+            aptos.get_chain_id().await?,
+        )
+        .sender(alice.address())
+        .sequence_number(aptos.get_sequence_number(alice.address()).await?)
+        .max_gas_amount(10_000)
+        .gas_unit_price(100)
+        .expiration_timestamp_secs(
+            aptos.get_latest_ledger_info().await?.timestamp() + 60,
+        )
+        .build();
+
+    // Sign and submit
+    let signed_txn = aptos.sign_transaction(&alice, raw_txn)?;
+    let result = aptos.submit_and_wait(signed_txn).await?;
+
+    let success = result
+        .data
+        .get("success")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    println!("\nScript transaction success: {}", success);
+
+    // Verify balances
+    println!("\n=== Final Balances ===");
+    println!("Alice: {} octas", aptos.get_balance(alice.address()).await?);
+    println!("Bob: {} octas", aptos.get_balance(bob.address()).await?);
+
+    Ok(())
+}
+```
+
+<Aside type="tip">
+  Para un ejemplo completo ejecutable de transaccion de script, consulta [script\_transaction.rs](https://github.com/aptos-labs/aptos-rust-sdk/blob/main/examples/script_transaction.rs) en el repositorio del SDK de Rust para Aptos.
+</Aside>

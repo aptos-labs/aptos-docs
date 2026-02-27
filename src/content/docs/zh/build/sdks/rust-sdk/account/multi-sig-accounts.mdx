@@ -1,0 +1,164 @@
+---
+title: "多重签名与无密钥账户"
+description: "学习如何使用 Aptos Rust SDK 创建和使用多重签名账户及无密钥账户"
+sidebar:
+  label: "多签与无密钥"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Aptos Rust SDK 支持超越单密钥账户的高级账户类型。本页介绍需要多方授权交易的多重签名账户，以及通过 OpenID Connect (OIDC) 提供商而非私钥进行认证的无密钥账户。
+
+## MultiEd25519Account
+
+`MultiEd25519Account` 使用 Ed25519 密钥实现 M-of-N 门限签名方案。这意味着您定义 N 个签名者，其中任意 M 个签名者必须签署交易才能使其有效。这适用于共享托管、组织钱包和治理场景，在这些场景中任何单方不应拥有单边控制权。
+
+### 创建多重签名账户
+
+要创建 `MultiEd25519Account`，首先生成各个 Ed25519 密钥对，然后将其公钥与签名门限组合：
+
+```rust
+use aptos_sdk::account::{Ed25519Account, MultiEd25519Account};
+
+// Generate three individual signers
+let signer_1 = Ed25519Account::generate();
+let signer_2 = Ed25519Account::generate();
+let signer_3 = Ed25519Account::generate();
+
+// Create a 2-of-3 multi-signature account
+let multi_account = MultiEd25519Account::new(
+    vec![
+        signer_1.public_key().clone(),
+        signer_2.public_key().clone(),
+        signer_3.public_key().clone(),
+    ],
+    2, // signatures_required
+)?;
+
+println!("Multi-sig address: {}", multi_account.address());
+```
+
+在此示例中，三个签名者中的任意两个即可授权交易。`signatures_required` 参数必须在 1 和公钥总数（含）之间。
+
+### 使用 MultiEd25519Account 签名
+
+签署交易时，您需要提供将参与的各个签名者。签名者数量必须达到或超过门限：
+
+```rust
+// Sign with signer_1 and signer_3 (2-of-3 threshold met)
+let signature = multi_account.sign_with_signers(
+    &message,
+    vec![&signer_1, &signer_3],
+)?;
+```
+
+<Aside type="note">
+  `MultiEd25519Account` 中使用的所有公钥必须是 Ed25519 密钥。如果您需要混合不同的密钥类型，请改用 `MultiKeyAccount`。
+</Aside>
+
+## MultiKeyAccount
+
+`MultiKeyAccount` 通过允许在同一门限方案中使用不同的加密密钥类型来扩展多重签名概念。您可以在单个账户中组合 Ed25519、Secp256k1 和 Secp256r1 密钥。当签名者使用具有不同加密能力的不同钱包软件或硬件时，这非常有用。
+
+### 创建混合密钥多重签名账户
+
+```rust
+use aptos_sdk::account::{
+    Ed25519Account, Secp256k1Account, MultiKeyAccount, AnyPublicKey,
+};
+
+// Generate signers with different key types
+let ed25519_signer = Ed25519Account::generate();
+let secp256k1_signer = Secp256k1Account::generate();
+
+// Create a 2-of-2 multi-key account with mixed key types
+let multi_key_account = MultiKeyAccount::new(
+    vec![
+        AnyPublicKey::Ed25519(ed25519_signer.public_key().clone()),
+        AnyPublicKey::Secp256k1(secp256k1_signer.public_key().clone()),
+    ],
+    2, // signatures_required
+)?;
+
+println!("Multi-key address: {}", multi_key_account.address());
+```
+
+### 使用 MultiKeyAccount 签名
+
+与 `MultiEd25519Account` 类似，您需要提供将参与的各个签名者：
+
+```rust
+let signature = multi_key_account.sign_with_signers(
+    &message,
+    vec![&ed25519_signer, &secp256k1_signer],
+)?;
+```
+
+`MultiKeyAccount` 相比 `MultiEd25519Account` 的主要优势在于灵活性：一个签名者可能使用存储在软件钱包中的 Ed25519 密钥，而另一个签名者使用仅支持 Bitcoin 风格加密的硬件设备的 Secp256k1 密钥。
+
+## 无密钥账户
+
+无密钥账户允许用户使用其现有的身份提供商（如 Google 或 Apple）进行认证，而无需管理私钥。SDK 在底层使用 OpenID Connect (OIDC) 令牌结合临时密钥对和零知识证明来生成有效的交易签名。
+
+<Aside type="note">
+  无密钥账户需要 `keyless` 功能特性标志，默认未启用。将其添加到您的 `Cargo.toml`：
+
+  ```toml filename="Cargo.toml"
+  [dependencies]
+  aptos-sdk = { git = "https://github.com/aptos-labs/aptos-rust-sdk", package = "aptos-sdk", features = ["keyless"] }
+  ```
+</Aside>
+
+### 无密钥认证的工作原理
+
+1. **临时密钥对** -- SDK 生成一个短期的 `EphemeralKeyPair`，用于在单次会话中签名。
+2. **OIDC 认证** -- 用户通过其身份提供商（Google、Apple 等）进行认证并获得 JWT 令牌。
+3. **证明生成** -- 生成零知识证明，将 OIDC 身份与临时密钥对关联，同时不在链上暴露用户身份。
+4. **交易签名** -- 临时密钥对签署交易，并在认证器中包含证明。
+
+### 创建无密钥账户
+
+```rust
+use aptos_sdk::account::keyless::{EphemeralKeyPair, KeylessAccount};
+
+// Step 1: Generate an ephemeral key pair
+let ephemeral_key_pair = EphemeralKeyPair::generate();
+
+// Step 2: Get the nonce to include in the OIDC authentication request
+let nonce = ephemeral_key_pair.nonce();
+
+// Step 3: Use the nonce in your OIDC flow to obtain a JWT token
+// This step happens externally (redirect user to identity provider)
+// let jwt_token = authenticate_with_provider(nonce);
+
+// Step 4: Create the keyless account using the JWT and ephemeral key pair
+// let keyless_account = KeylessAccount::new(jwt_token, ephemeral_key_pair)?;
+// println!("Keyless address: {}", keyless_account.address());
+```
+
+<Aside type="caution" title="外部服务依赖">
+  无密钥账户依赖于外部 OIDC 提供商以及 Aptos pepper 和 prover 服务。您的应用必须在 SDK 之外处理 OIDC 重定向流程和令牌交换。一旦您拥有有效的 JWT 令牌，SDK 将处理加密操作。
+</Aside>
+
+有关设置无密钥认证的完整步骤（包括 OIDC 集成和证明生成），请参阅 [Aptos 无密钥指南](/zh/build/guides/aptos-keyless)。
+
+## 选择账户类型
+
+下表比较了可用的账户类型，帮助您选择适合您用例的类型：
+
+| 账户类型                  | 所需签名者    | 支持的密钥类型                     | 最适合                        |
+| --------------------- | -------- | --------------------------- | -------------------------- |
+| `Ed25519Account`      | 1        | 仅 Ed25519                   | 通用钱包和应用                    |
+| `Secp256k1Account`    | 1        | 仅 Secp256k1                 | 与 Bitcoin/Ethereum 工具的互操作性 |
+| `Secp256r1Account`    | 1        | 仅 Secp256r1 (P-256)         | WebAuthn、passkey 和安全硬件飞地   |
+| `MultiEd25519Account` | M-of-N   | 仅 Ed25519                   | 使用统一密钥基础设施的共享托管            |
+| `MultiKeyAccount`     | M-of-N   | Ed25519、Secp256k1、Secp256r1 | 跨不同签名者环境的共享托管              |
+| `KeylessAccount`      | 1 (OIDC) | 临时密钥 + OIDC 证明              | 用户无需管理密钥的消费级应用             |
+
+### 选择指南
+
+- **单用户、标准钱包** -- 使用 `Ed25519Account`。它是最广泛支持的方案，性能最佳。
+- **跨链兼容性** -- 如果您的用户来自 Bitcoin 或 Ethereum 生态系统并且已拥有 Secp256k1 密钥，请使用 `Secp256k1Account`。
+- **硬件支持的认证** -- 对于 passkey 和 WebAuthn 集成（私钥存储在安全飞地中），请使用 `Secp256r1Account`。
+- **组织或共享资金** -- 当所有签名者使用 Ed25519 密钥时使用 `MultiEd25519Account`，当签名者使用不同密钥类型时使用 `MultiKeyAccount`。
+- **面向消费者的应用** -- 使用 `KeylessAccount` 让用户通过 Google、Apple 或其他 OIDC 提供商登录，无需了解私钥或助记词。

@@ -1,0 +1,373 @@
+---
+title: "构建交易"
+description: "使用 Rust SDK 在 Aptos 上构建、签名、提交和等待交易的全面指南"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+交易允许您更改链上数据或触发事件。一般来说，交易遵循从构造到链上执行的四步流程：**构建**、**签名**、**提交**和**等待**。
+
+<Aside type="note">
+  在这些示例中，`aptos` 是 [`Aptos`](https://github.com/aptos-labs/aptos-rust-sdk) 客户端对象的实例，通过类似 `Aptos::new(AptosConfig::testnet())?` 的配置创建。
+</Aside>
+
+## 便捷方法
+
+Rust SDK 在 `Aptos` 客户端上提供了多个高级方法，将多个步骤合并为一次调用。当您不需要对每个步骤进行精细控制时，这些方法是将交易上链的最快方式。
+
+### `sign_submit_and_wait`
+
+在一次调用中构建、签名、提交和等待交易完成。这是直接交易最常用的方法。
+
+```rust
+let payload = InputEntryFunctionData::new("0x1::aptos_account::transfer")
+    .arg(recipient.address())
+    .arg(1_000_000u64)
+    .build()?;
+
+let response = aptos
+    .sign_submit_and_wait(&sender, payload, None)
+    .await?;
+
+println!("Transaction succeeded: {}", response.data.success);
+```
+
+可选的第三个参数是超时时间。传入 `None` 使用默认值。
+
+### `sign_and_submit`
+
+签名并提交交易但不等待确认。当您想自行追踪结果或即发即忘时使用。
+
+```rust
+let payload = InputEntryFunctionData::new("0x1::aptos_account::transfer")
+    .arg(recipient.address())
+    .arg(1_000_000u64)
+    .build()?;
+
+let pending = aptos.sign_and_submit(&sender, payload).await?;
+println!("Submitted transaction hash: {}", pending.hash);
+```
+
+### `simulate_and_submit`
+
+先模拟交易以验证其会成功，然后再提交。这对于在花费 gas 之前捕获错误很有用。
+
+```rust
+let payload = InputEntryFunctionData::new("0x1::aptos_account::transfer")
+    .arg(recipient.address())
+    .arg(1_000_000u64)
+    .build()?;
+
+let pending = aptos
+    .simulate_and_submit(&sender, payload)
+    .await?;
+```
+
+### `transfer_apt`
+
+专为账户间转账 APT 而设计的便捷方法。
+
+```rust
+let response = aptos
+    .transfer_apt(&sender, recipient.address(), 10_000_000)
+    .await?;
+
+println!("Transfer succeeded: {}", response.data.success);
+```
+
+### `transfer_coin`
+
+通过指定代币的类型标签字符串来转移任何代币类型。
+
+```rust
+let response = aptos
+    .transfer_coin(
+        &sender,
+        recipient.address(),
+        "0x1::aptos_coin::AptosCoin",
+        10_000_000,
+    )
+    .await?;
+
+println!("Coin transfer succeeded: {}", response.data.success);
+```
+
+### 使用 `InputEntryFunctionData` 构建负载
+
+上述所有便捷方法（`transfer_apt` 和 `transfer_coin` 除外）都接受从 `InputEntryFunctionData` 构建的 `TransactionPayload`。此构建器为构造入口函数调用提供了简洁的链式 API：
+
+```rust
+use aptos_sdk::transaction::InputEntryFunctionData;
+
+let payload = InputEntryFunctionData::new("0x1::aptos_account::transfer")
+    .arg(recipient.address())
+    .arg(1_000_000u64)
+    .build()?;
+```
+
+要调用需要类型参数的泛型函数，请使用 `.type_arg()`：
+
+```rust
+let payload = InputEntryFunctionData::new("0x1::coin::transfer")
+    .type_arg("0x1::aptos_coin::AptosCoin")
+    .arg(recipient.address())
+    .arg(1_000_000u64)
+    .build()?;
+```
+
+## 分步交易流程
+
+当您需要完全控制交易的每个阶段时，例如自定义 gas 参数、在签名前检查原始交易或在不同服务间分离关注点，请使用分步方法。
+
+<Steps>
+  1. **构建负载**
+
+     首先构造交易负载。这定义了要调用哪个链上函数以及传递什么参数。
+
+     ```rust
+     use aptos_sdk::transaction::InputEntryFunctionData;
+
+     let payload = InputEntryFunctionData::new("0x1::aptos_account::transfer")
+         .arg(recipient.address())
+         .arg(1_000_000u64)
+         .build()?;
+     ```
+
+     如果函数需要类型参数（泛型），请使用 `.type_arg()` 添加：
+
+     ```rust
+     let payload = InputEntryFunctionData::new("0x1::coin::transfer")
+         .type_arg("0x1::aptos_coin::AptosCoin")
+         .arg(recipient.address())
+         .arg(1_000_000u64)
+         .build()?;
+     ```
+
+  2. **构建原始交易**
+
+     使用 `TransactionBuilder` 组装一个包含发送者、序列号、负载、链 ID 和可选 gas 参数的 `RawTransaction`。
+
+     ```rust
+     use aptos_sdk::transaction::TransactionBuilder;
+
+     let chain_id = aptos.chain_id().await?;
+     let sequence_number = aptos.get_sequence_number(sender.address()).await?;
+
+     let raw_txn = TransactionBuilder::new()
+         .sender(sender.address())
+         .sequence_number(sequence_number)
+         .payload(payload)
+         .chain_id(chain_id)
+         .max_gas_amount(100_000)
+         .gas_unit_price(100)
+         .expiration_from_now(600)
+         .build()?;
+     ```
+
+     构建器需要 `sender`、`sequence_number`、`payload` 和 `chain_id`。其余字段有合理的默认值：
+
+     | 字段                    | 默认值     | 描述                     |
+     | --------------------- | ------- | ---------------------- |
+     | `max_gas_amount`      | 200,000 | 交易可消耗的最大 gas 单位        |
+     | `gas_unit_price`      | 100     | 每 gas 单位的价格（以 octas 计） |
+     | `expiration_from_now` | 600     | 交易过期前的秒数               |
+
+  3. **签名交易**
+
+     使用 `sign_transaction` 函数用发送者的账户签署原始交易。
+
+     ```rust
+     use aptos_sdk::transaction::sign_transaction;
+
+     let signed_txn = sign_transaction(&raw_txn, &sender)?;
+     ```
+
+     这会生成一个包含原始交易数据和加密签名的 `SignedTransaction`。SDK 支持使用 Ed25519、Secp256k1 和 Secp256r1 账户类型进行签名。
+
+  4. **提交并等待**
+
+     将签名交易提交到网络并等待其在链上确认。
+
+     ```rust
+     let response = aptos.submit_and_wait(&signed_txn, None).await?;
+
+     if response.data.success {
+         println!("Transaction succeeded at version {}", response.data.version);
+     } else {
+         println!("Transaction failed: {}", response.data.vm_status);
+     }
+     ```
+
+     第二个参数是可选的超时时间。传入 `None` 使用默认超时，或提供 `Duration` 用于自定义行为。
+
+     如果您只想提交而不等待，请改用 `submit_transaction`：
+
+     ```rust
+     let pending = aptos.submit_transaction(&signed_txn).await?;
+     println!("Submitted hash: {}", pending.hash);
+     ```
+</Steps>
+
+## Move 参数辅助函数
+
+SDK 提供了辅助函数用于将常见 Move 类型编码为交易参数。当 Move 函数需要 `String`、`Option<T>` 或 `vector<T>` 参数时，这些函数是必需的。
+
+### `move_string`
+
+将 Rust `&str` 编码为 Move `String` 参数。
+
+```rust
+use aptos_sdk::transaction::move_string;
+
+let payload = InputEntryFunctionData::new("0x1::my_module::set_name")
+    .arg(move_string("Alice"))
+    .build()?;
+```
+
+### `move_some` 和 `move_none`
+
+将值编码为 Move `Option<T>` 类型。使用 `move_some` 将值包装在 `Some` 中，使用 `move_none` 表示 `None`。
+
+```rust
+use aptos_sdk::transaction::{move_some, move_none};
+
+// Pass Some(100u64)
+let payload = InputEntryFunctionData::new("0x1::my_module::set_optional_value")
+    .arg(move_some(100u64))
+    .build()?;
+
+// Pass None
+let payload = InputEntryFunctionData::new("0x1::my_module::set_optional_value")
+    .arg(move_none())
+    .build()?;
+```
+
+### `move_vec`
+
+将值切片编码为 Move `vector<T>` 参数。
+
+```rust
+use aptos_sdk::transaction::move_vec;
+
+let recipients = vec![alice.address(), bob.address(), carol.address()];
+
+let payload = InputEntryFunctionData::new("0x1::my_module::batch_process")
+    .arg(move_vec(&recipients))
+    .build()?;
+```
+
+## 预定义函数常量
+
+SDK 在 `functions` 模块中提供了常用链上函数的常量。这些常量可以防止硬编码字符串的拼写错误，使代码更具可读性。
+
+| 常量                           | 值                                      |
+| ---------------------------- | -------------------------------------- |
+| `functions::APT_TRANSFER`    | `"0x1::aptos_account::transfer"`       |
+| `functions::COIN_TRANSFER`   | `"0x1::coin::transfer"`                |
+| `functions::CREATE_ACCOUNT`  | `"0x1::aptos_account::create_account"` |
+| `functions::REGISTER_COIN`   | `"0x1::managed_coin::register"`        |
+| `functions::PUBLISH_PACKAGE` | `"0x1::code::publish_package_txn"`     |
+
+在任何需要传递函数标识符字符串的地方使用它们：
+
+```rust
+use aptos_sdk::transaction::{functions, InputEntryFunctionData};
+
+let payload = InputEntryFunctionData::new(functions::APT_TRANSFER)
+    .arg(recipient.address())
+    .arg(1_000_000u64)
+    .build()?;
+```
+
+## 完整 Rust 示例
+
+```rust
+/// This example demonstrates the complete transaction lifecycle:
+/// building, signing, submitting, and waiting for an APT transfer.
+
+use aptos_sdk::{Aptos, AptosConfig};
+use aptos_sdk::account::Ed25519Account;
+use aptos_sdk::transaction::{
+    functions, sign_transaction, InputEntryFunctionData, TransactionBuilder,
+};
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    // 0. Setup the client and test accounts
+    let aptos = Aptos::new(AptosConfig::testnet())?;
+
+    let sender = Ed25519Account::generate();
+    let recipient = Ed25519Account::generate();
+
+    println!("Sender:    {}", sender.address());
+    println!("Recipient: {}", recipient.address());
+
+    // Fund the sender account on testnet
+    aptos.fund_account(sender.address(), 100_000_000).await?;
+    println!("Funded sender account.");
+
+    // 1. Build the payload
+    let payload = InputEntryFunctionData::new(functions::APT_TRANSFER)
+        .arg(recipient.address())
+        .arg(10_000_000u64)
+        .build()?;
+
+    // 2. Build the raw transaction
+    let chain_id = aptos.chain_id().await?;
+    let sequence_number = aptos.get_sequence_number(sender.address()).await?;
+
+    let raw_txn = TransactionBuilder::new()
+        .sender(sender.address())
+        .sequence_number(sequence_number)
+        .payload(payload)
+        .chain_id(chain_id)
+        .max_gas_amount(100_000)
+        .gas_unit_price(100)
+        .expiration_from_now(600)
+        .build()?;
+
+    // 3. Sign the transaction
+    let signed_txn = sign_transaction(&raw_txn, &sender)?;
+
+    // 4. Submit and wait for confirmation
+    let response = aptos.submit_and_wait(&signed_txn, None).await?;
+
+    if response.data.success {
+        println!(
+            "Transaction succeeded at version {}",
+            response.data.version
+        );
+    } else {
+        println!("Transaction failed: {}", response.data.vm_status);
+    }
+
+    // Verify the recipient balance
+    let balance = aptos.get_balance(recipient.address()).await?;
+    println!("Recipient balance: {} octas", balance);
+
+    Ok(())
+}
+```
+
+<Aside type="tip">
+  在大多数用例中，便捷方法 `sign_submit_and_wait` 可以用更少的代码完成相同的结果：
+
+  ```rust
+  let payload = InputEntryFunctionData::new(functions::APT_TRANSFER)
+      .arg(recipient.address())
+      .arg(10_000_000u64)
+      .build()?;
+
+  let response = aptos.sign_submit_and_wait(&sender, payload, None).await?;
+  ```
+</Aside>
+
+## 探索高级交易功能
+
+交易支持多种高级功能，以适应不同的用例：
+
+1. [模拟交易](/zh/build/sdks/rust-sdk/building-transactions/simulating-transactions) - 在链上提交之前预览交易成本和效果。
+2. [多代理交易](/zh/build/sdks/rust-sdk/building-transactions/multi-agent-transactions) - 允许多个账户通过协调签名参与单笔交易。
+3. [赞助交易](/zh/build/sdks/rust-sdk/building-transactions/sponsoring-transactions) - 让另一个账户为交易支付 gas 费用。
+4. [批量交易](/zh/build/sdks/rust-sdk/building-transactions/batching-transactions) - 从单个账户快速提交多笔独立交易。
+5. [脚本交易](/zh/build/sdks/rust-sdk/building-transactions/script-transactions) - 执行自定义 Move 脚本字节码，用于一次性或多步原子操作。

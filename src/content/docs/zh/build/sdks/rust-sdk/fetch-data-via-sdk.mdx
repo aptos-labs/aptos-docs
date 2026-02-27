@@ -1,0 +1,158 @@
+---
+title: "通过 SDK 获取数据"
+description: "学习如何使用 Aptos Rust SDK 查询账户余额、视图函数、账本信息和索引数据"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+您可以使用 `Aptos` 客户端通过多种辅助方法检索链上数据。以下示例假设您已经创建了一个 `Aptos` 客户端实例：
+
+```rust
+use aptos_sdk::{Aptos, AptosConfig};
+
+let aptos = Aptos::new(AptosConfig::testnet())?;
+```
+
+## 账户余额
+
+获取任意账户地址的 APT 余额。余额以 octas 为单位返回（1 APT = 100,000,000 octas）。
+
+```rust
+let address = "0x1".parse()?;
+let balance = aptos.get_balance(address).await?;
+println!("Balance: {} octas", balance);
+```
+
+## 账户信息
+
+检查账户是否存在于链上，并获取其当前序列号。手动构建交易时需要序列号。
+
+```rust
+let address = "0x1".parse()?;
+
+// Check if an account exists
+let exists = aptos.account_exists(address).await?;
+println!("Account exists: {}", exists);
+
+// Get the current sequence number
+let sequence_number = aptos.get_sequence_number(address).await?;
+println!("Sequence number: {}", sequence_number);
+```
+
+## 账本信息
+
+获取区块链的当前状态，包括最新的账本版本、区块高度和 epoch。
+
+```rust
+let info = aptos.ledger_info().await?;
+println!("Ledger version: {}", info.ledger_version);
+println!("Block height: {}", info.block_height);
+println!("Epoch: {}", info.epoch);
+```
+
+## 视图函数（JSON）
+
+视图函数允许您调用标记为 `#[view]` 的链上 Move 函数，而无需提交交易。JSON 变体将结果作为 `serde_json::Value` 返回，适用于快速查询和动态数据。
+
+### 无类型参数
+
+调用没有类型参数或参数的简单视图函数：
+
+```rust
+let result = aptos
+    .view("0x1::timestamp::now_seconds", vec![], vec![])
+    .await?;
+println!("Current timestamp: {:?}", result);
+```
+
+### 带类型参数
+
+要查询特定代币余额，将代币类型作为类型参数传入，账户地址作为函数参数传入：
+
+```rust
+let result = aptos
+    .view(
+        "0x1::coin::balance",
+        vec!["0x1::aptos_coin::AptosCoin"],
+        vec![serde_json::json!("0x1")],
+    )
+    .await?;
+println!("Coin balance: {:?}", result);
+```
+
+## 视图函数（BCS）
+
+`view_bcs` 方法将结果作为 BCS 编码的字节返回，您可以将其反序列化为强类型的 Rust 结构体。这比 JSON 变体更高效且类型安全。
+
+```rust
+let timestamp: Vec<u64> = aptos
+    .view_bcs("0x1::timestamp::now_seconds", vec![], vec![])
+    .await?;
+println!("Current timestamp: {} seconds", timestamp[0]);
+```
+
+<Aside type="tip">
+  当您在编译时知道返回类型并且想避免手动解析 JSON 时，请使用 `view_bcs`。处理动态或未知返回类型时，请使用 `view`。
+</Aside>
+
+## Gas 估算
+
+在提交交易之前估算其 gas 成本。这对于向用户显示费用估算或验证交易不会超过 gas 预算很有帮助。
+
+```rust
+use aptos_sdk::types::InputEntryFunctionData;
+
+let payload = InputEntryFunctionData {
+    function: "0x1::aptos_account::transfer".to_string(),
+    type_arguments: vec![],
+    arguments: vec![
+        serde_json::json!("0xrecipient_address"),
+        serde_json::json!("1000"),
+    ],
+};
+
+let gas_estimate = aptos.estimate_gas(payload).await?;
+println!("Estimated gas units: {}", gas_estimate);
+```
+
+## 全节点 REST 客户端
+
+对于高级别 `Aptos` 方法未涵盖的高级查询，您可以直接访问全节点 REST 客户端。这使您可以访问完整的全节点 API 端点集。
+
+```rust
+let address = "0x1".parse()?;
+
+// Retrieve all modules published under an account
+let modules = aptos.fullnode().get_account_modules(address).await?;
+for module in &modules {
+    println!("Module: {}", module.abi.as_ref().unwrap().name);
+}
+```
+
+<Aside type="note">
+  全节点客户端提供的方法直接映射到 [Aptos 全节点 REST API](https://api.mainnet.aptoslabs.com/v1/spec#/)。当您需要访问 `get_account_resources`、`get_transactions` 或 `get_block_by_height` 等端点时，请使用它。
+</Aside>
+
+## 索引器查询
+
+SDK 包含一个索引器客户端，用于查询聚合和增强的链上数据。索引器提供对全节点 API 本身不可用的数据类型的访问，例如代币所有权历史、事件聚合和账户交易摘要。
+
+```rust
+let indexer = aptos.indexer();
+```
+
+<Aside type="caution">
+  索引器客户端需要在 `Cargo.toml` 中启用 `indexer` 功能特性标志。此功能包含在默认功能集中，但如果您使用 `default-features = false`，则必须显式启用。
+</Aside>
+
+索引器客户端提供以下数据访问：
+
+- **代币数据** -- 数字资产的所有权、元数据和转移历史。
+- **代币余额** -- 所有代币类型的当前和历史余额。
+- **账户交易** -- 带有解码负载的增强交易数据。
+- **事件数据** -- 聚合且可过滤的事件流。
+- **集合数据** -- NFT 集合的元数据和统计信息。
+
+<Aside type="note">
+  索引器数据可能略微滞后于最新账本版本，因为它需要额外的处理。如果您需要最新数据，请查询全节点客户端或在可用的情况下使用账本版本参数。
+</Aside>

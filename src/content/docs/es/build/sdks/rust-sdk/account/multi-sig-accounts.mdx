@@ -1,26 +1,71 @@
 ---
-title: "Cuentas Multi-Firma y Keyless"
-description: "Aprende a crear y usar cuentas multi-firma y keyless con el SDK de Rust para Aptos"
+title: "Cuentas Multi-Firma"
+description: "Aprende a crear y usar cuentas multi-firma con el SDK de Rust para Aptos"
 sidebar:
-  label: "Multi-Firma & Keyless"
+  label: "Cuentas Multi-Firma"
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-El SDK de Rust para Aptos soporta tipos de cuentas avanzados mas alla de las cuentas de clave unica. Esta pagina cubre las cuentas multi-firma que requieren multiples partes para autorizar una transaccion, y las cuentas keyless que se autentican a traves de proveedores de OpenID Connect (OIDC) en lugar de claves privadas.
+El SDK de Rust para Aptos soporta cuentas multi-firma que requieren multiples partes para autorizar una transaccion. Esto es util para custodia compartida, wallets organizacionales y escenarios de gobernanza donde ninguna parte individual debe tener control unilateral.
 
-## MultiEd25519Account
+## MultiKeyAccount
 
-Un `MultiEd25519Account` implementa un esquema de firma de umbral M-de-N usando claves Ed25519. Esto significa que defines N firmantes totales, y cualquier M de ellos debe firmar una transaccion para que sea valida. Esto es util para custodia compartida, wallets organizacionales y escenarios de gobernanza donde ninguna parte individual debe tener control unilateral.
+Un `MultiKeyAccount` implementa un esquema de firma de umbral M-de-N que soporta tipos de claves criptograficas mixtas. Puedes combinar claves Ed25519, Secp256k1 y Secp256r1 en una sola cuenta. Este es el enfoque recomendado para cuentas multi-firma.
 
 ### Crear una Cuenta Multi-Firma
 
-Para crear un `MultiEd25519Account`, genera los pares de claves Ed25519 individuales primero, luego combina sus claves publicas con un umbral de firma:
+Para crear un `MultiKeyAccount`, genera los pares de claves individuales primero, luego combina sus claves publicas con un umbral de firma:
+
+```rust
+use aptos_sdk::account::{
+    Ed25519Account, Secp256k1Account, MultiKeyAccount, AnyPublicKey,
+};
+
+// Generate signers with different key types
+let ed25519_signer = Ed25519Account::generate();
+let secp256k1_signer = Secp256k1Account::generate();
+let ed25519_signer_2 = Ed25519Account::generate();
+
+// Create a 2-of-3 multi-key account with mixed key types
+let multi_key_account = MultiKeyAccount::new(
+    vec![
+        AnyPublicKey::Ed25519(ed25519_signer.public_key().clone()),
+        AnyPublicKey::Secp256k1(secp256k1_signer.public_key().clone()),
+        AnyPublicKey::Ed25519(ed25519_signer_2.public_key().clone()),
+    ],
+    2, // signatures_required
+)?;
+
+println!("Multi-key address: {}", multi_key_account.address());
+```
+
+En este ejemplo, dos cualesquiera de los tres firmantes pueden autorizar una transaccion. El parametro `signatures_required` debe estar entre 1 y el numero total de claves publicas (inclusive). Los firmantes pueden usar cualquier tipo de clave soportado — Ed25519, Secp256k1 o Secp256r1 — permitiendo que un firmante use una wallet de software mientras otro usa un dispositivo de hardware con diferentes capacidades criptograficas.
+
+### Firmar con un MultiKeyAccount
+
+Al firmar una transaccion, proporcionas los firmantes individuales que participaran. El numero de firmantes debe alcanzar o superar el umbral:
+
+```rust
+// Sign with ed25519_signer and secp256k1_signer (2-of-3 threshold met)
+let signature = multi_key_account.sign_with_signers(
+    &message,
+    vec![&ed25519_signer, &secp256k1_signer],
+)?;
+```
+
+## MultiEd25519Account (Legacy)
+
+<Aside type="caution">
+  `MultiEd25519Account` existe por compatibilidad con cuentas antiguas en la cadena. Para nuevas cuentas multi-firma, usa `MultiKeyAccount` en su lugar — soporta las mismas configuraciones solo Ed25519 ademas de tipos de claves mixtas.
+</Aside>
+
+Un `MultiEd25519Account` implementa un esquema de firma de umbral M-de-N restringido unicamente a claves Ed25519. Si necesitas interactuar con una cuenta multi-firma existente en la cadena que fue creada con `MultiEd25519`, puedes cargarla de la siguiente manera:
 
 ```rust
 use aptos_sdk::account::{Ed25519Account, MultiEd25519Account};
 
-// Generate three individual signers
+// Generate three individual signers (all must be Ed25519)
 let signer_1 = Ed25519Account::generate();
 let signer_2 = Ed25519Account::generate();
 let signer_3 = Ed25519Account::generate();
@@ -34,15 +79,9 @@ let multi_account = MultiEd25519Account::new(
     ],
     2, // signatures_required
 )?;
-
-println!("Multi-sig address: {}", multi_account.address());
 ```
 
-En este ejemplo, dos cualesquiera de los tres firmantes pueden autorizar una transaccion. El parametro `signatures_required` debe estar entre 1 y el numero total de claves publicas (inclusive).
-
-### Firmar con un MultiEd25519Account
-
-Al firmar una transaccion, proporcionas los firmantes individuales que participaran. El numero de firmantes debe alcanzar o superar el umbral:
+La firma funciona de la misma manera que `MultiKeyAccount`:
 
 ```rust
 // Sign with signer_1 and signer_3 (2-of-3 threshold met)
@@ -51,114 +90,3 @@ let signature = multi_account.sign_with_signers(
     vec![&signer_1, &signer_3],
 )?;
 ```
-
-<Aside type="note">
-  Todas las claves publicas usadas en un `MultiEd25519Account` deben ser claves Ed25519. Si necesitas mezclar diferentes tipos de claves, usa `MultiKeyAccount` en su lugar.
-</Aside>
-
-## MultiKeyAccount
-
-Un `MultiKeyAccount` extiende el concepto de multi-firma permitiendo diferentes tipos de claves criptograficas en el mismo esquema de umbral. Puedes combinar claves Ed25519, Secp256k1 y Secp256r1 en una sola cuenta. Esto es util cuando los firmantes usan diferente software de wallet o hardware con diferentes capacidades criptograficas.
-
-### Crear una Cuenta Multi-Firma con Claves Mixtas
-
-```rust
-use aptos_sdk::account::{
-    Ed25519Account, Secp256k1Account, MultiKeyAccount, AnyPublicKey,
-};
-
-// Generate signers with different key types
-let ed25519_signer = Ed25519Account::generate();
-let secp256k1_signer = Secp256k1Account::generate();
-
-// Create a 2-of-2 multi-key account with mixed key types
-let multi_key_account = MultiKeyAccount::new(
-    vec![
-        AnyPublicKey::Ed25519(ed25519_signer.public_key().clone()),
-        AnyPublicKey::Secp256k1(secp256k1_signer.public_key().clone()),
-    ],
-    2, // signatures_required
-)?;
-
-println!("Multi-key address: {}", multi_key_account.address());
-```
-
-### Firmar con un MultiKeyAccount
-
-Similar a `MultiEd25519Account`, proporcionas los firmantes individuales que participaran:
-
-```rust
-let signature = multi_key_account.sign_with_signers(
-    &message,
-    vec![&ed25519_signer, &secp256k1_signer],
-)?;
-```
-
-La ventaja clave de `MultiKeyAccount` sobre `MultiEd25519Account` es la flexibilidad: un firmante podria usar una clave Ed25519 almacenada en una wallet de software, mientras que otro usa una clave Secp256k1 de un dispositivo de hardware que solo soporta criptografia de estilo Bitcoin.
-
-## Cuentas Keyless
-
-Las cuentas keyless permiten a los usuarios autenticarse con su proveedor de identidad existente (como Google o Apple) en lugar de gestionar claves privadas. Internamente, el SDK usa tokens OpenID Connect (OIDC) combinados con pares de claves efimeras y pruebas de conocimiento cero para producir firmas de transacciones validas.
-
-<Aside type="note">
-  Las cuentas keyless requieren el feature flag `keyless`, que no esta habilitado por defecto. Agregalo a tu `Cargo.toml`:
-
-  ```toml filename="Cargo.toml"
-  [dependencies]
-  aptos-sdk = { git = "https://github.com/aptos-labs/aptos-rust-sdk", package = "aptos-sdk", features = ["keyless"] }
-  ```
-</Aside>
-
-### Como Funciona la Autenticacion Keyless
-
-1. **Par de Claves Efimeras** -- El SDK genera un `EphemeralKeyPair` de corta duracion que se usa para firmar durante una sola sesion.
-2. **Autenticacion OIDC** -- El usuario se autentica con su proveedor de identidad (Google, Apple, etc.) y recibe un token JWT.
-3. **Generacion de Prueba** -- Se genera una prueba de conocimiento cero que vincula la identidad OIDC al par de claves efimeras sin revelar la identidad del usuario on-chain.
-4. **Firma de Transacciones** -- El par de claves efimeras firma la transaccion, y la prueba se incluye en el autenticador.
-
-### Crear una Cuenta Keyless
-
-```rust
-use aptos_sdk::account::keyless::{EphemeralKeyPair, KeylessAccount};
-
-// Step 1: Generate an ephemeral key pair
-let ephemeral_key_pair = EphemeralKeyPair::generate();
-
-// Step 2: Get the nonce to include in the OIDC authentication request
-let nonce = ephemeral_key_pair.nonce();
-
-// Step 3: Use the nonce in your OIDC flow to obtain a JWT token
-// This step happens externally (redirect user to identity provider)
-// let jwt_token = authenticate_with_provider(nonce);
-
-// Step 4: Create the keyless account using the JWT and ephemeral key pair
-// let keyless_account = KeylessAccount::new(jwt_token, ephemeral_key_pair)?;
-// println!("Keyless address: {}", keyless_account.address());
-```
-
-<Aside type="caution" title="Dependencia de Servicios Externos">
-  Las cuentas keyless dependen de proveedores OIDC externos y de los servicios pepper y prover de Aptos. Tu aplicacion debe manejar el flujo de redireccion OIDC y el intercambio de tokens fuera del SDK. El SDK se encarga de las operaciones criptograficas una vez que tienes un token JWT valido.
-</Aside>
-
-Para un tutorial completo sobre la configuracion de la autenticacion keyless, incluyendo la integracion OIDC y la generacion de pruebas, consulta la [guia de Aptos Keyless](/es/build/guides/aptos-keyless).
-
-## Elegir un Tipo de Cuenta
-
-La siguiente tabla compara los tipos de cuenta disponibles para ayudarte a seleccionar el adecuado para tu caso de uso:
-
-| Tipo de Cuenta        | Firmantes Requeridos | Tipos de Clave Soportados     | Mejor Para                                                              |
-| --------------------- | -------------------- | ----------------------------- | ----------------------------------------------------------------------- |
-| `Ed25519Account`      | 1                    | Solo Ed25519                  | Wallets y aplicaciones de proposito general                             |
-| `Secp256k1Account`    | 1                    | Solo Secp256k1                | Interoperabilidad con herramientas de Bitcoin/Ethereum                  |
-| `Secp256r1Account`    | 1                    | Solo Secp256r1 (P-256)        | WebAuthn, passkeys y enclaves de hardware seguros                       |
-| `MultiEd25519Account` | M-de-N               | Solo Ed25519                  | Custodia compartida con infraestructura de claves uniforme              |
-| `MultiKeyAccount`     | M-de-N               | Ed25519, Secp256k1, Secp256r1 | Custodia compartida en entornos de firmantes diversos                   |
-| `KeylessAccount`      | 1 (OIDC)             | Efimera + prueba OIDC         | Aplicaciones de consumidor donde los usuarios no deben gestionar claves |
-
-### Guias de Decision
-
-- **Usuario unico, wallet estandar** -- Usa `Ed25519Account`. Es el mas ampliamente soportado y tiene el mejor rendimiento.
-- **Compatibilidad entre cadenas** -- Usa `Secp256k1Account` si tus usuarios provienen del ecosistema Bitcoin o Ethereum y ya tienen claves Secp256k1.
-- **Autenticacion respaldada por hardware** -- Usa `Secp256r1Account` para integraciones de passkey y WebAuthn donde la clave privada reside en un enclave seguro.
-- **Fondos organizacionales o compartidos** -- Usa `MultiEd25519Account` cuando todos los firmantes usen claves Ed25519, o `MultiKeyAccount` cuando los firmantes usen diferentes tipos de claves.
-- **Aplicaciones orientadas al consumidor** -- Usa `KeylessAccount` para permitir que los usuarios inicien sesion con Google, Apple u otros proveedores OIDC sin necesidad de entender claves privadas o frases mnemonicas.

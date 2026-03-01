@@ -1,15 +1,15 @@
 ---
-title: "Obtener Datos con el SDK de Kotlin"
-description: "Lee datos de red y de cuentas en Aptos con Kaptos usando REST, indexer y funciones view de Move"
+title: "Fetch Data via the Kotlin SDK"
+description: "Read Aptos network and account data with Kaptos, including REST, indexer, and Move view calls"
 sidebar:
-  label: "Obtener Datos"
+  label: "Via the SDK"
 ---
 
-Kaptos expone APIs de lectura sobre endpoints REST de fullnode, endpoints respaldados por indexer y funciones `view` de Move.
+Kaptos exposes data-reading APIs across fullnode REST endpoints, indexer-backed endpoints, and Move view functions.
 
-## Manejo basado en Result
+## Result-based handling
 
-Las llamadas de red retornan `Result<Ok, Err>`, así que puedes elegir entre control explícito o fail-fast.
+Network calls return `Result<Ok, Err>`, so you can choose explicit branching or fail-fast unwrapping.
 
 ```kotlin
 val ledgerInfoResult = aptos.getLedgerInfo()
@@ -20,22 +20,22 @@ when (ledgerInfoResult) {
 }
 ```
 
-Si prefieres fail-fast:
+If you want fail-fast semantics:
 
 ```kotlin
 val ledgerInfo = aptos.getLedgerInfo().expect("Failed to fetch ledger info")
 ```
 
-Para más patrones de manejo, revisa [Manejar respuestas de consulta del SDK](/es/build/sdks/community-sdks/kotlin-sdk/response-handling).
+For more patterns, see [Handle SDK Data Fetch Responses](/build/sdks/community-sdks/kotlin-sdk/response-handling).
 
-## Leer datos generales de la cadena
+## Read general chain data
 
 ```kotlin
 val chainId = aptos.getChainId().expect("Failed to fetch chain id")
 val latestBlock = aptos.getBlockByHeight(ledgerHeight = 1, withTransactions = true)
 ```
 
-## Leer datos de cuenta
+## Read account data
 
 ```kotlin
 val address = AccountAddress.fromString("0x1")
@@ -45,15 +45,15 @@ val modules = aptos.getAccountModules(address) { limit = 20 }.expect("Failed to 
 val resources = aptos.getAccountResources(address) { limit = 50 }.expect("Failed to fetch resources")
 ```
 
-## Leer balances
+## Read balances
 
-Balance de APT vía indexer:
+Indexer-backed APT balance:
 
 ```kotlin
 val aptBalance = aptos.getAccountAPTAmount(address).expect("Failed to fetch APT balance")
 ```
 
-Ruta view de smart contract para un coin type específico:
+Smart-contract view path for a specific coin type:
 
 ```kotlin
 val aptBalanceFromView =
@@ -65,9 +65,9 @@ val aptBalanceFromView =
     .expect("Failed to fetch coin balance from smart contract")
 ```
 
-## Leer con funciones view de Move
+## Read via Move view functions
 
-Usa `view<T>()` para llamadas de solo lectura personalizadas.
+Use `view<T>()` for custom read-only Move calls.
 
 ```kotlin
 val payload =

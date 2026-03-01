@@ -1,0 +1,42 @@
+---
+title: "Handle SDK Data Fetch Responses"
+description: "Handle retrieved on-chain data and network information using the Kaptos client with idiomatic Result-based error handling"
+sidebar:
+  label: "Response Handling"
+---
+
+All data-fetching and most other operations in the SDK returns a `Result`, which models either a success (`Ok`) or a failure (`Err`). This design ensures you handle both outcomes explicitly, making your code more predictable and safer by default.
+
+You can work with the result in several ways:
+
+### Using `when` Expression
+
+This is the most explicit and idiomatic way to handle both cases:
+
+```kotlin
+val result = aptos.getLedgerInfo()
+
+when(result) {
+  is Result.Ok -> {
+    println("Ledger Info: ${result.value}")
+  }
+  is Result.Err -> {
+    println("Failed to fetch ledger info: ${result.error.message}")
+  }
+}
+```
+
+### Using Convenience Functions
+
+The `Result` class includes helper methods for more concise handling:
+
+- `unwrap()`: Returns the value if successful, or throws if it’s an error.
+- `unwrapErr()`: Returns the error if failed, or throws if it’s successful.
+- `expect("message")`: Like `unwrap()`, but includes a custom error message.
+- `expectErr { "message" }`: Like `unwrapErr()`, with a custom error message.
+
+```kotlin
+val data = result.expect { "Failed to fetch account balance" }
+```
+
+Use these when you’re confident about the outcome, or in testing/debug scenarios where failure should immediately surface.

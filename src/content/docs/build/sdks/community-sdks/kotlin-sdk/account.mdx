@@ -1,83 +1,110 @@
 ---
 title: "Creating and Managing Accounts"
-description: "Learn how to create and manage both legacy and SingleKey accounts using the Kaptos Kotlin SDK"
+description: "Create and manage legacy, SingleKey, and MultiKey accounts with the Kaptos Kotlin SDK"
 sidebar:
   label: "Accounts"
 ---
 
-**Kaptos** provides a few ways to generate account credentials, both _legacy_ and
-`SingleKeyAccount`s. You can either generate a new account or derive
-an account from a private key.
+Kaptos supports three account patterns you should know when building production apps:
 
-## Legacy Account
+- **Legacy Ed25519 account** (`Ed25519Account` / `Account.generate()` default)
+- **SingleKey account** (`SingleKeyAccount`) using unified auth keys
+- **MultiKey account** (`MultiKeyAccount`) for threshold-style signing
 
-**Kaptos** offers a straightforward method to generate a legacy account using the
-`Account` class. By invoking the static method `generate()`, you can create a new
-legacy account either by passing no arguments or by explicitly setting
-the `scheme` to `SigningSchemeInput.Ed25519` and the `legacy` property to `true` as
-shown below.
+## Legacy account (Ed25519)
 
-### Generate a New Account
-
-To create a new legacy account, you can generate a new account credential using the
-`Account.generate()` method. This method will create a new account with a new
-key pair.
+The default `Account.generate()` path creates a legacy Ed25519 account.
 
 ```kotlin
-val account = Account.generate()
+val legacy = Account.generate()
+
+val explicitLegacy = Account.generate(
+  scheme = SigningSchemeInput.Ed25519,
+  legacy = true,
+)
 ```
 
-You can also use the `Ed25519Account` class that provides a **nullary** method,
-`generate()`, to create a new account:
+You can also derive a legacy account from an existing Ed25519 private key:
 
 ```kotlin
-val account = Ed25519Account.generate()
+val legacyFromPrivateKey =
+  Account.fromPrivateKey(
+    Ed25519PrivateKey("0x...")
+  )
 ```
 
-### Derive an Account from a Private Key
+## SingleKey account (Ed25519 or Secp256k1)
 
-If you have a private key, you can use it to create an `Account` object to manage
-those credentials.
+Use `SingleKeyAccount` when you want unified authentication and key agility.
 
 ```kotlin
-val privateKey = Ed25519PrivateKey("myEd25519privatekeystring")
-
-val account = Account.fromPrivateKey(privateKey)
+val ed25519Single = SingleKeyAccount.generate(SigningSchemeInput.Ed25519)
+val secp256k1Single = SingleKeyAccount.generate(SigningSchemeInput.Secp256k1)
 ```
 
-## Single Key Account
-
-The SDK offers two ways to generate a single key account: using either the
-`SingleKeyAccount` or the `Account` class. In both cases, you can create a
-new account by calling the static `generate()` method. You’ll need to specify
-the `scheme`, and for the `Account` class, you can optionally set the `legacy`
-property to `false`.
+You can also request a single-key account via `Account.generate(...)`:
 
 ```kotlin
-val secp256k1SKAccount = SingleKeyAccount.generate(SigningSchemeInput.Secp256k1)
-val ed25519SKAccount = SingleKeyAccount.generate(SigningSchemeInput.Ed25519)
+val singleViaAccount = Account.generate(
+  scheme = SigningSchemeInput.Ed25519,
+  legacy = false,
+)
 ```
 
-Using the `Account` class, you can create a new single key account by setting
-the `scheme` to `SigningSchemeInput.Secp256k1` and optionally setting the
-`legacy` property to `false`. Alternatively, you can set the `scheme` to
-`SigningSchemeInput.Ed25519` and ensure the `legacy` property is also
-set to `false`.
+To derive from existing private keys:
 
 ```kotlin
-val secp256k1SKAccount = Account.generate(scheme = SigningSchemeInput.Secp256k1)
-val ed25519SKAccount = Account.generate(scheme = SigningSchemeInput.Ed25519, legacy = false)
+val ed25519SingleFromPrivateKey =
+  SingleKeyAccount(
+    Ed25519PrivateKey("0x...")
+  )
+
+val secp256k1SingleFromPrivateKey =
+  SingleKeyAccount(
+    Secp256k1PrivateKey(HexInput.fromString("0x..."))
+  )
 ```
 
-## On-chain Account Creation
+## MultiKey account (threshold signing)
 
-It is also worth noting that Account generation does not create the account
-on-chain. You must fund the account on-chain to use it for transactions.
-On test networks, you can fund an account programmatically by asking a
-"faucet" for test tokens. You can do this as shown below:
+`MultiKeyAccount` lets you define a threshold signing identity from multiple public keys.
 
 ```kotlin
-val fundedAccount = aptos.fundAccount(aliceAccount.accountAddress, FUNDING_AMOUNT)
+val signerA = SingleKeyAccount.generate(SigningSchemeInput.Ed25519)
+val signerB = SingleKeyAccount.generate(SigningSchemeInput.Secp256k1)
+val signerC = SingleKeyAccount.generate(SigningSchemeInput.Ed25519)
+
+val multiKeyAccount =
+  MultiKeyAccount.fromPublicKeysAndSigners(
+    publicKeys = listOf(signerA.publicKey, signerB.publicKey, signerC.publicKey),
+    signaturesRequired = 2,
+    signers = listOf(signerA, signerC),
+  )
 ```
 
-This only works on devnet. On testnet you can mint at the [mint page](/network/faucet).
+In the current API, `signers.size` must match `signaturesRequired`.
+
+Because `MultiKeyAccount` extends `Account`, it can sign transactions like other account types:
+
+```kotlin
+val txn =
+  aptos.buildSimpleTransaction(sender = multiKeyAccount.accountAddress) {
+    function = "0x1::coin::transfer"
+    typeArgs("0x1::aptos_coin::AptosCoin")
+    args(Account.generate().accountAddress, 1_000_000UL)
+  }
+
+val pending = aptos.signAndSubmitTransaction(multiKeyAccount, txn)
+```
+
+## On-chain account creation
+
+Generating an account only creates local credentials. The address is not usable on-chain until funded/created.
+
+```kotlin
+aptos
+  .fundAccount(accountAddress = legacy.accountAddress, amount = 100_000_000L)
+  .expect("Failed to fund account")
+```
+
+On testnet, you can also mint using the [faucet page](/network/faucet).

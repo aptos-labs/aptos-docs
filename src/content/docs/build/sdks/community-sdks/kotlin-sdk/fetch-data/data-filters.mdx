@@ -1,0 +1,178 @@
+---
+title: "Data Filters"
+description: "Handle retrieved on-chain data and network information using the Kaptos client with idiomatic Result-based error handling"
+sidebar:
+  label: "Data Filters"
+---
+
+Some read operations require additional parameters to filter the data returned from the network. Since the classes that
+define these parameters are auto-generated, they may not have the most idiomatic Kotlin names. To help with this, the SDK
+provides DSL-style builder functions to make it easier to create these parameter objects.
+
+For example, to fetch fungible asset metadata, a `FungibleAssetMetadataFilter` object is required. You can create this
+object using the `fungibleAssetMetadataFilter` builder function:
+
+```kotlin
+val filter = fungibleAssetMetadataFilter {
+    assetType = stringFilter { eq = "0x1::aptos_coin::AptosCoin" }
+}
+```
+
+This creates a filter that matches the `AptosCoin` asset type. You can then use this filter when calling the
+`getFungibleAssetMetadata` method:
+
+```kotlin
+val metadata = aptos.getFungibleAssetMetadata(filter)
+```
+
+Of course. Here is the complete and exhaustive markdown documentation for all the DSL filter and ordering functions, based on the files you've provided. The functions are grouped by their purpose and parameter similarity to improve clarity and reduce repetition.
+
+The remainder of this document provides a comprehensive overview of the Domain-Specific Language (DSL) functions available for building type-safe `where` (filter) and `order_by` clauses for Aptos Indexer GraphQL queries.
+
+## Filter DSL Functions
+
+These functions are used to construct the `where` argument in a GraphQL query, allowing you to specify conditions for the data you want to retrieve.
+
+### Comparison Expression Builders
+
+These are the fundamental building blocks used within entity filters. They create comparison expressions for primitive types like strings, integers, and booleans.
+
+#### For Numeric and Timestamp Types
+
+The following builders share a common set of comparison operators for numeric and time-based values.
+
+- **`bigintFilter`**
+
+- **`numericFilter`**
+
+- **`intFilter`**
+
+- **`timestampFilter`**
+
+- **Purpose**: To create a comparison expression for `bigint`, `numeric`, `int`, and `timestamp` fields, respectively.
+
+- **Parameters**: Each function takes a lambda block where you can set the following comparison operators:
+  - `eq`: Equal to.
+  - `neq`: Not equal to.
+  - `gt`: Greater than.
+  - `gte`: Greater than or equal to.
+  - `lt`: Less than.
+  - `lte`: Less than or equal to.
+  - `inList`: The value must be in the provided list.
+  - `nin`: The value must not be in the provided list.
+  - `isNull`: `true` if the field should be null, `false` otherwise.
+
+#### For String Types
+
+- **`stringFilter`**
+  - **Purpose**: Creates a rich comparison expression for `String` fields.
+  - **Parameters**: In addition to the common operators (`eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `inList`, `nin`, `isNull`), it supports advanced pattern matching:
+  - `like`: Case-sensitive pattern match (e.g., `_like: "aptos%"`).
+  - `nlike`: Case-sensitive negative pattern match.
+  - `ilike`: Case-insensitive pattern match.
+  - `nilike`: Case-insensitive negative pattern match.
+  - `similar`: SQL `SIMILAR TO` pattern match.
+  - `nsimilar`: SQL `NOT SIMILAR TO` pattern match.
+  - `regex`: POSIX regular expression match.
+  - `nregex`: POSIX negative regular expression match.
+  - `iregex`: Case-insensitive POSIX regular expression match.
+  - `niregex`: Case-insensitive negative POSIX regular expression match.
+
+#### For Boolean Types
+
+- **`booleanFilter`**
+  - **Purpose**: Creates a comparison expression for `Boolean` fields.
+  - **Parameters**: A lambda block where you can set the following simple operators:
+  - `eq`: Equal to (`true` or `false`).
+  - `neq`: Not equal to.
+  - `isNull`: `true` if the field should be null.
+
+#### For JSON Types
+
+- **`jsonbFilter`**
+  - **Purpose**: Creates a comparison expression for fields with the `jsonb` type, often used for unstructured properties.
+  - **Parameters**: A lambda block with JSON-specific operators:
+  - `contains`: Checks if the JSONB value contains the specified JSONB.
+  - `containedIn`: Checks if the JSONB value is contained within the specified JSONB.
+  - `hasKey`: Checks if the JSONB value has a specific top-level key.
+  - `hasKeysAny`: Checks if the JSONB value has any of the keys in the provided list.
+  - `hasKeysAll`: Checks if the JSONB value has all of the keys in the provided list.
+  - Also supports common operators: `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `inList`, `nin`, `isNull`.
+
+### Entity Filter Builders
+
+These functions create filters for specific tables or views in the indexer. They all support `and`, `or`, and `not` functions to build complex logical queries.
+
+- **`authKeyAccountAddressesFilter`**: Filters `auth_key_account_addresses`.
+  - **Fields**: `accountAddress`, `authKey`, `isAuthKeyUsed`, `lastTransactionVersion`.
+- **`currentAptosNamesFilter`**: Filters `current_aptos_names`.
+  - **Fields**: `domain`, `domainExpirationTimestamp`, `domainWithSuffix`, `expirationTimestamp`, `isActive`, `isPrimary`, `lastTransactionVersion`, `ownerAddress`, `registeredAddress`, `subdomain`, `subdomainExpirationPolicy`, `tokenName`, `tokenStandard`.
+- **`currentCollectionsV2Filter`**: Filters `current_collections_v2`.
+  - **Fields**: `collectionId`, `collectionName`, `collectionProperties`, `creatorAddress`, `currentSupply`, `description`, `lastTransactionTimestamp`, `lastTransactionVersion`, `maxSupply`, `mutableDescription`, `mutableUri`, `tableHandleV1`, `tokenStandard`, `totalMintedV2`, `uri`.
+- **`currentCollectionOwnershipV2ViewFilter`**: Filters the `current_collection_ownership_v2_view`.
+  - **Fields**: `collectionId`, `collectionName`, `collectionUri`, `creatorAddress`, `distinctTokens`, `lastTransactionVersion`, `ownerAddress`, `singleTokenUri`.
+- **`currentFungibleAssetBalancesFilter`**: Filters `current_fungible_asset_balances`.
+  - **Fields**: `amount`, `assetType`, `isFrozen`, `isPrimary`, `lastTransactionTimestamp`, `lastTransactionVersion`, `metadata`, `ownerAddress`, `storageId`, `tokenStandard`. Also includes V1/V2 specific versions like `amountV1`, `assetTypeV2`, etc.
+- **`currentObjectsFilter`**: Filters `current_objects`.
+  - **Fields**: `allowUngatedTransfer`, `isDeleted`, `lastGuidCreationNum`, `lastTransactionVersion`, `objectAddress`, `ownerAddress`, `stateKeyHash`.
+- **`currentTokenDatasV2Filter`**: Filters `current_token_datas_v2`.
+  - **Fields**: `collectionId`, `decimals`, `description`, `isDeletedV2`, `isFungibleV2`, `lastTransactionVersion`, `maximum`, `supply`, `tokenDataId`, `tokenName`, `tokenStandard`, `tokenUri`, `tokenProperties`.
+- **`currentTokenOwnershipsV2Filter`**: Filters `current_token_ownerships_v2`.
+  - **Fields**: `amount`, `isFungibleV2`, `isSoulboundV2`, `lastTransactionVersion`, `ownerAddress`, `storageId`, `tokenDataId`, `tokenStandard`.
+- **`currentTokenRoyaltyV1Filter`**: Filters `current_token_royalty_v1`.
+  - **Fields**: `lastTransactionVersion`, `payeeAddress`, `royaltyPointsDenominator`, `royaltyPointsNumerator`, `tokenDataId`.
+- **`eventsFilter`**: Filters `events`.
+  - **Fields**: `accountAddress`, `creationNumber`, `data`, `eventIndex`, `sequenceNumber`, `transactionVersion`, `type`.
+- **`fungibleAssetActivitiesFilter`**: Filters `fungible_asset_activities`.
+  - **Fields**: `amount`, `assetType`, `blockHeight`, `eventIndex`, `ownerAddress`, `tokenStandard`, `transactionVersion`, `type`.
+- **`fungibleAssetMetadataFilter`**: Filters `fungible_asset_metadata`.
+  - **Fields**: `assetType`, `creatorAddress`, `decimals`, `lastTransactionVersion`, `name`, `symbol`, `tokenStandard`.
+- **`nftMetadataCrawlerParsedAssetUrisFilter`**: Filters `nft_metadata_crawler_parsed_asset_uris`.
+  - **Fields**: `assetUri`, `cdnAnimationUri`, `cdnImageUri`, `cdnJsonUri`, `rawAnimationUri`, `rawImageUri`.
+- **`numActiveDelegatorPerPoolFilter`**: Filters `num_active_delegator_per_pool`.
+  - **Fields**: `numActiveDelegator`, `poolAddress`.
+- **`processorStatusFilter`**: Filters `processor_status`.
+  - **Fields**: `lastSuccessVersion`, `lastUpdated`, `processor`.
+- **`publicKeyAuthKeysFilter`**: Filters `public_key_auth_keys`.
+  - **Fields**: `accountPublicKey`, `authKey`, `isPublicKeyUsed`, `lastTransactionVersion`, `publicKey`, `publicKeyType`, `signatureType`.
+- **`tableItemsFilter`**: Filters `table_items`.
+  - **Fields**: `key`, `tableHandle`, `transactionVersion`, and nested JSONB filters for `decodedKey` and `decodedValue`.
+- **`tableMetadatasFilter`**: Filters `table_metadatas`.
+  - **Fields**: `handle`, `keyType`, `valueType`.
+- **`tokenActivitiesV2Filter`**: Filters `token_activities_v2`.
+  - **Fields**: `afterValue`, `beforeValue`, `fromAddress`, `toAddress`, `tokenAmount`, `tokenDataId`, `transactionVersion`, `type`.
+
+### Aggregate Filter Builders
+
+- **`currentAptosNamesAggregateFilter`**
+- **`currentTokenOwnershipsV2AggregateFilter`**
+  - **Purpose**: Creates a filter for applying conditions on aggregated results.
+  - **Parameters**: A lambda block where you can use the following functions:
+  - `count()`: Applies a predicate to the count of items.
+  - `boolAnd()`: Checks if a boolean condition is true for all items.
+  - `boolOr()`: Checks if a boolean condition is true for any item.
+
+## Order By DSL Functions
+
+These functions are used to construct the `order_by` argument in a GraphQL query, allowing you to specify the sorting of the results.
+
+- **`authKeyAccountAddressesOrder`**: Orders `auth_key_account_addresses`.
+  - **Fields**: `accountAddress`, `authKey`, `isAuthKeyUsed`, `lastTransactionVersion`.
+- **`currentAptosNamesOrder`**: Orders `current_aptos_names`.
+  - **Fields**: `domain`, `expirationTimestamp`, `lastTransactionVersion`, `ownerAddress`, etc.
+- **`currentFungibleAssetBalancesOrder`**: Orders `current_fungible_asset_balances`.
+  - **Fields**: `amount`, `assetType`, `lastTransactionTimestamp`, `ownerAddress`, etc.
+- **`currentObjectsOrder`**: Orders `current_objects`.
+  - **Fields**: `allowUngatedTransfer`, `lastTransactionVersion`, `objectAddress`, `ownerAddress`.
+- **`eventsOrder`**: Orders `events`.
+  - **Fields**: `accountAddress`, `creationNumber`, `sequenceNumber`, `transactionVersion`.
+- **`fungibleAssetMetadataOrder`**: Orders `fungible_asset_metadata`.
+  - **Fields**: `assetType`, `creatorAddress`, `decimals`, `name`, `symbol`.
+- **`numActiveDelegatorPerPoolOrder`**: Orders `num_active_delegator_per_pool`.
+  - **Fields**: `numActiveDelegator`, `poolAddress`.
+- **`publicKeyAuthKeysOrder`**: Orders `public_key_auth_keys`.
+  - **Fields**: `accountPublicKey`, `authKey`, `lastTransactionVersion`, `publicKey`.
+- **`tableItemsOrder`**: Orders `table_items`.
+  - **Fields**: `decodedKey`, `decodedValue`, `key`, `tableHandle`, `transactionVersion`.
+- **`tableMetadatasOrder`**: Orders `table_metadatas`.
+  - **Fields**: `handle`, `keyType`, `valueType`.

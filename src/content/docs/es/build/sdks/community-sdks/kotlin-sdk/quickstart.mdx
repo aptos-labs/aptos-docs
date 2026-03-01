@@ -1,160 +1,103 @@
 ---
 title: "Guía Rápida del SDK de Kotlin"
-description: "Comienza con Kaptos configurando el SDK, obteniendo datos de blockchain y enviando transacciones en Aptos"
+description: "Configura Kaptos, lee datos on-chain y envía tu primera transacción usando la API lean más reciente"
 sidebar:
   label: "Guía Rápida"
 ---
 
 import { Aside, Steps } from '@astrojs/starlight/components';
 
-Esta guía te llevará a través del proceso de configurar Kaptos,
-obtener datos y enviar una transacción en la blockchain de Aptos.
+Esta guía te lleva desde instalación hasta una transacción confirmada usando la forma actual de la API de Kaptos.
 
 <Steps>
   1. Instalar el SDK
 
-     Kaptos está disponible tanto para desarrollo multiplataforma como de plataforma única.
-     Los artefactos se publican en Sonatype Maven Central y pueden agregarse a tu
-     proyecto usando Gradle como se muestra abajo:
+     Kaptos publica artefactos multiplataforma y específicos por plataforma en Maven Central.
 
-     #### Desarrollo Multiplataforma
-
-     En tu archivo `build.gradle.kts`, y en tu bloque de conjunto de fuentes `commonMain`, agrega como sigue:
+     #### Multiplataforma
 
      ```kotlin
      kotlin {
-         sourceSets {
-             commonMain.dependencies {
-                 implementation("xyz.mcxross.kaptos:kaptos:<version>")
-             }
+       sourceSets {
+         commonMain.dependencies {
+           implementation("xyz.mcxross.kaptos:kaptos:<version>")
          }
+       }
      }
      ```
 
-     #### Desarrollo de Plataforma Única
-
-     Dependiendo de tu plataforma objetivo, Kaptos proporciona diferentes artefactos en la
-     forma de `kaptos-jvm`, `kaptos-android`, `kaptos-iosArm64`, y `kaptos-js`.
-     Por ejemplo, para agregar el artefacto JVM a tu proyecto, agrega la siguiente dependencia:
+     #### JVM (ejemplo)
 
      ```kotlin
      dependencies {
-         implementation("xyz.mcxross.kaptos:kaptos-jvm:<version>")
+       implementation("xyz.mcxross.kaptos:kaptos-jvm:<version>")
      }
      ```
 
-     Para agregar el artefacto Android, usa:
+  2. Configurar el cliente
 
      ```kotlin
-     dependencies {
-         implementation("xyz.mcxross.kaptos:kaptos-android:<version>")
-     }
-     ```
-
-  2. Configurar el cliente Aptos
-
-     Puedes usar el objeto `Aptos` para manejar todo lo que requiere una conexión
-     a la red de Aptos.
-
-     ```kotlin
-     val aptos = Aptos()
-     ```
-
-     Si quieres pasar una configuración personalizada, puedes hacerlo pasando un
-     objeto AptosConfig que toma un objeto AptosSettings. El objeto AptosSettings
-     te permite especificar la red a la que quieres conectarte, la URL del fullnode, y
-     otras configuraciones.
-
-     ```kotlin
-     val settings = AptosSettings(network = Network.MAINNET, clientConfig = ClientConfig(maxRetries = 10))
-     val aptosConfig = AptosConfig(settings = settings)
-     val aptos = Aptos(aptosConfig)
+     val aptos = Aptos(
+       AptosConfig(
+         settings = AptosSettings(
+           network = Network.DEVNET,
+           clientConfig = ClientConfig(maxRetries = 10),
+         )
+       )
+     )
      ```
 
      <Aside type="note" emoji="ℹ️">
-       Kaptos ofrece configuraciones comunes para todas las plataformas mientras también proporciona
-       configuraciones específicas de plataforma. Por ejemplo, puedes configurar tanto conexión
-       como timeouts de solicitud en Linux, mientras que en iOS, solo puedes establecer timeouts de solicitud.
+       Kaptos es Kotlin Multiplatform. Algunas opciones HTTP cambian por target, pero el uso de la API se mantiene consistente.
      </Aside>
 
-  3. Obtener datos de la cadena
-
-     Una vez que tengas un objeto `Aptos`, puedes usarlo para obtener datos de la blockchain de Aptos.
-     Por ejemplo, puedes obtener la información del ledger así:
+  3. Leer datos de cadena
 
      ```kotlin
-     val ledgerInfo = aptos.getLedgerInfo()
+     val ledgerInfo = aptos.getLedgerInfo().expect("Failed to fetch ledger info")
+     println("Ledger version: ${ledgerInfo.ledgerVersion}")
+
+     val chainId = aptos.getChainId().expect("Failed to fetch chain id")
+     println("Chain id: $chainId")
      ```
 
-  4. Enviar Transacciones
+  4. Crear y financiar cuentas
 
-     Para interactuar con el ledger y cambiar su estado, debes enviar transacciones.
-     Para hacer esto, necesitas una cuenta existente. Puedes crear una cuenta
-     generando un nuevo par de claves de cuenta y financiando la cuenta en cadena.
-     Una vez que tengas una cuenta, puedes firmar transacciones para demostrar autoridad,
-     permitiéndote realizar acciones como transferir tokens, activar módulos Move,
-     o intercambiar NFTs.
+     ```kotlin
+     val alice = Account.generate()
+     val bob = Account.generate()
 
-     Aquí está cómo puedes construir una transacción para transferir APT:
+     aptos.fundAccount(alice.accountAddress, 100_000_000L).expect("Failed to fund Alice")
+     aptos.fundAccount(bob.accountAddress, 100_000_000L).expect("Failed to fund Bob")
+     ```
 
-     <Steps>
-       1. Crear una Cuenta
+     Para patrones single-key y multi-key, revisa [Cuentas](/es/build/sdks/community-sdks/kotlin-sdk/account).
 
-          Para crear una nueva cuenta, primero generas nuevas credenciales luego financias la cuenta.
-          En redes devnet, puedes financiar una cuenta programáticamente pidiendo a un "faucet"
+  5. Construir y enviar una transacción
 
-          ```kotlin
-          val aliceAccount = Account.generate()
-          val bobAccount = Account.generate()
-          ```
+     El builder lean usa `typeArgs(...)` y `args(...)`.
 
-          En testnet puedes acuñar en la [página de acuñar](/es/network/faucet).
+     ```kotlin
+     val pendingTxn =
+       aptos
+         .execute(signer = alice) {
+           function = "0x1::coin::transfer"
+           typeArgs("0x1::aptos_coin::AptosCoin")
+           args(bob.accountAddress, 1_000_000UL)
+         }
+         .expect("Failed to build/sign/submit transaction")
+     ```
 
-       2. Construir la Transacción
+  6. Esperar confirmación
 
-          ```kotlin
-          val txn = aptos.buildTransaction.simple(
-              sender = aliceAccount.accountAddress,
-              data = entryFunctionData {
-                  function = "0x1::coin::transfer"
-                  typeArguments = typeArguments {
-                      +TypeTagStruct("0x1::aptos_coin::AptosCoin")
-                  }
-                  functionArguments = functionArguments {
-                      +bobAccount.accountAddress
-                      +U64(SEND_AMOUNT)
-                  }
-          },)
-          ```
+     ```kotlin
+     val executedTxn =
+       aptos
+         .waitForTransaction(HexInput.fromString(pendingTxn.hash))
+         .expect("Transaction did not execute successfully")
 
-       3. Firmar la Transacción
-
-          Una vez que hayas construido una transacción, puedes firmarla usando el método `sign`.
-
-          ```kotlin
-            val aliceAuthenticator = aptos.sign(
-                sender = aliceAccount,
-                transaction = txn,
-            )
-          ```
-
-       4. Enviar la Transacción
-
-          Finalmente, puedes enviar la transacción a la red usando el método `submitTransaction.simple`.
-
-          ```kotlin
-          val committedTransaction = aptos.submitTransaction.simple(
-                transaction = signedTransaction,
-                senderAuthenticator = aliceAuthenticator,
-          )
-          ```
-
-       5. Esperar a que la Transacción se Ejecute
-
-          Luego puedes esperar a que la transacción sea ejecutada usando el método `waitForTransaction`.
-
-          ```kotlin
-          val executedTransaction = aptos.waitForTransaction(HexInput.fromString(committedTransaction.expect("Transaction failed").hash))
-          ```
-     </Steps>
+     println("Executed transaction version: ${executedTxn.version}")
+     ```
 </Steps>
+
+¿Necesitas más control (build/sign/submit por separado, fee payer, simulación)? Revisa [Construir Transacciones](/es/build/sdks/community-sdks/kotlin-sdk/building-transactions).

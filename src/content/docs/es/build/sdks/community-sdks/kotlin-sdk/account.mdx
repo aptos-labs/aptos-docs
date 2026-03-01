@@ -1,83 +1,110 @@
 ---
 title: "Crear y Gestionar Cuentas"
-description: "Aprende cómo crear y gestionar tanto cuentas legacy como SingleKey usando el SDK Kotlin de Kaptos"
+description: "Crea y gestiona cuentas legacy, SingleKey y MultiKey con el SDK Kotlin de Kaptos"
 sidebar:
   label: "Cuentas"
 ---
 
-**Kaptos** proporciona algunas formas de generar credenciales de cuenta, tanto _legacy_ como
-`SingleKeyAccount`s. Puedes generar una nueva cuenta o derivar
-una cuenta desde una clave privada.
+Kaptos soporta tres patrones de cuenta importantes para producción:
 
-## Cuenta Legacy
+- **Cuenta legacy Ed25519** (`Ed25519Account` / `Account.generate()` por defecto)
+- **Cuenta SingleKey** (`SingleKeyAccount`) con auth key unificada
+- **Cuenta MultiKey** (`MultiKeyAccount`) para firmas por umbral
 
-**Kaptos** ofrece un método directo para generar una cuenta legacy usando la
-clase `Account`. Al invocar el método estático `generate()`, puedes crear una nueva
-cuenta legacy ya sea pasando ningún argumento o estableciendo explícitamente
-el `scheme` a `SigningSchemeInput.Ed25519` y la propiedad `legacy` a `true` como
-se muestra abajo.
+## Cuenta legacy (Ed25519)
 
-### Generar una Nueva Cuenta
-
-Para crear una nueva cuenta legacy, puedes generar una nueva credencial de cuenta usando el
-método `Account.generate()`. Este método creará una nueva cuenta con un nuevo
-par de claves.
+La ruta por defecto `Account.generate()` crea una cuenta legacy Ed25519.
 
 ```kotlin
-val account = Account.generate()
+val legacy = Account.generate()
+
+val explicitLegacy = Account.generate(
+  scheme = SigningSchemeInput.Ed25519,
+  legacy = true,
+)
 ```
 
-También puedes usar la clase `Ed25519Account` que proporciona un método **nullary**,
-`generate()`, para crear una nueva cuenta:
+También puedes derivar una cuenta legacy desde una clave privada Ed25519 existente:
 
 ```kotlin
-val account = Ed25519Account.generate()
+val legacyFromPrivateKey =
+  Account.fromPrivateKey(
+    Ed25519PrivateKey("0x...")
+  )
 ```
 
-### Derivar una Cuenta desde una Clave Privada
+## Cuenta SingleKey (Ed25519 o Secp256k1)
 
-Si tienes una clave privada, puedes usarla para crear un objeto `Account` para gestionar
-esas credenciales.
+Usa `SingleKeyAccount` cuando necesitas autenticación unificada y flexibilidad de esquema.
 
 ```kotlin
-val privateKey = Ed25519PrivateKey("myEd25519privatekeystring")
-
-val account = Account.fromPrivateKey(privateKey)
+val ed25519Single = SingleKeyAccount.generate(SigningSchemeInput.Ed25519)
+val secp256k1Single = SingleKeyAccount.generate(SigningSchemeInput.Secp256k1)
 ```
 
-## Cuenta de Clave Única
-
-El SDK ofrece dos formas de generar una cuenta de clave única: usando ya sea la
-clase `SingleKeyAccount` o la clase `Account`. En ambos casos, puedes crear una
-nueva cuenta llamando al método estático `generate()`. Necesitarás especificar
-el `scheme`, y para la clase `Account`, puedes opcionalmente establecer la propiedad `legacy`
-a `false`.
+También puedes pedir una cuenta single-key vía `Account.generate(...)`:
 
 ```kotlin
-val secp256k1SKAccount = SingleKeyAccount.generate(SigningSchemeInput.Secp256k1)
-val ed25519SKAccount = SingleKeyAccount.generate(SigningSchemeInput.Ed25519)
+val singleViaAccount = Account.generate(
+  scheme = SigningSchemeInput.Ed25519,
+  legacy = false,
+)
 ```
 
-Usando la clase `Account`, puedes crear una nueva cuenta de clave única estableciendo
-el `scheme` a `SigningSchemeInput.Secp256k1` y opcionalmente estableciendo la
-propiedad `legacy` a `false`. Alternativamente, puedes establecer el `scheme` a
-`SigningSchemeInput.Ed25519` y asegurar que la propiedad `legacy` también esté
-establecida a `false`.
+Para derivar desde claves privadas existentes:
 
 ```kotlin
-val secp256k1SKAccount = Account.generate(scheme = SigningSchemeInput.Secp256k1)
-val ed25519SKAccount = Account.generate(scheme = SigningSchemeInput.Ed25519, legacy = false)
+val ed25519SingleFromPrivateKey =
+  SingleKeyAccount(
+    Ed25519PrivateKey("0x...")
+  )
+
+val secp256k1SingleFromPrivateKey =
+  SingleKeyAccount(
+    Secp256k1PrivateKey(HexInput.fromString("0x..."))
+  )
 ```
 
-## Creación de Cuenta en Cadena
+## Cuenta MultiKey (firma por umbral)
 
-También vale la pena notar que la generación de Cuenta no crea la cuenta
-en cadena. Debes financiar la cuenta en cadena para usarla para transacciones.
-En redes de prueba, puedes financiar una cuenta programáticamente pidiendo a un
-"faucet" tokens de prueba. Puedes hacer esto como se muestra abajo:
+`MultiKeyAccount` te permite definir una identidad de firma por umbral desde varias claves públicas.
 
 ```kotlin
-val fundedAccount = aptos.fundAccount(aliceAccount.accountAddress, FUNDING_AMOUNT)
+val signerA = SingleKeyAccount.generate(SigningSchemeInput.Ed25519)
+val signerB = SingleKeyAccount.generate(SigningSchemeInput.Secp256k1)
+val signerC = SingleKeyAccount.generate(SigningSchemeInput.Ed25519)
+
+val multiKeyAccount =
+  MultiKeyAccount.fromPublicKeysAndSigners(
+    publicKeys = listOf(signerA.publicKey, signerB.publicKey, signerC.publicKey),
+    signaturesRequired = 2,
+    signers = listOf(signerA, signerC),
+  )
 ```
 
-Esto solo funciona en devnet. En testnet puedes acuñar en la [página de acuñar](/es/network/faucet).
+En la API actual, `signers.size` debe coincidir con `signaturesRequired`.
+
+Como `MultiKeyAccount` extiende `Account`, puede firmar transacciones igual que otros tipos de cuenta:
+
+```kotlin
+val txn =
+  aptos.buildSimpleTransaction(sender = multiKeyAccount.accountAddress) {
+    function = "0x1::coin::transfer"
+    typeArgs("0x1::aptos_coin::AptosCoin")
+    args(Account.generate().accountAddress, 1_000_000UL)
+  }
+
+val pending = aptos.signAndSubmitTransaction(multiKeyAccount, txn)
+```
+
+## Creación de cuenta on-chain
+
+Generar una cuenta solo crea credenciales locales. La dirección no existe en cadena hasta que la financias/creas.
+
+```kotlin
+aptos
+  .fundAccount(accountAddress = legacy.accountAddress, amount = 100_000_000L)
+  .expect("Failed to fund account")
+```
+
+En testnet también puedes usar la [página del faucet](/es/network/faucet).

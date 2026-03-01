@@ -1,50 +1,86 @@
 ---
-title: "Obtener Datos a través del SDK de Kotlin"
-description: "Recupera datos en cadena e información de red usando el cliente Kaptos con manejo idiomático de errores basado en Option"
+title: "Obtener Datos con el SDK de Kotlin"
+description: "Lee datos de red y de cuentas en Aptos con Kaptos usando REST, indexer y funciones view de Move"
 sidebar:
   label: "Obtener Datos"
 ---
 
-Puedes usar el cliente Aptos para obtener todo tipo de datos de la cadena como
-información sobre la red misma o información específica de cuenta.
+Kaptos expone APIs de lectura sobre endpoints REST de fullnode, endpoints respaldados por indexer y funciones `view` de Move.
+
+## Manejo basado en Result
+
+Las llamadas de red retornan `Result<Ok, Err>`, así que puedes elegir entre control explícito o fail-fast.
 
 ```kotlin
-val modules = aptos.getAccountModules("0x123").expect("Failed to fetch account modules")
-val option = aptos.getChainTopUserTransactions(10)
-```
+val ledgerInfoResult = aptos.getLedgerInfo()
 
-Kaptos devuelve un tipo `Option` para todas las solicitudes de red. Esto te permite manejar
-tanto solicitudes exitosas como fallidas de una manera más idiomática.
-
-```kotlin
-val ledgerInfo = aptos.getLedgerInfo()
-when (ledgerInfo) {
-    is Some -> println("Información del Ledger: ${ledgerInfo.value}")
-    is None -> println("Falló al obtener información del ledger")
+when (ledgerInfoResult) {
+  is Result.Ok -> println("Ledger version: ${ledgerInfoResult.value.ledgerVersion}")
+  is Result.Err -> println("Failed to read ledger info: ${ledgerInfoResult.error.message}")
 }
 ```
 
-Si confías en que el resultado existe, puedes usar la función `.expect` para desenvolver el valor.
+Si prefieres fail-fast:
 
 ```kotlin
 val ledgerInfo = aptos.getLedgerInfo().expect("Failed to fetch ledger info")
 ```
 
-### Usando Funciones de Vista de Move
+Para más patrones de manejo, revisa [Manejar respuestas de consulta del SDK](/build/sdks/community-sdks/kotlin-sdk/response-handling).
 
-Puedes llamar funciones de vista que devuelven datos personalizados de la cadena usando el
-método `.view` en el objeto `Aptos`.
-El usuario especifica el tipo de retorno de la función de vista como un parámetro de tipo.
-
-Por ejemplo, puedes buscar el suministro de tokens como sigue:
+## Leer datos generales de la cadena
 
 ```kotlin
-val inputViewFunctionData = InputViewFunctionData(
-      "0x1::coin::supply",
-      listOf(TypeTagStruct("0x1::aptos_coin::AptosCoin")),
-      emptyList(),)
+val chainId = aptos.getChainId().expect("Failed to fetch chain id")
+val latestBlock = aptos.getBlockByHeight(ledgerHeight = 1, withTransactions = true)
+```
 
-  val view = aptos
-      .view<List<MoveValue.MoveListType<MoveValue.String>>>(inputViewFunctionData)
-      .expect("Failed to fetch view")
+## Leer datos de cuenta
+
+```kotlin
+val address = AccountAddress.fromString("0x1")
+
+val accountInfo = aptos.getAccountInfo(address).expect("Failed to fetch account info")
+val modules = aptos.getAccountModules(address) { limit = 20 }.expect("Failed to fetch modules")
+val resources = aptos.getAccountResources(address) { limit = 50 }.expect("Failed to fetch resources")
+```
+
+## Leer balances
+
+Balance de APT vía indexer:
+
+```kotlin
+val aptBalance = aptos.getAccountAPTAmount(address).expect("Failed to fetch APT balance")
+```
+
+Ruta view de smart contract para un coin type específico:
+
+```kotlin
+val aptBalanceFromView =
+  aptos
+    .getAccountCoinAmountFromSmartContract(
+      accountAddress = address,
+      coinType = MoveValue.MoveStructId("0x1::aptos_coin::AptosCoin"),
+    )
+    .expect("Failed to fetch coin balance from smart contract")
+```
+
+## Leer con funciones view de Move
+
+Usa `view<T>()` para llamadas de solo lectura personalizadas.
+
+```kotlin
+val payload =
+  InputViewFunctionData(
+    function = "0x1::chain_id::get",
+    typeArguments = emptyList(),
+    functionArguments = emptyList(),
+  )
+
+val viewResult =
+  aptos
+    .view<List<MoveValue.MoveUint8Type>>(payload)
+    .expect("Failed to execute view")
+
+val chainIdFromView = viewResult.first().value
 ```

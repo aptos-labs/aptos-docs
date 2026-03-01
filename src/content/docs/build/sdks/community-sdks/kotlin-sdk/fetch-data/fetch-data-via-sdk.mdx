@@ -1,58 +1,86 @@
 ---
 title: "Fetch Data via the Kotlin SDK"
-description: "Retrieve on-chain data and network information using the Kaptos client with idiomatic Option-based error handling"
+description: "Read Aptos network and account data with Kaptos, including REST, indexer, and Move view calls"
 sidebar:
   label: "Via the SDK"
 ---
 
-You can use the Aptos client to fetch all sorts of data from on-chain such as
-information about the network itself or account-specific information.
+Kaptos exposes data-reading APIs across fullnode REST endpoints, indexer-backed endpoints, and Move view functions.
+
+## Result-based handling
+
+Network calls return `Result<Ok, Err>`, so you can choose explicit branching or fail-fast unwrapping.
 
 ```kotlin
-val result = aptos.getChainTopUserTransactions(10)
-```
+val ledgerInfoResult = aptos.getLedgerInfo()
 
-Kaptos returns a `Result` type for all network requests. This allows you to handle
-both successful and failed requests in a more idiomatic way:
-
-```kotlin
-val result = aptos.getLedgerInfo()
-
-when (result) {
-    is Result.Ok -> {
-        println("Ledger Info: ${result.value}")
-    }
-    is Result.Err -> {
-        println("Failed to fetch ledger info: ${result.error.message}")
-    }
+when (ledgerInfoResult) {
+  is Result.Ok -> println("Ledger version: ${ledgerInfoResult.value.ledgerVersion}")
+  is Result.Err -> println("Failed to read ledger info: ${ledgerInfoResult.error.message}")
 }
 ```
 
-If you trust the result exists, you can use the `.expect` function to unwrap the value.
+If you want fail-fast semantics:
 
 ```kotlin
 val ledgerInfo = aptos.getLedgerInfo().expect("Failed to fetch ledger info")
 ```
 
-You can find more information on handling responses in [Handle SDK Data Fetch Responses](../response-handling).
+For more patterns, see [Handle SDK Data Fetch Responses](../response-handling).
 
-### Using Move View Functions
-
-You can call view functions which return custom data from on-chain by using the
-`.view` method on the `Aptos` object.
-The user specifies the return type of the view function as a type parameter.
-
-For example, you can look up the supply of tokens as follows:
+## Read general chain data
 
 ```kotlin
-val inputViewFunctionData = InputViewFunctionData(
-      "0x1::coin::supply",
-      listOf(TypeTagStruct("0x1::aptos_coin::AptosCoin")),
-      emptyList(),)
-
-  val view = aptos
-      .view<List<MoveValue.MoveListType<MoveValue.String>>>(inputViewFunctionData)
-      .expect("Failed to fetch view")
+val chainId = aptos.getChainId().expect("Failed to fetch chain id")
+val latestBlock = aptos.getBlockByHeight(ledgerHeight = 1, withTransactions = true)
 ```
 
-For more information on how to handle responses, see [Handle SDK Data Fetch Responses](../response-handling).
+## Read account data
+
+```kotlin
+val address = AccountAddress.fromString("0x1")
+
+val accountInfo = aptos.getAccountInfo(address).expect("Failed to fetch account info")
+val modules = aptos.getAccountModules(address) { limit = 20 }.expect("Failed to fetch modules")
+val resources = aptos.getAccountResources(address) { limit = 50 }.expect("Failed to fetch resources")
+```
+
+## Read balances
+
+Indexer-backed APT balance:
+
+```kotlin
+val aptBalance = aptos.getAccountAPTAmount(address).expect("Failed to fetch APT balance")
+```
+
+Smart-contract view path for a specific coin type:
+
+```kotlin
+val aptBalanceFromView =
+  aptos
+    .getAccountCoinAmountFromSmartContract(
+      accountAddress = address,
+      coinType = MoveValue.MoveStructId("0x1::aptos_coin::AptosCoin"),
+    )
+    .expect("Failed to fetch coin balance from smart contract")
+```
+
+## Read via Move view functions
+
+Use `view<T>()` for custom read-only Move calls.
+
+```kotlin
+val payload =
+  InputViewFunctionData(
+    function = "0x1::chain_id::get",
+    typeArguments = emptyList(),
+    functionArguments = emptyList(),
+  )
+
+val viewResult =
+  aptos
+    .view<List<MoveValue.MoveUint8Type>>(payload)
+    .expect("Failed to execute view")
+
+val chainIdFromView = viewResult.first().value
+```

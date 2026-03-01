@@ -1,0 +1,86 @@
+---
+title: "通过 Kotlin SDK 获取数据"
+description: "使用 Kaptos 读取 Aptos 网络和账户数据，包括 REST、索引器和 Move view 调用"
+sidebar:
+  label: "通过 SDK"
+---
+
+Kaptos 提供了覆盖 fullnode REST 端点、索引器端点以及 Move `view` 函数的数据读取 API。
+
+## 基于 Result 的处理
+
+网络调用返回 `Result<Ok, Err>`，你可以选择显式分支处理，或者使用 fail-fast 解包。
+
+```kotlin
+val ledgerInfoResult = aptos.getLedgerInfo()
+
+when (ledgerInfoResult) {
+  is Result.Ok -> println("Ledger version: ${ledgerInfoResult.value.ledgerVersion}")
+  is Result.Err -> println("Failed to read ledger info: ${ledgerInfoResult.error.message}")
+}
+```
+
+如果你更偏好 fail-fast：
+
+```kotlin
+val ledgerInfo = aptos.getLedgerInfo().expect("Failed to fetch ledger info")
+```
+
+更多处理模式，请参见 [处理 SDK 数据读取响应](/zh/build/sdks/community-sdks/kotlin-sdk/response-handling)。
+
+## 读取链通用数据
+
+```kotlin
+val chainId = aptos.getChainId().expect("Failed to fetch chain id")
+val latestBlock = aptos.getBlockByHeight(ledgerHeight = 1, withTransactions = true)
+```
+
+## 读取账户数据
+
+```kotlin
+val address = AccountAddress.fromString("0x1")
+
+val accountInfo = aptos.getAccountInfo(address).expect("Failed to fetch account info")
+val modules = aptos.getAccountModules(address) { limit = 20 }.expect("Failed to fetch modules")
+val resources = aptos.getAccountResources(address) { limit = 50 }.expect("Failed to fetch resources")
+```
+
+## 读取余额
+
+通过索引器读取 APT 余额：
+
+```kotlin
+val aptBalance = aptos.getAccountAPTAmount(address).expect("Failed to fetch APT balance")
+```
+
+通过智能合约 `view` 路径读取指定 coin type：
+
+```kotlin
+val aptBalanceFromView =
+  aptos
+    .getAccountCoinAmountFromSmartContract(
+      accountAddress = address,
+      coinType = MoveValue.MoveStructId("0x1::aptos_coin::AptosCoin"),
+    )
+    .expect("Failed to fetch coin balance from smart contract")
+```
+
+## 通过 Move view 函数读取
+
+使用 `view<T>()` 发起自定义只读 Move 调用。
+
+```kotlin
+val payload =
+  InputViewFunctionData(
+    function = "0x1::chain_id::get",
+    typeArguments = emptyList(),
+    functionArguments = emptyList(),
+  )
+
+val viewResult =
+  aptos
+    .view<List<MoveValue.MoveUint8Type>>(payload)
+    .expect("Failed to execute view")
+
+val chainIdFromView = viewResult.first().value
+```

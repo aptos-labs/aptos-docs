@@ -39,6 +39,7 @@ export default navDictionary({
   "build.group.sdks.community-sdks.kotlin-sdk": "Kotlin SDK",
   "build.group.sdks.community-sdks.swift-sdk": "Swift SDK",
   "build.group.sdks.community-sdks.unity-opendive-sdk": "Unity OpenDive SDK",
+  "build.group.sdks.community-sdks.kotlin-sdk.fetch-data": "数据获取",
   "build.group.sdks.community-sdks.kotlin-sdk.for-ios-devs": "iOS 开发者专用",
   "build.group.sdks.official": "官方", // Official
   "build.group.sdks.community": "社区", // Community

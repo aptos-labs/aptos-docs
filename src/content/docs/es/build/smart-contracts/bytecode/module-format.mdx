@@ -1,0 +1,567 @@
+---
+title: "Formato Binario de Módulo"
+description: "Especificación completa del formato binario de módulos Move utilizado por la VM de Aptos Move, incluyendo el diseño del encabezado, el directorio de tablas y todos los tipos de tablas."
+sidebar:
+  label: "Module Format"
+---
+
+Un módulo Move compilado es un blob binario autocontenido que la VM de Aptos Move puede verificar
+y ejecutar. El binario se divide en tres regiones que aparecen en secuencia: un **encabezado** de
+tamaño fijo, un **directorio de tablas** de longitud variable y los **datos de tablas** en sí.
+Cada pool, tabla de handles y tabla de definiciones referenciada en otras partes de esta sección
+de documentación reside dentro de una de estas regiones de datos de tablas.
+
+Esta página especifica el diseño binario con suficiente detalle para escribir un parser o
+serializador desde cero. Para los tipos que aparecen dentro de estas tablas, consulta la página del
+[Sistema de Tipos](/es/build/smart-contracts/bytecode/type-system). Para las instrucciones
+almacenadas en los cuerpos de funciones, consulta la
+[Referencia del Conjunto de Instrucciones](/es/build/smart-contracts/bytecode/instructions).
+
+## Encabezado
+
+Todo binario de módulo comienza con el mismo encabezado de tamaño fijo.
+
+```
+Offset  Size   Field
+------  -----  ---------------------
+0x00    4      Magic bytes
+0x04    4      Version word
+0x08    ...    (table directory follows)
+```
+
+### Bytes Mágicos
+
+Los primeros cuatro bytes son siempre `0xA1 0x1C 0xEB 0x0B`. Cualquier archivo que no comience
+con esta secuencia no es un binario Move válido. El valor mágico a veces se escribe como el
+entero de 32 bits en formato little-endian `0x0BEB1CA1`.
+
+### Palabra de Versión
+
+Los bytes 4 a 7 forman un `u32` en formato little-endian que codifica la versión del formato de
+bytecode. En Aptos, esta palabra se combina con un OR a nivel de bits con la constante
+`APTOS_BYTECODE_VERSION_MASK` (`0x0A000000`). Para recuperar el número de versión simple, enmascara
+el byte superior:
+
+```
+plain_version = version_word & 0x00FFFFFF
+```
+
+Por ejemplo, un módulo compilado con la versión 9 de bytecode almacena `0x0A000009` en los bytes
+4--7. La VM lee esta palabra, extrae `9` y usa ese número para decidir qué características están
+disponibles durante la verificación. Consulta el
+[Historial de Versiones del Bytecode](/es/build/smart-contracts/bytecode/version-history) para ver
+qué introduce cada versión.
+
+La versión mínima aceptada es **5** y la máxima actual es **10**.
+
+## Codificación ULEB128
+
+La mayoría de los enteros de longitud variable en el binario -- conteos de tablas, índices,
+longitudes y muchos campos dentro de las entradas de tablas -- usan codificación **ULEB128**
+(Unsigned Little-Endian Base 128). ULEB128 codifica un entero no negativo en uno o más bytes:
+
+1. Toma los 7 bits más bajos del valor y colócalos en el byte de salida.
+2. Si el valor restante (después de desplazar 7 bits a la derecha) es distinto de cero, activa el
+   bit alto (0x80) del byte actual para indicar que siguen más bytes, luego repite desde el paso 1
+   con el valor desplazado.
+3. Si el valor restante es cero, deja el bit alto sin activar y detente.
+
+### Ejemplos
+
+| Valor | Bytes ULEB128    |
+| ----- | ---------------- |
+| 0     | `0x00`           |
+| 1     | `0x01`           |
+| 127   | `0x7F`           |
+| 128   | `0x80 0x01`      |
+| 624   | `0xF0 0x04`      |
+| 16384 | `0x80 0x80 0x01` |
+
+Todos los tipos de índice (`ModuleHandleIndex`, `StructHandleIndex`, `SignatureIndex`, etc.) son
+valores `u16` serializados como ULEB128. El valor máximo de índice representable es, por lo tanto,
+65.535.
+
+## Directorio de Tablas
+
+Inmediatamente después del encabezado de 8 bytes, el binario contiene un **directorio de tablas**
+que describe qué tablas están presentes y dónde comienzan sus datos.
+
+```
+Offset  Encoding  Field
+------  --------  ------------------------------------------------
+0x08    ULEB128   table_count  -- number of table entries that follow
+        ...       table_entry[0]
+        ...       table_entry[1]
+        ...       ...
+        ...       table_entry[table_count - 1]
+```
+
+Cada entrada de tabla tiene tres campos:
+
+| Campo    | Codificación | Descripción                                                         |
+| -------- | ------------ | ------------------------------------------------------------------- |
+| `kind`   | `u8`         | Código del tipo de tabla (ver la referencia a continuación)         |
+| `offset` | ULEB128      | Desplazamiento en bytes desde el inicio de la región de datos de tablas |
+| `length` | ULEB128      | Longitud de los datos de esta tabla en bytes                        |
+
+Solo las tablas no vacías aparecen en el directorio. Si un módulo no tiene declaraciones de friend,
+por ejemplo, la entrada `FRIEND_DECLS` se omite por completo.
+
+La **región de datos de tablas** comienza inmediatamente después de la última entrada del
+directorio. Todos los valores de `offset` en el directorio son relativos al inicio de esta
+región -- no al inicio del archivo.
+
+### Índice del Module Handle Propio
+
+Después de todos los datos de tablas, un binario de módulo termina con un valor ULEB128 adicional:
+`self_module_handle_idx`. Este índice apunta a la tabla de Module Handles e identifica qué
+entrada representa al módulo en sí (a diferencia de los módulos importados). Los parsers deben
+leer este valor final para consumir completamente el binario.
+
+## Referencia de Tipos de Tablas
+
+Las siguientes secciones documentan cada tipo de tabla reconocido por el formato binario de Move.
+Cada entrada lista el código numérico de la tabla, el significado de sus filas y el diseño a
+nivel de bytes de cada fila.
+
+### MODULE\_HANDLES (0x01)
+
+Cada entrada identifica un módulo Move por su dirección de cuenta y nombre. Tanto el handle
+propio del módulo como cada módulo importado obtienen una entrada.
+
+| Campo     | Codificación | Descripción                                  |
+| --------- | ------------ | -------------------------------------------- |
+| `address` | ULEB128      | Índice en la tabla ADDRESS\_IDENTIFIERS      |
+| `name`    | ULEB128      | Índice en la tabla IDENTIFIERS               |
+
+### STRUCT\_HANDLES (0x02)
+
+Cada entrada describe la identidad de un tipo struct (o enum) -- qué módulo lo define, su nombre,
+abilities y parámetros de tipo. Tanto los tipos struct definidos localmente como los importados
+aparecen aquí.
+
+| Campo              | Codificación  | Descripción                                                                                    |
+| ------------------ | ------------- | ---------------------------------------------------------------------------------------------- |
+| `module`           | ULEB128       | Índice en la tabla MODULE\_HANDLES                                                             |
+| `name`             | ULEB128       | Índice en la tabla IDENTIFIERS                                                                 |
+| `abilities`        | `u8`          | Máscara de bits de abilities (ver [Abilities](/es/build/smart-contracts/bytecode/type-system#abilities)) |
+| `type_param_count` | ULEB128       | Número de parámetros de tipo                                                                   |
+| Por parámetro de tipo: |           |                                                                                                |
+|   `constraints`    | `u8`          | Abilities requeridas para este argumento de tipo                                               |
+|   `is_phantom`     | `u8` (0 o 1)  | Si este parámetro es phantom                                                                   |
+
+### FUNCTION\_HANDLES (0x03)
+
+Cada entrada describe la firma de una función -- qué módulo la define, su nombre, tipos de
+parámetros, tipos de retorno y restricciones de parámetros de tipo.
+
+| Campo              | Codificación | Descripción                                              |
+| ------------------ | ------------ | -------------------------------------------------------- |
+| `module`           | ULEB128      | Índice en la tabla MODULE\_HANDLES                       |
+| `name`             | ULEB128      | Índice en la tabla IDENTIFIERS                           |
+| `parameters`       | ULEB128      | Índice en la tabla SIGNATURES (tipos de parámetros)      |
+| `return_`          | ULEB128      | Índice en la tabla SIGNATURES (tipos de retorno)         |
+| `type_param_count` | ULEB128      | Número de parámetros de tipo genéricos                   |
+| Por parámetro de tipo: |          |                                                          |
+|   `constraints`    | `u8`         | Conjunto de abilities requerido para este argumento de tipo |
+
+A partir de la versión 7 del bytecode, los handles de función también pueden llevar
+**especificadores de acceso** y (desde la v8) **atributos de función**. Estos se serializan
+después de los parámetros de tipo cuando están presentes.
+
+### FUNCTION\_INST (0x04)
+
+Cada entrada empareja una función genérica con argumentos de tipo concretos para una
+instanciación específica.
+
+| Campo             | Codificación | Descripción                                                       |
+| ----------------- | ------------ | ----------------------------------------------------------------- |
+| `handle`          | ULEB128      | Índice en la tabla FUNCTION\_HANDLES                              |
+| `type_parameters` | ULEB128      | Índice en la tabla SIGNATURES (argumentos de tipo concretos)      |
+
+### SIGNATURES (0x05)
+
+La tabla de Signatures almacena listas de tipos. Cada entrada es una **Signature** -- una
+secuencia de valores `SignatureToken` que representan listas de parámetros, tipos de retorno,
+tipos de variables locales o argumentos de tipo para instanciaciones genéricas.
+
+| Campo         | Codificación               | Descripción                                                                                       |
+| ------------- | -------------------------- | ------------------------------------------------------------------------------------------------- |
+| `token_count` | ULEB128                    | Número de tokens en esta firma                                                                    |
+| Por token:    | `SignatureToken` recursivo | Ver [Tokens de Firma](/es/build/smart-contracts/bytecode/type-system#signature-tokens)             |
+
+Cada `SignatureToken` comienza con un byte de etiqueta que identifica el tipo, opcionalmente
+seguido de datos adicionales (índices, tokens anidados o conteos). La codificación completa está
+documentada en la página del [Sistema de Tipos](/es/build/smart-contracts/bytecode/type-system).
+
+Una convención especial: `SignatureIndex(0)` es típicamente la firma vacía `[]`, utilizada para
+funciones sin argumentos de tipo.
+
+### CONSTANT\_POOL (0x06)
+
+Cada entrada almacena un valor constante en tiempo de compilación junto con su tipo.
+
+| Campo   | Codificación               | Descripción                                          |
+| ------- | -------------------------- | ---------------------------------------------------- |
+| `type_` | `SignatureToken` recursivo | El tipo de la constante                              |
+| `size`  | ULEB128                    | Longitud de los datos serializados en bytes          |
+| `data`  | bytes sin formato          | El valor de la constante en formato de serialización BCS |
+
+Las constantes se cargan en tiempo de ejecución mediante la instrucción `LdConst` (opcode `0x07`).
+Los bytes de datos están en formato [BCS](https://github.com/diem/bcs) (Binary Canonical
+Serialization).
+
+### IDENTIFIERS (0x07)
+
+Cada entrada es una cadena UTF-8 utilizada como nombre para módulos, structs, funciones o campos.
+
+| Campo    | Codificación    | Descripción                                |
+| -------- | --------------- | ------------------------------------------ |
+| `length` | ULEB128         | Número de bytes en la cadena UTF-8         |
+| `bytes`  | bytes sin formato | La cadena codificada en UTF-8            |
+
+Los identificadores deben cumplir con las reglas de nomenclatura de Move: comienzan con una letra
+o guion bajo y contienen solo caracteres alfanuméricos y guiones bajos.
+
+### ADDRESS\_IDENTIFIERS (0x08)
+
+Cada entrada es una dirección de cuenta de 32 bytes. No hay prefijo de longitud -- cada entrada
+tiene exactamente 32 bytes.
+
+| Campo     | Codificación | Descripción                          |
+| --------- | ------------ | ------------------------------------ |
+| `address` | 32 bytes     | Dirección de cuenta, en formato big-endian |
+
+### STRUCT\_DEFS (0x0A)
+
+Cada entrada define un tipo struct que se declara en este módulo. Conecta un handle de struct con
+el diseño de campos del tipo.
+
+| Campo            | Codificación | Descripción                                                               |
+| ---------------- | ------------ | ------------------------------------------------------------------------- |
+| `struct_handle`  | ULEB128      | Índice en la tabla STRUCT\_HANDLES                                        |
+| `field_info_tag` | `u8`         | `0x01` = Native, `0x02` = Declared, `0x03` = DeclaredVariants (v7+)       |
+
+Si `field_info_tag` es `0x02` (Declared), los campos siguen a continuación:
+
+| Campo         | Codificación               | Descripción                 |
+| ------------- | -------------------------- | --------------------------- |
+| `field_count` | ULEB128                    | Número de campos            |
+| Por campo:    |                            |                             |
+|   `name`      | ULEB128                    | Índice en IDENTIFIERS       |
+|   `signature` | `SignatureToken` recursivo | El tipo del campo           |
+
+Si `field_info_tag` es `0x03` (DeclaredVariants, bytecode v7+), las variantes siguen a
+continuación:
+
+| Campo           | Codificación               | Descripción                               |
+| --------------- | -------------------------- | ----------------------------------------- |
+| `variant_count` | ULEB128                    | Número de variantes                       |
+| Por variante:   |                            |                                           |
+|   `name`        | ULEB128                    | Índice en IDENTIFIERS                     |
+|   `field_count` | ULEB128                    | Número de campos en esta variante         |
+|   Por campo:    |                            |                                           |
+|    `name`       | ULEB128                    | Índice en IDENTIFIERS                     |
+|    `signature`  | `SignatureToken` recursivo | El tipo del campo                         |
+
+Si `field_info_tag` es `0x01` (Native), no siguen datos adicionales.
+
+### STRUCT\_DEF\_INST (0x0B)
+
+Cada entrada empareja una definición de struct con argumentos de tipo concretos para una
+instanciación genérica.
+
+| Campo             | Codificación | Descripción                                                  |
+| ----------------- | ------------ | ------------------------------------------------------------ |
+| `def`             | ULEB128      | Índice en la tabla STRUCT\_DEFS                              |
+| `type_parameters` | ULEB128      | Índice en la tabla SIGNATURES (argumentos de tipo concretos) |
+
+### FUNCTION\_DEFS (0x0C)
+
+Cada entrada define una función que se declara en este módulo. Conecta un handle de función con
+la implementación de la función.
+
+| Campo                  | Codificación | Descripción                                                       |
+| ---------------------- | ------------ | ----------------------------------------------------------------- |
+| `function`             | ULEB128      | Índice en la tabla FUNCTION\_HANDLES                              |
+| `visibility`           | `u8`         | `0x00` = Private, `0x01` = Public, `0x03` = Friend               |
+| `is_entry`             | `u8`         | `0x01` si es una función entry, `0x00` en caso contrario         |
+| `acquires_count`       | ULEB128      | Número de recursos que esta función adquiere                      |
+| Por recurso adquirido: |              |                                                                   |
+|   `struct_def_index`   | ULEB128      | Índice en la tabla STRUCT\_DEFS                                   |
+| `code_flag`            | `u8`         | `0x01` si sigue un cuerpo de código, `0x00` para funciones nativas |
+
+Si `code_flag` es `0x01`, un [Code Unit](#formato-del-code-unit) sigue inmediatamente. Las
+funciones nativas no tienen cuerpo de código.
+
+### FIELD\_HANDLES (0x0D)
+
+Cada entrada identifica un campo específico dentro de una definición de struct.
+
+| Campo   | Codificación | Descripción                                                     |
+| ------- | ------------ | --------------------------------------------------------------- |
+| `owner` | ULEB128      | Índice en la tabla STRUCT\_DEFS                                 |
+| `field` | ULEB128      | Desplazamiento del campo dentro del struct (MemberCount, `u16`) |
+
+### FIELD\_INST (0x0E)
+
+Cada entrada empareja un handle de campo con argumentos de tipo concretos para acceder a un campo
+en un struct genérico.
+
+| Campo             | Codificación | Descripción                                                  |
+| ----------------- | ------------ | ------------------------------------------------------------ |
+| `handle`          | ULEB128      | Índice en la tabla FIELD\_HANDLES                            |
+| `type_parameters` | ULEB128      | Índice en la tabla SIGNATURES (argumentos de tipo concretos) |
+
+### FRIEND\_DECLS (0x0F)
+
+Cada entrada declara un módulo friend que puede llamar funciones con visibilidad `friend` en este
+módulo.
+
+| Campo     | Codificación | Descripción                                  |
+| --------- | ------------ | -------------------------------------------- |
+| `address` | ULEB128      | Índice en la tabla ADDRESS\_IDENTIFIERS      |
+| `name`    | ULEB128      | Índice en la tabla IDENTIFIERS               |
+
+### METADATA (0x10)
+
+_Bytecode v5+._ Cada entrada es un par clave-valor de bytes opacos utilizado para metadatos del
+compilador, mapas de código fuente u otros datos de herramientas. La VM no interpreta el contenido
+de los metadatos.
+
+| Campo        | Codificación    | Descripción                            |
+| ------------ | --------------- | -------------------------------------- |
+| `key_length` | ULEB128         | Longitud de la clave en bytes          |
+| `key`        | bytes sin formato | La clave de metadatos                |
+| `val_length` | ULEB128         | Longitud del valor en bytes            |
+| `value`      | bytes sin formato | El valor de metadatos                |
+
+### VARIANT\_FIELD\_HANDLES (0x11)
+
+_Bytecode v7+._ Cada entrada identifica un campo que se comparte entre una o más variantes de un
+tipo enum.
+
+| Campo           | Codificación | Descripción                                                        |
+| --------------- | ------------ | ------------------------------------------------------------------ |
+| `struct_index`  | ULEB128      | Índice en la tabla STRUCT\_DEFS (la definición del enum)           |
+| `variant_count` | ULEB128      | Número de índices de variante que siguen                           |
+| Por variante:   |              |                                                                    |
+|   `variant`     | ULEB128      | Índice de variante (`u16`) dentro de la lista de variantes del enum |
+| `field`         | ULEB128      | Desplazamiento del campo dentro de la variante (MemberCount, `u16`) |
+
+### VARIANT\_FIELD\_INST (0x12)
+
+_Bytecode v7+._ Cada entrada empareja un handle de campo de variante con argumentos de tipo
+concretos.
+
+| Campo             | Codificación | Descripción                                                  |
+| ----------------- | ------------ | ------------------------------------------------------------ |
+| `handle`          | ULEB128      | Índice en la tabla VARIANT\_FIELD\_HANDLES                   |
+| `type_parameters` | ULEB128      | Índice en la tabla SIGNATURES (argumentos de tipo concretos) |
+
+### STRUCT\_VARIANT\_HANDLES (0x13)
+
+_Bytecode v7+._ Cada entrada identifica una variante específica de un tipo enum.
+
+| Campo          | Codificación | Descripción                                                         |
+| -------------- | ------------ | ------------------------------------------------------------------- |
+| `struct_index` | ULEB128      | Índice en la tabla STRUCT\_DEFS (la definición del enum)            |
+| `variant`      | ULEB128      | Índice de variante (`u16`) dentro de la lista de variantes del enum |
+
+### STRUCT\_VARIANT\_INST (0x14)
+
+_Bytecode v7+._ Cada entrada empareja un handle de variante de struct con argumentos de tipo
+concretos.
+
+| Campo             | Codificación | Descripción                                                  |
+| ----------------- | ------------ | ------------------------------------------------------------ |
+| `handle`          | ULEB128      | Índice en la tabla STRUCT\_VARIANT\_HANDLES                  |
+| `type_parameters` | ULEB128      | Índice en la tabla SIGNATURES (argumentos de tipo concretos) |
+
+### Resumen de Códigos de Tabla
+
+La siguiente tabla lista cada tipo de tabla con su código como referencia rápida.
+
+| Código | Tipo de Tabla            | Desde |
+| ------ | ------------------------ | ----- |
+| `0x01` | MODULE\_HANDLES          | v5    |
+| `0x02` | STRUCT\_HANDLES          | v5    |
+| `0x03` | FUNCTION\_HANDLES        | v5    |
+| `0x04` | FUNCTION\_INST           | v5    |
+| `0x05` | SIGNATURES               | v5    |
+| `0x06` | CONSTANT\_POOL           | v5    |
+| `0x07` | IDENTIFIERS              | v5    |
+| `0x08` | ADDRESS\_IDENTIFIERS     | v5    |
+| `0x0A` | STRUCT\_DEFS             | v5    |
+| `0x0B` | STRUCT\_DEF\_INST        | v5    |
+| `0x0C` | FUNCTION\_DEFS           | v5    |
+| `0x0D` | FIELD\_HANDLES           | v5    |
+| `0x0E` | FIELD\_INST              | v5    |
+| `0x0F` | FRIEND\_DECLS            | v5    |
+| `0x10` | METADATA                 | v5    |
+| `0x11` | VARIANT\_FIELD\_HANDLES  | v7    |
+| `0x12` | VARIANT\_FIELD\_INST     | v7    |
+| `0x13` | STRUCT\_VARIANT\_HANDLES | v7    |
+| `0x14` | STRUCT\_VARIANT\_INST    | v7    |
+
+Nota: el código `0x09` está reservado y no se usa en el formato actual.
+
+## Formato del Code Unit
+
+Cada definición de función no nativa contiene un **code unit** que describe el cuerpo de la
+función. El code unit se serializa en línea dentro de la entrada de la tabla FUNCTION\_DEFS,
+inmediatamente después de los campos de metadatos de la definición de función.
+
+### Diseño
+
+```
+Field               Encoding    Description
+-----------------   ---------   -----------------------------------
+locals              ULEB128     Index into SIGNATURES table
+                                (types of local variables)
+bytecode_count      ULEB128     Number of instructions that follow
+bytecode[0]         variable    First instruction
+bytecode[1]         variable    Second instruction
+...                 ...         ...
+bytecode[count-1]   variable    Last instruction
+```
+
+### Firma de Locales
+
+El campo `locals` es un `SignatureIndex` que apunta a una `Signature` en la tabla SIGNATURES. Esa
+firma lista los tipos de todas las variables locales declaradas en el cuerpo de la función (no
+incluye los parámetros de función, que son parte de la firma de parámetros del handle de función).
+En tiempo de ejecución, la VM asigna un arreglo de locales cuyas primeras entradas contienen los
+parámetros de la función (copiados del stack de operandos del invocador) y cuyas entradas
+restantes corresponden a la firma de locales.
+
+### Flujo de Bytecode
+
+Cada instrucción en el arreglo de bytecode comienza con un solo byte de opcode, opcionalmente
+seguido de uno o más operandos. La codificación de los operandos depende de la instrucción:
+
+- **Operandos de índice** (índices de pool, índices de definición) se codifican como ULEB128.
+- **Desplazamientos de bifurcación** se codifican como `u16` en formato little-endian. Son
+  desplazamientos absolutos desde el inicio del arreglo de bytecode de la función.
+- **Inmediatos enteros** (`LdU8`, `LdU64`, etc.) se codifican en formato little-endian de ancho
+  fijo correspondiente al ancho de su tipo (1 byte para `u8`, 8 bytes para `u64`, 32 bytes para
+  `u256`, y así sucesivamente).
+- **Máscaras de closure** (`PackClosure`, `PackClosureGeneric`) se codifican como valores ULEB128
+  `u64`.
+
+La codificación completa de instrucciones para cada opcode está documentada en la
+[Referencia del Conjunto de Instrucciones](/es/build/smart-contracts/bytecode/instructions).
+
+### Ejemplo
+
+Consideremos una función `fun add_one(x: u64): u64 { x + 1 }`. Su code unit podría verse así:
+
+```
+locals:          SignatureIndex(0)   // no additional locals beyond parameters
+bytecode_count:  4
+bytecode:
+  0x0B 0x00      // MoveLoc(0)       -- push parameter x
+  0x06 0x01 0x00 0x00 0x00 0x00 0x00 0x00 0x00  // LdU64(1)
+  0x16           // Add
+  0x02           // Ret
+```
+
+`MoveLoc(0)` apila el primer parámetro (`x`) en el stack. `LdU64(1)` apila la constante `1` como
+un inmediato de 8 bytes en formato little-endian. `Add` desapila ambos valores y apila la suma.
+`Ret` retorna el resultado al invocador.
+
+## Visión General Completa
+
+El siguiente diagrama muestra el diseño completo de un binario de módulo de principio a fin.
+
+```
+┌─────────────────────────────────────┐
+│  Magic: 0xA1 0x1C 0xEB 0x0B        │  4 bytes
+├─────────────────────────────────────┤
+│  Version word (LE u32)              │  4 bytes
+├─────────────────────────────────────┤
+│  Table count (ULEB128)              │  1--5 bytes
+├─────────────────────────────────────┤
+│  Table entry 0:                     │
+│    kind (u8)                        │
+│    offset (ULEB128)                 │
+│    length (ULEB128)                 │
+├─────────────────────────────────────┤
+│  Table entry 1 ...                  │
+│  ...                                │
+│  Table entry N-1                    │
+├═════════════════════════════════════┤  <-- table data region starts here
+│  Table data (MODULE_HANDLES)        │
+│  Table data (STRUCT_HANDLES)        │
+│  Table data (FUNCTION_HANDLES)      │
+│  Table data (FUNCTION_INST)         │
+│  Table data (SIGNATURES)            │
+│  Table data (IDENTIFIERS)           │
+│  Table data (ADDRESS_IDENTIFIERS)   │
+│  Table data (CONSTANT_POOL)         │
+│  Table data (METADATA)              │
+│  Table data (STRUCT_DEFS)           │
+│  Table data (STRUCT_DEF_INST)       │
+│  Table data (FUNCTION_DEFS)         │
+│  Table data (FIELD_HANDLES)         │
+│  Table data (FIELD_INST)            │
+│  Table data (FRIEND_DECLS)          │
+│  Table data (variant tables, v7+)   │
+├─────────────────────────────────────┤
+│  self_module_handle_idx (ULEB128)   │  trailing index
+└─────────────────────────────────────┘
+```
+
+Las secciones de datos de tablas aparecen en el orden determinado por el serializador. En la
+práctica, el orden sigue los códigos de tipo de tabla (MODULE\_HANDLES primero, tablas de variantes
+al final), pero un parser debería confiar en los desplazamientos del directorio en lugar de
+asumir un orden particular.
+
+## Notas de Compatibilidad
+
+### Aplicación de Versiones
+
+La VM aplica reglas estrictas de compatibilidad basadas en versiones:
+
+- **Versión mínima.** La VM rechaza cualquier módulo con una versión de bytecode inferior a 5. No
+  hay soporte para versiones anteriores.
+- **Versión máxima.** La VM rechaza cualquier módulo con una versión de bytecode superior a su
+  máximo propio (actualmente 10). Publicar un módulo compilado para una versión futura causa que
+  la transacción falle.
+- **Control por características.** Cada instrucción, token de firma y tipo de tabla está asociado
+  con la versión que lo introdujo. El verificador de bytecode rechaza características más nuevas
+  que la versión declarada del módulo. Por ejemplo, un módulo que declara versión 6 no puede
+  contener instrucciones `PackVariant` ni tablas relacionadas con variantes, incluso si la VM en
+  sí soporta la versión 7+.
+
+### Interoperabilidad entre Versiones
+
+Los módulos compilados con diferentes versiones de bytecode pueden coexistir en cadena y llamarse
+mutuamente libremente. El número de versión gobierna solo lo que un módulo puede _contener_, no
+con qué puede _interactuar_. Un módulo v5 puede llamar funciones en un módulo v10 y viceversa.
+
+### La Máscara de Versión de Aptos
+
+La `APTOS_BYTECODE_VERSION_MASK` (`0x0A000000`) distingue los módulos compilados para Aptos de
+los módulos compilados para otras cadenas basadas en Move. El byte superior de la palabra de
+versión actúa como identificador de cadena. Al analizar un binario de módulo, enmascara la palabra
+de versión con `0x00FFFFFF` para extraer el número de versión simple.
+
+Si el byte superior de un binario no coincide con la máscara esperada, la VM lo rechaza. Esto
+previene el despliegue accidental de módulos compilados para un runtime de Move diferente.
+
+### Garantías de Deduplicación
+
+El serializador garantiza que ninguna tabla contiene entradas duplicadas. Las firmas idénticas, los
+identificadores idénticos y las direcciones idénticas aparecen exactamente una vez en sus tablas
+respectivas. Los parsers pueden confiar en la igualdad de índices como sustituto de la igualdad
+estructural dentro de un solo módulo.
+
+## Lectura Adicional
+
+- [Referencia del Conjunto de Instrucciones](/es/build/smart-contracts/bytecode/instructions) --
+  cada opcode, sus operandos, efectos en el stack y semántica
+- [Sistema de Tipos del Bytecode](/es/build/smart-contracts/bytecode/type-system) -- tokens de
+  firma, abilities, el modelo de indirección de handles y genéricos
+- [Historial de Versiones del Bytecode](/es/build/smart-contracts/bytecode/version-history) -- qué
+  cambió en cada versión desde la v5 hasta la v10

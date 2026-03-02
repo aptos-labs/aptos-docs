@@ -1,0 +1,1439 @@
+---
+title: "Referencia del Conjunto de Instrucciones"
+description: "Referencia completa de todas las instrucciones del bytecode de Move, incluyendo opcodes, operandos, efectos en el stack y semántica de ejecución."
+sidebar:
+  label: "Instrucciones"
+---
+
+Esta página es la referencia autoritativa para cada instrucción en el conjunto de instrucciones
+del bytecode de Move tal como las ejecuta el MoveVM de Aptos. Está dirigida a desarrolladores
+que construyen intérpretes de bytecode, desensambladores, analizadores estáticos, o cualquier
+persona que necesite entender exactamente lo que hace la VM para cada opcode.
+
+## Modelo de Ejecución
+
+El MoveVM es una máquina virtual **basada en stack**. Cada invocación de función crea un nuevo
+_frame_ que contiene:
+
+- Un **stack de operandos** donde se apilan y desapilan valores intermedios.
+- Un **arreglo de locales** indexado por `LocalIndex` (u8), que contiene los parámetros de función y las variables locales.
+- Un **contador de programa** (PC) que apunta a la instrucción actual en el cuerpo de la función.
+
+Las instrucciones consumen operandos de la parte superior del stack, realizan cálculos y apilan
+los resultados. Las instrucciones de flujo de control modifican el PC. La instrucción `Call` crea
+un nuevo frame en el stack de llamadas; `Ret` destruye el frame actual y retorna al invocador.
+
+Para una descripción de los tipos que pueden tener los valores, consulta la página del
+[Sistema de Tipos](/es/build/smart-contracts/bytecode/type-system). Para el diseño binario de
+un módulo compilado, consulta la página del [Formato de Módulo](/es/build/smart-contracts/bytecode/module-format).
+
+## Cómo Leer Esta Referencia
+
+Cada entrada de instrucción documenta lo siguiente:
+
+| Campo                  | Significado                                                                                                                                                                                                                                                                                                  |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Opcode**             | El valor del byte hexadecimal que identifica la instrucción en el flujo de bytecode.                                                                                                                                                                                                                         |
+| **Operandos**          | Valores inmediatos codificados después del byte del opcode (índices, constantes, desplazamientos).                                                                                                                                                                                                           |
+| **Efecto en el stack** | Valores consumidos (desapilados) y producidos (apilados). Notación: `[..., a, b]` significa que `a` se apiló primero y `b` está en la parte superior. La flecha muestra la transición: `[..., a, b] -> [...]` significa que tanto `a` como `b` se desapilan; `[...] -> [..., c]` significa que `c` se apila. |
+| **Descripción**        | Comportamiento y condiciones de error.                                                                                                                                                                                                                                                                       |
+| **Desde**              | Versión del bytecode que introdujo la instrucción, si es posterior a v5 (la versión mínima soportada).                                                                                                                                                                                                       |
+
+Los operandos de índice se codifican como enteros ULEB128 en el flujo de bytecode a menos que se
+indique lo contrario. Los valores enteros inmediatos (p. ej., el valor para `LdU64`) se codifican
+en formato little-endian de ancho fijo correspondiente al ancho de su tipo.
+
+## Tabla Resumen
+
+La tabla siguiente enumera cada instrucción con su opcode y un resumen de una línea. Haz clic en
+el nombre de la instrucción para ir a su entrada detallada.
+
+| Opcode | Instrucción                                                   | Resumen                                                |
+| ------ | ------------------------------------------------------------- | ------------------------------------------------------ |
+| `0x01` | [Pop](#pop)                                                   | Descartar el valor superior del stack.                 |
+| `0x02` | [Ret](#ret)                                                   | Retornar de la función actual.                         |
+| `0x03` | [BrTrue](#brtrue)                                             | Bifurcar si el tope del stack es `true`.               |
+| `0x04` | [BrFalse](#brfalse)                                           | Bifurcar si el tope del stack es `false`.              |
+| `0x05` | [Branch](#branch)                                             | Bifurcación incondicional.                             |
+| `0x06` | [LdU64](#ldu64)                                               | Apilar un `u64` inmediato.                             |
+| `0x07` | [LdConst](#ldconst)                                           | Apilar un valor del pool de constantes.                |
+| `0x08` | [LdTrue](#ldtrue)                                             | Apilar `true`.                                         |
+| `0x09` | [LdFalse](#ldfalse)                                           | Apilar `false`.                                        |
+| `0x0A` | [CopyLoc](#copyloc)                                           | Copiar un local al stack.                              |
+| `0x0B` | [MoveLoc](#moveloc)                                           | Mover un local al stack.                               |
+| `0x0C` | [StLoc](#stloc)                                               | Desapilar y almacenar en un local.                     |
+| `0x0D` | [MutBorrowLoc](#mutborrowloc)                                 | Apilar referencia `&mut` a un local.                   |
+| `0x0E` | [ImmBorrowLoc](#immborrowloc)                                 | Apilar referencia `&` a un local.                      |
+| `0x0F` | [MutBorrowField](#mutborrowfield)                             | Préstamo mutable de un campo de struct.                |
+| `0x10` | [ImmBorrowField](#immborrowfield)                             | Préstamo inmutable de un campo de struct.              |
+| `0x11` | [Call](#call)                                                 | Llamar a una función por índice de handle.             |
+| `0x12` | [Pack](#pack)                                                 | Crear una instancia de struct.                         |
+| `0x13` | [Unpack](#unpack)                                             | Destruir un struct, apilar sus campos.                 |
+| `0x14` | [ReadRef](#readref)                                           | Desreferenciar y copiar.                               |
+| `0x15` | [WriteRef](#writeref)                                         | Escribir a través de una referencia mutable.           |
+| `0x16` | [Add](#add)                                                   | Suma de enteros.                                       |
+| `0x17` | [Sub](#sub)                                                   | Resta de enteros.                                      |
+| `0x18` | [Mul](#mul)                                                   | Multiplicación de enteros.                             |
+| `0x19` | [Mod](#mod-1)                                                 | Módulo de enteros.                                     |
+| `0x1A` | [Div](#div)                                                   | División de enteros.                                   |
+| `0x1B` | [BitOr](#bitor)                                               | OR a nivel de bits.                                    |
+| `0x1C` | [BitAnd](#bitand)                                             | AND a nivel de bits.                                   |
+| `0x1D` | [Xor](#xor)                                                   | XOR a nivel de bits.                                   |
+| `0x1E` | [Or](#or)                                                     | OR booleano.                                           |
+| `0x1F` | [And](#and)                                                   | AND booleano.                                          |
+| `0x20` | [Not](#not)                                                   | Negación booleana.                                     |
+| `0x21` | [Eq](#eq)                                                     | Prueba de igualdad.                                    |
+| `0x22` | [Neq](#neq)                                                   | Prueba de desigualdad.                                 |
+| `0x23` | [Lt](#lt)                                                     | Menor que.                                             |
+| `0x24` | [Gt](#gt)                                                     | Mayor que.                                             |
+| `0x25` | [Le](#le)                                                     | Menor o igual que.                                     |
+| `0x26` | [Ge](#ge)                                                     | Mayor o igual que.                                     |
+| `0x27` | [Abort](#abort)                                               | Abortar con código de error.                           |
+| `0x28` | [Nop](#nop)                                                   | Sin operación.                                         |
+| `0x29` | [Exists](#exists)                                             | Probar si existe un recurso en una dirección.          |
+| `0x2A` | [MutBorrowGlobal](#mutborrowglobal)                           | Préstamo mutable de un recurso global.                 |
+| `0x2B` | [ImmBorrowGlobal](#immborrowglobal)                           | Préstamo inmutable de un recurso global.               |
+| `0x2C` | [MoveFrom](#movefrom)                                         | Eliminar un recurso del almacenamiento global.         |
+| `0x2D` | [MoveTo](#moveto)                                             | Publicar un recurso en almacenamiento global.          |
+| `0x2E` | [FreezeRef](#freezeref)                                       | Convertir `&mut T` a `&T`.                             |
+| `0x2F` | [Shl](#shl)                                                   | Desplazamiento a la izquierda.                         |
+| `0x30` | [Shr](#shr)                                                   | Desplazamiento a la derecha.                           |
+| `0x31` | [LdU8](#ldu8)                                                 | Apilar un `u8` inmediato.                              |
+| `0x32` | [LdU128](#ldu128)                                             | Apilar un `u128` inmediato.                            |
+| `0x33` | [CastU8](#castu8)                                             | Convertir a `u8`.                                      |
+| `0x34` | [CastU64](#castu64)                                           | Convertir a `u64`.                                     |
+| `0x35` | [CastU128](#castu128)                                         | Convertir a `u128`.                                    |
+| `0x36` | [MutBorrowFieldGeneric](#mutborrowfieldgeneric)               | Préstamo mutable genérico de campo.                    |
+| `0x37` | [ImmBorrowFieldGeneric](#immborrowfieldgeneric)               | Préstamo inmutable genérico de campo.                  |
+| `0x38` | [CallGeneric](#callgeneric)                                   | Llamar a una instanciación de función genérica.        |
+| `0x39` | [PackGeneric](#packgeneric)                                   | Crear una instancia de struct genérico.                |
+| `0x3A` | [UnpackGeneric](#unpackgeneric)                               | Destruir un struct genérico, apilar sus campos.        |
+| `0x3B` | [ExistsGeneric](#existsgeneric)                               | Prueba genérica de existencia de recurso.              |
+| `0x3C` | [MutBorrowGlobalGeneric](#mutborrowglobalgeneric)             | Préstamo mutable global genérico.                      |
+| `0x3D` | [ImmBorrowGlobalGeneric](#immborrowglobalgeneric)             | Préstamo inmutable global genérico.                    |
+| `0x3E` | [MoveFromGeneric](#movefromgeneric)                           | Eliminación genérica de recurso.                       |
+| `0x3F` | [MoveToGeneric](#movetogeneric)                               | Publicación genérica de recurso.                       |
+| `0x40` | [VecPack](#vecpack)                                           | Crear un vector desde valores del stack.               |
+| `0x41` | [VecLen](#veclen)                                             | Obtener la longitud del vector.                        |
+| `0x42` | [VecImmBorrow](#vecimmborrow)                                 | Préstamo inmutable de elemento del vector.             |
+| `0x43` | [VecMutBorrow](#vecmutborrow)                                 | Préstamo mutable de elemento del vector.               |
+| `0x44` | [VecPushBack](#vecpushback)                                   | Agregar al vector.                                     |
+| `0x45` | [VecPopBack](#vecpopback)                                     | Eliminar el último elemento del vector.                |
+| `0x46` | [VecUnpack](#vecunpack)                                       | Destruir vector, apilar todos los elementos.           |
+| `0x47` | [VecSwap](#vecswap)                                           | Intercambiar dos elementos del vector.                 |
+| `0x48` | [LdU16](#ldu16)                                               | Apilar un `u16` inmediato.                             |
+| `0x49` | [LdU32](#ldu32)                                               | Apilar un `u32` inmediato.                             |
+| `0x4A` | [LdU256](#ldu256)                                             | Apilar un `u256` inmediato.                            |
+| `0x4B` | [CastU16](#castu16)                                           | Convertir a `u16`.                                     |
+| `0x4C` | [CastU32](#castu32)                                           | Convertir a `u32`.                                     |
+| `0x4D` | [CastU256](#castu256)                                         | Convertir a `u256`.                                    |
+| `0x4E` | [ImmBorrowVariantField](#immborrowvariantfield)               | Préstamo inmutable de campo de variante (v7).          |
+| `0x4F` | [MutBorrowVariantField](#mutborrowvariantfield)               | Préstamo mutable de campo de variante (v7).            |
+| `0x50` | [ImmBorrowVariantFieldGeneric](#immborrowvariantfieldgeneric) | Préstamo inmutable genérico de campo de variante (v7). |
+| `0x51` | [MutBorrowVariantFieldGeneric](#mutborrowvariantfieldgeneric) | Préstamo mutable genérico de campo de variante (v7).   |
+| `0x52` | [PackVariant](#packvariant)                                   | Crear una variante de enum (v7).                       |
+| `0x53` | [PackVariantGeneric](#packvariantgeneric)                     | Crear una variante genérica de enum (v7).              |
+| `0x54` | [UnpackVariant](#unpackvariant)                               | Destruir una variante de enum, apilar campos (v7).     |
+| `0x55` | [UnpackVariantGeneric](#unpackvariantgeneric)                 | Destruir una variante genérica de enum (v7).           |
+| `0x56` | [TestVariant](#testvariant)                                   | Probar si un valor es una variante dada (v7).          |
+| `0x57` | [TestVariantGeneric](#testvariantgeneric)                     | Prueba genérica de variante (v7).                      |
+| `0x58` | [PackClosure](#packclosure)                                   | Crear un closure (v8).                                 |
+| `0x59` | [PackClosureGeneric](#packclosuregeneric)                     | Crear un closure genérico (v8).                        |
+| `0x5A` | [CallClosure](#callclosure)                                   | Invocar un closure (v8).                               |
+| `0x5B` | [LdI8](#ldi8)                                                 | Apilar un `i8` inmediato (v9).                         |
+| `0x5C` | [LdI16](#ldi16)                                               | Apilar un `i16` inmediato (v9).                        |
+| `0x5D` | [LdI32](#ldi32)                                               | Apilar un `i32` inmediato (v9).                        |
+| `0x5E` | [LdI64](#ldi64)                                               | Apilar un `i64` inmediato (v9).                        |
+| `0x5F` | [LdI128](#ldi128)                                             | Apilar un `i128` inmediato (v9).                       |
+| `0x60` | [LdI256](#ldi256)                                             | Apilar un `i256` inmediato (v9).                       |
+| `0x61` | [CastI8](#casti8)                                             | Convertir a `i8` (v9).                                 |
+| `0x62` | [CastI16](#casti16)                                           | Convertir a `i16` (v9).                                |
+| `0x63` | [CastI32](#casti32)                                           | Convertir a `i32` (v9).                                |
+| `0x64` | [CastI64](#casti64)                                           | Convertir a `i64` (v9).                                |
+| `0x65` | [CastI128](#casti128)                                         | Convertir a `i128` (v9).                               |
+| `0x66` | [CastI256](#casti256)                                         | Convertir a `i256` (v9).                               |
+| `0x67` | [Negate](#negate)                                             | Negar un entero con signo (v9).                        |
+| `0x68` | [AbortMsg](#abortmsg)                                         | Abortar con código de error y mensaje (v10).           |
+
+***
+
+## Operaciones de Stack
+
+Estas instrucciones manipulan el stack de operandos directamente -- apilando constantes, cargando
+desde el pool de constantes o descartando valores.
+
+### Pop
+
+|               |                         |
+| ------------- | ----------------------- |
+| **Opcode**    | `0x01`                  |
+| **Operandos** | Ninguno                 |
+| **Stack**     | `[..., value] -> [...]` |
+
+Desapila y descarta el valor superior del stack. El valor debe tener la ability `drop`.
+
+### LdTrue
+
+|               |                        |
+| ------------- | ---------------------- |
+| **Opcode**    | `0x08`                 |
+| **Operandos** | Ninguno                |
+| **Stack**     | `[...] -> [..., true]` |
+
+Apila el valor booleano `true` en el stack.
+
+### LdFalse
+
+|               |                         |
+| ------------- | ----------------------- |
+| **Opcode**    | `0x09`                  |
+| **Operandos** | Ninguno                 |
+| **Stack**     | `[...] -> [..., false]` |
+
+Apila el valor booleano `false` en el stack.
+
+### LdU8
+
+|               |                            |
+| ------------- | -------------------------- |
+| **Opcode**    | `0x31`                     |
+| **Operandos** | `u8_value` (1 byte)        |
+| **Stack**     | `[...] -> [..., u8_value]` |
+
+Apila la constante `u8` dada en el stack. El byte inmediato sigue directamente al opcode.
+
+### LdU16
+
+|               |                                      |
+| ------------- | ------------------------------------ |
+| **Opcode**    | `0x48`                               |
+| **Operandos** | `u16_value` (2 bytes, little-endian) |
+| **Stack**     | `[...] -> [..., u16_value]`          |
+
+Apila la constante `u16` dada en el stack.
+
+### LdU32
+
+|               |                                      |
+| ------------- | ------------------------------------ |
+| **Opcode**    | `0x49`                               |
+| **Operandos** | `u32_value` (4 bytes, little-endian) |
+| **Stack**     | `[...] -> [..., u32_value]`          |
+
+Apila la constante `u32` dada en el stack.
+
+### LdU64
+
+|               |                                      |
+| ------------- | ------------------------------------ |
+| **Opcode**    | `0x06`                               |
+| **Operandos** | `u64_value` (8 bytes, little-endian) |
+| **Stack**     | `[...] -> [..., u64_value]`          |
+
+Apila la constante `u64` dada en el stack.
+
+### LdU128
+
+|               |                                        |
+| ------------- | -------------------------------------- |
+| **Opcode**    | `0x32`                                 |
+| **Operandos** | `u128_value` (16 bytes, little-endian) |
+| **Stack**     | `[...] -> [..., u128_value]`           |
+
+Apila la constante `u128` dada en el stack.
+
+### LdU256
+
+|               |                                        |
+| ------------- | -------------------------------------- |
+| **Opcode**    | `0x4A`                                 |
+| **Operandos** | `u256_value` (32 bytes, little-endian) |
+| **Stack**     | `[...] -> [..., u256_value]`           |
+
+Apila la constante `u256` dada en el stack.
+
+### LdConst
+
+|               |                                            |
+| ------------- | ------------------------------------------ |
+| **Opcode**    | `0x07`                                     |
+| **Operandos** | `const_idx` (ULEB128 -- ConstantPoolIndex) |
+| **Stack**     | `[...] -> [..., constant_value]`           |
+
+Carga una constante del [pool de constantes](/es/build/smart-contracts/bytecode/module-format#constant-pool)
+del módulo, la deserializa según su tipo declarado y apila el valor resultante en el stack.
+La entrada del pool de constantes almacena tanto los bytes serializados como la firma de tipo.
+
+### Nop
+
+|               |                  |
+| ------------- | ---------------- |
+| **Opcode**    | `0x28`           |
+| **Operandos** | Ninguno          |
+| **Stack**     | `[...] -> [...]` |
+
+Sin operación. El PC avanza uno. Esta instrucción puede servir como marcador de posición o
+relleno de alineación en el flujo de bytecode.
+
+***
+
+## Operaciones con Variables Locales
+
+Estas instrucciones transfieren valores entre el stack de operandos y el arreglo de locales del frame.
+
+### CopyLoc
+
+|               |                         |
+| ------------- | ----------------------- |
+| **Opcode**    | `0x0A`                  |
+| **Operandos** | `local_idx` (u8)        |
+| **Stack**     | `[...] -> [..., value]` |
+
+Copia el valor almacenado en `locals[local_idx]` y lo apila en el stack. El local permanece
+válido para uso posterior. El tipo del local debe tener la ability `copy`.
+
+### MoveLoc
+
+|               |                         |
+| ------------- | ----------------------- |
+| **Opcode**    | `0x0B`                  |
+| **Operandos** | `local_idx` (u8)        |
+| **Stack**     | `[...] -> [..., value]` |
+
+Mueve el valor de `locals[local_idx]` al stack. Después de esta instrucción, el local queda
+invalidado. Cualquier lectura del local antes de un `StLoc` posterior a ese índice es un
+error de verificación.
+
+### StLoc
+
+|               |                         |
+| ------------- | ----------------------- |
+| **Opcode**    | `0x0C`                  |
+| **Operandos** | `local_idx` (u8)        |
+| **Stack**     | `[..., value] -> [...]` |
+
+Desapila el valor superior del stack y lo almacena en `locals[local_idx]`. Si el local ya
+contiene un valor, ese valor anterior se descarta (el tipo debe tener la ability `drop` en ese
+caso). El tipo del valor debe coincidir con el tipo declarado del local.
+
+### MutBorrowLoc
+
+|               |                          |
+| ------------- | ------------------------ |
+| **Opcode**    | `0x0D`                   |
+| **Operandos** | `local_idx` (u8)         |
+| **Stack**     | `[...] -> [..., &mut T]` |
+
+Apila una referencia mutable a `locals[local_idx]` en el stack. El local debe contener
+actualmente un valor válido.
+
+### ImmBorrowLoc
+
+|               |                      |
+| ------------- | -------------------- |
+| **Opcode**    | `0x0E`               |
+| **Operandos** | `local_idx` (u8)     |
+| **Stack**     | `[...] -> [..., &T]` |
+
+Apila una referencia inmutable a `locals[local_idx]` en el stack.
+
+***
+
+## Operaciones de Almacenamiento Global
+
+Estas instrucciones interactúan con el almacenamiento global de recursos -- el almacén
+persistente clave-valor indexado por pares `(address, type)`. Los tipos struct utilizados
+deben tener la ability `key`.
+
+### Exists
+
+|               |                                                     |
+| ------------- | --------------------------------------------------- |
+| **Opcode**    | `0x29`                                              |
+| **Operandos** | `struct_def_idx` (ULEB128 -- StructDefinitionIndex) |
+| **Stack**     | `[..., address] -> [..., bool]`                     |
+
+Desapila una dirección del stack y apila `true` si existe una instancia del tipo struct
+especificado en esa dirección en el almacenamiento global, `false` en caso contrario.
+
+### ExistsGeneric
+
+|               |                                                            |
+| ------------- | ---------------------------------------------------------- |
+| **Opcode**    | `0x3B`                                                     |
+| **Operandos** | `struct_inst_idx` (ULEB128 -- StructDefInstantiationIndex) |
+| **Stack**     | `[..., address] -> [..., bool]`                            |
+
+Versión genérica de `Exists`. El operando indexa en la tabla de instanciación de struct que
+proporciona los argumentos de tipo concretos.
+
+### MoveFrom
+
+|               |                                                     |
+| ------------- | --------------------------------------------------- |
+| **Opcode**    | `0x2C`                                              |
+| **Operandos** | `struct_def_idx` (ULEB128 -- StructDefinitionIndex) |
+| **Stack**     | `[..., address] -> [..., struct_value]`             |
+
+Desapila una dirección, elimina el recurso del tipo especificado del almacenamiento global en
+esa dirección y apila el valor en el stack. Aborta si no existe dicho recurso.
+
+### MoveFromGeneric
+
+|               |                                                            |
+| ------------- | ---------------------------------------------------------- |
+| **Opcode**    | `0x3E`                                                     |
+| **Operandos** | `struct_inst_idx` (ULEB128 -- StructDefInstantiationIndex) |
+| **Stack**     | `[..., address] -> [..., struct_value]`                    |
+
+Versión genérica de `MoveFrom`.
+
+### MoveTo
+
+|               |                                                     |
+| ------------- | --------------------------------------------------- |
+| **Opcode**    | `0x2D`                                              |
+| **Operandos** | `struct_def_idx` (ULEB128 -- StructDefinitionIndex) |
+| **Stack**     | `[..., signer_ref, struct_value] -> [...]`          |
+
+Desapila un valor struct y una referencia `&signer` del stack. Publica el valor struct en
+el almacenamiento global bajo la dirección del firmante. Aborta si un recurso del mismo tipo
+ya existe en esa dirección.
+
+### MoveToGeneric
+
+|               |                                                            |
+| ------------- | ---------------------------------------------------------- |
+| **Opcode**    | `0x3F`                                                     |
+| **Operandos** | `struct_inst_idx` (ULEB128 -- StructDefInstantiationIndex) |
+| **Stack**     | `[..., signer_ref, struct_value] -> [...]`                 |
+
+Versión genérica de `MoveTo`.
+
+### MutBorrowGlobal
+
+|               |                                                     |
+| ------------- | --------------------------------------------------- |
+| **Opcode**    | `0x2A`                                              |
+| **Operandos** | `struct_def_idx` (ULEB128 -- StructDefinitionIndex) |
+| **Stack**     | `[..., address] -> [..., &mut T]`                   |
+
+Desapila una dirección, adquiere una referencia mutable al recurso del tipo especificado en
+esa dirección y apila la referencia. Aborta si el recurso no existe.
+
+### MutBorrowGlobalGeneric
+
+|               |                                                            |
+| ------------- | ---------------------------------------------------------- |
+| **Opcode**    | `0x3C`                                                     |
+| **Operandos** | `struct_inst_idx` (ULEB128 -- StructDefInstantiationIndex) |
+| **Stack**     | `[..., address] -> [..., &mut T]`                          |
+
+Versión genérica de `MutBorrowGlobal`.
+
+### ImmBorrowGlobal
+
+|               |                                                     |
+| ------------- | --------------------------------------------------- |
+| **Opcode**    | `0x2B`                                              |
+| **Operandos** | `struct_def_idx` (ULEB128 -- StructDefinitionIndex) |
+| **Stack**     | `[..., address] -> [..., &T]`                       |
+
+Desapila una dirección, adquiere una referencia inmutable al recurso del tipo especificado en
+esa dirección y apila la referencia. Aborta si el recurso no existe.
+
+### ImmBorrowGlobalGeneric
+
+|               |                                                            |
+| ------------- | ---------------------------------------------------------- |
+| **Opcode**    | `0x3D`                                                     |
+| **Operandos** | `struct_inst_idx` (ULEB128 -- StructDefInstantiationIndex) |
+| **Stack**     | `[..., address] -> [..., &T]`                              |
+
+Versión genérica de `ImmBorrowGlobal`.
+
+***
+
+## Operaciones de Campo
+
+Estas instrucciones toman prestados campos individuales de referencias a struct en el stack.
+
+### MutBorrowField
+
+|               |                                                  |
+| ------------- | ------------------------------------------------ |
+| **Opcode**    | `0x0F`                                           |
+| **Operandos** | `field_handle_idx` (ULEB128 -- FieldHandleIndex) |
+| **Stack**     | `[..., &mut Struct] -> [..., &mut FieldType]`    |
+
+Desapila una referencia mutable a un struct y apila una referencia mutable al campo identificado
+por el handle de campo. El handle de campo codifica tanto la definición del struct como el
+desplazamiento del campo dentro de ese struct.
+
+### MutBorrowFieldGeneric
+
+|               |                                                       |
+| ------------- | ----------------------------------------------------- |
+| **Opcode**    | `0x36`                                                |
+| **Operandos** | `field_inst_idx` (ULEB128 -- FieldInstantiationIndex) |
+| **Stack**     | `[..., &mut Struct<T>] -> [..., &mut FieldType]`      |
+
+Versión genérica de `MutBorrowField`. La tabla de instanciación de campo proporciona los
+argumentos de tipo concretos para el struct.
+
+### ImmBorrowField
+
+|               |                                                                                   |
+| ------------- | --------------------------------------------------------------------------------- |
+| **Opcode**    | `0x10`                                                                            |
+| **Operandos** | `field_handle_idx` (ULEB128 -- FieldHandleIndex)                                  |
+| **Stack**     | `[..., &Struct] -> [..., &FieldType]` o `[..., &mut Struct] -> [..., &FieldType]` |
+
+Desapila una referencia inmutable o mutable a un struct y apila una referencia inmutable al
+campo especificado.
+
+### ImmBorrowFieldGeneric
+
+|               |                                                                                         |
+| ------------- | --------------------------------------------------------------------------------------- |
+| **Opcode**    | `0x37`                                                                                  |
+| **Operandos** | `field_inst_idx` (ULEB128 -- FieldInstantiationIndex)                                   |
+| **Stack**     | `[..., &Struct<T>] -> [..., &FieldType]` o `[..., &mut Struct<T>] -> [..., &FieldType]` |
+
+Versión genérica de `ImmBorrowField`.
+
+***
+
+## Operaciones de Referencia
+
+Estas instrucciones desreferencian, escriben a través de o convierten referencias.
+
+### ReadRef
+
+|               |                                                       |
+| ------------- | ----------------------------------------------------- |
+| **Opcode**    | `0x14`                                                |
+| **Operandos** | Ninguno                                               |
+| **Stack**     | `[..., &T] -> [..., T]` o `[..., &mut T] -> [..., T]` |
+
+Desapila una referencia (mutable o inmutable), copia el valor referenciado y apila la copia
+en el stack. El tipo referenciado debe tener la ability `copy`.
+
+### WriteRef
+
+|               |                                 |
+| ------------- | ------------------------------- |
+| **Opcode**    | `0x15`                          |
+| **Operandos** | Ninguno                         |
+| **Stack**     | `[..., value, &mut T] -> [...]` |
+
+Desapila una referencia mutable y un valor del stack, luego escribe el valor a través de la
+referencia. El valor anterior en esa ubicación se descarta, por lo que el tipo debe tener la
+ability `drop`. El tipo del valor debe coincidir con el tipo interno de la referencia.
+
+### FreezeRef
+
+|               |                              |
+| ------------- | ---------------------------- |
+| **Opcode**    | `0x2E`                       |
+| **Operandos** | Ninguno                      |
+| **Stack**     | `[..., &mut T] -> [..., &T]` |
+
+Desapila una referencia mutable y la vuelve a apilar como referencia inmutable. Esta es una
+conversión solo a nivel de tipo -- no se realiza trabajo en tiempo de ejecución más allá de la
+actualización del seguimiento de préstamos.
+
+***
+
+## Operaciones Aritméticas
+
+Todas las instrucciones aritméticas desapilan dos operandos enteros del mismo tipo del stack y
+apilan el resultado. Para tipos sin signo, `Sub` aborta por underflow y `Add`/`Mul` abortan por
+overflow. Para tipos con signo, tanto el overflow como el underflow causan un aborto aritmético.
+`Div` y `Mod` abortan cuando el divisor es cero. `Div` sobre enteros con signo también aborta
+por overflow (el valor mínimo dividido por -1).
+
+### Add
+
+|               |                                    |
+| ------------- | ---------------------------------- |
+| **Opcode**    | `0x16`                             |
+| **Operandos** | Ninguno                            |
+| **Stack**     | `[..., lhs, rhs] -> [..., result]` |
+
+Calcula `lhs + rhs`. Aborta por overflow.
+
+### Sub
+
+|               |                                    |
+| ------------- | ---------------------------------- |
+| **Opcode**    | `0x17`                             |
+| **Operandos** | Ninguno                            |
+| **Stack**     | `[..., lhs, rhs] -> [..., result]` |
+
+Calcula `lhs - rhs`. Para tipos sin signo, aborta si `lhs < rhs`. Para tipos con signo, aborta
+por underflow.
+
+### Mul
+
+|               |                                    |
+| ------------- | ---------------------------------- |
+| **Opcode**    | `0x18`                             |
+| **Operandos** | Ninguno                            |
+| **Stack**     | `[..., lhs, rhs] -> [..., result]` |
+
+Calcula `lhs * rhs`. Aborta por overflow.
+
+### Mod
+
+|               |                                    |
+| ------------- | ---------------------------------- |
+| **Opcode**    | `0x19`                             |
+| **Operandos** | Ninguno                            |
+| **Stack**     | `[..., lhs, rhs] -> [..., result]` |
+
+Calcula `lhs % rhs`. Aborta si `rhs == 0`.
+
+### Div
+
+|               |                                    |
+| ------------- | ---------------------------------- |
+| **Opcode**    | `0x1A`                             |
+| **Operandos** | Ninguno                            |
+| **Stack**     | `[..., lhs, rhs] -> [..., result]` |
+
+Calcula `lhs / rhs` (división entera, truncando hacia cero). Aborta si `rhs == 0`. Para tipos
+con signo, también aborta si `lhs == MIN_VALUE && rhs == -1` (overflow).
+
+### Negate
+
+|               |                                 |
+| ------------- | ------------------------------- |
+| **Opcode**    | `0x67`                          |
+| **Operandos** | Ninguno                         |
+| **Stack**     | `[..., value] -> [..., result]` |
+| **Desde**     | Bytecode v9                     |
+
+Niega el entero con signo en la parte superior del stack. Calcula `-value`. Aborta si el valor
+es el mínimo de su tipo de entero con signo (p. ej., `i8::MIN`), porque la contraparte positiva
+no es representable.
+
+***
+
+## Operaciones a Nivel de Bits
+
+Las instrucciones a nivel de bits operan sobre dos valores enteros del mismo tipo (excepto para
+operaciones de desplazamiento, donde la cantidad de desplazamiento siempre es `u8`).
+
+### BitOr
+
+|               |                                    |
+| ------------- | ---------------------------------- |
+| **Opcode**    | `0x1B`                             |
+| **Operandos** | Ninguno                            |
+| **Stack**     | `[..., lhs, rhs] -> [..., result]` |
+
+Calcula `lhs | rhs` (OR a nivel de bits). Ambos operandos deben ser del mismo tipo entero.
+
+### BitAnd
+
+|               |                                    |
+| ------------- | ---------------------------------- |
+| **Opcode**    | `0x1C`                             |
+| **Operandos** | Ninguno                            |
+| **Stack**     | `[..., lhs, rhs] -> [..., result]` |
+
+Calcula `lhs & rhs` (AND a nivel de bits). Ambos operandos deben ser del mismo tipo entero.
+
+### Xor
+
+|               |                                    |
+| ------------- | ---------------------------------- |
+| **Opcode**    | `0x1D`                             |
+| **Operandos** | Ninguno                            |
+| **Stack**     | `[..., lhs, rhs] -> [..., result]` |
+
+Calcula `lhs ^ rhs` (XOR a nivel de bits). Ambos operandos deben ser del mismo tipo entero.
+
+### Shl
+
+|               |                                               |
+| ------------- | --------------------------------------------- |
+| **Opcode**    | `0x2F`                                        |
+| **Operandos** | Ninguno                                       |
+| **Stack**     | `[..., value, shift_amount] -> [..., result]` |
+
+Desplaza `value` a la izquierda por `shift_amount` bits. El `shift_amount` debe ser de tipo
+`u8` y debe ser menor que el ancho en bits del tipo del valor. Aborta con un error aritmético
+si la cantidad de desplazamiento está fuera de rango.
+
+### Shr
+
+|               |                                               |
+| ------------- | --------------------------------------------- |
+| **Opcode**    | `0x30`                                        |
+| **Operandos** | Ninguno                                       |
+| **Stack**     | `[..., value, shift_amount] -> [..., result]` |
+
+Desplaza `value` a la derecha por `shift_amount` bits. El `shift_amount` debe ser de tipo
+`u8` y debe ser menor que el ancho en bits del tipo del valor. Para enteros con signo, esto
+realiza un desplazamiento aritmético a la derecha (extensión de signo). Aborta con un error
+aritmético si la cantidad de desplazamiento está fuera de rango.
+
+***
+
+## Operaciones de Comparación
+
+Estas instrucciones comparan dos valores enteros y apilan un resultado booleano. Ambos operandos
+deben ser del mismo tipo entero.
+
+### Lt
+
+|               |                                  |
+| ------------- | -------------------------------- |
+| **Opcode**    | `0x23`                           |
+| **Operandos** | Ninguno                          |
+| **Stack**     | `[..., lhs, rhs] -> [..., bool]` |
+
+Apila `true` si `lhs < rhs`, `false` en caso contrario.
+
+### Gt
+
+|               |                                  |
+| ------------- | -------------------------------- |
+| **Opcode**    | `0x24`                           |
+| **Operandos** | Ninguno                          |
+| **Stack**     | `[..., lhs, rhs] -> [..., bool]` |
+
+Apila `true` si `lhs > rhs`, `false` en caso contrario.
+
+### Le
+
+|               |                                  |
+| ------------- | -------------------------------- |
+| **Opcode**    | `0x25`                           |
+| **Operandos** | Ninguno                          |
+| **Stack**     | `[..., lhs, rhs] -> [..., bool]` |
+
+Apila `true` si `lhs <= rhs`, `false` en caso contrario.
+
+### Ge
+
+|               |                                  |
+| ------------- | -------------------------------- |
+| **Opcode**    | `0x26`                           |
+| **Operandos** | Ninguno                          |
+| **Stack**     | `[..., lhs, rhs] -> [..., bool]` |
+
+Apila `true` si `lhs >= rhs`, `false` en caso contrario.
+
+***
+
+## Operaciones de Igualdad
+
+La igualdad está definida para tipos primitivos (`bool`, `address`, todos los tipos enteros),
+`vector<T>` donde `T` soporta igualdad, y referencias `&T`/`&mut T` donde `T` soporta igualdad.
+Ambos valores se consumen (el tipo debe tener la ability `drop`).
+
+### Eq
+
+|               |                                  |
+| ------------- | -------------------------------- |
+| **Opcode**    | `0x21`                           |
+| **Operandos** | Ninguno                          |
+| **Stack**     | `[..., lhs, rhs] -> [..., bool]` |
+
+Apila `true` si `lhs == rhs`, `false` en caso contrario.
+
+### Neq
+
+|               |                                  |
+| ------------- | -------------------------------- |
+| **Opcode**    | `0x22`                           |
+| **Operandos** | Ninguno                          |
+| **Stack**     | `[..., lhs, rhs] -> [..., bool]` |
+
+Apila `true` si `lhs != rhs`, `false` en caso contrario.
+
+***
+
+## Operaciones Booleanas
+
+Estas instrucciones operan sobre valores `bool`.
+
+### And
+
+|               |                                  |
+| ------------- | -------------------------------- |
+| **Opcode**    | `0x1F`                           |
+| **Operandos** | Ninguno                          |
+| **Stack**     | `[..., lhs, rhs] -> [..., bool]` |
+
+Calcula `lhs && rhs` (AND lógico).
+
+### Or
+
+|               |                                  |
+| ------------- | -------------------------------- |
+| **Opcode**    | `0x1E`                           |
+| **Operandos** | Ninguno                          |
+| **Stack**     | `[..., lhs, rhs] -> [..., bool]` |
+
+Calcula `lhs || rhs` (OR lógico).
+
+### Not
+
+|               |                               |
+| ------------- | ----------------------------- |
+| **Opcode**    | `0x20`                        |
+| **Operandos** | Ninguno                       |
+| **Stack**     | `[..., value] -> [..., bool]` |
+
+Calcula `!value` (NOT lógico).
+
+***
+
+## Operaciones de Conversión de Tipo
+
+Las instrucciones de conversión convierten un tipo entero a otro. Si el valor de origen está
+fuera del rango representable del tipo destino, la instrucción aborta con un error aritmético.
+Para tipos destino sin signo, los valores negativos de origen causan un aborto. Para `CastU256`
+y `CastI256`, todos los valores enteros no negativos caben (aunque los valores negativos aún
+causan aborto para `CastU256`).
+
+### CastU8
+
+|               |                                 |
+| ------------- | ------------------------------- |
+| **Opcode**    | `0x33`                          |
+| **Operandos** | Ninguno                         |
+| **Stack**     | `[..., int_value] -> [..., u8]` |
+
+Convierte el valor entero superior a `u8`. Aborta si el valor es negativo o excede `u8::MAX` (255).
+
+### CastU16
+
+|               |                                  |
+| ------------- | -------------------------------- |
+| **Opcode**    | `0x4B`                           |
+| **Operandos** | Ninguno                          |
+| **Stack**     | `[..., int_value] -> [..., u16]` |
+
+Convierte el valor entero superior a `u16`. Aborta si el valor es negativo o excede `u16::MAX` (65535).
+
+### CastU32
+
+|               |                                  |
+| ------------- | -------------------------------- |
+| **Opcode**    | `0x4C`                           |
+| **Operandos** | Ninguno                          |
+| **Stack**     | `[..., int_value] -> [..., u32]` |
+
+Convierte el valor entero superior a `u32`. Aborta si el valor es negativo o excede `u32::MAX`.
+
+### CastU64
+
+|               |                                  |
+| ------------- | -------------------------------- |
+| **Opcode**    | `0x34`                           |
+| **Operandos** | Ninguno                          |
+| **Stack**     | `[..., int_value] -> [..., u64]` |
+
+Convierte el valor entero superior a `u64`. Aborta si el valor es negativo o excede `u64::MAX`.
+
+### CastU128
+
+|               |                                   |
+| ------------- | --------------------------------- |
+| **Opcode**    | `0x35`                            |
+| **Operandos** | Ninguno                           |
+| **Stack**     | `[..., int_value] -> [..., u128]` |
+
+Convierte el valor entero superior a `u128`. Aborta si el valor es negativo o excede `u128::MAX`.
+
+### CastU256
+
+|               |                                   |
+| ------------- | --------------------------------- |
+| **Opcode**    | `0x4D`                            |
+| **Operandos** | Ninguno                           |
+| **Stack**     | `[..., int_value] -> [..., u256]` |
+
+Convierte el valor entero superior a `u256`. Aborta si el valor es negativo.
+
+### CastI8
+
+|               |                                 |
+| ------------- | ------------------------------- |
+| **Opcode**    | `0x61`                          |
+| **Operandos** | Ninguno                         |
+| **Stack**     | `[..., int_value] -> [..., i8]` |
+| **Desde**     | Bytecode v9                     |
+
+Convierte el valor entero superior a `i8`. Aborta si el valor está fuera del rango `i8::MIN` (-128) a `i8::MAX` (127).
+
+### CastI16
+
+|               |                                  |
+| ------------- | -------------------------------- |
+| **Opcode**    | `0x62`                           |
+| **Operandos** | Ninguno                          |
+| **Stack**     | `[..., int_value] -> [..., i16]` |
+| **Desde**     | Bytecode v9                      |
+
+Convierte el valor entero superior a `i16`. Aborta si el valor está fuera del rango `i16::MIN` (-32768) a `i16::MAX` (32767).
+
+### CastI32
+
+|               |                                  |
+| ------------- | -------------------------------- |
+| **Opcode**    | `0x63`                           |
+| **Operandos** | Ninguno                          |
+| **Stack**     | `[..., int_value] -> [..., i32]` |
+| **Desde**     | Bytecode v9                      |
+
+Convierte el valor entero superior a `i32`. Aborta si el valor está fuera del rango representable.
+
+### CastI64
+
+|               |                                  |
+| ------------- | -------------------------------- |
+| **Opcode**    | `0x64`                           |
+| **Operandos** | Ninguno                          |
+| **Stack**     | `[..., int_value] -> [..., i64]` |
+| **Desde**     | Bytecode v9                      |
+
+Convierte el valor entero superior a `i64`. Aborta si el valor está fuera del rango representable.
+
+### CastI128
+
+|               |                                   |
+| ------------- | --------------------------------- |
+| **Opcode**    | `0x65`                            |
+| **Operandos** | Ninguno                           |
+| **Stack**     | `[..., int_value] -> [..., i128]` |
+| **Desde**     | Bytecode v9                       |
+
+Convierte el valor entero superior a `i128`. Aborta si el valor está fuera del rango representable.
+
+### CastI256
+
+|               |                                   |
+| ------------- | --------------------------------- |
+| **Opcode**    | `0x66`                            |
+| **Operandos** | Ninguno                           |
+| **Stack**     | `[..., int_value] -> [..., i256]` |
+| **Desde**     | Bytecode v9                       |
+
+Convierte el valor entero superior a `i256`. Aborta si el valor excede `i256::MAX`.
+
+***
+
+## Flujo de Control
+
+### Branch
+
+|               |                                    |
+| ------------- | ---------------------------------- |
+| **Opcode**    | `0x05`                             |
+| **Operandos** | `code_offset` (u16, little-endian) |
+| **Stack**     | `[...] -> [...]`                   |
+
+Establece incondicionalmente el PC a `code_offset`. El desplazamiento es relativo al inicio del
+flujo de instrucciones de la función.
+
+### BrTrue
+
+|               |                                    |
+| ------------- | ---------------------------------- |
+| **Opcode**    | `0x03`                             |
+| **Operandos** | `code_offset` (u16, little-endian) |
+| **Stack**     | `[..., bool] -> [...]`             |
+
+Desapila un booleano del stack. Si es `true`, establece el PC a `code_offset`. De lo contrario,
+avanza el PC en uno.
+
+### BrFalse
+
+|               |                                    |
+| ------------- | ---------------------------------- |
+| **Opcode**    | `0x04`                             |
+| **Operandos** | `code_offset` (u16, little-endian) |
+| **Stack**     | `[..., bool] -> [...]`             |
+
+Desapila un booleano del stack. Si es `false`, establece el PC a `code_offset`. De lo contrario,
+avanza el PC en uno.
+
+### Ret
+
+|               |                                                                                                        |
+| ------------- | ------------------------------------------------------------------------------------------------------ |
+| **Opcode**    | `0x02`                                                                                                 |
+| **Operandos** | Ninguno                                                                                                |
+| **Stack**     | `[..., ret_val_0, ..., ret_val_n]` (los valores de retorno deben coincidir con la firma de la función) |
+
+Retorna de la función actual. El frame se desapila del stack de llamadas. Los valores de retorno
+(si los hay) permanecen en el stack de operandos del invocador. El número y los tipos de valores
+en el stack deben coincidir con la firma del tipo de retorno de la función.
+
+### Abort
+
+|               |                     |
+| ------------- | ------------------- |
+| **Opcode**    | `0x27`              |
+| **Operandos** | Ninguno             |
+| **Stack**     | `[..., error_code]` |
+
+Desapila un código de error `u64` del stack y aborta la transacción. Todos los cambios realizados
+durante la transacción se revierten.
+
+### AbortMsg
+
+|               |                                    |
+| ------------- | ---------------------------------- |
+| **Opcode**    | `0x68`                             |
+| **Operandos** | Ninguno                            |
+| **Stack**     | `[..., error_code, error_message]` |
+| **Desde**     | Bytecode v10                       |
+
+Desapila un mensaje de error `vector<u8>` y un código de error `u64` del stack y aborta la
+transacción con ambos. Esto proporciona diagnósticos más ricos que `Abort` solo.
+
+***
+
+## Llamadas a Funciones
+
+### Call
+
+|               |                                                          |
+| ------------- | -------------------------------------------------------- |
+| **Opcode**    | `0x11`                                                   |
+| **Operandos** | `func_handle_idx` (ULEB128 -- FunctionHandleIndex)       |
+| **Stack**     | `[..., arg_0, ..., arg_n-1] -> [..., ret_0, ..., ret_m]` |
+
+Llama a la función identificada por `func_handle_idx`. Los argumentos están en el stack en
+orden de declaración (el primer parámetro se apila primero, el último parámetro queda en la
+parte superior). Todos los argumentos se consumen.
+
+Para funciones no nativas, se apila un nuevo frame en el stack de llamadas con los argumentos
+cargados como los primeros locales. Para funciones nativas, la VM despacha directamente a la
+implementación nativa; cuando retorna, los valores de retorno están en el stack del invocador.
+
+### CallGeneric
+
+|               |                                                          |
+| ------------- | -------------------------------------------------------- |
+| **Opcode**    | `0x38`                                                   |
+| **Operandos** | `func_inst_idx` (ULEB128 -- FunctionInstantiationIndex)  |
+| **Stack**     | `[..., arg_0, ..., arg_n-1] -> [..., ret_0, ..., ret_m]` |
+
+Versión genérica de `Call`. La entrada de la tabla de instanciación de funciones especifica
+tanto el handle de función como los argumentos de tipo concretos a sustituir por los parámetros
+genéricos de la función.
+
+***
+
+## Operaciones de Struct
+
+Estas instrucciones crean y destruyen instancias de struct.
+
+### Pack
+
+|               |                                                         |
+| ------------- | ------------------------------------------------------- |
+| **Opcode**    | `0x12`                                                  |
+| **Operandos** | `struct_def_idx` (ULEB128 -- StructDefinitionIndex)     |
+| **Stack**     | `[..., field_0, ..., field_n-1] -> [..., struct_value]` |
+
+Desapila los valores de campo del stack en orden de declaración (el primer campo se apila
+primero) y crea una nueva instancia de struct. Todos los campos deben proporcionarse.
+
+### PackGeneric
+
+|               |                                                            |
+| ------------- | ---------------------------------------------------------- |
+| **Opcode**    | `0x39`                                                     |
+| **Operandos** | `struct_inst_idx` (ULEB128 -- StructDefInstantiationIndex) |
+| **Stack**     | `[..., field_0, ..., field_n-1] -> [..., struct_value]`    |
+
+Versión genérica de `Pack`. La entrada de instanciación de struct proporciona los argumentos
+de tipo concretos.
+
+### Unpack
+
+|               |                                                         |
+| ------------- | ------------------------------------------------------- |
+| **Opcode**    | `0x13`                                                  |
+| **Operandos** | `struct_def_idx` (ULEB128 -- StructDefinitionIndex)     |
+| **Stack**     | `[..., struct_value] -> [..., field_0, ..., field_n-1]` |
+
+Desapila un valor struct, lo destruye y apila sus valores de campo en el stack en orden de
+declaración (el primer campo se apila primero, el último campo queda en la parte superior).
+
+### UnpackGeneric
+
+|               |                                                            |
+| ------------- | ---------------------------------------------------------- |
+| **Opcode**    | `0x3A`                                                     |
+| **Operandos** | `struct_inst_idx` (ULEB128 -- StructDefInstantiationIndex) |
+| **Stack**     | `[..., struct_value] -> [..., field_0, ..., field_n-1]`    |
+
+Versión genérica de `Unpack`.
+
+***
+
+## Operaciones de Enum / Variante
+
+Estas instrucciones trabajan con tipos enum (structs con múltiples variantes). Fueron
+introducidas en la versión 7 del bytecode. Consulta el
+[Historial de Versiones](/es/build/smart-contracts/bytecode/version-history) para detalles sobre
+cuándo se agregó el soporte de enum.
+
+### PackVariant
+
+|               |                                                                   |
+| ------------- | ----------------------------------------------------------------- |
+| **Opcode**    | `0x52`                                                            |
+| **Operandos** | `struct_variant_handle_idx` (ULEB128 -- StructVariantHandleIndex) |
+| **Stack**     | `[..., field_0, ..., field_n-1] -> [..., variant_value]`          |
+| **Desde**     | Bytecode v7                                                       |
+
+Desapila los valores de campo en orden de declaración y crea una nueva instancia de la variante
+de enum especificada. El handle de variante identifica tanto la definición del struct como la
+variante específica.
+
+### PackVariantGeneric
+
+|               |                                                                        |
+| ------------- | ---------------------------------------------------------------------- |
+| **Opcode**    | `0x53`                                                                 |
+| **Operandos** | `struct_variant_inst_idx` (ULEB128 -- StructVariantInstantiationIndex) |
+| **Stack**     | `[..., field_0, ..., field_n-1] -> [..., variant_value]`               |
+| **Desde**     | Bytecode v7                                                            |
+
+Versión genérica de `PackVariant`.
+
+### UnpackVariant
+
+|               |                                                                   |
+| ------------- | ----------------------------------------------------------------- |
+| **Opcode**    | `0x54`                                                            |
+| **Operandos** | `struct_variant_handle_idx` (ULEB128 -- StructVariantHandleIndex) |
+| **Stack**     | `[..., variant_value] -> [..., field_0, ..., field_n-1]`          |
+| **Desde**     | Bytecode v7                                                       |
+
+Desapila un valor que se espera sea la variante especificada. Lo destruye y apila sus campos
+en el stack en orden de declaración. Aborta si el valor no es la variante esperada.
+
+### UnpackVariantGeneric
+
+|               |                                                                        |
+| ------------- | ---------------------------------------------------------------------- |
+| **Opcode**    | `0x55`                                                                 |
+| **Operandos** | `struct_variant_inst_idx` (ULEB128 -- StructVariantInstantiationIndex) |
+| **Stack**     | `[..., variant_value] -> [..., field_0, ..., field_n-1]`               |
+| **Desde**     | Bytecode v7                                                            |
+
+Versión genérica de `UnpackVariant`.
+
+### TestVariant
+
+|               |                                                                                     |
+| ------------- | ----------------------------------------------------------------------------------- |
+| **Opcode**    | `0x56`                                                                              |
+| **Operandos** | `struct_variant_handle_idx` (ULEB128 -- StructVariantHandleIndex)                   |
+| **Stack**     | `[..., &variant_value] -> [..., bool]` o `[..., &mut variant_value] -> [..., bool]` |
+| **Desde**     | Bytecode v7                                                                         |
+
+Desapila una referencia (inmutable o mutable) a un valor enum y apila `true` si el valor es la
+variante especificada, `false` en caso contrario. La referencia se consume.
+
+### TestVariantGeneric
+
+|               |                                                                                     |
+| ------------- | ----------------------------------------------------------------------------------- |
+| **Opcode**    | `0x57`                                                                              |
+| **Operandos** | `struct_variant_inst_idx` (ULEB128 -- StructVariantInstantiationIndex)              |
+| **Stack**     | `[..., &variant_value] -> [..., bool]` o `[..., &mut variant_value] -> [..., bool]` |
+| **Desde**     | Bytecode v7                                                                         |
+
+Versión genérica de `TestVariant`.
+
+### ImmBorrowVariantField
+
+|               |                                                                                                 |
+| ------------- | ----------------------------------------------------------------------------------------------- |
+| **Opcode**    | `0x4E`                                                                                          |
+| **Operandos** | `variant_field_handle_idx` (ULEB128 -- VariantFieldHandleIndex)                                 |
+| **Stack**     | `[..., &variant_value] -> [..., &FieldType]` o `[..., &mut variant_value] -> [..., &FieldType]` |
+| **Desde**     | Bytecode v7                                                                                     |
+
+Desapila una referencia a un valor enum. Si el valor es la variante esperada, apila una
+referencia inmutable al campo especificado. Aborta si el valor no es la variante esperada.
+
+### ImmBorrowVariantFieldGeneric
+
+|               |                                                                                                 |
+| ------------- | ----------------------------------------------------------------------------------------------- |
+| **Opcode**    | `0x50`                                                                                          |
+| **Operandos** | `variant_field_inst_idx` (ULEB128 -- VariantFieldInstantiationIndex)                            |
+| **Stack**     | `[..., &variant_value] -> [..., &FieldType]` o `[..., &mut variant_value] -> [..., &FieldType]` |
+| **Desde**     | Bytecode v7                                                                                     |
+
+Versión genérica de `ImmBorrowVariantField`.
+
+### MutBorrowVariantField
+
+|               |                                                                 |
+| ------------- | --------------------------------------------------------------- |
+| **Opcode**    | `0x4F`                                                          |
+| **Operandos** | `variant_field_handle_idx` (ULEB128 -- VariantFieldHandleIndex) |
+| **Stack**     | `[..., &mut variant_value] -> [..., &mut FieldType]`            |
+| **Desde**     | Bytecode v7                                                     |
+
+Desapila una referencia mutable a un valor enum. Si el valor es la variante esperada, apila una
+referencia mutable al campo especificado. Aborta si el valor no es la variante esperada.
+
+### MutBorrowVariantFieldGeneric
+
+|               |                                                                      |
+| ------------- | -------------------------------------------------------------------- |
+| **Opcode**    | `0x51`                                                               |
+| **Operandos** | `variant_field_inst_idx` (ULEB128 -- VariantFieldInstantiationIndex) |
+| **Stack**     | `[..., &mut variant_value] -> [..., &mut FieldType]`                 |
+| **Desde**     | Bytecode v7                                                          |
+
+Versión genérica de `MutBorrowVariantField`.
+
+***
+
+## Operaciones de Closure
+
+Los closures capturan un subconjunto de los argumentos de una función en el momento de la
+creación, produciendo un valor invocable. Estas instrucciones fueron introducidas en la versión 8
+del bytecode.
+
+### PackClosure
+
+|               |                                                                                     |
+| ------------- | ----------------------------------------------------------------------------------- |
+| **Opcode**    | `0x58`                                                                              |
+| **Operandos** | `func_handle_idx` (ULEB128 -- FunctionHandleIndex), `mask` (ULEB128 -- u64 bitmask) |
+| **Stack**     | `[..., captured_m, ..., captured_1] -> [..., closure]`                              |
+| **Desde**     | Bytecode v8                                                                         |
+
+Crea un closure para la función identificada por `func_handle_idx`. La `mask` es una máscara
+de bits u64 que indica qué parámetros de la función se capturan. Si la función tiene
+parámetros `(t1, t2, ..., tn)` y el bit `j` de `mask` está activado, entonces el parámetro
+`j` se captura del stack.
+
+Los valores capturados se desapilan del stack (en orden inverso de sus posiciones de parámetro).
+El closure resultante, cuando se invoca, aceptará solo los parámetros no capturados como
+argumentos.
+
+El conjunto de abilities del valor closure es la intersección de las abilities de todos los
+valores capturados intersectada con las abilities inherentes de un handle de función (`copy` +
+`drop`, más `store` si la función es pública).
+
+### PackClosureGeneric
+
+|               |                                                                                          |
+| ------------- | ---------------------------------------------------------------------------------------- |
+| **Opcode**    | `0x59`                                                                                   |
+| **Operandos** | `func_inst_idx` (ULEB128 -- FunctionInstantiationIndex), `mask` (ULEB128 -- u64 bitmask) |
+| **Stack**     | `[..., captured_m, ..., captured_1] -> [..., closure]`                                   |
+| **Desde**     | Bytecode v8                                                                              |
+
+Versión genérica de `PackClosure`. Se usa cuando la función que se captura es una instanciación
+genérica. Una función genérica no instanciada no puede usarse para crear un closure.
+
+### CallClosure
+
+|               |                                                                       |
+| ------------- | --------------------------------------------------------------------- |
+| **Opcode**    | `0x5A`                                                                |
+| **Operandos** | `sig_idx` (ULEB128 -- SignatureIndex, codificando el tipo de función) |
+| **Stack**     | `[..., arg_1, ..., arg_n, closure] -> [..., ret_0, ..., ret_m]`       |
+| **Desde**     | Bytecode v8                                                           |
+
+Invoca un closure. El closure está en la parte superior del stack, con los argumentos restantes
+(no capturados) debajo. El `sig_idx` codifica el tipo de función esperado para propósitos de
+verificación de bytecode. En tiempo de ejecución, los argumentos capturados almacenados dentro
+del closure se combinan con los argumentos proporcionados para formar la lista completa de
+parámetros, y se llama a la función subyacente.
+
+Semánticamente:
+
+```
+CallClosure(PackClosure(f, mask, c1..cn), a1..am) == f(mask.compose(c1..cn, a1..am))
+```
+
+***
+
+## Operaciones de Vector
+
+Estas instrucciones integradas proporcionan manipulación eficiente de vectores sin pasar por
+llamadas a funciones nativas. Cada una toma un operando `SignatureIndex` que identifica el tipo
+de elemento del vector.
+
+### VecPack
+
+|               |                                                                            |
+| ------------- | -------------------------------------------------------------------------- |
+| **Opcode**    | `0x40`                                                                     |
+| **Operandos** | `elem_ty_idx` (ULEB128 -- SignatureIndex), `num_elements` (ULEB128 -- u64) |
+| **Stack**     | `[..., elem_0, ..., elem_n-1] -> [..., vector]`                            |
+
+Desapila `num_elements` valores del stack y crea un nuevo vector que los contiene en orden
+(el primero apilado = primer elemento). Todos los valores deben coincidir con el tipo de
+elemento identificado por `elem_ty_idx`.
+
+### VecLen
+
+|               |                                                                           |
+| ------------- | ------------------------------------------------------------------------- |
+| **Opcode**    | `0x41`                                                                    |
+| **Operandos** | `elem_ty_idx` (ULEB128 -- SignatureIndex)                                 |
+| **Stack**     | `[..., &vector<T>] -> [..., u64]` o `[..., &mut vector<T>] -> [..., u64]` |
+
+Desapila una referencia a un vector y apila su longitud como `u64`.
+
+### VecImmBorrow
+
+|               |                                                                                       |
+| ------------- | ------------------------------------------------------------------------------------- |
+| **Opcode**    | `0x42`                                                                                |
+| **Operandos** | `elem_ty_idx` (ULEB128 -- SignatureIndex)                                             |
+| **Stack**     | `[..., &vector<T>, index] -> [..., &T]` o `[..., &mut vector<T>, index] -> [..., &T]` |
+
+Desapila un índice `u64` y una referencia a un vector, luego apila una referencia inmutable al
+elemento en ese índice. Aborta si el índice está fuera de límites.
+
+### VecMutBorrow
+
+|               |                                                 |
+| ------------- | ----------------------------------------------- |
+| **Opcode**    | `0x43`                                          |
+| **Operandos** | `elem_ty_idx` (ULEB128 -- SignatureIndex)       |
+| **Stack**     | `[..., &mut vector<T>, index] -> [..., &mut T]` |
+
+Desapila un índice `u64` y una referencia mutable al vector, luego apila una referencia mutable
+al elemento en ese índice. Aborta si el índice está fuera de límites.
+
+### VecPushBack
+
+|               |                                           |
+| ------------- | ----------------------------------------- |
+| **Opcode**    | `0x44`                                    |
+| **Operandos** | `elem_ty_idx` (ULEB128 -- SignatureIndex) |
+| **Stack**     | `[..., &mut vector<T>, value] -> [...]`   |
+
+Desapila un valor y una referencia mutable al vector, luego agrega el valor al final del vector.
+
+### VecPopBack
+
+|               |                                           |
+| ------------- | ----------------------------------------- |
+| **Opcode**    | `0x45`                                    |
+| **Operandos** | `elem_ty_idx` (ULEB128 -- SignatureIndex) |
+| **Stack**     | `[..., &mut vector<T>] -> [..., T]`       |
+
+Desapila una referencia mutable al vector, elimina el último elemento del vector y apila ese
+elemento en el stack. Aborta si el vector está vacío.
+
+### VecUnpack
+
+|               |                                                                            |
+| ------------- | -------------------------------------------------------------------------- |
+| **Opcode**    | `0x46`                                                                     |
+| **Operandos** | `elem_ty_idx` (ULEB128 -- SignatureIndex), `num_elements` (ULEB128 -- u64) |
+| **Stack**     | `[..., vector<T>] -> [..., elem_0, ..., elem_n-1]`                         |
+
+Desapila un vector (por valor), lo destruye y apila todos los `num_elements` elementos en el
+stack en orden (el primer elemento se apila primero). Aborta si la longitud real del vector no
+es igual a `num_elements`.
+
+### VecSwap
+
+|               |                                           |
+| ------------- | ----------------------------------------- |
+| **Opcode**    | `0x47`                                    |
+| **Operandos** | `elem_ty_idx` (ULEB128 -- SignatureIndex) |
+| **Stack**     | `[..., &mut vector<T>, i, j] -> [...]`    |
+
+Desapila dos índices `u64` (`j` en la parte superior, luego `i`) y una referencia mutable al
+vector, luego intercambia los elementos en las posiciones `i` y `j`. Aborta si alguno de los
+índices está fuera de límites.
+
+***
+
+## Operaciones de Carga de Enteros con Signo
+
+Estas instrucciones apilan constantes enteras con signo en el stack. Fueron introducidas en la
+versión 9 del bytecode junto con el sistema de tipos de enteros con signo.
+
+### LdI8
+
+|               |                                |
+| ------------- | ------------------------------ |
+| **Opcode**    | `0x5B`                         |
+| **Operandos** | `i8_value` (1 byte, con signo) |
+| **Stack**     | `[...] -> [..., i8_value]`     |
+| **Desde**     | Bytecode v9                    |
+
+Apila la constante `i8` dada en el stack.
+
+### LdI16
+
+|               |                                                 |
+| ------------- | ----------------------------------------------- |
+| **Opcode**    | `0x5C`                                          |
+| **Operandos** | `i16_value` (2 bytes, little-endian, con signo) |
+| **Stack**     | `[...] -> [..., i16_value]`                     |
+| **Desde**     | Bytecode v9                                     |
+
+Apila la constante `i16` dada en el stack.
+
+### LdI32
+
+|               |                                                 |
+| ------------- | ----------------------------------------------- |
+| **Opcode**    | `0x5D`                                          |
+| **Operandos** | `i32_value` (4 bytes, little-endian, con signo) |
+| **Stack**     | `[...] -> [..., i32_value]`                     |
+| **Desde**     | Bytecode v9                                     |
+
+Apila la constante `i32` dada en el stack.
+
+### LdI64
+
+|               |                                                 |
+| ------------- | ----------------------------------------------- |
+| **Opcode**    | `0x5E`                                          |
+| **Operandos** | `i64_value` (8 bytes, little-endian, con signo) |
+| **Stack**     | `[...] -> [..., i64_value]`                     |
+| **Desde**     | Bytecode v9                                     |
+
+Apila la constante `i64` dada en el stack.
+
+### LdI128
+
+|               |                                                   |
+| ------------- | ------------------------------------------------- |
+| **Opcode**    | `0x5F`                                            |
+| **Operandos** | `i128_value` (16 bytes, little-endian, con signo) |
+| **Stack**     | `[...] -> [..., i128_value]`                      |
+| **Desde**     | Bytecode v9                                       |
+
+Apila la constante `i128` dada en el stack.
+
+### LdI256
+
+|               |                                                   |
+| ------------- | ------------------------------------------------- |
+| **Opcode**    | `0x60`                                            |
+| **Operandos** | `i256_value` (32 bytes, little-endian, con signo) |
+| **Stack**     | `[...] -> [..., i256_value]`                      |
+| **Desde**     | Bytecode v9                                       |
+
+Apila la constante `i256` dada en el stack.

@@ -1,0 +1,470 @@
+---
+title: "Module 二进制格式"
+description: "Aptos Move VM 使用的 Move module 二进制格式的完整规范，包括头部布局、表目录和所有表类型。"
+sidebar:
+  label: "Module Format"
+---
+
+编译后的 Move module 是一个自包含的二进制 blob，Aptos Move VM 可以对其进行验证和执行。该二进制文件分为三个依次排列的区域：固定大小的**头部**、可变长度的**表目录**，以及**表数据**本身。本文档节中其他地方引用的每个池、handle 表和定义表都存储在这些表数据区域中。
+
+本页面以足够的细节描述了二进制布局，使你可以从头开始编写解析器或序列化器。有关这些表中出现的类型，请参阅[类型系统](/zh/build/smart-contracts/bytecode/type-system)页面。有关存储在函数体中的指令，请参阅[指令集参考](/zh/build/smart-contracts/bytecode/instructions)。
+
+## 头部
+
+每个 module 二进制文件都以相同的固定大小头部开始。
+
+```
+Offset  Size   Field
+------  -----  ---------------------
+0x00    4      Magic bytes
+0x04    4      Version word
+0x08    ...    (table directory follows)
+```
+
+### Magic 字节
+
+前四个字节始终为 `0xA1 0x1C 0xEB 0x0B`。任何不以此序列开头的文件都不是有效的 Move 二进制文件。该 magic 值有时写作 32 位小端整数 `0x0BEB1CA1`。
+
+### Version 字段
+
+第 4 到第 7 字节构成一个小端 `u32`，编码 bytecode 格式版本。在 Aptos 上，此字段与常量 `APTOS_BYTECODE_VERSION_MASK`（`0x0A000000`）进行按位或运算。要恢复原始版本号，需屏蔽高位字节：
+
+```
+plain_version = version_word & 0x00FFFFFF
+```
+
+例如，一个以 bytecode 版本 9 编译的 module 在第 4--7 字节存储 `0x0A000009`。VM 读取此字段，提取 `9`，并使用该数字决定验证期间可用哪些特性。有关每个版本引入的内容，请参阅 [Bytecode 版本历史](/zh/build/smart-contracts/bytecode/version-history)。
+
+接受的最低版本为 **5**，当前最高版本为 **10**。
+
+## ULEB128 编码
+
+二进制文件中的大多数可变长度整数——表计数、索引、长度以及表条目中的许多字段——使用 **ULEB128**（Unsigned Little-Endian Base 128）编码。ULEB128 将非负整数编码为一个或多个字节：
+
+1. 取值的最低 7 位放入输出字节。
+2. 如果剩余值（右移 7 位后）非零，设置当前字节的高位（0x80）以表示后续还有更多字节，然后对移位后的值从步骤 1 重复。
+3. 如果剩余值为零，保持高位清零并停止。
+
+### 示例
+
+| 值     | ULEB128 字节       |
+| ----- | ---------------- |
+| 0     | `0x00`           |
+| 1     | `0x01`           |
+| 127   | `0x7F`           |
+| 128   | `0x80 0x01`      |
+| 624   | `0xF0 0x04`      |
+| 16384 | `0x80 0x80 0x01` |
+
+所有索引类型（`ModuleHandleIndex`、`StructHandleIndex`、`SignatureIndex` 等）都是序列化为 ULEB128 的 `u16` 值。因此最大可表示的索引值为 65,535。
+
+## 表目录
+
+紧接在 8 字节头部之后，二进制文件包含一个**表目录**，描述哪些表存在以及它们的数据从哪里开始。
+
+```
+Offset  Encoding  Field
+------  --------  ------------------------------------------------
+0x08    ULEB128   table_count  -- number of table entries that follow
+        ...       table_entry[0]
+        ...       table_entry[1]
+        ...       ...
+        ...       table_entry[table_count - 1]
+```
+
+每个表条目有三个字段：
+
+| 字段       | 编码      | 描述                 |
+| -------- | ------- | ------------------ |
+| `kind`   | `u8`    | 表类型代码（参见下方参考）      |
+| `offset` | ULEB128 | 从表数据区域起始位置算起的字节偏移量 |
+| `length` | ULEB128 | 此表数据的字节长度          |
+
+只有非空表才会出现在目录中。例如，如果一个 module 没有 friend 声明，则 `FRIEND_DECLS` 条目会被完全省略。
+
+**表数据区域**紧接在最后一个目录条目之后开始。目录中的所有 `offset` 值都是相对于此区域的起始位置——而不是相对于文件的起始位置。
+
+### Self Module Handle 索引
+
+在所有表数据之后，module 二进制文件以一个额外的 ULEB128 值 `self_module_handle_idx` 结尾。此索引指向 Module Handle 表，标识哪个条目代表 module 本身（与导入的 module 相对）。解析器必须读取此尾部值才能完整消费该二进制文件。
+
+## 表类型参考
+
+以下各节记录了 Move 二进制格式识别的每种表类型。每个条目列出了表的数字代码、其行的含义以及每行的字节级布局。
+
+### MODULE\_HANDLES (0x01)
+
+每个条目通过其账户地址和名称标识一个 Move module。module 自身的 self-handle 和每个导入的 module 各占一个条目。
+
+| 字段        | 编码      | 描述                         |
+| --------- | ------- | -------------------------- |
+| `address` | ULEB128 | ADDRESS\_IDENTIFIERS 表中的索引 |
+| `name`    | ULEB128 | IDENTIFIERS 表中的索引          |
+
+### STRUCT\_HANDLES (0x02)
+
+每个条目描述一个 struct（或 enum）类型的标识——定义它的 module、名称、ability 和类型参数。本地定义和导入的 struct 类型都出现在这里。
+
+| 字段                 | 编码          | 描述                                                                                  |
+| ------------------ | ----------- | ----------------------------------------------------------------------------------- |
+| `module`           | ULEB128     | MODULE\_HANDLES 表中的索引                                                               |
+| `name`             | ULEB128     | IDENTIFIERS 表中的索引                                                                   |
+| `abilities`        | `u8`        | Ability 位掩码（参见 [Ability](/zh/build/smart-contracts/bytecode/type-system#abilities)） |
+| `type_param_count` | ULEB128     | 类型参数数量                                                                              |
+| 每个类型参数：            |             |                                                                                     |
+| `constraints`      | `u8`        | 此类型参数所需的 ability                                                                    |
+| `is_phantom`       | `u8`（0 或 1） | 此参数是否为 phantom                                                                      |
+
+### FUNCTION\_HANDLES (0x03)
+
+每个条目描述一个函数的签名——定义它的 module、名称、参数类型、返回类型和类型参数约束。
+
+| 字段                 | 编码      | 描述                     |
+| ------------------ | ------- | ---------------------- |
+| `module`           | ULEB128 | MODULE\_HANDLES 表中的索引  |
+| `name`             | ULEB128 | IDENTIFIERS 表中的索引      |
+| `parameters`       | ULEB128 | SIGNATURES 表中的索引（参数类型） |
+| `return_`          | ULEB128 | SIGNATURES 表中的索引（返回类型） |
+| `type_param_count` | ULEB128 | 泛型类型参数数量               |
+| 每个类型参数：            |         |                        |
+| `constraints`      | `u8`    | 此类型参数所需的 ability 集     |
+
+从 bytecode v7 开始，function handle 还可能携带**访问说明符**，从 v8 开始可能携带**函数属性**。当存在时，它们在类型参数之后序列化。
+
+### FUNCTION\_INST (0x04)
+
+每个条目将一个泛型函数与特定实例化的具体类型参数配对。
+
+| 字段                | 编码      | 描述                       |
+| ----------------- | ------- | ------------------------ |
+| `handle`          | ULEB128 | FUNCTION\_HANDLES 表中的索引  |
+| `type_parameters` | ULEB128 | SIGNATURES 表中的索引（具体类型参数） |
+
+### SIGNATURES (0x05)
+
+Signature 表存储类型列表。每个条目是一个 **Signature**——一个 `SignatureToken` 值的序列，表示参数列表、返回类型、局部变量类型或泛型实例化的类型参数。
+
+| 字段            | 编码                  | 描述                                                                                    |
+| ------------- | ------------------- | ------------------------------------------------------------------------------------- |
+| `token_count` | ULEB128             | 此 signature 中的 token 数量                                                               |
+| 每个 token：     | 递归 `SignatureToken` | 参见 [Signature Token](/zh/build/smart-contracts/bytecode/type-system#signature-tokens) |
+
+每个 `SignatureToken` 以标识类型种类的单字节标签开头，后面可选地跟随附加数据（索引、嵌套 token 或计数）。完整编码记录在[类型系统](/zh/build/smart-contracts/bytecode/type-system)页面中。
+
+特殊约定：`SignatureIndex(0)` 通常是空 signature `[]`，用于没有类型参数的函数。
+
+### CONSTANT\_POOL (0x06)
+
+每个条目存储一个编译时常量值及其类型。
+
+| 字段      | 编码                  | 描述            |
+| ------- | ------------------- | ------------- |
+| `type_` | 递归 `SignatureToken` | 常量的类型         |
+| `size`  | ULEB128             | 序列化数据的字节长度    |
+| `data`  | 原始字节                | BCS 序列化格式的常量值 |
+
+常量在运行时由 `LdConst` 指令（opcode `0x07`）加载。数据字节采用 [BCS](https://github.com/diem/bcs)（Binary Canonical Serialization）格式。
+
+### IDENTIFIERS (0x07)
+
+每个条目是一个 UTF-8 字符串，用作 module、struct、函数或字段的名称。
+
+| 字段       | 编码      | 描述            |
+| -------- | ------- | ------------- |
+| `length` | ULEB128 | UTF-8 字符串的字节数 |
+| `bytes`  | 原始字节    | UTF-8 编码的字符串  |
+
+标识符必须符合 Move 的命名规则：以字母或下划线开头，仅包含字母数字字符和下划线。
+
+### ADDRESS\_IDENTIFIERS (0x08)
+
+每个条目是一个 32 字节的账户地址。没有长度前缀——每个条目恰好是 32 字节。
+
+| 字段        | 编码    | 描述       |
+| --------- | ----- | -------- |
+| `address` | 32 字节 | 账户地址，大端序 |
+
+### STRUCT\_DEFS (0x0A)
+
+每个条目定义在此 module 中声明的一个 struct 类型。它将 struct handle 连接到类型的字段布局。
+
+| 字段               | 编码      | 描述                                                               |
+| ---------------- | ------- | ---------------------------------------------------------------- |
+| `struct_handle`  | ULEB128 | STRUCT\_HANDLES 表中的索引                                            |
+| `field_info_tag` | `u8`    | `0x01` = Native，`0x02` = Declared，`0x03` = DeclaredVariants（v7+） |
+
+如果 `field_info_tag` 为 `0x02`（Declared），则字段如下：
+
+| 字段            | 编码                  | 描述               |
+| ------------- | ------------------- | ---------------- |
+| `field_count` | ULEB128             | 字段数量             |
+| 每个字段：         |                     |                  |
+| `name`        | ULEB128             | IDENTIFIERS 中的索引 |
+| `signature`   | 递归 `SignatureToken` | 字段的类型            |
+
+如果 `field_info_tag` 为 `0x03`（DeclaredVariants，bytecode v7+），则 variant 如下：
+
+| 字段              | 编码                  | 描述               |
+| --------------- | ------------------- | ---------------- |
+| `variant_count` | ULEB128             | variant 数量       |
+| 每个 variant：     |                     |                  |
+| `name`          | ULEB128             | IDENTIFIERS 中的索引 |
+| `field_count`   | ULEB128             | 此 variant 中的字段数量 |
+| 每个字段：           |                     |                  |
+| `name`          | ULEB128             | IDENTIFIERS 中的索引 |
+| `signature`     | 递归 `SignatureToken` | 字段的类型            |
+
+如果 `field_info_tag` 为 `0x01`（Native），则没有附加数据。
+
+### STRUCT\_DEF\_INST (0x0B)
+
+每个条目将一个 struct 定义与泛型实例化的具体类型参数配对。
+
+| 字段                | 编码      | 描述                       |
+| ----------------- | ------- | ------------------------ |
+| `def`             | ULEB128 | STRUCT\_DEFS 表中的索引       |
+| `type_parameters` | ULEB128 | SIGNATURES 表中的索引（具体类型参数） |
+
+### FUNCTION\_DEFS (0x0C)
+
+每个条目定义在此 module 中声明的一个函数。它将 function handle 连接到函数的实现。
+
+| 字段                 | 编码      | 描述                                               |
+| ------------------ | ------- | ------------------------------------------------ |
+| `function`         | ULEB128 | FUNCTION\_HANDLES 表中的索引                          |
+| `visibility`       | `u8`    | `0x00` = Private，`0x01` = Public，`0x03` = Friend |
+| `is_entry`         | `u8`    | 如果是 entry 函数则为 `0x01`，否则为 `0x00`                 |
+| `acquires_count`   | ULEB128 | 此函数 acquire 的资源数量                                |
+| 每个 acquired 资源：    |         |                                                  |
+| `struct_def_index` | ULEB128 | STRUCT\_DEFS 表中的索引                               |
+| `code_flag`        | `u8`    | 如果后续有代码体则为 `0x01`，native 函数为 `0x00`              |
+
+如果 `code_flag` 为 `0x01`，则紧随其后的是一个 [Code Unit](#code-unit-format)。Native 函数没有代码体。
+
+### FIELD\_HANDLES (0x0D)
+
+每个条目标识 struct 定义中的一个特定字段。
+
+| 字段      | 编码      | 描述                                |
+| ------- | ------- | --------------------------------- |
+| `owner` | ULEB128 | STRUCT\_DEFS 表中的索引                |
+| `field` | ULEB128 | struct 内的字段偏移量（MemberCount，`u16`） |
+
+### FIELD\_INST (0x0E)
+
+每个条目将一个 field handle 与具体类型参数配对，用于访问泛型 struct 上的字段。
+
+| 字段                | 编码      | 描述                       |
+| ----------------- | ------- | ------------------------ |
+| `handle`          | ULEB128 | FIELD\_HANDLES 表中的索引     |
+| `type_parameters` | ULEB128 | SIGNATURES 表中的索引（具体类型参数） |
+
+### FRIEND\_DECLS (0x0F)
+
+每个条目声明一个友元 module，该 module 可以调用此 module 中 `friend` 可见的函数。
+
+| 字段        | 编码      | 描述                         |
+| --------- | ------- | -------------------------- |
+| `address` | ULEB128 | ADDRESS\_IDENTIFIERS 表中的索引 |
+| `name`    | ULEB128 | IDENTIFIERS 表中的索引          |
+
+### METADATA (0x10)
+
+_Bytecode v5+。_ 每个条目是一个由不透明字节组成的键值对，用于编译器元数据、source map 或其他工具数据。VM 不解释 metadata 内容。
+
+| 字段           | 编码      | 描述         |
+| ------------ | ------- | ---------- |
+| `key_length` | ULEB128 | 键的字节长度     |
+| `key`        | 原始字节    | metadata 键 |
+| `val_length` | ULEB128 | 值的字节长度     |
+| `value`      | 原始字节    | metadata 值 |
+
+### VARIANT\_FIELD\_HANDLES (0x11)
+
+_Bytecode v7+。_ 每个条目标识在 enum 类型的一个或多个 variant 之间共享的字段。
+
+| 字段              | 编码      | 描述                                  |
+| --------------- | ------- | ----------------------------------- |
+| `struct_index`  | ULEB128 | STRUCT\_DEFS 表中的索引（enum 定义）         |
+| `variant_count` | ULEB128 | 后续的 variant 索引数量                    |
+| 每个 variant：     |         |                                     |
+| `variant`       | ULEB128 | enum variant 列表中的 variant 索引（`u16`） |
+| `field`         | ULEB128 | variant 内的字段偏移量（MemberCount，`u16`）  |
+
+### VARIANT\_FIELD\_INST (0x12)
+
+_Bytecode v7+。_ 每个条目将一个 variant field handle 与具体类型参数配对。
+
+| 字段                | 编码      | 描述                            |
+| ----------------- | ------- | ----------------------------- |
+| `handle`          | ULEB128 | VARIANT\_FIELD\_HANDLES 表中的索引 |
+| `type_parameters` | ULEB128 | SIGNATURES 表中的索引（具体类型参数）      |
+
+### STRUCT\_VARIANT\_HANDLES (0x13)
+
+_Bytecode v7+。_ 每个条目标识 enum 类型的一个特定 variant。
+
+| 字段             | 编码      | 描述                                  |
+| -------------- | ------- | ----------------------------------- |
+| `struct_index` | ULEB128 | STRUCT\_DEFS 表中的索引（enum 定义）         |
+| `variant`      | ULEB128 | enum variant 列表中的 variant 索引（`u16`） |
+
+### STRUCT\_VARIANT\_INST (0x14)
+
+_Bytecode v7+。_ 每个条目将一个 struct variant handle 与具体类型参数配对。
+
+| 字段                | 编码      | 描述                             |
+| ----------------- | ------- | ------------------------------ |
+| `handle`          | ULEB128 | STRUCT\_VARIANT\_HANDLES 表中的索引 |
+| `type_parameters` | ULEB128 | SIGNATURES 表中的索引（具体类型参数）       |
+
+### 表代码汇总
+
+下表列出了每种表类型及其代码，便于快速参考。
+
+| 代码     | 表类型                      | 引入版本 |
+| ------ | ------------------------ | ---- |
+| `0x01` | MODULE\_HANDLES          | v5   |
+| `0x02` | STRUCT\_HANDLES          | v5   |
+| `0x03` | FUNCTION\_HANDLES        | v5   |
+| `0x04` | FUNCTION\_INST           | v5   |
+| `0x05` | SIGNATURES               | v5   |
+| `0x06` | CONSTANT\_POOL           | v5   |
+| `0x07` | IDENTIFIERS              | v5   |
+| `0x08` | ADDRESS\_IDENTIFIERS     | v5   |
+| `0x0A` | STRUCT\_DEFS             | v5   |
+| `0x0B` | STRUCT\_DEF\_INST        | v5   |
+| `0x0C` | FUNCTION\_DEFS           | v5   |
+| `0x0D` | FIELD\_HANDLES           | v5   |
+| `0x0E` | FIELD\_INST              | v5   |
+| `0x0F` | FRIEND\_DECLS            | v5   |
+| `0x10` | METADATA                 | v5   |
+| `0x11` | VARIANT\_FIELD\_HANDLES  | v7   |
+| `0x12` | VARIANT\_FIELD\_INST     | v7   |
+| `0x13` | STRUCT\_VARIANT\_HANDLES | v7   |
+| `0x14` | STRUCT\_VARIANT\_INST    | v7   |
+
+注意：代码 `0x09` 是保留的，在当前格式中未使用。
+
+## Code Unit 格式
+
+每个非 native 函数定义包含一个描述函数体的 **code unit**。Code unit 在 FUNCTION\_DEFS 表条目中内联序列化，紧接在函数定义的元数据字段之后。
+
+### 布局
+
+```
+Field               Encoding    Description
+-----------------   ---------   -----------------------------------
+locals              ULEB128     Index into SIGNATURES table
+                                (types of local variables)
+bytecode_count      ULEB128     Number of instructions that follow
+bytecode[0]         variable    First instruction
+bytecode[1]         variable    Second instruction
+...                 ...         ...
+bytecode[count-1]   variable    Last instruction
+```
+
+### Locals Signature
+
+`locals` 字段是一个 `SignatureIndex`，指向 SIGNATURES 表中的一个 `Signature`。该 signature 列出了函数体中声明的所有局部变量的类型（不包括函数参数，参数是函数 handle 的参数签名的一部分）。在运行时，VM 分配一个 locals 数组，其前几个条目保存函数的参数（从调用者的操作数 stack 复制），其余条目对应 locals signature。
+
+### Bytecode 流
+
+bytecode 数组中的每条指令以单个 opcode 字节开头，后面可选地跟随一个或多个操作数。操作数的编码取决于指令：
+
+- **索引操作数**（池索引、定义索引）编码为 ULEB128。
+- **分支偏移量**编码为小端格式的 `u16`。它们是从函数 bytecode 数组起始位置算起的绝对偏移量。
+- **整数立即数**（`LdU8`、`LdU64` 等）以与其类型宽度匹配的固定宽度小端格式编码（`u8` 为 1 字节，`u64` 为 8 字节，`u256` 为 32 字节，依此类推）。
+- **Closure 掩码**（`PackClosure`、`PackClosureGeneric`）编码为 ULEB128 `u64` 值。
+
+每个 opcode 的完整指令编码记录在[指令集参考](/zh/build/smart-contracts/bytecode/instructions)中。
+
+### 示例
+
+考虑一个函数 `fun add_one(x: u64): u64 { x + 1 }`。其 code unit 可能如下所示：
+
+```
+locals:          SignatureIndex(0)   // no additional locals beyond parameters
+bytecode_count:  4
+bytecode:
+  0x0B 0x00      // MoveLoc(0)       -- push parameter x
+  0x06 0x01 0x00 0x00 0x00 0x00 0x00 0x00 0x00  // LdU64(1)
+  0x16           // Add
+  0x02           // Ret
+```
+
+`MoveLoc(0)` 将第一个参数（`x`）推入 stack。`LdU64(1)` 将常量 `1` 作为 8 字节小端立即数推入。`Add` 弹出两个值并推入它们的和。`Ret` 将结果返回给调用者。
+
+## 完整布局
+
+下图展示了 module 二进制文件从头到尾的完整布局。
+
+```
+┌─────────────────────────────────────┐
+│  Magic: 0xA1 0x1C 0xEB 0x0B        │  4 bytes
+├─────────────────────────────────────┤
+│  Version word (LE u32)              │  4 bytes
+├─────────────────────────────────────┤
+│  Table count (ULEB128)              │  1--5 bytes
+├─────────────────────────────────────┤
+│  Table entry 0:                     │
+│    kind (u8)                        │
+│    offset (ULEB128)                 │
+│    length (ULEB128)                 │
+├─────────────────────────────────────┤
+│  Table entry 1 ...                  │
+│  ...                                │
+│  Table entry N-1                    │
+├═════════════════════════════════════┤  <-- table data region starts here
+│  Table data (MODULE_HANDLES)        │
+│  Table data (STRUCT_HANDLES)        │
+│  Table data (FUNCTION_HANDLES)      │
+│  Table data (FUNCTION_INST)         │
+│  Table data (SIGNATURES)            │
+│  Table data (IDENTIFIERS)           │
+│  Table data (ADDRESS_IDENTIFIERS)   │
+│  Table data (CONSTANT_POOL)         │
+│  Table data (METADATA)              │
+│  Table data (STRUCT_DEFS)           │
+│  Table data (STRUCT_DEF_INST)       │
+│  Table data (FUNCTION_DEFS)         │
+│  Table data (FIELD_HANDLES)         │
+│  Table data (FIELD_INST)            │
+│  Table data (FRIEND_DECLS)          │
+│  Table data (variant tables, v7+)   │
+├─────────────────────────────────────┤
+│  self_module_handle_idx (ULEB128)   │  trailing index
+└─────────────────────────────────────┘
+```
+
+表数据区段按序列化器确定的顺序排列。实际上，顺序遵循表类型代码（MODULE\_HANDLES 在前，variant 表在后），但解析器应依赖目录偏移量而不是假设任何特定顺序。
+
+## 兼容性说明
+
+### 版本强制执行
+
+VM 执行严格的基于版本的兼容性规则：
+
+- **最低版本。** VM 拒绝 bytecode 版本低于 5 的任何 module。不支持旧版本。
+- **最高版本。** VM 拒绝 bytecode 版本高于其自身最大值（当前为 10）的任何 module。发布为未来版本编译的 module 会导致交易失败。
+- **特性门控。** 每条指令、signature token 和表类型都与引入它的版本关联。bytecode 验证器拒绝比 module 声明版本更新的特性。例如，声明版本 6 的 module 不能包含 `PackVariant` 指令或 variant 相关表，即使 VM 本身支持版本 7+。
+
+### 跨版本互操作性
+
+以不同 bytecode 版本编译的 module 可以在链上共存并自由互相调用。版本号仅控制 module 允许\_包含\_什么，而不控制它可以\_交互\_什么。v5 module 可以调用 v10 module 中的函数，反之亦然。
+
+### Aptos 版本掩码
+
+`APTOS_BYTECODE_VERSION_MASK`（`0x0A000000`）用于区分 Aptos 编译的 module 和为其他基于 Move 的链编译的 module。version 字段的高位字节充当链标识符。解析 module 二进制文件时，用 `0x00FFFFFF` 掩码 version 字段以提取原始版本号。
+
+如果二进制文件的高位字节与预期掩码不匹配，VM 会拒绝它。这可以防止意外部署为不同 Move 运行时编译的 module。
+
+### 去重保证
+
+序列化器保证没有表包含重复条目。相同的 signature、相同的标识符和相同的地址在各自的表中只出现一次。解析器可以在单个 module 内将索引相等性作为结构相等性的代理。
+
+## 延伸阅读
+
+- [指令集参考](/zh/build/smart-contracts/bytecode/instructions)——每个 opcode、其操作数、stack 效果和语义
+- [Bytecode 类型系统](/zh/build/smart-contracts/bytecode/type-system)——signature token、ability、handle 间接引用模型和泛型
+- [Bytecode 版本历史](/zh/build/smart-contracts/bytecode/version-history)——从 v5 到 v10 每个版本的变更内容

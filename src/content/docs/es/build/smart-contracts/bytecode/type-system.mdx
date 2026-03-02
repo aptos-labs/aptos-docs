@@ -1,0 +1,537 @@
+---
+title: "Sistema de Tipos del Bytecode"
+description: "Cómo se representan los tipos en el bytecode de Move, incluyendo signature tokens, abilities, genéricos y el modelo de indirección por handles."
+sidebar:
+  label: "Sistema de Tipos"
+---
+
+El bytecode de Move representa cada tipo como un **signature token** -- una estructura de datos
+etiquetada y recursiva almacenada en la
+[tabla de Signatures](/es/build/smart-contracts/bytecode/module-format#table-types-reference).
+Esta página documenta cómo se codifican los tipos a nivel binario, cómo las abilities los
+restringen, y cómo el modelo de indirección por handles conecta los tipos con sus definiciones.
+
+## Signature Tokens
+
+Un `SignatureToken` es la representación central de tipos en el bytecode de Move. Cada token
+comienza con un byte de etiqueta que identifica el tipo, opcionalmente seguido de datos
+adicionales (un token interno, un índice o una lista de argumentos de tipo).
+
+### Tabla de Referencia Rápida
+
+| Token                 | Etiqueta | Datos Adicionales                                               | Versión |
+| --------------------- | -------- | --------------------------------------------------------------- | ------- |
+| `Bool`                | `0x01`   | --                                                              | v5+     |
+| `U8`                  | `0x02`   | --                                                              | v5+     |
+| `U64`                 | `0x03`   | --                                                              | v5+     |
+| `U128`                | `0x04`   | --                                                              | v5+     |
+| `Address`             | `0x05`   | --                                                              | v5+     |
+| `Reference`           | `0x06`   | `SignatureToken` interno                                        | v5+     |
+| `MutableReference`    | `0x07`   | `SignatureToken` interno                                        | v5+     |
+| `Struct`              | `0x08`   | `StructHandleIndex` (ULEB128)                                   | v5+     |
+| `TypeParameter`       | `0x09`   | índice `u16` (ULEB128)                                          | v5+     |
+| `Vector`              | `0x0A`   | `SignatureToken` interno                                        | v5+     |
+| `StructInstantiation` | `0x0B`   | `StructHandleIndex` + conteo + tokens de tipo                   | v5+     |
+| `Signer`              | `0x0C`   | --                                                              | v5+     |
+| `U16`                 | `0x0D`   | --                                                              | v6+     |
+| `U32`                 | `0x0E`   | --                                                              | v6+     |
+| `U256`                | `0x0F`   | --                                                              | v6+     |
+| `Function`            | `0x10`   | tokens de parámetros + tokens de retorno + máscara de abilities | v8+     |
+| `I8`                  | `0x11`   | --                                                              | v9+     |
+| `I16`                 | `0x12`   | --                                                              | v9+     |
+| `I32`                 | `0x13`   | --                                                              | v9+     |
+| `I64`                 | `0x14`   | --                                                              | v9+     |
+| `I128`                | `0x15`   | --                                                              | v9+     |
+| `I256`                | `0x16`   | --                                                              | v9+     |
+
+### Tokens Primitivos
+
+Los tokens primitivos no llevan datos adicionales -- el byte de etiqueta solo identifica el tipo.
+
+**Enteros sin signo:** `Bool` (0x01), `U8` (0x02), `U64` (0x03), `U128` (0x04), `U16` (0x0D),
+`U32` (0x0E), `U256` (0x0F). Todos los tipos de enteros sin signo tienen las abilities `copy`,
+`drop` y `store`.
+
+**Enteros con signo (v9+):** `I8` (0x11), `I16` (0x12), `I32` (0x13), `I64` (0x14), `I128` (0x15),
+`I256` (0x16). Estos comparten las mismas abilities que sus contrapartes sin signo.
+
+**Tipos especiales:** `Address` (0x05) tiene `copy + drop + store`. `Signer` (0x0C) solo tiene
+`drop` (no puede copiarse ni almacenarse).
+
+### Tokens Compuestos
+
+**Vector** (0x0A) es seguido por un único `SignatureToken` interno que representa el tipo de
+elemento. Por ejemplo, `vector<u64>` se serializa como `0x0A 0x03` -- la etiqueta `Vector`
+seguida de la etiqueta `U64`. Vector hereda `copy`, `drop` y `store` de su tipo de elemento.
+
+**Struct** (0x08) es seguido por un `StructHandleIndex` codificado en ULEB128 que apunta a la
+tabla StructHandle. Esto se usa para tipos struct no genéricos (o structs genéricos cuyos
+parámetros de tipo no están instanciados en este punto de uso).
+
+**StructInstantiation** (0x0B) representa un struct genérico con argumentos de tipo concretos.
+Es seguido por:
+
+1. Un `StructHandleIndex` codificado en ULEB128
+2. Un conteo codificado en ULEB128 de argumentos de tipo
+3. Esa cantidad de valores `SignatureToken`, uno por argumento de tipo
+
+Por ejemplo, `Table<address, u64>` se serializaría como `0x0B <handle_idx> 0x02 0x05 0x03`.
+
+### Tokens de Referencia
+
+**Reference** (0x06) y **MutableReference** (0x07) cada uno envuelve un único `SignatureToken`
+interno. Las referencias siempre tienen las abilities `copy + drop`. No pueden aparecer dentro
+de structs -- el verificador rechaza cualquier campo de struct con un tipo de referencia.
+
+### Token de Parámetro de Tipo Genérico
+
+**TypeParameter** (0x09) es seguido por un índice `u16` codificado en ULEB128 que se refiere a
+un parámetro de tipo del struct o función genérico que lo contiene. Por ejemplo, en una función
+`fun foo<T, U>(x: T)`, el parámetro `T` aparece como `0x09 0x00` (índice de parámetro de tipo
+0\) y `U` sería `0x09 0x01` (índice de parámetro de tipo 1).
+
+### Token Function (v8+)
+
+**Function** (0x10) representa un tipo de función de primera clase (usado con closures). Se
+serializa como:
+
+1. Un conteo codificado en ULEB128 de tipos de parámetro
+2. Esa cantidad de valores `SignatureToken` para los parámetros
+3. Un conteo codificado en ULEB128 de tipos de retorno
+4. Esa cantidad de valores `SignatureToken` para los retornos
+5. Una máscara de bits `u8` de abilities (ver [Abilities](#abilities))
+
+### Profundidad del Signature Token
+
+La VM impone una profundidad máxima de anidamiento de **256** para signature tokens. Los tipos
+profundamente anidados como `vector<vector<vector<...>>>` se rechazan durante la deserialización
+si exceden este límite.
+
+## Abilities
+
+Move usa cuatro **abilities** para controlar qué operaciones soporta un tipo. Las abilities se
+codifican como una máscara de bits `u8`, donde cada ability ocupa una posición de bit individual.
+
+### Valores de Bit de Abilities
+
+| Ability | Valor de Bit | Descripción                                                                                 |
+| ------- | ------------ | ------------------------------------------------------------------------------------------- |
+| `copy`  | `0x01`       | Los valores pueden duplicarse (vía `CopyLoc`, `ReadRef`)                                    |
+| `drop`  | `0x02`       | Los valores pueden descartarse (vía `Pop`, `WriteRef`, `StLoc`, al salir del ámbito)        |
+| `store` | `0x04`       | Los valores pueden existir dentro de un struct en almacenamiento global                     |
+| `key`   | `0x08`       | El tipo puede servir como clave de nivel superior para operaciones de almacenamiento global |
+
+La máscara de bits es el OR a nivel de bits de los valores individuales de ability. Por ejemplo,
+`copy + drop + store` se codifica como `0x01 | 0x02 | 0x04 = 0x07`. El conjunto vacío es `0x00`.
+
+### Conjuntos Comunes de Abilities
+
+| Nombre del Conjunto | Abilities                 | Máscara de Bits | Usado Por                             |
+| ------------------- | ------------------------- | --------------- | ------------------------------------- |
+| `EMPTY`             | (ninguna)                 | `0x00`          | --                                    |
+| `PRIMITIVES`        | copy + drop + store       | `0x07`          | Bool, U8, U64, U128, Address, enteros |
+| `SIGNER`            | drop                      | `0x02`          | Signer                                |
+| `REFERENCES`        | copy + drop               | `0x03`          | Reference, MutableReference           |
+| `FUNCTIONS`         | drop                      | `0x02`          | Mínimo para tipos de función          |
+| `ALL`               | copy + drop + store + key | `0x0F`          | --                                    |
+
+### Cómo las Abilities Restringen las Instrucciones
+
+El verificador de bytecode comprueba las abilities antes de permitir ciertas instrucciones:
+
+- **`CopyLoc`** y **`ReadRef`** requieren que el tipo tenga `copy`.
+- **`Pop`**, **`WriteRef`**, **`StLoc`** (al sobrescribir), y **`Eq`/`Neq`** requieren `drop`.
+  Un valor dejado en un local cuando se ejecuta `Ret` también requiere `drop`.
+- **`MoveTo`** requiere que el tipo tenga `key`. **`MoveFrom`**, **`BorrowGlobal`**,
+  **`BorrowGlobalMut`** y **`Exists`** también requieren `key`.
+- Los campos de un struct con `key` deben tener `store` (ya que residen en almacenamiento global).
+
+### Requisitos de Abilities para Genéricos
+
+Cuando un struct genérico `S<T>` declara `has copy, drop`, el parámetro de tipo `T` debe
+satisfacer ciertas restricciones de ability para que la instanciación `S<ConcreteType>` tenga
+esas abilities. La regla es:
+
+- Para que `S<T>` tenga la ability `a`, cada parámetro de tipo no phantom `T` debe tener
+  `a.requires()`.
+- El mapeo de `requires` es: `copy` requiere `copy`, `drop` requiere `drop`, `store` requiere
+  `store`, y `key` requiere `store`.
+
+Estas restricciones se almacenan en el struct `StructTypeParameter`, que asocia cada parámetro
+de tipo con un `AbilitySet` de restricciones y una bandera `is_phantom`.
+
+### Parámetros de Tipo Phantom
+
+Un parámetro de tipo declarado como **phantom** no contribuye a los requisitos de ability del
+struct. Un parámetro phantom no aparece en ningún campo del struct -- existe solo como una
+etiqueta de tipo. Por ejemplo, en `struct Coin<phantom T> has store { value: u64 }`, el tipo
+`T` no lleva restricciones de ability porque es phantom.
+
+A nivel de bytecode, `StructTypeParameter` registra `is_phantom: true` para parámetros phantom.
+El verificador confirma que los parámetros phantom nunca se usen en posiciones no phantom dentro
+de los tipos de campo.
+
+## Modelo de Indirección por Handles
+
+El bytecode de Move no incorpora nombres de tipo, direcciones ni firmas directamente en las
+instrucciones. En su lugar, usa un sistema de **índices** que apuntan a tablas compartidas. Esta
+indirección proporciona codificación binaria compacta, deduplicación de referencias repetidas
+y carga eficiente de módulos.
+
+### Tipos de Índice
+
+| Tipo de Índice                | Apunta A                           | Tipo Rust |
+| ----------------------------- | ---------------------------------- | --------- |
+| `ModuleHandleIndex`           | Tabla de handles de módulo         | `u16`     |
+| `StructHandleIndex`           | Tabla de handles de struct         | `u16`     |
+| `FunctionHandleIndex`         | Tabla de handles de función        | `u16`     |
+| `FieldHandleIndex`            | Tabla de handles de campo          | `u16`     |
+| `SignatureIndex`              | Tabla de signatures                | `u16`     |
+| `IdentifierIndex`             | Tabla de identificadores (cadenas) | `u16`     |
+| `AddressIdentifierIndex`      | Tabla de direcciones               | `u16`     |
+| `ConstantPoolIndex`           | Pool de constantes                 | `u16`     |
+| `StructDefinitionIndex`       | Tabla de definiciones de struct    | `u16`     |
+| `FunctionDefinitionIndex`     | Tabla de definiciones de función   | `u16`     |
+| `StructDefInstantiationIndex` | Tabla de instanciación de struct   | `u16`     |
+| `FunctionInstantiationIndex`  | Tabla de instanciación de función  | `u16`     |
+| `FieldInstantiationIndex`     | Tabla de instanciación de campo    | `u16`     |
+
+Todos los tipos de índice son valores `u16` (máximo 65,535 entradas por tabla). Se serializan
+como ULEB128 en el formato binario.
+
+### Por Qué Índices en Lugar de Datos en Línea
+
+1. **Tamaño binario compacto.** Una función podría referenciar el mismo tipo struct docenas de
+   veces. Con índices, cada referencia es un valor ULEB128 de 1--2 bytes en lugar de una cadena
+   completa de dirección de módulo + nombre.
+2. **Deduplicación.** Signatures, identificadores y direcciones idénticos se almacenan una vez y
+   se referencian por índice. El serializador asegura que no existan entradas duplicadas en
+   ninguna tabla.
+3. **Carga eficiente.** La VM puede resolver handles una vez durante la carga del módulo y
+   almacenar los resultados en caché. Las instrucciones entonces operan sobre datos previamente
+   resueltos.
+
+### Ejemplo de Cadena de Indirección
+
+Considera la instrucción `Call(FunctionHandleIndex(3))`. La VM resuelve el destino de la llamada
+a través de una cadena de búsquedas en tablas:
+
+```
+Instruction:  Call(FunctionHandleIndex(3))
+                    |
+                    v
+FunctionHandle #3:
+  module:     ModuleHandleIndex(0)  ----> ModuleHandle #0:
+  name:       IdentifierIndex(5)            address: AddressIdentifierIndex(1) -> 0x1
+  parameters: SignatureIndex(2)             name:    IdentifierIndex(2)        -> "vector"
+  return_:    SignatureIndex(1)
+                    |
+                    v
+  IdentifierIndex(5) -> "push_back"
+  SignatureIndex(2)  -> [Vector(TypeParameter(0)), TypeParameter(0)]
+  SignatureIndex(1)  -> []
+```
+
+La VM encadena a través de: operando de instrucción al handle de función, al handle de módulo
+(y desde ahí a la dirección de cuenta y el nombre del módulo), la tabla de identificadores
+(para el nombre de la función) y la tabla de signatures (para los tipos de parámetro y retorno).
+Cada paso es una búsqueda en arreglo por índice.
+
+### Resolución de Handles de Struct
+
+El mismo patrón se aplica a la resolución de tipos. Un token de signature
+`Struct(StructHandleIndex(2))` se resuelve a través de:
+
+```
+SignatureToken: Struct(StructHandleIndex(2))
+                         |
+                         v
+StructHandle #2:
+  module:          ModuleHandleIndex(1)  -> address + module name
+  name:            IdentifierIndex(4)    -> "Coin"
+  abilities:       0x07                  -> copy + drop + store
+  type_parameters: []                    -> (non-generic)
+```
+
+## Genéricos a Nivel de Bytecode
+
+Move soporta tipos y funciones genéricos (parametrizados). A nivel de bytecode, los genéricos
+usan índices de parámetro de tipo y tablas de instanciación para evitar duplicar definiciones
+para cada tipo concreto.
+
+### Representación de Parámetros de Tipo
+
+Los parámetros de tipo se representan como índices `u16` (`TypeParameterIndex`). Dentro de una
+definición de función o struct genérico, las referencias a parámetros de tipo usan el signature
+token `TypeParameter(index)`. El índice 0 es el primer parámetro de tipo, el índice 1 es el
+segundo, y así sucesivamente.
+
+- En un **struct handle**, los parámetros de tipo se almacenan como `Vec<StructTypeParameter>`,
+  donde cada entrada lleva restricciones de ability y una bandera phantom.
+- En un **function handle**, los parámetros de tipo se almacenan como `Vec<AbilitySet>`, listando
+  las abilities requeridas para cada parámetro de tipo.
+
+### Tablas de Instanciación
+
+Cuando funciones o structs genéricos se usan con argumentos de tipo concretos, el bytecode
+almacena la instanciación en una tabla separada en lugar de duplicar el handle.
+
+**FunctionInstantiation** asocia un `FunctionHandleIndex` con un `SignatureIndex` que contiene
+los argumentos de tipo concretos:
+
+| Campo             | Tipo                  | Descripción                                                 |
+| ----------------- | --------------------- | ----------------------------------------------------------- |
+| `handle`          | `FunctionHandleIndex` | La función genérica que se instancia                        |
+| `type_parameters` | `SignatureIndex`      | Índice en la tabla de Signatures con los argumentos de tipo |
+
+**StructDefInstantiation** asocia un `StructDefinitionIndex` con un `SignatureIndex`:
+
+| Campo             | Tipo                    | Descripción                                                 |
+| ----------------- | ----------------------- | ----------------------------------------------------------- |
+| `def`             | `StructDefinitionIndex` | La definición del struct genérico                           |
+| `type_parameters` | `SignatureIndex`        | Índice en la tabla de Signatures con los argumentos de tipo |
+
+**FieldInstantiation** asocia un `FieldHandleIndex` con un `SignatureIndex`:
+
+| Campo             | Tipo               | Descripción                                                 |
+| ----------------- | ------------------ | ----------------------------------------------------------- |
+| `handle`          | `FieldHandleIndex` | El campo en un struct genérico                              |
+| `type_parameters` | `SignatureIndex`   | Índice en la tabla de Signatures con los argumentos de tipo |
+
+### Instrucciones Genéricas
+
+Las instrucciones que operan sobre tipos o funciones genéricas vienen en formas pareadas: una
+instrucción base y una variante `*Generic`. La instrucción base usa un handle directo o índice
+de definición, mientras que la variante genérica usa un índice de instanciación.
+
+| Instrucción Base  | Variante Genérica        | Tipo de Operando              |
+| ----------------- | ------------------------ | ----------------------------- |
+| `Call`            | `CallGeneric`            | `FunctionInstantiationIndex`  |
+| `Pack`            | `PackGeneric`            | `StructDefInstantiationIndex` |
+| `Unpack`          | `UnpackGeneric`          | `StructDefInstantiationIndex` |
+| `Exists`          | `ExistsGeneric`          | `StructDefInstantiationIndex` |
+| `MoveFrom`        | `MoveFromGeneric`        | `StructDefInstantiationIndex` |
+| `MoveTo`          | `MoveToGeneric`          | `StructDefInstantiationIndex` |
+| `ImmBorrowGlobal` | `ImmBorrowGlobalGeneric` | `StructDefInstantiationIndex` |
+| `MutBorrowGlobal` | `MutBorrowGlobalGeneric` | `StructDefInstantiationIndex` |
+| `ImmBorrowField`  | `ImmBorrowFieldGeneric`  | `FieldInstantiationIndex`     |
+| `MutBorrowField`  | `MutBorrowFieldGeneric`  | `FieldInstantiationIndex`     |
+
+### Ejemplo Detallado: `vector::push_back<u64>(v, 42)`
+
+Esta llamada a una función genérica se compila a una instrucción `CallGeneric`. Aquí está la
+cadena de resolución:
+
+1. El compilador emite `CallGeneric(FunctionInstantiationIndex(N))`.
+2. `FunctionInstantiation #N` contiene:
+   - `handle`: `FunctionHandleIndex(M)` (apuntando al handle de la función `push_back`)
+   - `type_parameters`: `SignatureIndex(K)` (apuntando a un signature que contiene `[U64]`)
+3. `FunctionHandle #M` contiene:
+   - `module`: `ModuleHandleIndex` apuntando a `0x1::vector`
+   - `name`: `IdentifierIndex` apuntando a `"push_back"`
+   - `parameters`: `SignatureIndex` apuntando a `[Vector(TypeParameter(0)), TypeParameter(0)]`
+   - `return_`: `SignatureIndex` apuntando a `[]`
+   - `type_parameters`: `[AbilitySet::EMPTY]` (sin restricciones sobre `T`)
+4. En tiempo de ejecución, la VM sustituye `TypeParameter(0)` con `U64` de la instanciación,
+   obteniendo tipos de parámetro efectivos `[vector<u64>, u64]`.
+
+## Tipos de Función (v8+)
+
+La versión 8 del bytecode introdujo **tipos de función** de primera clase para soportar closures.
+Un tipo de función describe la firma de un valor invocable -- sus tipos de parámetro, tipos de
+retorno y las abilities que el closure debe satisfacer.
+
+### El Signature Token Function
+
+El signature token `Function` (etiqueta `0x10`) lleva:
+
+| Componente           | Codificación                          |
+| -------------------- | ------------------------------------- |
+| Conteo de parámetros | ULEB128                               |
+| Tipos de parámetros  | Secuencia de valores `SignatureToken` |
+| Conteo de retornos   | ULEB128                               |
+| Tipos de retorno     | Secuencia de valores `SignatureToken` |
+| Abilities            | Máscara de bits `u8`                  |
+
+Por ejemplo, un tipo de función `|u64, bool| -> address` con ability `drop` se serializa como:
+`0x10 0x02 0x03 0x01 0x01 0x05 0x02` -- etiqueta Function, 2 parámetros, U64, Bool, 1 retorno,
+Address, máscara de bits drop (0x02).
+
+Todos los tipos de función tienen al menos la ability `drop`. Las funciones públicas también
+obtienen `copy` y `store`. Las funciones privadas obtienen `copy` y `drop` pero no `store`
+(ya que podrían no ser válidas después de una actualización de módulo).
+
+### Instrucciones de Closure
+
+Tres instrucciones trabajan con tipos de función:
+
+- **`PackClosure(FunctionHandleIndex, ClosureMask)`** (opcode `0x58`) -- Crea un closure
+  capturando algunos argumentos de la función nombrada. La `ClosureMask` es una máscara de bits
+  `u64` que indica qué parámetros se capturan del stack (bit activado = capturado). Los
+  parámetros restantes se convierten en los tipos de parámetro del closure.
+
+- **`PackClosureGeneric(FunctionInstantiationIndex, ClosureMask)`** (opcode `0x59`) -- Igual que
+  `PackClosure` pero para una instanciación de función genérica.
+
+- **`CallClosure(SignatureIndex)`** (opcode `0x5A`) -- Invoca un closure. El `SignatureIndex`
+  describe el tipo de función esperado. El valor del closure está en la parte superior del stack,
+  con los argumentos restantes (no capturados) debajo.
+
+### Ejemplo Breve
+
+Dada una función `fun add(x: u64, y: u64): u64`, crear y llamar un closure que capture el
+primer argumento:
+
+```
+// Capture x=5, leaving a closure of type |u64| -> u64
+LdU64(5)
+PackClosure(FunctionHandleIndex(add), mask=0b01)
+// Stack: [closure]
+
+// Call the closure with y=10
+LdU64(10)
+CallClosure(SignatureIndex(|u64| -> u64))
+// Stack: [15]
+```
+
+La máscara `0b01` significa "capturar el parámetro 0." El closure resultante toma un argumento
+restante (parámetro 1) y retorna `u64`.
+
+## Definiciones de Struct
+
+Un tipo struct (o enum) en el bytecode de Move se divide en dos capas: un **handle** que
+describe la identidad del tipo y una **definición** que proporciona sus campos.
+
+### StructHandle
+
+El `StructHandle` describe la interfaz pública de un tipo struct:
+
+| Campo             | Tipo                       | Descripción                                            |
+| ----------------- | -------------------------- | ------------------------------------------------------ |
+| `module`          | `ModuleHandleIndex`        | El módulo que define este tipo                         |
+| `name`            | `IdentifierIndex`          | El nombre del tipo                                     |
+| `abilities`       | `AbilitySet` (u8)          | Abilities declaradas del tipo                          |
+| `type_parameters` | `Vec<StructTypeParameter>` | Restricciones de parámetros de tipo y banderas phantom |
+
+Cada `StructTypeParameter` consiste en:
+
+| Campo         | Tipo         | Descripción                                |
+| ------------- | ------------ | ------------------------------------------ |
+| `constraints` | `AbilitySet` | Abilities requeridas del argumento de tipo |
+| `is_phantom`  | `bool`       | Si el parámetro es phantom                 |
+
+### StructDefinition
+
+La `StructDefinition` conecta un handle con el diseño de campos del tipo:
+
+| Campo               | Tipo                     | Descripción                                      |
+| ------------------- | ------------------------ | ------------------------------------------------ |
+| `struct_handle`     | `StructHandleIndex`      | Apunta al StructHandle correspondiente           |
+| `field_information` | `StructFieldInformation` | Diseño de campos (nativo, declarado o variantes) |
+
+`StructFieldInformation` es un enum con tres variantes:
+
+| Variante           | Etiqueta de Serialización | Contenido                                   |
+| ------------------ | ------------------------- | ------------------------------------------- |
+| `Native`           | `0x01`                    | Sin campos (tipo nativo)                    |
+| `Declared`         | `0x02`                    | Lista de entradas `FieldDefinition`         |
+| `DeclaredVariants` | `0x03`                    | Lista de entradas `VariantDefinition` (v7+) |
+
+### FieldDefinition
+
+Cada campo en un struct se representa por:
+
+| Campo       | Tipo              | Descripción                           |
+| ----------- | ----------------- | ------------------------------------- |
+| `name`      | `IdentifierIndex` | Nombre del campo                      |
+| `signature` | `TypeSignature`   | El tipo del campo (un SignatureToken) |
+
+### Definiciones de Struct con Variantes (v7+)
+
+La versión 7 del bytecode agregó tipos enum usando la información de campo `DeclaredVariants`.
+Cada `VariantDefinition` contiene:
+
+| Campo    | Tipo                   | Descripción                         |
+| -------- | ---------------------- | ----------------------------------- |
+| `name`   | `IdentifierIndex`      | Nombre de la variante               |
+| `fields` | `Vec<FieldDefinition>` | Campos específicos de esta variante |
+
+El índice de variante es un valor `u16` determinado por la posición de la variante en la lista.
+Tablas adicionales soportan las operaciones de variante:
+
+- **StructVariantHandle** -- asocia un `StructDefinitionIndex` con un `VariantIndex` para
+  identificar una variante específica.
+- **StructVariantInstantiation** -- asocia un `StructVariantHandleIndex` con un `SignatureIndex`
+  para operaciones de variante genéricas.
+- **VariantFieldHandle** -- identifica un campo compartido entre múltiples variantes del mismo
+  enum.
+- **VariantFieldInstantiation** -- versión genérica de `VariantFieldHandle`.
+
+## Visibilidad y Acceso
+
+La visibilidad de funciones y el control de acceso se codifican directamente en el bytecode,
+gobernando quién puede llamar a una función y qué recursos puede tocar.
+
+### Banderas de Visibilidad
+
+El enum `Visibility` se almacena como un `u8` en cada `FunctionDefinition`:
+
+| Visibilidad | Valor  | Descripción                                                         |
+| ----------- | ------ | ------------------------------------------------------------------- |
+| `Private`   | `0x00` | Invocable solo dentro del módulo que la define                      |
+| `Public`    | `0x01` | Invocable desde cualquier módulo o script                           |
+| `Friend`    | `0x03` | Invocable desde el módulo que la define y módulos friend declarados |
+
+El valor `0x02` se usaba anteriormente para la visibilidad `Script` pero ahora está obsoleto en
+favor del modificador entry separado.
+
+### Funciones Entry
+
+La bandera `is_entry` (serializada como un `u8` donde `0x04` representa el bit entry) marca una
+función como un punto de entrada válido de transacción. Las funciones entry pueden ser llamadas
+directamente por el runtime de transacciones de Aptos. Una función puede ser tanto `public` como
+`entry`, o `private` como `entry`.
+
+### Especificadores de Acceso (v7+)
+
+La versión 7 del bytecode agregó **especificadores de acceso** a los handles de función. Un
+especificador de acceso describe qué recursos globales lee o escribe una función, permitiendo
+el análisis estático de la huella de almacenamiento de una función.
+
+Cada `AccessSpecifier` contiene:
+
+| Campo      | Tipo                | Descripción                      |
+| ---------- | ------------------- | -------------------------------- |
+| `kind`     | `AccessKind`        | `Reads` (0x01) o `Writes` (0x02) |
+| `negated`  | `bool`              | Si el especificador está negado  |
+| `resource` | `ResourceSpecifier` | Qué recurso(s) se acceden        |
+| `address`  | `AddressSpecifier`  | En qué dirección(es)             |
+
+Variantes de **ResourceSpecifier**:
+
+| Variante                | Etiqueta | Descripción                                     |
+| ----------------------- | -------- | ----------------------------------------------- |
+| `Any`                   | `0x01`   | Cualquier recurso                               |
+| `DeclaredAtAddress`     | `0x02`   | Recursos declarados en una dirección específica |
+| `DeclaredInModule`      | `0x03`   | Recursos declarados en un módulo específico     |
+| `Resource`              | `0x04`   | Un tipo struct específico                       |
+| `ResourceInstantiation` | `0x05`   | Una instanciación específica de struct genérico |
+
+Variantes de **AddressSpecifier**:
+
+| Variante    | Etiqueta | Descripción                                                                                            |
+| ----------- | -------- | ------------------------------------------------------------------------------------------------------ |
+| `Any`       | `0x01`   | Cualquier dirección de almacenamiento                                                                  |
+| `Literal`   | `0x02`   | Una dirección literal específica                                                                       |
+| `Parameter` | `0x03`   | Derivada de un parámetro de función (opcionalmente vía una función conocida como `object::address_of`) |
+
+Si un handle de función no tiene especificadores de acceso (`None`), la VM asume que la función
+puede acceder a recursos arbitrarios. Una lista vacía de especificadores (`Some([])`) indica una
+función pura sin dependencias de almacenamiento global.
+
+## Lectura Adicional
+
+- [Formato Binario de Módulo](/es/build/smart-contracts/bytecode/module-format) -- diseño de
+  serialización de cada tabla referenciada en esta página
+- [Historial de Versiones del Bytecode](/es/build/smart-contracts/bytecode/version-history) --
+  qué versión introdujo cada signature token, instrucción y tipo de tabla

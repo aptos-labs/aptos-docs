@@ -1,0 +1,38 @@
+---
+title: "Bytecode 参考"
+description: "Aptos Move VM 使用的 Move bytecode 格式的技术参考，包括 module 二进制布局、指令集、类型系统和版本历史。"
+---
+
+本节是 **Move bytecode 格式**的技术参考——即 Aptos Move VM 验证和执行的二进制表示。它面向构建工具（反汇编器、调试器、静态分析器）的开发人员，以及任何想了解 `aptos move compile` 与链上执行之间发生了什么的人。
+
+## Move 源码如何变为 Bytecode
+
+```
+┌──────────────┐     ┌──────────┐     ┌───────────────┐     ┌───────────┐
+│  Move source │ ──▶ │ Compiler │ ──▶ │ Module binary  │ ──▶ │  Aptos VM │
+│   (.move)    │     │          │     │ (bytecode blob)│     │ (execute) │
+└──────────────┘     └──────────┘     └───────────────┘     └───────────┘
+```
+
+1. **编译器**将 Move 源码翻译为自包含的 module 二进制文件。
+2. 该二进制文件通过 `publish` 交易发布到链上。
+3. 在执行时，**VM** 加载该二进制文件，运行 bytecode 验证器，然后解释执行指令。
+
+## 本节内容
+
+| 页面                                                               | 描述                                                                  |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------- |
+| [Module 二进制格式](/zh/build/smart-contracts/bytecode/module-format) | 头部布局、magic 字节、表目录以及二进制格式中的每种表类型。如果你正在编写解析器，请从这里开始。                  |
+| [指令集参考](/zh/build/smart-contracts/bytecode/instructions)         | VM 可以执行的每个 opcode——操作数、stack 效果和执行语义。                               |
+| [类型系统](/zh/build/smart-contracts/bytecode/type-system)           | 类型如何表示为 signature token，ability 在 bytecode 级别如何工作，以及 handle 间接引用模型。 |
+| [版本历史](/zh/build/smart-contracts/bytecode/version-history)       | 从 v5 到 v10 每个 bytecode 格式版本的变更内容。                                   |
+
+## 源码指引
+
+规范定义位于 `aptos-core` 仓库中：
+
+- **二进制格式 struct：** [`third_party/move/move-binary-format/src/file_format.rs`](https://github.com/AptosFoundation/aptos-core/blob/main/third_party/move/move-binary-format/src/file_format.rs)
+- **序列化：** [`third_party/move/move-binary-format/src/serializer.rs`](https://github.com/AptosFoundation/aptos-core/blob/main/third_party/move/move-binary-format/src/serializer.rs)
+- **反序列化：** [`third_party/move/move-binary-format/src/deserializer.rs`](https://github.com/AptosFoundation/aptos-core/blob/main/third_party/move/move-binary-format/src/deserializer.rs)
+- **Bytecode opcode：** [`third_party/move/move-binary-format/src/file_format.rs`](https://github.com/AptosFoundation/aptos-core/blob/main/third_party/move/move-binary-format/src/file_format.rs)（`Bytecode` enum）
+- **Bytecode 验证器：** [`third_party/move/move-bytecode-verifier/src/`](https://github.com/AptosFoundation/aptos-core/tree/main/third_party/move/move-bytecode-verifier/src)

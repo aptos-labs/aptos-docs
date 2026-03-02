@@ -1,0 +1,42 @@
+---
+title: "Referencia de Bytecode"
+description: "Referencia técnica del formato de bytecode de Move utilizado por la VM de Aptos Move, incluyendo el diseño binario de módulos, el conjunto de instrucciones, el sistema de tipos y el historial de versiones."
+---
+
+Esta sección es una referencia técnica del **formato de bytecode de Move** -- la representación
+binaria que la VM de Aptos Move verifica y ejecuta. Está dirigida a desarrolladores que construyen
+herramientas (desensambladores, depuradores, analizadores estáticos) y a cualquier persona que
+desee entender lo que ocurre entre `aptos move compile` y la ejecución en cadena.
+
+## Cómo el Código Fuente Move se Convierte en Bytecode
+
+```
+┌──────────────┐     ┌──────────┐     ┌───────────────┐     ┌───────────┐
+│  Move source │ ──▶ │ Compiler │ ──▶ │ Module binary  │ ──▶ │  Aptos VM │
+│   (.move)    │     │          │     │ (bytecode blob)│     │ (execute) │
+└──────────────┘     └──────────┘     └───────────────┘     └───────────┘
+```
+
+1. El **compilador** traduce el código fuente Move en un binario de módulo autocontenido.
+2. El binario se publica en cadena mediante una transacción `publish`.
+3. En tiempo de ejecución, la **VM** carga el binario, ejecuta el verificador de bytecode y luego
+   interpreta las instrucciones.
+
+## Contenido de Esta Sección
+
+| Página                                                                                      | Descripción                                                                                                                                          |
+| ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Formato Binario de Módulo](/es/build/smart-contracts/bytecode/module-format)               | Diseño del encabezado, bytes mágicos, directorio de tablas y cada tipo de tabla en el formato binario. Comienza aquí si estás escribiendo un parser. |
+| [Referencia del Conjunto de Instrucciones](/es/build/smart-contracts/bytecode/instructions) | Cada opcode que la VM puede ejecutar -- operandos, efectos en el stack y semántica de ejecución.                                                     |
+| [Sistema de Tipos](/es/build/smart-contracts/bytecode/type-system)                          | Cómo los tipos se representan como tokens de firma, cómo funcionan las abilities a nivel de bytecode y el modelo de indirección de handles.          |
+| [Historial de Versiones](/es/build/smart-contracts/bytecode/version-history)                | Qué cambió en cada versión del formato de bytecode desde la v5 hasta la v10.                                                                         |
+
+## Punteros al Código Fuente
+
+Las definiciones canónicas se encuentran en el repositorio `aptos-core`:
+
+- **Structs del formato binario:** [`third_party/move/move-binary-format/src/file_format.rs`](https://github.com/AptosFoundation/aptos-core/blob/main/third_party/move/move-binary-format/src/file_format.rs)
+- **Serialización:** [`third_party/move/move-binary-format/src/serializer.rs`](https://github.com/AptosFoundation/aptos-core/blob/main/third_party/move/move-binary-format/src/serializer.rs)
+- **Deserialización:** [`third_party/move/move-binary-format/src/deserializer.rs`](https://github.com/AptosFoundation/aptos-core/blob/main/third_party/move/move-binary-format/src/deserializer.rs)
+- **Opcodes de bytecode:** [`third_party/move/move-binary-format/src/file_format.rs`](https://github.com/AptosFoundation/aptos-core/blob/main/third_party/move/move-binary-format/src/file_format.rs) (el enum `Bytecode`)
+- **Verificador de bytecode:** [`third_party/move/move-bytecode-verifier/src/`](https://github.com/AptosFoundation/aptos-core/tree/main/third_party/move/move-bytecode-verifier/src)

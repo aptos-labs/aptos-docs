@@ -19,16 +19,15 @@ index 2f2ec366c9816a861d1ee145923a32f46070af32..1e3c569cacaa8b345c7d27358d80859d
  interface VercelISRConfig {
      /**
 diff --git a/dist/index.js b/dist/index.js
-index d54b7b9b013b96e2a9dba1328b412260f2c295ac..f3ae10b373aa599f8de67597c8e98ae53ad1d0a0 100644
+index 77a4965d20328c3f0fb89547719eb0c73ecd9f66..c3ce83904f299b10def203fc3c1c2cde620b0d82 100644
 --- a/dist/index.js
 +++ b/dist/index.js
-@@ -418,8 +418,20 @@ function vercelAdapter({
+@@ -421,8 +421,19 @@ function vercelAdapter({
            if (!normalized.routes) {
              normalized.routes = [];
            }
 -          if (experimentalStaticHeaders) {
 -            const routesWithConfigHeaders = createRoutesWithStaticHeaders(_routeToHeaders, _config);
-+          // Normalize `experimentalStaticHeaders` into flags we can use.
 +          const _staticHeadersEnabled =
 +            experimentalStaticHeaders === true || typeof experimentalStaticHeaders === 'object';
 +          const _cspMode =
@@ -45,16 +44,15 @@ index d54b7b9b013b96e2a9dba1328b412260f2c295ac..f3ae10b373aa599f8de67597c8e98ae5
              const fileSystemRouteIndex = normalized.routes.findIndex(
                (r) => "handle" in r && r.handle === "filesystem"
              );
-@@ -560,20 +572,31 @@ function getRuntime(process2, logger) {
+@@ -563,20 +574,29 @@ function getRuntime(process2, logger) {
    }
-   return "nodejs22.x";
+   return "nodejs24.x";
  }
 -function createRoutesWithStaticHeaders(staticHeaders, config) {
 +function createRoutesWithStaticHeaders(staticHeaders, config, cspMode = 'per-route') {
    const vercelHeaders = [];
 +  if (!config.experimental.csp) return vercelHeaders;
 +
-+  // GLOBAL MODE — collapse to a single catch-all CSP header
 +  if (cspMode === 'global') {
 +    let csp;
 +    for (const { headers } of staticHeaders.values()) {
@@ -67,7 +65,6 @@ index d54b7b9b013b96e2a9dba1328b412260f2c295ac..f3ae10b373aa599f8de67597c8e98ae5
 +    return vercelHeaders;
 +  }
 +
-+  // PER-ROUTE MODE — existing behavior
    for (const [pathname, { headers }] of staticHeaders.entries()) {
 -    if (config.experimental.csp) {
 -      const csp = headers.get("Content-Security-Policy");

@@ -18,30 +18,30 @@ an index, or a list of type arguments).
 
 ### Quick Reference Table
 
-| Token                  | Tag    | Additional Data                               | Version |
-| ---------------------- | ------ | --------------------------------------------- | ------- |
-| `Bool`                 | `0x01` | --                                            | v5+     |
-| `U8`                   | `0x02` | --                                            | v5+     |
-| `U64`                  | `0x03` | --                                            | v5+     |
-| `U128`                 | `0x04` | --                                            | v5+     |
-| `Address`              | `0x05` | --                                            | v5+     |
-| `Reference`            | `0x06` | inner `SignatureToken`                         | v5+     |
-| `MutableReference`     | `0x07` | inner `SignatureToken`                         | v5+     |
-| `Struct`               | `0x08` | `StructHandleIndex` (ULEB128)                 | v5+     |
-| `TypeParameter`        | `0x09` | `u16` index (ULEB128)                         | v5+     |
-| `Vector`               | `0x0A` | inner `SignatureToken`                         | v5+     |
-| `StructInstantiation`  | `0x0B` | `StructHandleIndex` + count + type arg tokens | v5+     |
-| `Signer`               | `0x0C` | --                                            | v5+     |
-| `U16`                  | `0x0D` | --                                            | v6+     |
-| `U32`                  | `0x0E` | --                                            | v6+     |
-| `U256`                 | `0x0F` | --                                            | v6+     |
-| `Function`             | `0x10` | param tokens + return tokens + ability mask   | v8+     |
-| `I8`                   | `0x11` | --                                            | v9+     |
-| `I16`                  | `0x12` | --                                            | v9+     |
-| `I32`                  | `0x13` | --                                            | v9+     |
-| `I64`                  | `0x14` | --                                            | v9+     |
-| `I128`                 | `0x15` | --                                            | v9+     |
-| `I256`                 | `0x16` | --                                            | v9+     |
+| Token                 | Tag    | Additional Data                               | Version |
+| --------------------- | ------ | --------------------------------------------- | ------- |
+| `Bool`                | `0x01` | --                                            | v5+     |
+| `U8`                  | `0x02` | --                                            | v5+     |
+| `U64`                 | `0x03` | --                                            | v5+     |
+| `U128`                | `0x04` | --                                            | v5+     |
+| `Address`             | `0x05` | --                                            | v5+     |
+| `Reference`           | `0x06` | inner `SignatureToken`                        | v5+     |
+| `MutableReference`    | `0x07` | inner `SignatureToken`                        | v5+     |
+| `Struct`              | `0x08` | `StructHandleIndex` (ULEB128)                 | v5+     |
+| `TypeParameter`       | `0x09` | `u16` index (ULEB128)                         | v5+     |
+| `Vector`              | `0x0A` | inner `SignatureToken`                        | v5+     |
+| `StructInstantiation` | `0x0B` | `StructHandleIndex` + count + type arg tokens | v5+     |
+| `Signer`              | `0x0C` | --                                            | v5+     |
+| `U16`                 | `0x0D` | --                                            | v6+     |
+| `U32`                 | `0x0E` | --                                            | v6+     |
+| `U256`                | `0x0F` | --                                            | v6+     |
+| `Function`            | `0x10` | param tokens + return tokens + ability mask   | v8+     |
+| `I8`                  | `0x11` | --                                            | v9+     |
+| `I16`                 | `0x12` | --                                            | v9+     |
+| `I32`                 | `0x13` | --                                            | v9+     |
+| `I64`                 | `0x14` | --                                            | v9+     |
+| `I128`                | `0x15` | --                                            | v9+     |
+| `I256`                | `0x16` | --                                            | v9+     |
 
 ### Primitive Tokens
 
@@ -69,6 +69,7 @@ parameters are not instantiated at this usage site).
 
 **StructInstantiation** (0x0B) represents a generic struct with concrete type arguments. It is
 followed by:
+
 1. A ULEB128-encoded `StructHandleIndex`
 2. A ULEB128-encoded count of type arguments
 3. That many `SignatureToken` values, one per type argument
@@ -91,6 +92,7 @@ parameter of the enclosing generic struct or function. For example, in a functio
 ### Function Token (v8+)
 
 **Function** (0x10) represents a first-class function type (used with closures). It serializes as:
+
 1. A ULEB128-encoded count of parameter types
 2. That many `SignatureToken` values for the parameters
 3. A ULEB128-encoded count of return types
@@ -109,26 +111,26 @@ Move uses four **abilities** to control what operations a type supports. Abiliti
 
 ### Ability Bit Values
 
-| Ability | Bit Value | Description                                                   |
-| ------- | --------- | ------------------------------------------------------------- |
-| `copy`  | `0x01`    | Values can be duplicated (via `CopyLoc`, `ReadRef`)           |
+| Ability | Bit Value | Description                                                             |
+| ------- | --------- | ----------------------------------------------------------------------- |
+| `copy`  | `0x01`    | Values can be duplicated (via `CopyLoc`, `ReadRef`)                     |
 | `drop`  | `0x02`    | Values can be discarded (via `Pop`, `WriteRef`, `StLoc`, leaving scope) |
-| `store` | `0x04`    | Values can exist inside a struct in global storage            |
-| `key`   | `0x08`    | The type can serve as a top-level key for global storage operations |
+| `store` | `0x04`    | Values can exist inside a struct in global storage                      |
+| `key`   | `0x08`    | The type can serve as a top-level key for global storage operations     |
 
 The bitmask is the bitwise OR of the individual ability values. For example, `copy + drop + store`
 encodes as `0x01 | 0x02 | 0x04 = 0x07`. The empty set is `0x00`.
 
 ### Common Ability Sets
 
-| Set Name       | Abilities              | Bitmask | Used By                        |
-| -------------- | ---------------------- | ------- | ------------------------------ |
-| `EMPTY`        | (none)                 | `0x00`  | --                             |
-| `PRIMITIVES`   | copy + drop + store    | `0x07`  | Bool, U8, U64, U128, Address, integers |
-| `SIGNER`       | drop                   | `0x02`  | Signer                         |
-| `REFERENCES`   | copy + drop            | `0x03`  | Reference, MutableReference    |
-| `FUNCTIONS`    | drop                   | `0x02`  | Minimum for function types     |
-| `ALL`          | copy + drop + store + key | `0x0F` | --                          |
+| Set Name     | Abilities                 | Bitmask | Used By                                |
+| ------------ | ------------------------- | ------- | -------------------------------------- |
+| `EMPTY`      | (none)                    | `0x00`  | --                                     |
+| `PRIMITIVES` | copy + drop + store       | `0x07`  | Bool, U8, U64, U128, Address, integers |
+| `SIGNER`     | drop                      | `0x02`  | Signer                                 |
+| `REFERENCES` | copy + drop               | `0x03`  | Reference, MutableReference            |
+| `FUNCTIONS`  | drop                      | `0x02`  | Minimum for function types             |
+| `ALL`        | copy + drop + store + key | `0x0F`  | --                                     |
 
 ### How Abilities Constrain Instructions
 
@@ -172,21 +174,21 @@ compact binary encoding, deduplication of repeated references, and efficient mod
 
 ### Index Types
 
-| Index Type                       | Points To                  | Rust Type     |
-| -------------------------------- | -------------------------- | ------------- |
-| `ModuleHandleIndex`              | Module handle table        | `u16`         |
-| `StructHandleIndex`              | Struct handle table        | `u16`         |
-| `FunctionHandleIndex`            | Function handle table      | `u16`         |
-| `FieldHandleIndex`               | Field handle table         | `u16`         |
-| `SignatureIndex`                  | Signature table            | `u16`         |
-| `IdentifierIndex`                | Identifier (string) table  | `u16`         |
-| `AddressIdentifierIndex`         | Address table              | `u16`         |
-| `ConstantPoolIndex`              | Constant pool              | `u16`         |
-| `StructDefinitionIndex`          | Struct definition table    | `u16`         |
-| `FunctionDefinitionIndex`        | Function definition table  | `u16`         |
-| `StructDefInstantiationIndex`    | Struct instantiation table | `u16`         |
-| `FunctionInstantiationIndex`     | Function instantiation table | `u16`       |
-| `FieldInstantiationIndex`        | Field instantiation table  | `u16`         |
+| Index Type                    | Points To                    | Rust Type |
+| ----------------------------- | ---------------------------- | --------- |
+| `ModuleHandleIndex`           | Module handle table          | `u16`     |
+| `StructHandleIndex`           | Struct handle table          | `u16`     |
+| `FunctionHandleIndex`         | Function handle table        | `u16`     |
+| `FieldHandleIndex`            | Field handle table           | `u16`     |
+| `SignatureIndex`              | Signature table              | `u16`     |
+| `IdentifierIndex`             | Identifier (string) table    | `u16`     |
+| `AddressIdentifierIndex`      | Address table                | `u16`     |
+| `ConstantPoolIndex`           | Constant pool                | `u16`     |
+| `StructDefinitionIndex`       | Struct definition table      | `u16`     |
+| `FunctionDefinitionIndex`     | Function definition table    | `u16`     |
+| `StructDefInstantiationIndex` | Struct instantiation table   | `u16`     |
+| `FunctionInstantiationIndex`  | Function instantiation table | `u16`     |
+| `FieldInstantiationIndex`     | Field instantiation table    | `u16`     |
 
 All index types are `u16` values (maximum 65,535 entries per table). They are serialized as
 ULEB128 in the binary format.
@@ -267,23 +269,23 @@ instantiation in a separate table rather than duplicating the handle.
 **FunctionInstantiation** pairs a `FunctionHandleIndex` with a `SignatureIndex` that holds the
 concrete type arguments:
 
-| Field             | Type                  | Description                             |
-| ----------------- | --------------------- | --------------------------------------- |
-| `handle`          | `FunctionHandleIndex` | The generic function being instantiated |
+| Field             | Type                  | Description                                  |
+| ----------------- | --------------------- | -------------------------------------------- |
+| `handle`          | `FunctionHandleIndex` | The generic function being instantiated      |
 | `type_parameters` | `SignatureIndex`      | Index into Signature table holding type args |
 
 **StructDefInstantiation** pairs a `StructDefinitionIndex` with a `SignatureIndex`:
 
-| Field             | Type                      | Description                             |
-| ----------------- | ------------------------- | --------------------------------------- |
-| `def`             | `StructDefinitionIndex`   | The generic struct definition           |
-| `type_parameters` | `SignatureIndex`          | Index into Signature table holding type args |
+| Field             | Type                    | Description                                  |
+| ----------------- | ----------------------- | -------------------------------------------- |
+| `def`             | `StructDefinitionIndex` | The generic struct definition                |
+| `type_parameters` | `SignatureIndex`        | Index into Signature table holding type args |
 
 **FieldInstantiation** pairs a `FieldHandleIndex` with a `SignatureIndex`:
 
-| Field             | Type               | Description                                |
-| ----------------- | ------------------ | ------------------------------------------ |
-| `handle`          | `FieldHandleIndex` | The field in a generic struct              |
+| Field             | Type               | Description                                  |
+| ----------------- | ------------------ | -------------------------------------------- |
+| `handle`          | `FieldHandleIndex` | The field in a generic struct                |
 | `type_parameters` | `SignatureIndex`   | Index into Signature table holding type args |
 
 ### Generic Instructions
@@ -292,18 +294,18 @@ Instructions that operate on generic types or functions come in paired forms: a 
 and a `*Generic` variant. The base instruction uses a direct handle or definition index, while the
 generic variant uses an instantiation index.
 
-| Base Instruction    | Generic Variant          | Operand Type                          |
-| ------------------- | ------------------------ | ------------------------------------- |
-| `Call`              | `CallGeneric`            | `FunctionInstantiationIndex`          |
-| `Pack`              | `PackGeneric`            | `StructDefInstantiationIndex`         |
-| `Unpack`            | `UnpackGeneric`          | `StructDefInstantiationIndex`         |
-| `Exists`            | `ExistsGeneric`          | `StructDefInstantiationIndex`         |
-| `MoveFrom`          | `MoveFromGeneric`        | `StructDefInstantiationIndex`         |
-| `MoveTo`            | `MoveToGeneric`          | `StructDefInstantiationIndex`         |
-| `ImmBorrowGlobal`   | `ImmBorrowGlobalGeneric` | `StructDefInstantiationIndex`         |
-| `MutBorrowGlobal`   | `MutBorrowGlobalGeneric` | `StructDefInstantiationIndex`         |
-| `ImmBorrowField`    | `ImmBorrowFieldGeneric`  | `FieldInstantiationIndex`             |
-| `MutBorrowField`    | `MutBorrowFieldGeneric`  | `FieldInstantiationIndex`             |
+| Base Instruction  | Generic Variant          | Operand Type                  |
+| ----------------- | ------------------------ | ----------------------------- |
+| `Call`            | `CallGeneric`            | `FunctionInstantiationIndex`  |
+| `Pack`            | `PackGeneric`            | `StructDefInstantiationIndex` |
+| `Unpack`          | `UnpackGeneric`          | `StructDefInstantiationIndex` |
+| `Exists`          | `ExistsGeneric`          | `StructDefInstantiationIndex` |
+| `MoveFrom`        | `MoveFromGeneric`        | `StructDefInstantiationIndex` |
+| `MoveTo`          | `MoveToGeneric`          | `StructDefInstantiationIndex` |
+| `ImmBorrowGlobal` | `ImmBorrowGlobalGeneric` | `StructDefInstantiationIndex` |
+| `MutBorrowGlobal` | `MutBorrowGlobalGeneric` | `StructDefInstantiationIndex` |
+| `ImmBorrowField`  | `ImmBorrowFieldGeneric`  | `FieldInstantiationIndex`     |
+| `MutBorrowField`  | `MutBorrowFieldGeneric`  | `FieldInstantiationIndex`     |
 
 ### Worked Example: `vector::push_back<u64>(v, 42)`
 
@@ -333,13 +335,13 @@ the closure must satisfy.
 
 The `Function` signature token (tag `0x10`) carries:
 
-| Component       | Encoding                                  |
-| --------------- | ----------------------------------------- |
-| Parameter count | ULEB128                                   |
-| Parameter types | Sequence of `SignatureToken` values        |
-| Return count    | ULEB128                                   |
-| Return types    | Sequence of `SignatureToken` values        |
-| Abilities       | `u8` bitmask                              |
+| Component       | Encoding                            |
+| --------------- | ----------------------------------- |
+| Parameter count | ULEB128                             |
+| Parameter types | Sequence of `SignatureToken` values |
+| Return count    | ULEB128                             |
+| Return types    | Sequence of `SignatureToken` values |
+| Abilities       | `u8` bitmask                        |
 
 For example, a function type `|u64, bool| -> address` with `drop` ability serializes as:
 `0x10 0x02 0x03 0x01 0x01 0x05 0x02` -- Function tag, 2 params, U64, Bool, 1 return, Address,
@@ -394,44 +396,44 @@ the type's identity and a **definition** that provides its fields.
 
 The `StructHandle` describes a struct type's public interface:
 
-| Field             | Type                       | Description                               |
-| ----------------- | -------------------------- | ----------------------------------------- |
-| `module`          | `ModuleHandleIndex`        | The module that defines this type         |
-| `name`            | `IdentifierIndex`          | The name of the type                      |
-| `abilities`       | `AbilitySet` (u8)          | Declared abilities of the type            |
+| Field             | Type                       | Description                                  |
+| ----------------- | -------------------------- | -------------------------------------------- |
+| `module`          | `ModuleHandleIndex`        | The module that defines this type            |
+| `name`            | `IdentifierIndex`          | The name of the type                         |
+| `abilities`       | `AbilitySet` (u8)          | Declared abilities of the type               |
 | `type_parameters` | `Vec<StructTypeParameter>` | Type parameter constraints and phantom flags |
 
 Each `StructTypeParameter` consists of:
 
-| Field         | Type          | Description                              |
-| ------------- | ------------- | ---------------------------------------- |
-| `constraints` | `AbilitySet`  | Abilities required of the type argument  |
-| `is_phantom`  | `bool`        | Whether the parameter is phantom         |
+| Field         | Type         | Description                             |
+| ------------- | ------------ | --------------------------------------- |
+| `constraints` | `AbilitySet` | Abilities required of the type argument |
+| `is_phantom`  | `bool`       | Whether the parameter is phantom        |
 
 ### StructDefinition
 
 The `StructDefinition` connects a handle to the type's field layout:
 
-| Field               | Type                     | Description                             |
-| ------------------- | ------------------------ | --------------------------------------- |
-| `struct_handle`     | `StructHandleIndex`      | Points to the corresponding StructHandle |
-| `field_information` | `StructFieldInformation`  | Field layout (native, declared, or variants) |
+| Field               | Type                     | Description                                  |
+| ------------------- | ------------------------ | -------------------------------------------- |
+| `struct_handle`     | `StructHandleIndex`      | Points to the corresponding StructHandle     |
+| `field_information` | `StructFieldInformation` | Field layout (native, declared, or variants) |
 
 `StructFieldInformation` is an enum with three variants:
 
-| Variant              | Serialization Tag | Content                                    |
-| -------------------- | ----------------- | ------------------------------------------ |
-| `Native`             | `0x01`            | No fields (native type)                    |
-| `Declared`           | `0x02`            | List of `FieldDefinition` entries          |
-| `DeclaredVariants`   | `0x03`            | List of `VariantDefinition` entries (v7+)  |
+| Variant            | Serialization Tag | Content                                   |
+| ------------------ | ----------------- | ----------------------------------------- |
+| `Native`           | `0x01`            | No fields (native type)                   |
+| `Declared`         | `0x02`            | List of `FieldDefinition` entries         |
+| `DeclaredVariants` | `0x03`            | List of `VariantDefinition` entries (v7+) |
 
 ### FieldDefinition
 
 Each field in a struct is represented by:
 
-| Field       | Type              | Description                      |
-| ----------- | ----------------- | -------------------------------- |
-| `name`      | `IdentifierIndex` | Name of the field                |
+| Field       | Type              | Description                         |
+| ----------- | ----------------- | ----------------------------------- |
+| `name`      | `IdentifierIndex` | Name of the field                   |
 | `signature` | `TypeSignature`   | The field's type (a SignatureToken) |
 
 ### Variant Struct Definitions (v7+)
@@ -439,10 +441,10 @@ Each field in a struct is represented by:
 Bytecode version 7 added enum types using the `DeclaredVariants` field information. Each
 `VariantDefinition` contains:
 
-| Field    | Type                     | Description                    |
-| -------- | ------------------------ | ------------------------------ |
-| `name`   | `IdentifierIndex`        | Name of the variant            |
-| `fields` | `Vec<FieldDefinition>`   | Fields specific to this variant |
+| Field    | Type                   | Description                     |
+| -------- | ---------------------- | ------------------------------- |
+| `name`   | `IdentifierIndex`      | Name of the variant             |
+| `fields` | `Vec<FieldDefinition>` | Fields specific to this variant |
 
 The variant index is a `u16` value determined by the variant's position in the list. Additional
 tables support variant operations:
@@ -463,10 +465,10 @@ call a function and what resources it may touch.
 
 The `Visibility` enum is stored as a `u8` in each `FunctionDefinition`:
 
-| Visibility | Value  | Description                                                |
-| ---------- | ------ | ---------------------------------------------------------- |
-| `Private`  | `0x00` | Callable only within the defining module                   |
-| `Public`   | `0x01` | Callable from any module or script                         |
+| Visibility | Value  | Description                                                   |
+| ---------- | ------ | ------------------------------------------------------------- |
+| `Private`  | `0x00` | Callable only within the defining module                      |
+| `Public`   | `0x01` | Callable from any module or script                            |
 | `Friend`   | `0x03` | Callable from the defining module and declared friend modules |
 
 Value `0x02` was previously used for `Script` visibility but is now deprecated in favor of the
@@ -486,29 +488,29 @@ storage footprint.
 
 Each `AccessSpecifier` contains:
 
-| Field      | Type                | Description                                  |
-| ---------- | ------------------- | -------------------------------------------- |
-| `kind`     | `AccessKind`        | `Reads` (0x01) or `Writes` (0x02)           |
-| `negated`  | `bool`              | Whether the specifier is negated             |
-| `resource` | `ResourceSpecifier` | Which resource(s) are accessed               |
-| `address`  | `AddressSpecifier`  | At which address(es)                         |
+| Field      | Type                | Description                       |
+| ---------- | ------------------- | --------------------------------- |
+| `kind`     | `AccessKind`        | `Reads` (0x01) or `Writes` (0x02) |
+| `negated`  | `bool`              | Whether the specifier is negated  |
+| `resource` | `ResourceSpecifier` | Which resource(s) are accessed    |
+| `address`  | `AddressSpecifier`  | At which address(es)              |
 
 **ResourceSpecifier** variants:
 
-| Variant                   | Tag    | Description                                 |
-| ------------------------- | ------ | ------------------------------------------- |
-| `Any`                     | `0x01` | Any resource                                |
-| `DeclaredAtAddress`       | `0x02` | Resources declared at a specific address    |
-| `DeclaredInModule`        | `0x03` | Resources declared in a specific module     |
-| `Resource`                | `0x04` | A specific struct type                      |
-| `ResourceInstantiation`   | `0x05` | A specific generic struct instantiation     |
+| Variant                 | Tag    | Description                              |
+| ----------------------- | ------ | ---------------------------------------- |
+| `Any`                   | `0x01` | Any resource                             |
+| `DeclaredAtAddress`     | `0x02` | Resources declared at a specific address |
+| `DeclaredInModule`      | `0x03` | Resources declared in a specific module  |
+| `Resource`              | `0x04` | A specific struct type                   |
+| `ResourceInstantiation` | `0x05` | A specific generic struct instantiation  |
 
 **AddressSpecifier** variants:
 
-| Variant     | Tag    | Description                                          |
-| ----------- | ------ | ---------------------------------------------------- |
-| `Any`       | `0x01` | Any storage address                                  |
-| `Literal`   | `0x02` | A specific literal address                           |
+| Variant     | Tag    | Description                                                                                   |
+| ----------- | ------ | --------------------------------------------------------------------------------------------- |
+| `Any`       | `0x01` | Any storage address                                                                           |
+| `Literal`   | `0x02` | A specific literal address                                                                    |
 | `Parameter` | `0x03` | Derived from a function parameter (optionally via a known function like `object::address_of`) |
 
 If a function handle has no access specifiers (`None`), the VM assumes the function may access

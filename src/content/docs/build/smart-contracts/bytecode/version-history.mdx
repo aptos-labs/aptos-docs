@@ -1,0 +1,206 @@
+---
+title: "Bytecode Version History"
+description: "Reference for what changed in each Move bytecode format version, from v5 through v10, including new instructions, table types, and signature tokens."
+sidebar:
+  label: "Version History"
+---
+
+The Move bytecode format carries a version number in every compiled module. The VM uses this
+version to decide which features are available during verification and execution. This page
+documents the changes introduced in each version from v5 (the minimum the VM accepts) through
+v10 (the latest).
+
+## Quick Reference
+
+| Version | Default For            | Key Additions                                     |
+| ------- | ---------------------- | ------------------------------------------------- |
+| v5      | -- (minimum supported) | Baseline instruction set                          |
+| v6      | --                     | Internal refactoring; no new user-facing features |
+| v7      | --                     | Enum types and variant instructions               |
+| v8      | --                     | First-class closures                              |
+| v9      | Language v1 (default)  | Signed integer types (`i8`..`i256`)               |
+| v10     | Language v2.4, v2.5    | `AbortMsg` instruction (abort with message)       |
+
+## Version 5
+
+Version 5 is the **minimum bytecode version** the Aptos Move VM accepts. It defines the baseline
+instruction set, the module binary layout, and the core type system. All instructions present
+before v7 belong to this baseline.
+
+Modules compiled at v5 can use the full set of unsigned integer types (`u8`, `u16`, `u32`, `u64`,
+`u128`, `u256`), structs with abilities, generics, global storage operations, and vector
+instructions. See the [Instruction Set Reference](/build/smart-contracts/bytecode/instructions)
+for the complete baseline instruction list.
+
+## Version 6
+
+Version 6 introduced internal changes to the binary format but did not add any new instructions,
+table types, or signature tokens visible to Move authors. Modules compiled at v6 are functionally
+equivalent to v5 modules from a developer perspective.
+
+## Version 7
+
+Version 7 added **enum types** (also called variants) to the Move bytecode. Enums allow a single
+type to hold one of several named variants, each with its own fields -- similar to Rust enums or
+algebraic data types in functional languages.
+
+### New Instructions
+
+| Instruction                    | Opcode | Description                                               |
+| ------------------------------ | ------ | --------------------------------------------------------- |
+| `PackVariant`                  | `0x52` | Create a variant value with the given fields              |
+| `PackVariantGeneric`           | `0x53` | Generic version of `PackVariant`                          |
+| `UnpackVariant`                | `0x54` | Destructure a variant, pushing its fields onto the stack  |
+| `UnpackVariantGeneric`         | `0x55` | Generic version of `UnpackVariant`                        |
+| `TestVariant`                  | `0x56` | Test whether a value is a specific variant; pushes `bool` |
+| `TestVariantGeneric`           | `0x57` | Generic version of `TestVariant`                          |
+| `ImmBorrowVariantField`        | `0x4E` | Borrow a variant field immutably                          |
+| `MutBorrowVariantField`        | `0x4F` | Borrow a variant field mutably                            |
+| `ImmBorrowVariantFieldGeneric` | `0x50` | Generic version of `ImmBorrowVariantField`                |
+| `MutBorrowVariantFieldGeneric` | `0x51` | Generic version of `MutBorrowVariantField`                |
+
+### New Table Types
+
+These table types store metadata about enum variants and their fields:
+
+| Table Type               | Code   | Purpose                                                                     |
+| ------------------------ | ------ | --------------------------------------------------------------------------- |
+| `VARIANT_FIELD_HANDLES`  | `0x11` | Maps variant field references to their parent variant and field index       |
+| `VARIANT_FIELD_INST`     | `0x12` | Instantiations of generic variant field handles                             |
+| `STRUCT_VARIANT_HANDLES` | `0x13` | Maps variant references to their parent struct definition and variant index |
+| `STRUCT_VARIANT_INST`    | `0x14` | Instantiations of generic struct variant handles                            |
+
+### What This Enables
+
+With v7, Move developers can define types like:
+
+```move
+enum Color {
+    Red,
+    Green,
+    Blue,
+    Custom { r: u8, g: u8, b: u8 },
+}
+```
+
+The compiler emits `PackVariant` / `UnpackVariant` instructions to construct and destructure these
+values, and `TestVariant` to implement pattern matching. See the
+[Move Book -- Enums](/build/smart-contracts/book/enums) for the source-level reference.
+
+## Version 8
+
+Version 8 added **first-class closures** to Move bytecode. Closures capture values from their
+environment and can be passed as function arguments, enabling higher-order programming patterns.
+
+### New Instructions
+
+| Instruction          | Opcode | Description                                                                        |
+| -------------------- | ------ | ---------------------------------------------------------------------------------- |
+| `PackClosure`        | `0x58` | Create a closure that captures specified stack values and binds them to a function |
+| `PackClosureGeneric` | `0x59` | Generic version of `PackClosure`                                                   |
+| `CallClosure`        | `0x5A` | Invoke a closure, pushing its return values onto the stack                         |
+
+### New Signature Token
+
+Version 8 introduced the **`Function`** signature token, which represents the type of a closure
+or function reference. A `Function` token carries:
+
+- A list of parameter types
+- A list of return types
+- An ability set that constrains how the closure can be used
+
+This token appears in signatures wherever a closure type is expected, such as function parameters
+that accept callbacks.
+
+### What This Enables
+
+Closures allow patterns like passing a comparison function to a sorting routine or creating
+callbacks that carry captured state. The `Function` signature token gives the type system full
+visibility into closure types, so the bytecode verifier can enforce type safety and ability
+constraints on closures just as it does on structs.
+
+## Version 9
+
+Version 9 added **signed integer types** to Move. Previously, Move supported only unsigned
+integers (`u8` through `u256`). Version 9 introduced six signed counterparts along with
+arithmetic negation.
+
+### New Load Instructions
+
+| Instruction | Opcode | Description                            |
+| ----------- | ------ | -------------------------------------- |
+| `LdI8`      | `0x5B` | Load a signed 8-bit integer constant   |
+| `LdI16`     | `0x5C` | Load a signed 16-bit integer constant  |
+| `LdI32`     | `0x5D` | Load a signed 32-bit integer constant  |
+| `LdI64`     | `0x5E` | Load a signed 64-bit integer constant  |
+| `LdI128`    | `0x5F` | Load a signed 128-bit integer constant |
+| `LdI256`    | `0x60` | Load a signed 256-bit integer constant |
+
+### New Cast Instructions
+
+| Instruction | Opcode | Description                     |
+| ----------- | ------ | ------------------------------- |
+| `CastI8`    | `0x61` | Cast the top of stack to `i8`   |
+| `CastI16`   | `0x62` | Cast the top of stack to `i16`  |
+| `CastI32`   | `0x63` | Cast the top of stack to `i32`  |
+| `CastI64`   | `0x64` | Cast the top of stack to `i64`  |
+| `CastI128`  | `0x65` | Cast the top of stack to `i128` |
+| `CastI256`  | `0x66` | Cast the top of stack to `i256` |
+
+### New Arithmetic Instruction
+
+| Instruction | Opcode | Description                                                        |
+| ----------- | ------ | ------------------------------------------------------------------ |
+| `Negate`    | `0x67` | Arithmetic negation; pops a signed integer and pushes its negation |
+
+### New Signature Tokens
+
+Six new signature tokens represent signed integer types in the type system:
+
+- `I8` -- signed 8-bit integer
+- `I16` -- signed 16-bit integer
+- `I32` -- signed 32-bit integer
+- `I64` -- signed 64-bit integer
+- `I128` -- signed 128-bit integer
+- `I256` -- signed 256-bit integer
+
+These tokens appear in function signatures, struct field definitions, and local variable types
+wherever signed integers are used.
+
+### What This Enables
+
+Signed integers support negative values and two's complement arithmetic, which simplifies
+financial calculations, coordinate math, and any domain where negative numbers are natural.
+Version 9 is the default bytecode version for the standard Move language configuration.
+
+## Version 10
+
+Version 10 added the **abort-with-message** instruction, which allows a transaction to abort
+with a human-readable error string in addition to the numeric abort code.
+
+### New Instruction
+
+| Instruction | Opcode | Description                                                                  |
+| ----------- | ------ | ---------------------------------------------------------------------------- |
+| `AbortMsg`  | `0x68` | Abort execution with a `u64` error code and an optional UTF-8 message string |
+
+### What This Enables
+
+Before v10, `abort` only accepted a numeric code, making it difficult to diagnose failures
+without consulting the module source. With `AbortMsg`, modules can include descriptive error
+messages that appear in transaction output, greatly improving debuggability. Version 10 is the
+default bytecode version for Move language v2.4 and v2.5.
+
+## Compatibility Notes
+
+- The VM accepts bytecode from **v5 through the current maximum version** (v10 at the time of
+  writing). Modules compiled at any supported version can coexist on-chain and call each other.
+- When a module declares an older bytecode version, the verifier **rejects instructions and types
+  introduced in later versions**. For example, a module at v6 cannot use `PackVariant` (a v7
+  instruction).
+- The bytecode version is encoded as a **little-endian `u32`** in bytes 4 through 7 of the module
+  binary header, immediately after the magic bytes. See the
+  [Module Binary Format](/build/smart-contracts/bytecode/module-format) page for a full
+  description of the header layout.
+- Publishing a module with a version newer than the VM supports causes the transaction to fail
+  during verification.

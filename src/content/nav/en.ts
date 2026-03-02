@@ -68,6 +68,7 @@ const labels = {
   "smartContracts.group.aptosFeatures.aptosStandards.nonFungibleTokens": "Non-Fungible Tokens",
   "smartContracts.group.aptosFeatures.dataStructures": "Data Structures",
   "smartContracts.group.tooling": "Tooling",
+  "smartContracts.group.tooling.bytecode": "Bytecode Reference",
   "smartContracts.group.tooling.move-prover": "Move Prover",
   "smartContracts.group.reference": "Move Reference",
 

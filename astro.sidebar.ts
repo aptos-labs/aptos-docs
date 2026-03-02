@@ -549,6 +549,16 @@ export const sidebar = [
           "build/smart-contracts/move-vscode-extension",
           "build/smart-contracts/linter",
           "build/smart-contracts/compiler_v2",
+          group("smartContracts.group.tooling.bytecode", {
+            collapsed: true,
+            items: [
+              "build/smart-contracts/bytecode",
+              "build/smart-contracts/bytecode/module-format",
+              "build/smart-contracts/bytecode/instructions",
+              "build/smart-contracts/bytecode/type-system",
+              "build/smart-contracts/bytecode/version-history",
+            ],
+          }),
           group("smartContracts.group.tooling.move-prover", {
             collapsed: true,
             items: [

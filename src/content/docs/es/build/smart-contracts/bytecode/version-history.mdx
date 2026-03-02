@@ -1,0 +1,214 @@
+---
+title: "Historial de Versiones del Bytecode"
+description: "Referencia de lo que cambió en cada versión del formato de bytecode de Move, desde v5 hasta v10, incluyendo nuevas instrucciones, tipos de tabla y signature tokens."
+sidebar:
+  label: "Historial de Versiones"
+---
+
+El formato de bytecode de Move lleva un número de versión en cada módulo compilado. La VM usa
+esta versión para decidir qué características están disponibles durante la verificación y
+ejecución. Esta página documenta los cambios introducidos en cada versión desde v5 (la mínima
+que la VM acepta) hasta v10 (la más reciente).
+
+## Referencia Rápida
+
+| Versión | Predeterminada Para          | Adiciones Clave                                                              |
+| ------- | ---------------------------- | ---------------------------------------------------------------------------- |
+| v5      | -- (mínima soportada)        | Conjunto de instrucciones base                                               |
+| v6      | --                           | Refactorización interna; sin nuevas características visibles para el usuario |
+| v7      | --                           | Tipos enum e instrucciones de variante                                       |
+| v8      | --                           | Closures de primera clase                                                    |
+| v9      | Language v1 (predeterminada) | Tipos de enteros con signo (`i8`..`i256`)                                    |
+| v10     | Language v2.4, v2.5          | Instrucción `AbortMsg` (abortar con mensaje)                                 |
+
+## Versión 5
+
+La versión 5 es la **versión mínima de bytecode** que acepta el Move VM de Aptos. Define el
+conjunto de instrucciones base, el diseño binario del módulo y el sistema de tipos central. Todas
+las instrucciones presentes antes de la v7 pertenecen a esta línea base.
+
+Los módulos compilados en v5 pueden usar el conjunto completo de tipos de enteros sin signo
+(`u8`, `u16`, `u32`, `u64`, `u128`, `u256`), structs con abilities, genéricos, operaciones de
+almacenamiento global e instrucciones de vector. Consulta la
+[Referencia del Conjunto de Instrucciones](/es/build/smart-contracts/bytecode/instructions) para
+la lista completa de instrucciones base.
+
+## Versión 6
+
+La versión 6 introdujo cambios internos al formato binario pero no agregó nuevas instrucciones,
+tipos de tabla ni signature tokens visibles para los desarrolladores de Move. Los módulos
+compilados en v6 son funcionalmente equivalentes a los módulos v5 desde la perspectiva del
+desarrollador.
+
+## Versión 7
+
+La versión 7 agregó **tipos enum** (también llamados variantes) al bytecode de Move. Los enums
+permiten que un solo tipo contenga una de varias variantes nombradas, cada una con sus propios
+campos -- similar a los enums de Rust o los tipos de datos algebraicos en lenguajes funcionales.
+
+### Nuevas Instrucciones
+
+| Instrucción                    | Opcode | Descripción                                                  |
+| ------------------------------ | ------ | ------------------------------------------------------------ |
+| `PackVariant`                  | `0x52` | Crear un valor de variante con los campos dados              |
+| `PackVariantGeneric`           | `0x53` | Versión genérica de `PackVariant`                            |
+| `UnpackVariant`                | `0x54` | Desestructurar una variante, apilando sus campos en el stack |
+| `UnpackVariantGeneric`         | `0x55` | Versión genérica de `UnpackVariant`                          |
+| `TestVariant`                  | `0x56` | Probar si un valor es una variante específica; apila `bool`  |
+| `TestVariantGeneric`           | `0x57` | Versión genérica de `TestVariant`                            |
+| `ImmBorrowVariantField`        | `0x4E` | Tomar prestado un campo de variante de forma inmutable       |
+| `MutBorrowVariantField`        | `0x4F` | Tomar prestado un campo de variante de forma mutable         |
+| `ImmBorrowVariantFieldGeneric` | `0x50` | Versión genérica de `ImmBorrowVariantField`                  |
+| `MutBorrowVariantFieldGeneric` | `0x51` | Versión genérica de `MutBorrowVariantField`                  |
+
+### Nuevos Tipos de Tabla
+
+Estos tipos de tabla almacenan metadatos sobre variantes de enum y sus campos:
+
+| Tipo de Tabla            | Código | Propósito                                                                          |
+| ------------------------ | ------ | ---------------------------------------------------------------------------------- |
+| `VARIANT_FIELD_HANDLES`  | `0x11` | Mapea referencias de campos de variante a su variante padre e índice de campo      |
+| `VARIANT_FIELD_INST`     | `0x12` | Instanciaciones de handles genéricos de campos de variante                         |
+| `STRUCT_VARIANT_HANDLES` | `0x13` | Mapea referencias de variante a su definición de struct padre e índice de variante |
+| `STRUCT_VARIANT_INST`    | `0x14` | Instanciaciones de handles genéricos de variantes de struct                        |
+
+### Lo Que Esto Permite
+
+Con v7, los desarrolladores de Move pueden definir tipos como:
+
+```move
+enum Color {
+    Red,
+    Green,
+    Blue,
+    Custom { r: u8, g: u8, b: u8 },
+}
+```
+
+El compilador emite instrucciones `PackVariant` / `UnpackVariant` para construir y desestructurar
+estos valores, y `TestVariant` para implementar la coincidencia de patrones. Consulta el
+[Libro de Move -- Enums](/es/build/smart-contracts/book/enums) para la referencia a nivel de
+código fuente.
+
+## Versión 8
+
+La versión 8 agregó **closures de primera clase** al bytecode de Move. Los closures capturan
+valores de su entorno y pueden pasarse como argumentos de función, habilitando patrones de
+programación de orden superior.
+
+### Nuevas Instrucciones
+
+| Instrucción          | Opcode | Descripción                                                                              |
+| -------------------- | ------ | ---------------------------------------------------------------------------------------- |
+| `PackClosure`        | `0x58` | Crear un closure que captura valores del stack especificados y los vincula a una función |
+| `PackClosureGeneric` | `0x59` | Versión genérica de `PackClosure`                                                        |
+| `CallClosure`        | `0x5A` | Invocar un closure, apilando sus valores de retorno en el stack                          |
+
+### Nuevo Signature Token
+
+La versión 8 introdujo el signature token **`Function`**, que representa el tipo de un closure
+o referencia de función. Un token `Function` lleva:
+
+- Una lista de tipos de parámetro
+- Una lista de tipos de retorno
+- Un conjunto de abilities que restringe cómo puede usarse el closure
+
+Este token aparece en signatures donde se espera un tipo closure, como parámetros de función
+que aceptan callbacks.
+
+### Lo Que Esto Permite
+
+Los closures permiten patrones como pasar una función de comparación a una rutina de
+ordenamiento o crear callbacks que llevan estado capturado. El signature token `Function` da al
+sistema de tipos visibilidad completa sobre los tipos de closure, para que el verificador de
+bytecode pueda imponer seguridad de tipos y restricciones de abilities sobre los closures de la
+misma manera que lo hace con los structs.
+
+## Versión 9
+
+La versión 9 agregó **tipos de enteros con signo** a Move. Anteriormente, Move solo soportaba
+enteros sin signo (`u8` a `u256`). La versión 9 introdujo seis contrapartes con signo junto con
+la negación aritmética.
+
+### Nuevas Instrucciones de Carga
+
+| Instrucción | Opcode | Descripción                                       |
+| ----------- | ------ | ------------------------------------------------- |
+| `LdI8`      | `0x5B` | Cargar una constante entera con signo de 8 bits   |
+| `LdI16`     | `0x5C` | Cargar una constante entera con signo de 16 bits  |
+| `LdI32`     | `0x5D` | Cargar una constante entera con signo de 32 bits  |
+| `LdI64`     | `0x5E` | Cargar una constante entera con signo de 64 bits  |
+| `LdI128`    | `0x5F` | Cargar una constante entera con signo de 128 bits |
+| `LdI256`    | `0x60` | Cargar una constante entera con signo de 256 bits |
+
+### Nuevas Instrucciones de Conversión
+
+| Instrucción | Opcode | Descripción                          |
+| ----------- | ------ | ------------------------------------ |
+| `CastI8`    | `0x61` | Convertir el tope del stack a `i8`   |
+| `CastI16`   | `0x62` | Convertir el tope del stack a `i16`  |
+| `CastI32`   | `0x63` | Convertir el tope del stack a `i32`  |
+| `CastI64`   | `0x64` | Convertir el tope del stack a `i64`  |
+| `CastI128`  | `0x65` | Convertir el tope del stack a `i128` |
+| `CastI256`  | `0x66` | Convertir el tope del stack a `i256` |
+
+### Nueva Instrucción Aritmética
+
+| Instrucción | Opcode | Descripción                                                           |
+| ----------- | ------ | --------------------------------------------------------------------- |
+| `Negate`    | `0x67` | Negación aritmética; desapila un entero con signo y apila su negación |
+
+### Nuevos Signature Tokens
+
+Seis nuevos signature tokens representan tipos de enteros con signo en el sistema de tipos:
+
+- `I8` -- entero con signo de 8 bits
+- `I16` -- entero con signo de 16 bits
+- `I32` -- entero con signo de 32 bits
+- `I64` -- entero con signo de 64 bits
+- `I128` -- entero con signo de 128 bits
+- `I256` -- entero con signo de 256 bits
+
+Estos tokens aparecen en firmas de funciones, definiciones de campos de struct y tipos de
+variables locales donde se usen enteros con signo.
+
+### Lo Que Esto Permite
+
+Los enteros con signo soportan valores negativos y aritmética en complemento a dos, lo que
+simplifica cálculos financieros, matemáticas de coordenadas y cualquier dominio donde los
+números negativos son naturales. La versión 9 es la versión predeterminada de bytecode para la
+configuración estándar del lenguaje Move.
+
+## Versión 10
+
+La versión 10 agregó la instrucción **abort-with-message**, que permite que una transacción
+aborte con una cadena de error legible por humanos además del código numérico de aborto.
+
+### Nueva Instrucción
+
+| Instrucción | Opcode | Descripción                                                                              |
+| ----------- | ------ | ---------------------------------------------------------------------------------------- |
+| `AbortMsg`  | `0x68` | Abortar la ejecución con un código de error `u64` y una cadena de mensaje UTF-8 opcional |
+
+### Lo Que Esto Permite
+
+Antes de v10, `abort` solo aceptaba un código numérico, lo que dificultaba diagnosticar fallos
+sin consultar el código fuente del módulo. Con `AbortMsg`, los módulos pueden incluir mensajes
+de error descriptivos que aparecen en la salida de la transacción, mejorando enormemente la
+capacidad de depuración. La versión 10 es la versión predeterminada de bytecode para Move
+language v2.4 y v2.5.
+
+## Notas de Compatibilidad
+
+- La VM acepta bytecode desde **v5 hasta la versión máxima actual** (v10 al momento de escribir
+  esto). Los módulos compilados en cualquier versión soportada pueden coexistir en la cadena y
+  llamarse entre sí.
+- Cuando un módulo declara una versión de bytecode más antigua, el verificador **rechaza
+  instrucciones y tipos introducidos en versiones posteriores**. Por ejemplo, un módulo en v6 no
+  puede usar `PackVariant` (una instrucción de v7).
+- La versión de bytecode se codifica como un **`u32` little-endian** en los bytes 4 al 7 del
+  encabezado binario del módulo, inmediatamente después de los bytes mágicos. Consulta la
+  página del [Formato Binario de Módulo](/es/build/smart-contracts/bytecode/module-format) para
+  una descripción completa del diseño del encabezado.
+- Publicar un módulo con una versión más nueva que la que soporta la VM causa que la transacción
+  falle durante la verificación.

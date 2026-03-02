@@ -1,0 +1,1328 @@
+---
+title: "指令集参考"
+description: "Move bytecode 所有指令的完整参考，包括 opcode、操作数、stack 效果和执行语义。"
+sidebar:
+  label: "Instructions"
+---
+
+本页面是 Aptos MoveVM 执行的 Move bytecode 指令集中每条指令的权威参考。它面向构建 bytecode 解释器、反汇编器、静态分析器的开发人员，或任何需要精确了解 VM 对每个 opcode 执行操作的人员。
+
+## 执行模型
+
+MoveVM 是一个**基于 stack 的**虚拟机。每次函数调用会创建一个新的 _frame_，其中包含：
+
+- 一个**操作数 stack**，用于推入和弹出中间值。
+- 一个**locals 数组**，以 `LocalIndex`（u8）为索引，存放函数参数和局部变量。
+- 一个**程序计数器**（PC），指向函数体中的当前指令。
+
+指令从 stack 顶部消耗操作数，执行计算，并将结果推回 stack。控制流指令修改 PC。`Call` 指令在调用 stack 上创建新的 frame；`Ret` 销毁当前 frame 并返回到调用者。
+
+有关值可以具有的类型的描述，请参阅[类型系统](/zh/build/smart-contracts/bytecode/type-system)页面。有关已编译 module 的二进制布局，请参阅 [Module 格式](/zh/build/smart-contracts/bytecode/module-format)页面。
+
+## 阅读本参考指南
+
+每条指令的条目记录以下内容：
+
+| 字段           | 含义                                                                                                                                   |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| **Opcode**   | 在 bytecode 流中标识该指令的十六进制字节值。                                                                                                          |
+| **操作数**      | 在 opcode 字节之后编码的立即数值（索引、常量、偏移量）。                                                                                                     |
+| **Stack 效果** | 消耗（弹出）和产生（推入）的值。表示法：`[..., a, b]` 表示 `a` 先推入，`b` 在顶部。箭头表示转换：`[..., a, b] -> [...]` 表示 `a` 和 `b` 都被弹出；`[...] -> [..., c]` 表示 `c` 被推入。 |
+| **描述**       | 行为和错误条件。                                                                                                                             |
+| **引入版本**     | 引入该指令的 bytecode 版本（如果晚于 v5，即最低支持版本）。                                                                                                 |
+
+索引操作数在 bytecode 流中编码为 ULEB128 整数，除非另有说明。立即整数值（例如 `LdU64` 的值）以与其类型宽度匹配的小端固定宽度格式编码。
+
+## 总览表
+
+下表列出了每条指令及其 opcode 和一行摘要。点击指令名称可跳转到其详细条目。
+
+| Opcode | 指令                                                            | 摘要                          |
+| ------ | ------------------------------------------------------------- | --------------------------- |
+| `0x01` | [Pop](#pop)                                                   | 丢弃 stack 顶部的值。              |
+| `0x02` | [Ret](#ret)                                                   | 从当前函数返回。                    |
+| `0x03` | [BrTrue](#brtrue)                                             | 如果 stack 顶部为 `true` 则跳转。    |
+| `0x04` | [BrFalse](#brfalse)                                           | 如果 stack 顶部为 `false` 则跳转。   |
+| `0x05` | [Branch](#branch)                                             | 无条件跳转。                      |
+| `0x06` | [LdU64](#ldu64)                                               | 推入一个 `u64` 立即数。             |
+| `0x07` | [LdConst](#ldconst)                                           | 从常量池推入一个值。                  |
+| `0x08` | [LdTrue](#ldtrue)                                             | 推入 `true`。                  |
+| `0x09` | [LdFalse](#ldfalse)                                           | 推入 `false`。                 |
+| `0x0A` | [CopyLoc](#copyloc)                                           | 将一个 local 复制到 stack 上。      |
+| `0x0B` | [MoveLoc](#moveloc)                                           | 将一个 local 移动到 stack 上。      |
+| `0x0C` | [StLoc](#stloc)                                               | 弹出并存储到一个 local。             |
+| `0x0D` | [MutBorrowLoc](#mutborrowloc)                                 | 推入一个 local 的 `&mut` 引用。     |
+| `0x0E` | [ImmBorrowLoc](#immborrowloc)                                 | 推入一个 local 的 `&` 引用。        |
+| `0x0F` | [MutBorrowField](#mutborrowfield)                             | 可变借用一个 struct 字段。           |
+| `0x10` | [ImmBorrowField](#immborrowfield)                             | 不可变借用一个 struct 字段。          |
+| `0x11` | [Call](#call)                                                 | 通过 handle 索引调用函数。           |
+| `0x12` | [Pack](#pack)                                                 | 创建一个 struct 实例。             |
+| `0x13` | [Unpack](#unpack)                                             | 销毁一个 struct，推入其字段。          |
+| `0x14` | [ReadRef](#readref)                                           | 解引用并复制。                     |
+| `0x15` | [WriteRef](#writeref)                                         | 通过可变引用写入。                   |
+| `0x16` | [Add](#add)                                                   | 整数加法。                       |
+| `0x17` | [Sub](#sub)                                                   | 整数减法。                       |
+| `0x18` | [Mul](#mul)                                                   | 整数乘法。                       |
+| `0x19` | [Mod](#mod-1)                                                 | 整数取模。                       |
+| `0x1A` | [Div](#div)                                                   | 整数除法。                       |
+| `0x1B` | [BitOr](#bitor)                                               | 按位或。                        |
+| `0x1C` | [BitAnd](#bitand)                                             | 按位与。                        |
+| `0x1D` | [Xor](#xor)                                                   | 按位异或。                       |
+| `0x1E` | [Or](#or)                                                     | 布尔或。                        |
+| `0x1F` | [And](#and)                                                   | 布尔与。                        |
+| `0x20` | [Not](#not)                                                   | 布尔取反。                       |
+| `0x21` | [Eq](#eq)                                                     | 相等测试。                       |
+| `0x22` | [Neq](#neq)                                                   | 不等测试。                       |
+| `0x23` | [Lt](#lt)                                                     | 小于。                         |
+| `0x24` | [Gt](#gt)                                                     | 大于。                         |
+| `0x25` | [Le](#le)                                                     | 小于或等于。                      |
+| `0x26` | [Ge](#ge)                                                     | 大于或等于。                      |
+| `0x27` | [Abort](#abort)                                               | 以错误码中止。                     |
+| `0x28` | [Nop](#nop)                                                   | 空操作。                        |
+| `0x29` | [Exists](#exists)                                             | 测试地址处是否存在资源。                |
+| `0x2A` | [MutBorrowGlobal](#mutborrowglobal)                           | 可变借用全局资源。                   |
+| `0x2B` | [ImmBorrowGlobal](#immborrowglobal)                           | 不可变借用全局资源。                  |
+| `0x2C` | [MoveFrom](#movefrom)                                         | 从全局存储中移除资源。                 |
+| `0x2D` | [MoveTo](#moveto)                                             | 将资源发布到全局存储。                 |
+| `0x2E` | [FreezeRef](#freezeref)                                       | 将 `&mut T` 转换为 `&T`。        |
+| `0x2F` | [Shl](#shl)                                                   | 左移。                         |
+| `0x30` | [Shr](#shr)                                                   | 右移。                         |
+| `0x31` | [LdU8](#ldu8)                                                 | 推入一个 `u8` 立即数。              |
+| `0x32` | [LdU128](#ldu128)                                             | 推入一个 `u128` 立即数。            |
+| `0x33` | [CastU8](#castu8)                                             | 转换为 `u8`。                   |
+| `0x34` | [CastU64](#castu64)                                           | 转换为 `u64`。                  |
+| `0x35` | [CastU128](#castu128)                                         | 转换为 `u128`。                 |
+| `0x36` | [MutBorrowFieldGeneric](#mutborrowfieldgeneric)               | 泛型可变字段借用。                   |
+| `0x37` | [ImmBorrowFieldGeneric](#immborrowfieldgeneric)               | 泛型不可变字段借用。                  |
+| `0x38` | [CallGeneric](#callgeneric)                                   | 调用泛型函数实例化。                  |
+| `0x39` | [PackGeneric](#packgeneric)                                   | 创建泛型 struct 实例。             |
+| `0x3A` | [UnpackGeneric](#unpackgeneric)                               | 销毁泛型 struct，推入其字段。          |
+| `0x3B` | [ExistsGeneric](#existsgeneric)                               | 泛型资源存在性测试。                  |
+| `0x3C` | [MutBorrowGlobalGeneric](#mutborrowglobalgeneric)             | 泛型可变全局借用。                   |
+| `0x3D` | [ImmBorrowGlobalGeneric](#immborrowglobalgeneric)             | 泛型不可变全局借用。                  |
+| `0x3E` | [MoveFromGeneric](#movefromgeneric)                           | 泛型移除资源。                     |
+| `0x3F` | [MoveToGeneric](#movetogeneric)                               | 泛型发布资源。                     |
+| `0x40` | [VecPack](#vecpack)                                           | 从 stack 值创建 vector。         |
+| `0x41` | [VecLen](#veclen)                                             | 获取 vector 长度。               |
+| `0x42` | [VecImmBorrow](#vecimmborrow)                                 | 不可变借用 vector 元素。            |
+| `0x43` | [VecMutBorrow](#vecmutborrow)                                 | 可变借用 vector 元素。             |
+| `0x44` | [VecPushBack](#vecpushback)                                   | 追加到 vector。                 |
+| `0x45` | [VecPopBack](#vecpopback)                                     | 移除 vector 最后一个元素。           |
+| `0x46` | [VecUnpack](#vecunpack)                                       | 销毁 vector，推入所有元素。           |
+| `0x47` | [VecSwap](#vecswap)                                           | 交换两个 vector 元素。             |
+| `0x48` | [LdU16](#ldu16)                                               | 推入一个 `u16` 立即数。             |
+| `0x49` | [LdU32](#ldu32)                                               | 推入一个 `u32` 立即数。             |
+| `0x4A` | [LdU256](#ldu256)                                             | 推入一个 `u256` 立即数。            |
+| `0x4B` | [CastU16](#castu16)                                           | 转换为 `u16`。                  |
+| `0x4C` | [CastU32](#castu32)                                           | 转换为 `u32`。                  |
+| `0x4D` | [CastU256](#castu256)                                         | 转换为 `u256`。                 |
+| `0x4E` | [ImmBorrowVariantField](#immborrowvariantfield)               | 不可变借用 variant 字段（v7）。       |
+| `0x4F` | [MutBorrowVariantField](#mutborrowvariantfield)               | 可变借用 variant 字段（v7）。        |
+| `0x50` | [ImmBorrowVariantFieldGeneric](#immborrowvariantfieldgeneric) | 泛型不可变 variant 字段借用（v7）。     |
+| `0x51` | [MutBorrowVariantFieldGeneric](#mutborrowvariantfieldgeneric) | 泛型可变 variant 字段借用（v7）。      |
+| `0x52` | [PackVariant](#packvariant)                                   | 创建一个 enum variant（v7）。      |
+| `0x53` | [PackVariantGeneric](#packvariantgeneric)                     | 创建一个泛型 enum variant（v7）。    |
+| `0x54` | [UnpackVariant](#unpackvariant)                               | 销毁一个 enum variant，推入字段（v7）。 |
+| `0x55` | [UnpackVariantGeneric](#unpackvariantgeneric)                 | 销毁一个泛型 enum variant（v7）。    |
+| `0x56` | [TestVariant](#testvariant)                                   | 测试值是否为给定 variant（v7）。       |
+| `0x57` | [TestVariantGeneric](#testvariantgeneric)                     | 泛型 variant 测试（v7）。          |
+| `0x58` | [PackClosure](#packclosure)                                   | 创建一个 closure（v8）。           |
+| `0x59` | [PackClosureGeneric](#packclosuregeneric)                     | 创建一个泛型 closure（v8）。         |
+| `0x5A` | [CallClosure](#callclosure)                                   | 调用一个 closure（v8）。           |
+| `0x5B` | [LdI8](#ldi8)                                                 | 推入一个 `i8` 立即数（v9）。          |
+| `0x5C` | [LdI16](#ldi16)                                               | 推入一个 `i16` 立即数（v9）。         |
+| `0x5D` | [LdI32](#ldi32)                                               | 推入一个 `i32` 立即数（v9）。         |
+| `0x5E` | [LdI64](#ldi64)                                               | 推入一个 `i64` 立即数（v9）。         |
+| `0x5F` | [LdI128](#ldi128)                                             | 推入一个 `i128` 立即数（v9）。        |
+| `0x60` | [LdI256](#ldi256)                                             | 推入一个 `i256` 立即数（v9）。        |
+| `0x61` | [CastI8](#casti8)                                             | 转换为 `i8`（v9）。               |
+| `0x62` | [CastI16](#casti16)                                           | 转换为 `i16`（v9）。              |
+| `0x63` | [CastI32](#casti32)                                           | 转换为 `i32`（v9）。              |
+| `0x64` | [CastI64](#casti64)                                           | 转换为 `i64`（v9）。              |
+| `0x65` | [CastI128](#casti128)                                         | 转换为 `i128`（v9）。             |
+| `0x66` | [CastI256](#casti256)                                         | 转换为 `i256`（v9）。             |
+| `0x67` | [Negate](#negate)                                             | 对有符号整数取负（v9）。               |
+| `0x68` | [AbortMsg](#abortmsg)                                         | 以错误码和消息中止（v10）。             |
+
+***
+
+## Stack 操作
+
+这些指令直接操作操作数 stack——推入常量、从常量池加载值或丢弃值。
+
+### Pop
+
+|            |                         |
+| ---------- | ----------------------- |
+| **Opcode** | `0x01`                  |
+| **操作数**    | 无                       |
+| **Stack**  | `[..., value] -> [...]` |
+
+弹出并丢弃 stack 顶部的值。该值必须具有 `drop` ability。
+
+### LdTrue
+
+|            |                        |
+| ---------- | ---------------------- |
+| **Opcode** | `0x08`                 |
+| **操作数**    | 无                      |
+| **Stack**  | `[...] -> [..., true]` |
+
+将布尔值 `true` 推入 stack。
+
+### LdFalse
+
+|            |                         |
+| ---------- | ----------------------- |
+| **Opcode** | `0x09`                  |
+| **操作数**    | 无                       |
+| **Stack**  | `[...] -> [..., false]` |
+
+将布尔值 `false` 推入 stack。
+
+### LdU8
+
+|            |                            |
+| ---------- | -------------------------- |
+| **Opcode** | `0x31`                     |
+| **操作数**    | `u8_value`（1 字节）           |
+| **Stack**  | `[...] -> [..., u8_value]` |
+
+将给定的 `u8` 常量推入 stack。立即字节直接跟在 opcode 之后。
+
+### LdU16
+
+|            |                             |
+| ---------- | --------------------------- |
+| **Opcode** | `0x48`                      |
+| **操作数**    | `u16_value`（2 字节，小端序）       |
+| **Stack**  | `[...] -> [..., u16_value]` |
+
+将给定的 `u16` 常量推入 stack。
+
+### LdU32
+
+|            |                             |
+| ---------- | --------------------------- |
+| **Opcode** | `0x49`                      |
+| **操作数**    | `u32_value`（4 字节，小端序）       |
+| **Stack**  | `[...] -> [..., u32_value]` |
+
+将给定的 `u32` 常量推入 stack。
+
+### LdU64
+
+|            |                             |
+| ---------- | --------------------------- |
+| **Opcode** | `0x06`                      |
+| **操作数**    | `u64_value`（8 字节，小端序）       |
+| **Stack**  | `[...] -> [..., u64_value]` |
+
+将给定的 `u64` 常量推入 stack。
+
+### LdU128
+
+|            |                              |
+| ---------- | ---------------------------- |
+| **Opcode** | `0x32`                       |
+| **操作数**    | `u128_value`（16 字节，小端序）      |
+| **Stack**  | `[...] -> [..., u128_value]` |
+
+将给定的 `u128` 常量推入 stack。
+
+### LdU256
+
+|            |                              |
+| ---------- | ---------------------------- |
+| **Opcode** | `0x4A`                       |
+| **操作数**    | `u256_value`（32 字节，小端序）      |
+| **Stack**  | `[...] -> [..., u256_value]` |
+
+将给定的 `u256` 常量推入 stack。
+
+### LdConst
+
+|            |                                           |
+| ---------- | ----------------------------------------- |
+| **Opcode** | `0x07`                                    |
+| **操作数**    | `const_idx`（ULEB128 -- ConstantPoolIndex） |
+| **Stack**  | `[...] -> [..., constant_value]`          |
+
+从 module 的[常量池](/zh/build/smart-contracts/bytecode/module-format#constant-pool)加载一个常量，根据其声明的类型进行反序列化，并将结果值推入 stack。常量池条目同时存储序列化的字节和类型签名。
+
+### Nop
+
+|            |                  |
+| ---------- | ---------------- |
+| **Opcode** | `0x28`           |
+| **操作数**    | 无                |
+| **Stack**  | `[...] -> [...]` |
+
+空操作。PC 前进一步。此指令可以用作 bytecode 流中的占位符或对齐填充。
+
+***
+
+## 局部变量操作
+
+这些指令在操作数 stack 和 frame 的 locals 数组之间传递值。
+
+### CopyLoc
+
+|            |                         |
+| ---------- | ----------------------- |
+| **Opcode** | `0x0A`                  |
+| **操作数**    | `local_idx`（u8）         |
+| **Stack**  | `[...] -> [..., value]` |
+
+复制 `locals[local_idx]` 中存储的值并推入 stack。该 local 仍然有效，可以继续使用。该 local 的类型必须具有 `copy` ability。
+
+### MoveLoc
+
+|            |                         |
+| ---------- | ----------------------- |
+| **Opcode** | `0x0B`                  |
+| **操作数**    | `local_idx`（u8）         |
+| **Stack**  | `[...] -> [..., value]` |
+
+将 `locals[local_idx]` 中的值移出到 stack 上。执行此指令后，该 local 变为无效状态。在后续 `StLoc` 写入该索引之前，对该 local 的任何读取都是验证错误。
+
+### StLoc
+
+|            |                         |
+| ---------- | ----------------------- |
+| **Opcode** | `0x0C`                  |
+| **操作数**    | `local_idx`（u8）         |
+| **Stack**  | `[..., value] -> [...]` |
+
+从 stack 弹出顶部值并存储到 `locals[local_idx]`。如果该 local 已经持有一个值，则该先前的值会被丢弃（在这种情况下，其类型必须具有 `drop` ability）。值的类型必须与该 local 声明的类型匹配。
+
+### MutBorrowLoc
+
+|            |                          |
+| ---------- | ------------------------ |
+| **Opcode** | `0x0D`                   |
+| **操作数**    | `local_idx`（u8）          |
+| **Stack**  | `[...] -> [..., &mut T]` |
+
+将 `locals[local_idx]` 的可变引用推入 stack。该 local 当前必须持有一个有效的值。
+
+### ImmBorrowLoc
+
+|            |                      |
+| ---------- | -------------------- |
+| **Opcode** | `0x0E`               |
+| **操作数**    | `local_idx`（u8）      |
+| **Stack**  | `[...] -> [..., &T]` |
+
+将 `locals[local_idx]` 的不可变引用推入 stack。
+
+***
+
+## 全局存储操作
+
+这些指令与全局资源存储交互——以 `(address, type)` 对为键的持久化键值存储。使用的 struct 类型必须具有 `key` ability。
+
+### Exists
+
+|            |                                                    |
+| ---------- | -------------------------------------------------- |
+| **Opcode** | `0x29`                                             |
+| **操作数**    | `struct_def_idx`（ULEB128 -- StructDefinitionIndex） |
+| **Stack**  | `[..., address] -> [..., bool]`                    |
+
+从 stack 弹出一个地址，如果指定 struct 类型的实例存在于该地址的全局存储中则推入 `true`，否则推入 `false`。
+
+### ExistsGeneric
+
+|            |                                                           |
+| ---------- | --------------------------------------------------------- |
+| **Opcode** | `0x3B`                                                    |
+| **操作数**    | `struct_inst_idx`（ULEB128 -- StructDefInstantiationIndex） |
+| **Stack**  | `[..., address] -> [..., bool]`                           |
+
+`Exists` 的泛型版本。操作数索引到 struct 实例化表，该表提供具体的类型参数。
+
+### MoveFrom
+
+|            |                                                    |
+| ---------- | -------------------------------------------------- |
+| **Opcode** | `0x2C`                                             |
+| **操作数**    | `struct_def_idx`（ULEB128 -- StructDefinitionIndex） |
+| **Stack**  | `[..., address] -> [..., struct_value]`            |
+
+弹出一个地址，从该地址的全局存储中移除指定类型的资源，并将该值推入 stack。如果不存在此类资源则中止。
+
+### MoveFromGeneric
+
+|            |                                                           |
+| ---------- | --------------------------------------------------------- |
+| **Opcode** | `0x3E`                                                    |
+| **操作数**    | `struct_inst_idx`（ULEB128 -- StructDefInstantiationIndex） |
+| **Stack**  | `[..., address] -> [..., struct_value]`                   |
+
+`MoveFrom` 的泛型版本。
+
+### MoveTo
+
+|            |                                                    |
+| ---------- | -------------------------------------------------- |
+| **Opcode** | `0x2D`                                             |
+| **操作数**    | `struct_def_idx`（ULEB128 -- StructDefinitionIndex） |
+| **Stack**  | `[..., signer_ref, struct_value] -> [...]`         |
+
+从 stack 弹出一个 struct 值和一个 `&signer` 引用。将该 struct 值发布到 signer 地址下的全局存储中。如果该地址已存在相同类型的资源则中止。
+
+### MoveToGeneric
+
+|            |                                                           |
+| ---------- | --------------------------------------------------------- |
+| **Opcode** | `0x3F`                                                    |
+| **操作数**    | `struct_inst_idx`（ULEB128 -- StructDefInstantiationIndex） |
+| **Stack**  | `[..., signer_ref, struct_value] -> [...]`                |
+
+`MoveTo` 的泛型版本。
+
+### MutBorrowGlobal
+
+|            |                                                    |
+| ---------- | -------------------------------------------------- |
+| **Opcode** | `0x2A`                                             |
+| **操作数**    | `struct_def_idx`（ULEB128 -- StructDefinitionIndex） |
+| **Stack**  | `[..., address] -> [..., &mut T]`                  |
+
+弹出一个地址，获取该地址处指定类型资源的可变引用，并推入该引用。如果资源不存在则中止。
+
+### MutBorrowGlobalGeneric
+
+|            |                                                           |
+| ---------- | --------------------------------------------------------- |
+| **Opcode** | `0x3C`                                                    |
+| **操作数**    | `struct_inst_idx`（ULEB128 -- StructDefInstantiationIndex） |
+| **Stack**  | `[..., address] -> [..., &mut T]`                         |
+
+`MutBorrowGlobal` 的泛型版本。
+
+### ImmBorrowGlobal
+
+|            |                                                    |
+| ---------- | -------------------------------------------------- |
+| **Opcode** | `0x2B`                                             |
+| **操作数**    | `struct_def_idx`（ULEB128 -- StructDefinitionIndex） |
+| **Stack**  | `[..., address] -> [..., &T]`                      |
+
+弹出一个地址，获取该地址处指定类型资源的不可变引用，并推入该引用。如果资源不存在则中止。
+
+### ImmBorrowGlobalGeneric
+
+|            |                                                           |
+| ---------- | --------------------------------------------------------- |
+| **Opcode** | `0x3D`                                                    |
+| **操作数**    | `struct_inst_idx`（ULEB128 -- StructDefInstantiationIndex） |
+| **Stack**  | `[..., address] -> [..., &T]`                             |
+
+`ImmBorrowGlobal` 的泛型版本。
+
+***
+
+## 字段操作
+
+这些指令从 stack 上的 struct 引用借用单个字段。
+
+### MutBorrowField
+
+|            |                                                 |
+| ---------- | ----------------------------------------------- |
+| **Opcode** | `0x0F`                                          |
+| **操作数**    | `field_handle_idx`（ULEB128 -- FieldHandleIndex） |
+| **Stack**  | `[..., &mut Struct] -> [..., &mut FieldType]`   |
+
+弹出一个 struct 的可变引用，并推入由字段 handle 标识的字段的可变引用。字段 handle 编码了 struct 定义和该 struct 内的字段偏移量。
+
+### MutBorrowFieldGeneric
+
+|            |                                                      |
+| ---------- | ---------------------------------------------------- |
+| **Opcode** | `0x36`                                               |
+| **操作数**    | `field_inst_idx`（ULEB128 -- FieldInstantiationIndex） |
+| **Stack**  | `[..., &mut Struct<T>] -> [..., &mut FieldType]`     |
+
+`MutBorrowField` 的泛型版本。字段实例化表提供 struct 的具体类型参数。
+
+### ImmBorrowField
+
+|            |                                                                                   |
+| ---------- | --------------------------------------------------------------------------------- |
+| **Opcode** | `0x10`                                                                            |
+| **操作数**    | `field_handle_idx`（ULEB128 -- FieldHandleIndex）                                   |
+| **Stack**  | `[..., &Struct] -> [..., &FieldType]` 或 `[..., &mut Struct] -> [..., &FieldType]` |
+
+弹出一个 struct 的不可变或可变引用，并推入指定字段的不可变引用。
+
+### ImmBorrowFieldGeneric
+
+|            |                                                                                         |
+| ---------- | --------------------------------------------------------------------------------------- |
+| **Opcode** | `0x37`                                                                                  |
+| **操作数**    | `field_inst_idx`（ULEB128 -- FieldInstantiationIndex）                                    |
+| **Stack**  | `[..., &Struct<T>] -> [..., &FieldType]` 或 `[..., &mut Struct<T>] -> [..., &FieldType]` |
+
+`ImmBorrowField` 的泛型版本。
+
+***
+
+## 引用操作
+
+这些指令解引用、通过引用写入或转换引用。
+
+### ReadRef
+
+|            |                                                       |
+| ---------- | ----------------------------------------------------- |
+| **Opcode** | `0x14`                                                |
+| **操作数**    | 无                                                     |
+| **Stack**  | `[..., &T] -> [..., T]` 或 `[..., &mut T] -> [..., T]` |
+
+弹出一个引用（可变或不可变），复制被引用的值，并将副本推入 stack。被引用的类型必须具有 `copy` ability。
+
+### WriteRef
+
+|            |                                 |
+| ---------- | ------------------------------- |
+| **Opcode** | `0x15`                          |
+| **操作数**    | 无                               |
+| **Stack**  | `[..., value, &mut T] -> [...]` |
+
+从 stack 弹出一个可变引用和一个值，然后通过该引用写入值。该位置的先前值会被丢弃，因此类型必须具有 `drop` ability。值的类型必须与引用的内部类型匹配。
+
+### FreezeRef
+
+|            |                              |
+| ---------- | ---------------------------- |
+| **Opcode** | `0x2E`                       |
+| **操作数**    | 无                            |
+| **Stack**  | `[..., &mut T] -> [..., &T]` |
+
+弹出一个可变引用并将其作为不可变引用推回。这只是类型级别的转换——除了借用跟踪更新外不执行任何运行时操作。
+
+***
+
+## 算术操作
+
+所有算术指令从 stack 弹出两个相同类型的整数操作数并推入结果。对于无符号类型，`Sub` 在下溢时中止，`Add`/`Mul` 在溢出时中止。对于有符号类型，溢出和下溢都会导致算术中止。当除数为零时，`Div` 和 `Mod` 中止。对有符号整数的 `Div` 在溢出时也会中止（最小值除以 -1）。
+
+### Add
+
+|            |                                    |
+| ---------- | ---------------------------------- |
+| **Opcode** | `0x16`                             |
+| **操作数**    | 无                                  |
+| **Stack**  | `[..., lhs, rhs] -> [..., result]` |
+
+计算 `lhs + rhs`。溢出时中止。
+
+### Sub
+
+|            |                                    |
+| ---------- | ---------------------------------- |
+| **Opcode** | `0x17`                             |
+| **操作数**    | 无                                  |
+| **Stack**  | `[..., lhs, rhs] -> [..., result]` |
+
+计算 `lhs - rhs`。对于无符号类型，如果 `lhs < rhs` 则中止。对于有符号类型，下溢时中止。
+
+### Mul
+
+|            |                                    |
+| ---------- | ---------------------------------- |
+| **Opcode** | `0x18`                             |
+| **操作数**    | 无                                  |
+| **Stack**  | `[..., lhs, rhs] -> [..., result]` |
+
+计算 `lhs * rhs`。溢出时中止。
+
+### Mod
+
+|            |                                    |
+| ---------- | ---------------------------------- |
+| **Opcode** | `0x19`                             |
+| **操作数**    | 无                                  |
+| **Stack**  | `[..., lhs, rhs] -> [..., result]` |
+
+计算 `lhs % rhs`。如果 `rhs == 0` 则中止。
+
+### Div
+
+|            |                                    |
+| ---------- | ---------------------------------- |
+| **Opcode** | `0x1A`                             |
+| **操作数**    | 无                                  |
+| **Stack**  | `[..., lhs, rhs] -> [..., result]` |
+
+计算 `lhs / rhs`（整数除法，向零截断）。如果 `rhs == 0` 则中止。对于有符号类型，如果 `lhs == MIN_VALUE && rhs == -1`（溢出）也会中止。
+
+### Negate
+
+|            |                                 |
+| ---------- | ------------------------------- |
+| **Opcode** | `0x67`                          |
+| **操作数**    | 无                               |
+| **Stack**  | `[..., value] -> [..., result]` |
+| **引入版本**   | Bytecode v9                     |
+
+对 stack 顶部的有符号整数取负。计算 `-value`。如果该值是其有符号整数类型的最小值（例如 `i8::MIN`），则中止，因为正数对应值不可表示。
+
+***
+
+## 位运算操作
+
+位运算指令对两个相同类型的整数值进行操作（移位操作除外，其中移位量始终为 `u8`）。
+
+### BitOr
+
+|            |                                    |
+| ---------- | ---------------------------------- |
+| **Opcode** | `0x1B`                             |
+| **操作数**    | 无                                  |
+| **Stack**  | `[..., lhs, rhs] -> [..., result]` |
+
+计算 `lhs | rhs`（按位或）。两个操作数必须是相同的整数类型。
+
+### BitAnd
+
+|            |                                    |
+| ---------- | ---------------------------------- |
+| **Opcode** | `0x1C`                             |
+| **操作数**    | 无                                  |
+| **Stack**  | `[..., lhs, rhs] -> [..., result]` |
+
+计算 `lhs & rhs`（按位与）。两个操作数必须是相同的整数类型。
+
+### Xor
+
+|            |                                    |
+| ---------- | ---------------------------------- |
+| **Opcode** | `0x1D`                             |
+| **操作数**    | 无                                  |
+| **Stack**  | `[..., lhs, rhs] -> [..., result]` |
+
+计算 `lhs ^ rhs`（按位异或）。两个操作数必须是相同的整数类型。
+
+### Shl
+
+|            |                                               |
+| ---------- | --------------------------------------------- |
+| **Opcode** | `0x2F`                                        |
+| **操作数**    | 无                                             |
+| **Stack**  | `[..., value, shift_amount] -> [..., result]` |
+
+将 `value` 左移 `shift_amount` 位。`shift_amount` 必须为 `u8` 类型，且必须小于值类型的位宽。如果移位量超出范围，则以算术错误中止。
+
+### Shr
+
+|            |                                               |
+| ---------- | --------------------------------------------- |
+| **Opcode** | `0x30`                                        |
+| **操作数**    | 无                                             |
+| **Stack**  | `[..., value, shift_amount] -> [..., result]` |
+
+将 `value` 右移 `shift_amount` 位。`shift_amount` 必须为 `u8` 类型，且必须小于值类型的位宽。对于有符号整数，执行算术右移（符号扩展）。如果移位量超出范围，则以算术错误中止。
+
+***
+
+## 比较操作
+
+这些指令比较两个整数值并推入一个布尔结果。两个操作数必须是相同的整数类型。
+
+### Lt
+
+|            |                                  |
+| ---------- | -------------------------------- |
+| **Opcode** | `0x23`                           |
+| **操作数**    | 无                                |
+| **Stack**  | `[..., lhs, rhs] -> [..., bool]` |
+
+如果 `lhs < rhs` 则推入 `true`，否则推入 `false`。
+
+### Gt
+
+|            |                                  |
+| ---------- | -------------------------------- |
+| **Opcode** | `0x24`                           |
+| **操作数**    | 无                                |
+| **Stack**  | `[..., lhs, rhs] -> [..., bool]` |
+
+如果 `lhs > rhs` 则推入 `true`，否则推入 `false`。
+
+### Le
+
+|            |                                  |
+| ---------- | -------------------------------- |
+| **Opcode** | `0x25`                           |
+| **操作数**    | 无                                |
+| **Stack**  | `[..., lhs, rhs] -> [..., bool]` |
+
+如果 `lhs <= rhs` 则推入 `true`，否则推入 `false`。
+
+### Ge
+
+|            |                                  |
+| ---------- | -------------------------------- |
+| **Opcode** | `0x26`                           |
+| **操作数**    | 无                                |
+| **Stack**  | `[..., lhs, rhs] -> [..., bool]` |
+
+如果 `lhs >= rhs` 则推入 `true`，否则推入 `false`。
+
+***
+
+## 相等性操作
+
+相等性适用于原始类型（`bool`、`address`、所有整数类型）、元素支持相等性的 `vector<T>`，以及内部类型支持相等性的引用 `&T`/`&mut T`。两个值都会被消耗（类型必须具有 `drop` ability）。
+
+### Eq
+
+|            |                                  |
+| ---------- | -------------------------------- |
+| **Opcode** | `0x21`                           |
+| **操作数**    | 无                                |
+| **Stack**  | `[..., lhs, rhs] -> [..., bool]` |
+
+如果 `lhs == rhs` 则推入 `true`，否则推入 `false`。
+
+### Neq
+
+|            |                                  |
+| ---------- | -------------------------------- |
+| **Opcode** | `0x22`                           |
+| **操作数**    | 无                                |
+| **Stack**  | `[..., lhs, rhs] -> [..., bool]` |
+
+如果 `lhs != rhs` 则推入 `true`，否则推入 `false`。
+
+***
+
+## 布尔操作
+
+这些指令对 `bool` 值进行操作。
+
+### And
+
+|            |                                  |
+| ---------- | -------------------------------- |
+| **Opcode** | `0x1F`                           |
+| **操作数**    | 无                                |
+| **Stack**  | `[..., lhs, rhs] -> [..., bool]` |
+
+计算 `lhs && rhs`（逻辑与）。
+
+### Or
+
+|            |                                  |
+| ---------- | -------------------------------- |
+| **Opcode** | `0x1E`                           |
+| **操作数**    | 无                                |
+| **Stack**  | `[..., lhs, rhs] -> [..., bool]` |
+
+计算 `lhs || rhs`（逻辑或）。
+
+### Not
+
+|            |                               |
+| ---------- | ----------------------------- |
+| **Opcode** | `0x20`                        |
+| **操作数**    | 无                             |
+| **Stack**  | `[..., value] -> [..., bool]` |
+
+计算 `!value`（逻辑非）。
+
+***
+
+## 类型转换操作
+
+类型转换指令将一种整数类型转换为另一种。如果源值超出目标类型的可表示范围，该指令将以算术错误中止。对于无符号目标类型，负的源值会导致中止。对于 `CastU256` 和 `CastI256`，所有非负整数值都可以容纳（但对于 `CastU256`，负值仍然会中止）。
+
+### CastU8
+
+|            |                                 |
+| ---------- | ------------------------------- |
+| **Opcode** | `0x33`                          |
+| **操作数**    | 无                               |
+| **Stack**  | `[..., int_value] -> [..., u8]` |
+
+将 stack 顶部的整数值转换为 `u8`。如果值为负数或超过 `u8::MAX`（255）则中止。
+
+### CastU16
+
+|            |                                  |
+| ---------- | -------------------------------- |
+| **Opcode** | `0x4B`                           |
+| **操作数**    | 无                                |
+| **Stack**  | `[..., int_value] -> [..., u16]` |
+
+将 stack 顶部的整数值转换为 `u16`。如果值为负数或超过 `u16::MAX`（65535）则中止。
+
+### CastU32
+
+|            |                                  |
+| ---------- | -------------------------------- |
+| **Opcode** | `0x4C`                           |
+| **操作数**    | 无                                |
+| **Stack**  | `[..., int_value] -> [..., u32]` |
+
+将 stack 顶部的整数值转换为 `u32`。如果值为负数或超过 `u32::MAX` 则中止。
+
+### CastU64
+
+|            |                                  |
+| ---------- | -------------------------------- |
+| **Opcode** | `0x34`                           |
+| **操作数**    | 无                                |
+| **Stack**  | `[..., int_value] -> [..., u64]` |
+
+将 stack 顶部的整数值转换为 `u64`。如果值为负数或超过 `u64::MAX` 则中止。
+
+### CastU128
+
+|            |                                   |
+| ---------- | --------------------------------- |
+| **Opcode** | `0x35`                            |
+| **操作数**    | 无                                 |
+| **Stack**  | `[..., int_value] -> [..., u128]` |
+
+将 stack 顶部的整数值转换为 `u128`。如果值为负数或超过 `u128::MAX` 则中止。
+
+### CastU256
+
+|            |                                   |
+| ---------- | --------------------------------- |
+| **Opcode** | `0x4D`                            |
+| **操作数**    | 无                                 |
+| **Stack**  | `[..., int_value] -> [..., u256]` |
+
+将 stack 顶部的整数值转换为 `u256`。如果值为负数则中止。
+
+### CastI8
+
+|            |                                 |
+| ---------- | ------------------------------- |
+| **Opcode** | `0x61`                          |
+| **操作数**    | 无                               |
+| **Stack**  | `[..., int_value] -> [..., i8]` |
+| **引入版本**   | Bytecode v9                     |
+
+将 stack 顶部的整数值转换为 `i8`。如果值超出 `i8::MIN`（-128）到 `i8::MAX`（127）的范围则中止。
+
+### CastI16
+
+|            |                                  |
+| ---------- | -------------------------------- |
+| **Opcode** | `0x62`                           |
+| **操作数**    | 无                                |
+| **Stack**  | `[..., int_value] -> [..., i16]` |
+| **引入版本**   | Bytecode v9                      |
+
+将 stack 顶部的整数值转换为 `i16`。如果值超出 `i16::MIN`（-32768）到 `i16::MAX`（32767）的范围则中止。
+
+### CastI32
+
+|            |                                  |
+| ---------- | -------------------------------- |
+| **Opcode** | `0x63`                           |
+| **操作数**    | 无                                |
+| **Stack**  | `[..., int_value] -> [..., i32]` |
+| **引入版本**   | Bytecode v9                      |
+
+将 stack 顶部的整数值转换为 `i32`。如果值超出可表示范围则中止。
+
+### CastI64
+
+|            |                                  |
+| ---------- | -------------------------------- |
+| **Opcode** | `0x64`                           |
+| **操作数**    | 无                                |
+| **Stack**  | `[..., int_value] -> [..., i64]` |
+| **引入版本**   | Bytecode v9                      |
+
+将 stack 顶部的整数值转换为 `i64`。如果值超出可表示范围则中止。
+
+### CastI128
+
+|            |                                   |
+| ---------- | --------------------------------- |
+| **Opcode** | `0x65`                            |
+| **操作数**    | 无                                 |
+| **Stack**  | `[..., int_value] -> [..., i128]` |
+| **引入版本**   | Bytecode v9                       |
+
+将 stack 顶部的整数值转换为 `i128`。如果值超出可表示范围则中止。
+
+### CastI256
+
+|            |                                   |
+| ---------- | --------------------------------- |
+| **Opcode** | `0x66`                            |
+| **操作数**    | 无                                 |
+| **Stack**  | `[..., int_value] -> [..., i256]` |
+| **引入版本**   | Bytecode v9                       |
+
+将 stack 顶部的整数值转换为 `i256`。如果值超过 `i256::MAX` 则中止。
+
+***
+
+## 控制流
+
+### Branch
+
+|            |                        |
+| ---------- | ---------------------- |
+| **Opcode** | `0x05`                 |
+| **操作数**    | `code_offset`（u16，小端序） |
+| **Stack**  | `[...] -> [...]`       |
+
+无条件将 PC 设置为 `code_offset`。偏移量相对于函数指令流的起始位置。
+
+### BrTrue
+
+|            |                        |
+| ---------- | ---------------------- |
+| **Opcode** | `0x03`                 |
+| **操作数**    | `code_offset`（u16，小端序） |
+| **Stack**  | `[..., bool] -> [...]` |
+
+从 stack 弹出一个布尔值。如果为 `true`，将 PC 设置为 `code_offset`。否则，PC 前进一步。
+
+### BrFalse
+
+|            |                        |
+| ---------- | ---------------------- |
+| **Opcode** | `0x04`                 |
+| **操作数**    | `code_offset`（u16，小端序） |
+| **Stack**  | `[..., bool] -> [...]` |
+
+从 stack 弹出一个布尔值。如果为 `false`，将 PC 设置为 `code_offset`。否则，PC 前进一步。
+
+### Ret
+
+|            |                                                 |
+| ---------- | ----------------------------------------------- |
+| **Opcode** | `0x02`                                          |
+| **操作数**    | 无                                               |
+| **Stack**  | `[..., ret_val_0, ..., ret_val_n]`（返回值必须匹配函数签名） |
+
+从当前函数返回。该 frame 从调用 stack 弹出。返回值（如果有）保留在调用者的操作数 stack 上。stack 上的值的数量和类型必须与函数的返回类型签名匹配。
+
+### Abort
+
+|            |                     |
+| ---------- | ------------------- |
+| **Opcode** | `0x27`              |
+| **操作数**    | 无                   |
+| **Stack**  | `[..., error_code]` |
+
+从 stack 弹出一个 `u64` 错误码并中止交易。交易期间所做的所有更改都会被回滚。
+
+### AbortMsg
+
+|            |                                    |
+| ---------- | ---------------------------------- |
+| **Opcode** | `0x68`                             |
+| **操作数**    | 无                                  |
+| **Stack**  | `[..., error_code, error_message]` |
+| **引入版本**   | Bytecode v10                       |
+
+从 stack 弹出一个 `vector<u8>` 错误消息和一个 `u64` 错误码，并以两者同时中止交易。这比单独使用 `Abort` 提供更丰富的诊断信息。
+
+***
+
+## 函数调用
+
+### Call
+
+|            |                                                          |
+| ---------- | -------------------------------------------------------- |
+| **Opcode** | `0x11`                                                   |
+| **操作数**    | `func_handle_idx`（ULEB128 -- FunctionHandleIndex）        |
+| **Stack**  | `[..., arg_0, ..., arg_n-1] -> [..., ret_0, ..., ret_m]` |
+
+调用由 `func_handle_idx` 标识的函数。参数按声明顺序放在 stack 上（第一个参数先推入，最后一个参数在顶部）。所有参数都会被消耗。
+
+对于非 native 函数，一个新的 frame 会被推入调用 stack，参数作为最初的 locals 加载。对于 native 函数，VM 直接分派到 native 实现；当其返回时，返回值在调用者的 stack 上。
+
+### CallGeneric
+
+|            |                                                          |
+| ---------- | -------------------------------------------------------- |
+| **Opcode** | `0x38`                                                   |
+| **操作数**    | `func_inst_idx`（ULEB128 -- FunctionInstantiationIndex）   |
+| **Stack**  | `[..., arg_0, ..., arg_n-1] -> [..., ret_0, ..., ret_m]` |
+
+`Call` 的泛型版本。函数实例化表条目指定了函数 handle 和要替换函数泛型参数的具体类型参数。
+
+***
+
+## Struct 操作
+
+这些指令创建和销毁 struct 实例。
+
+### Pack
+
+|            |                                                         |
+| ---------- | ------------------------------------------------------- |
+| **Opcode** | `0x12`                                                  |
+| **操作数**    | `struct_def_idx`（ULEB128 -- StructDefinitionIndex）      |
+| **Stack**  | `[..., field_0, ..., field_n-1] -> [..., struct_value]` |
+
+按声明顺序从 stack 弹出字段值（第一个字段先推入）并创建一个新的 struct 实例。必须提供所有字段。
+
+### PackGeneric
+
+|            |                                                           |
+| ---------- | --------------------------------------------------------- |
+| **Opcode** | `0x39`                                                    |
+| **操作数**    | `struct_inst_idx`（ULEB128 -- StructDefInstantiationIndex） |
+| **Stack**  | `[..., field_0, ..., field_n-1] -> [..., struct_value]`   |
+
+`Pack` 的泛型版本。struct 实例化条目提供具体的类型参数。
+
+### Unpack
+
+|            |                                                         |
+| ---------- | ------------------------------------------------------- |
+| **Opcode** | `0x13`                                                  |
+| **操作数**    | `struct_def_idx`（ULEB128 -- StructDefinitionIndex）      |
+| **Stack**  | `[..., struct_value] -> [..., field_0, ..., field_n-1]` |
+
+弹出一个 struct 值，销毁它，并按声明顺序将其字段值推入 stack（第一个字段先推入，最后一个字段在顶部）。
+
+### UnpackGeneric
+
+|            |                                                           |
+| ---------- | --------------------------------------------------------- |
+| **Opcode** | `0x3A`                                                    |
+| **操作数**    | `struct_inst_idx`（ULEB128 -- StructDefInstantiationIndex） |
+| **Stack**  | `[..., struct_value] -> [..., field_0, ..., field_n-1]`   |
+
+`Unpack` 的泛型版本。
+
+***
+
+## Enum / Variant 操作
+
+这些指令用于 enum 类型（具有多个 variant 的 struct）。它们在 bytecode 版本 7 中引入。有关 enum 支持何时添加的详细信息，请参阅[版本历史](/zh/build/smart-contracts/bytecode/version-history)。
+
+### PackVariant
+
+|            |                                                                  |
+| ---------- | ---------------------------------------------------------------- |
+| **Opcode** | `0x52`                                                           |
+| **操作数**    | `struct_variant_handle_idx`（ULEB128 -- StructVariantHandleIndex） |
+| **Stack**  | `[..., field_0, ..., field_n-1] -> [..., variant_value]`         |
+| **引入版本**   | Bytecode v7                                                      |
+
+按声明顺序弹出字段值并创建指定 enum variant 的新实例。variant handle 标识了 struct 定义和特定的 variant。
+
+### PackVariantGeneric
+
+|            |                                                                       |
+| ---------- | --------------------------------------------------------------------- |
+| **Opcode** | `0x53`                                                                |
+| **操作数**    | `struct_variant_inst_idx`（ULEB128 -- StructVariantInstantiationIndex） |
+| **Stack**  | `[..., field_0, ..., field_n-1] -> [..., variant_value]`              |
+| **引入版本**   | Bytecode v7                                                           |
+
+`PackVariant` 的泛型版本。
+
+### UnpackVariant
+
+|            |                                                                  |
+| ---------- | ---------------------------------------------------------------- |
+| **Opcode** | `0x54`                                                           |
+| **操作数**    | `struct_variant_handle_idx`（ULEB128 -- StructVariantHandleIndex） |
+| **Stack**  | `[..., variant_value] -> [..., field_0, ..., field_n-1]`         |
+| **引入版本**   | Bytecode v7                                                      |
+
+弹出一个期望为指定 variant 的值。销毁它并按声明顺序将其字段推入 stack。如果该值不是期望的 variant 则中止。
+
+### UnpackVariantGeneric
+
+|            |                                                                       |
+| ---------- | --------------------------------------------------------------------- |
+| **Opcode** | `0x55`                                                                |
+| **操作数**    | `struct_variant_inst_idx`（ULEB128 -- StructVariantInstantiationIndex） |
+| **Stack**  | `[..., variant_value] -> [..., field_0, ..., field_n-1]`              |
+| **引入版本**   | Bytecode v7                                                           |
+
+`UnpackVariant` 的泛型版本。
+
+### TestVariant
+
+|            |                                                                                     |
+| ---------- | ----------------------------------------------------------------------------------- |
+| **Opcode** | `0x56`                                                                              |
+| **操作数**    | `struct_variant_handle_idx`（ULEB128 -- StructVariantHandleIndex）                    |
+| **Stack**  | `[..., &variant_value] -> [..., bool]` 或 `[..., &mut variant_value] -> [..., bool]` |
+| **引入版本**   | Bytecode v7                                                                         |
+
+弹出一个 enum 值的引用（不可变或可变），如果该值是指定的 variant 则推入 `true`，否则推入 `false`。引用会被消耗。
+
+### TestVariantGeneric
+
+|            |                                                                                     |
+| ---------- | ----------------------------------------------------------------------------------- |
+| **Opcode** | `0x57`                                                                              |
+| **操作数**    | `struct_variant_inst_idx`（ULEB128 -- StructVariantInstantiationIndex）               |
+| **Stack**  | `[..., &variant_value] -> [..., bool]` 或 `[..., &mut variant_value] -> [..., bool]` |
+| **引入版本**   | Bytecode v7                                                                         |
+
+`TestVariant` 的泛型版本。
+
+### ImmBorrowVariantField
+
+|            |                                                                                                 |
+| ---------- | ----------------------------------------------------------------------------------------------- |
+| **Opcode** | `0x4E`                                                                                          |
+| **操作数**    | `variant_field_handle_idx`（ULEB128 -- VariantFieldHandleIndex）                                  |
+| **Stack**  | `[..., &variant_value] -> [..., &FieldType]` 或 `[..., &mut variant_value] -> [..., &FieldType]` |
+| **引入版本**   | Bytecode v7                                                                                     |
+
+弹出一个 enum 值的引用。如果该值是期望的 variant，则推入指定字段的不可变引用。如果该值不是期望的 variant 则中止。
+
+### ImmBorrowVariantFieldGeneric
+
+|            |                                                                                                 |
+| ---------- | ----------------------------------------------------------------------------------------------- |
+| **Opcode** | `0x50`                                                                                          |
+| **操作数**    | `variant_field_inst_idx`（ULEB128 -- VariantFieldInstantiationIndex）                             |
+| **Stack**  | `[..., &variant_value] -> [..., &FieldType]` 或 `[..., &mut variant_value] -> [..., &FieldType]` |
+| **引入版本**   | Bytecode v7                                                                                     |
+
+`ImmBorrowVariantField` 的泛型版本。
+
+### MutBorrowVariantField
+
+|            |                                                                |
+| ---------- | -------------------------------------------------------------- |
+| **Opcode** | `0x4F`                                                         |
+| **操作数**    | `variant_field_handle_idx`（ULEB128 -- VariantFieldHandleIndex） |
+| **Stack**  | `[..., &mut variant_value] -> [..., &mut FieldType]`           |
+| **引入版本**   | Bytecode v7                                                    |
+
+弹出一个 enum 值的可变引用。如果该值是期望的 variant，则推入指定字段的可变引用。如果该值不是期望的 variant 则中止。
+
+### MutBorrowVariantFieldGeneric
+
+|            |                                                                     |
+| ---------- | ------------------------------------------------------------------- |
+| **Opcode** | `0x51`                                                              |
+| **操作数**    | `variant_field_inst_idx`（ULEB128 -- VariantFieldInstantiationIndex） |
+| **Stack**  | `[..., &mut variant_value] -> [..., &mut FieldType]`                |
+| **引入版本**   | Bytecode v7                                                         |
+
+`MutBorrowVariantField` 的泛型版本。
+
+***
+
+## Closure 操作
+
+Closure 在创建时捕获函数参数的一个子集，生成一个可调用的值。这些指令在 bytecode 版本 8 中引入。
+
+### PackClosure
+
+|            |                                                                              |
+| ---------- | ---------------------------------------------------------------------------- |
+| **Opcode** | `0x58`                                                                       |
+| **操作数**    | `func_handle_idx`（ULEB128 -- FunctionHandleIndex），`mask`（ULEB128 -- u64 位掩码） |
+| **Stack**  | `[..., captured_m, ..., captured_1] -> [..., closure]`                       |
+| **引入版本**   | Bytecode v8                                                                  |
+
+为 `func_handle_idx` 标识的函数创建一个 closure。`mask` 是一个 u64 位掩码，指示函数的哪些参数被捕获。如果函数的参数为 `(t1, t2, ..., tn)` 且 `mask` 的第 `j` 位被设置，则第 `j` 个参数从 stack 中捕获。
+
+被捕获的值按其参数位置的逆序从 stack 弹出。生成的 closure 在调用时只接受未捕获的参数作为实参。
+
+closure 值的 ability 集是所有被捕获值的 ability 的交集，再与函数 handle 的固有 ability（`copy` + `drop`，如果函数是 public 的还包括 `store`）取交集。
+
+### PackClosureGeneric
+
+|            |                                                                                   |
+| ---------- | --------------------------------------------------------------------------------- |
+| **Opcode** | `0x59`                                                                            |
+| **操作数**    | `func_inst_idx`（ULEB128 -- FunctionInstantiationIndex），`mask`（ULEB128 -- u64 位掩码） |
+| **Stack**  | `[..., captured_m, ..., captured_1] -> [..., closure]`                            |
+| **引入版本**   | Bytecode v8                                                                       |
+
+`PackClosure` 的泛型版本。用于被捕获的函数是泛型实例化的情况。未实例化的泛型函数不能用于创建 closure。
+
+### CallClosure
+
+|            |                                                                 |
+| ---------- | --------------------------------------------------------------- |
+| **Opcode** | `0x5A`                                                          |
+| **操作数**    | `sig_idx`（ULEB128 -- SignatureIndex，编码函数类型）                     |
+| **Stack**  | `[..., arg_1, ..., arg_n, closure] -> [..., ret_0, ..., ret_m]` |
+| **引入版本**   | Bytecode v8                                                     |
+
+调用一个 closure。closure 在 stack 顶部，剩余的（未捕获的）参数在其下方。`sig_idx` 编码了用于 bytecode 验证目的的期望函数类型。在运行时，存储在 closure 内部的被捕获参数与提供的参数组合形成完整的参数列表，然后调用底层函数。
+
+语义上：
+
+```
+CallClosure(PackClosure(f, mask, c1..cn), a1..am) == f(mask.compose(c1..cn, a1..am))
+```
+
+***
+
+## Vector 操作
+
+这些内置指令提供了高效的 vector 操作，无需通过 native 函数调用。每条指令都接受一个 `SignatureIndex` 操作数，用于标识 vector 的元素类型。
+
+### VecPack
+
+|            |                                                                         |
+| ---------- | ----------------------------------------------------------------------- |
+| **Opcode** | `0x40`                                                                  |
+| **操作数**    | `elem_ty_idx`（ULEB128 -- SignatureIndex），`num_elements`（ULEB128 -- u64） |
+| **Stack**  | `[..., elem_0, ..., elem_n-1] -> [..., vector]`                         |
+
+从 stack 弹出 `num_elements` 个值并创建一个按顺序包含它们的新 vector（先推入的 = 第一个元素）。所有值必须匹配 `elem_ty_idx` 标识的元素类型。
+
+### VecLen
+
+|            |                                                                           |
+| ---------- | ------------------------------------------------------------------------- |
+| **Opcode** | `0x41`                                                                    |
+| **操作数**    | `elem_ty_idx`（ULEB128 -- SignatureIndex）                                  |
+| **Stack**  | `[..., &vector<T>] -> [..., u64]` 或 `[..., &mut vector<T>] -> [..., u64]` |
+
+弹出一个 vector 的引用并将其长度作为 `u64` 推入。
+
+### VecImmBorrow
+
+|            |                                                                                       |
+| ---------- | ------------------------------------------------------------------------------------- |
+| **Opcode** | `0x42`                                                                                |
+| **操作数**    | `elem_ty_idx`（ULEB128 -- SignatureIndex）                                              |
+| **Stack**  | `[..., &vector<T>, index] -> [..., &T]` 或 `[..., &mut vector<T>, index] -> [..., &T]` |
+
+弹出一个 `u64` 索引和一个 vector 的引用，然后推入该索引处元素的不可变引用。如果索引越界则中止。
+
+### VecMutBorrow
+
+|            |                                                 |
+| ---------- | ----------------------------------------------- |
+| **Opcode** | `0x43`                                          |
+| **操作数**    | `elem_ty_idx`（ULEB128 -- SignatureIndex）        |
+| **Stack**  | `[..., &mut vector<T>, index] -> [..., &mut T]` |
+
+弹出一个 `u64` 索引和一个可变 vector 引用，然后推入该索引处元素的可变引用。如果索引越界则中止。
+
+### VecPushBack
+
+|            |                                          |
+| ---------- | ---------------------------------------- |
+| **Opcode** | `0x44`                                   |
+| **操作数**    | `elem_ty_idx`（ULEB128 -- SignatureIndex） |
+| **Stack**  | `[..., &mut vector<T>, value] -> [...]`  |
+
+弹出一个值和一个可变 vector 引用，然后将该值追加到 vector 的末尾。
+
+### VecPopBack
+
+|            |                                          |
+| ---------- | ---------------------------------------- |
+| **Opcode** | `0x45`                                   |
+| **操作数**    | `elem_ty_idx`（ULEB128 -- SignatureIndex） |
+| **Stack**  | `[..., &mut vector<T>] -> [..., T]`      |
+
+弹出一个可变 vector 引用，从 vector 中移除最后一个元素，并将该元素推入 stack。如果 vector 为空则中止。
+
+### VecUnpack
+
+|            |                                                                         |
+| ---------- | ----------------------------------------------------------------------- |
+| **Opcode** | `0x46`                                                                  |
+| **操作数**    | `elem_ty_idx`（ULEB128 -- SignatureIndex），`num_elements`（ULEB128 -- u64） |
+| **Stack**  | `[..., vector<T>] -> [..., elem_0, ..., elem_n-1]`                      |
+
+弹出一个 vector（按值），销毁它，并按顺序将所有 `num_elements` 个元素推入 stack（第一个元素先推入）。如果 vector 的实际长度不等于 `num_elements` 则中止。
+
+### VecSwap
+
+|            |                                          |
+| ---------- | ---------------------------------------- |
+| **Opcode** | `0x47`                                   |
+| **操作数**    | `elem_ty_idx`（ULEB128 -- SignatureIndex） |
+| **Stack**  | `[..., &mut vector<T>, i, j] -> [...]`   |
+
+弹出两个 `u64` 索引（`j` 在顶部，然后是 `i`）和一个可变 vector 引用，然后交换位置 `i` 和 `j` 处的元素。如果任一索引越界则中止。
+
+***
+
+## 有符号整数加载操作
+
+这些指令将有符号整数常量推入 stack。它们与有符号整数类型系统一起在 bytecode 版本 9 中引入。
+
+### LdI8
+
+|            |                            |
+| ---------- | -------------------------- |
+| **Opcode** | `0x5B`                     |
+| **操作数**    | `i8_value`（1 字节，有符号）       |
+| **Stack**  | `[...] -> [..., i8_value]` |
+| **引入版本**   | Bytecode v9                |
+
+将给定的 `i8` 常量推入 stack。
+
+### LdI16
+
+|            |                             |
+| ---------- | --------------------------- |
+| **Opcode** | `0x5C`                      |
+| **操作数**    | `i16_value`（2 字节，小端序，有符号）   |
+| **Stack**  | `[...] -> [..., i16_value]` |
+| **引入版本**   | Bytecode v9                 |
+
+将给定的 `i16` 常量推入 stack。
+
+### LdI32
+
+|            |                             |
+| ---------- | --------------------------- |
+| **Opcode** | `0x5D`                      |
+| **操作数**    | `i32_value`（4 字节，小端序，有符号）   |
+| **Stack**  | `[...] -> [..., i32_value]` |
+| **引入版本**   | Bytecode v9                 |
+
+将给定的 `i32` 常量推入 stack。
+
+### LdI64
+
+|            |                             |
+| ---------- | --------------------------- |
+| **Opcode** | `0x5E`                      |
+| **操作数**    | `i64_value`（8 字节，小端序，有符号）   |
+| **Stack**  | `[...] -> [..., i64_value]` |
+| **引入版本**   | Bytecode v9                 |
+
+将给定的 `i64` 常量推入 stack。
+
+### LdI128
+
+|            |                              |
+| ---------- | ---------------------------- |
+| **Opcode** | `0x5F`                       |
+| **操作数**    | `i128_value`（16 字节，小端序，有符号）  |
+| **Stack**  | `[...] -> [..., i128_value]` |
+| **引入版本**   | Bytecode v9                  |
+
+将给定的 `i128` 常量推入 stack。
+
+### LdI256
+
+|            |                              |
+| ---------- | ---------------------------- |
+| **Opcode** | `0x60`                       |
+| **操作数**    | `i256_value`（32 字节，小端序，有符号）  |
+| **Stack**  | `[...] -> [..., i256_value]` |
+| **引入版本**   | Bytecode v9                  |
+
+将给定的 `i256` 常量推入 stack。

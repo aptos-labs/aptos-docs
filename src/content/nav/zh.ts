@@ -71,6 +71,7 @@ export default navDictionary({
   "smartContracts.group.aptosFeatures.dataStructures": "数据结构", // Data Structures
   "smartContracts.group.aptosFeatures": "Aptos Move 功能", // Aptos Move Features
   "smartContracts.group.tooling": "工具", // Tooling
+  "smartContracts.group.tooling.bytecode": "字节码参考", // Bytecode Reference
   "smartContracts.group.tooling.move-prover": "Move Prover", // Move Prover
   "smartContracts.group.reference": "Move 参考", // Move Reference
 

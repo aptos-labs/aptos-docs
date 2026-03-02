@@ -1,0 +1,170 @@
+---
+title: "Bytecode 版本历史"
+description: "每个 Move bytecode 格式版本的变更参考，从 v5 到 v10，包括新指令、表类型和 signature token。"
+sidebar:
+  label: "Version History"
+---
+
+Move bytecode 格式在每个已编译 module 中都携带一个版本号。VM 使用此版本来决定在验证和执行期间哪些功能可用。本页面记录了从 v5（VM 接受的最低版本）到 v10（最新版本）每个版本中引入的变更。
+
+## 快速参考
+
+| 版本  | 默认用于               | 主要新增内容                    |
+| --- | ------------------ | ------------------------- |
+| v5  | --（最低支持版本）         | 基准指令集                     |
+| v6  | --                 | 内部重构；无面向用户的新功能            |
+| v7  | --                 | Enum 类型和 variant 指令       |
+| v8  | --                 | 一等 closure                |
+| v9  | Language v1（默认）    | 有符号整数类型（`i8`..`i256`）     |
+| v10 | Language v2.4、v2.5 | `AbortMsg` 指令（带消息的 abort） |
+
+## 版本 5
+
+版本 5 是 Aptos Move VM 接受的**最低 bytecode 版本**。它定义了基准指令集、module 二进制布局和核心类型系统。v7 之前的所有指令都属于此基准。
+
+在 v5 编译的 module 可以使用全套无符号整数类型（`u8`、`u16`、`u32`、`u64`、`u128`、`u256`）、具有 ability 的 struct、泛型、全局存储操作和 vector 指令。完整的基准指令列表请参见[指令集参考](/zh/build/smart-contracts/bytecode/instructions)。
+
+## 版本 6
+
+版本 6 引入了二进制格式的内部变更，但未添加任何对 Move 开发者可见的新指令、表类型或 signature token。从开发者角度来看，在 v6 编译的 module 在功能上等同于 v5 module。
+
+## 版本 7
+
+版本 7 向 Move bytecode 添加了 **enum 类型**（也称为 variant）。Enum 允许单一类型持有多个命名 variant 之一，每个 variant 有自己的字段——类似于 Rust enum 或函数式语言中的代数数据类型。
+
+### 新指令
+
+| 指令                             | Opcode | 描述                            |
+| ------------------------------ | ------ | ----------------------------- |
+| `PackVariant`                  | `0x52` | 使用给定字段创建 variant 值            |
+| `PackVariantGeneric`           | `0x53` | `PackVariant` 的泛型版本           |
+| `UnpackVariant`                | `0x54` | 解构 variant，将其字段推入 stack       |
+| `UnpackVariantGeneric`         | `0x55` | `UnpackVariant` 的泛型版本         |
+| `TestVariant`                  | `0x56` | 测试值是否为特定 variant；推入 `bool`    |
+| `TestVariantGeneric`           | `0x57` | `TestVariant` 的泛型版本           |
+| `ImmBorrowVariantField`        | `0x4E` | 不可变借用 variant 字段              |
+| `MutBorrowVariantField`        | `0x4F` | 可变借用 variant 字段               |
+| `ImmBorrowVariantFieldGeneric` | `0x50` | `ImmBorrowVariantField` 的泛型版本 |
+| `MutBorrowVariantFieldGeneric` | `0x51` | `MutBorrowVariantField` 的泛型版本 |
+
+### 新表类型
+
+这些表类型存储有关 enum variant 及其字段的元数据：
+
+| 表类型                      | 代码     | 用途                                      |
+| ------------------------ | ------ | --------------------------------------- |
+| `VARIANT_FIELD_HANDLES`  | `0x11` | 将 variant 字段引用映射到其父 variant 和字段索引       |
+| `VARIANT_FIELD_INST`     | `0x12` | 泛型 variant 字段 handle 的实例化               |
+| `STRUCT_VARIANT_HANDLES` | `0x13` | 将 variant 引用映射到其父 struct 定义和 variant 索引 |
+| `STRUCT_VARIANT_INST`    | `0x14` | 泛型 struct variant handle 的实例化           |
+
+### 启用的功能
+
+通过 v7，Move 开发者可以定义如下类型：
+
+```move
+enum Color {
+    Red,
+    Green,
+    Blue,
+    Custom { r: u8, g: u8, b: u8 },
+}
+```
+
+编译器生成 `PackVariant` / `UnpackVariant` 指令来构造和解构这些值，并使用 `TestVariant` 来实现模式匹配。源码级别的参考请参见 [Move Book -- Enum](/zh/build/smart-contracts/book/enums)。
+
+## 版本 8
+
+版本 8 向 Move bytecode 添加了**一等 closure**。Closure 从其环境中捕获值，可以作为函数参数传递，从而支持高阶编程模式。
+
+### 新指令
+
+| 指令                   | Opcode | 描述                                  |
+| -------------------- | ------ | ----------------------------------- |
+| `PackClosure`        | `0x58` | 创建一个 closure，捕获指定的 stack 值并将它们绑定到函数 |
+| `PackClosureGeneric` | `0x59` | `PackClosure` 的泛型版本                 |
+| `CallClosure`        | `0x5A` | 调用 closure，将其返回值推入 stack            |
+
+### 新 Signature Token
+
+版本 8 引入了 **`Function`** signature token，表示 closure 或函数引用的类型。`Function` token 携带：
+
+- 参数类型列表
+- 返回类型列表
+- 约束 closure 使用方式的 ability 集
+
+此 token 出现在期望 closure 类型的签名中，例如接受回调的函数参数。
+
+### 启用的功能
+
+Closure 支持诸如将比较函数传递给排序例程或创建携带捕获状态的回调等模式。`Function` signature token 为类型系统提供了对 closure 类型的完全可见性，因此 bytecode 验证器可以像对 struct 一样对 closure 强制执行类型安全和 ability 约束。
+
+## 版本 9
+
+版本 9 向 Move 添加了**有符号整数类型**。此前，Move 仅支持无符号整数（`u8` 到 `u256`）。版本 9 引入了六种有符号对应类型以及算术取反操作。
+
+### 新加载指令
+
+| 指令       | Opcode | 描述              |
+| -------- | ------ | --------------- |
+| `LdI8`   | `0x5B` | 加载有符号 8 位整数常量   |
+| `LdI16`  | `0x5C` | 加载有符号 16 位整数常量  |
+| `LdI32`  | `0x5D` | 加载有符号 32 位整数常量  |
+| `LdI64`  | `0x5E` | 加载有符号 64 位整数常量  |
+| `LdI128` | `0x5F` | 加载有符号 128 位整数常量 |
+| `LdI256` | `0x60` | 加载有符号 256 位整数常量 |
+
+### 新转换指令
+
+| 指令         | Opcode | 描述                    |
+| ---------- | ------ | --------------------- |
+| `CastI8`   | `0x61` | 将 stack 顶部值转换为 `i8`   |
+| `CastI16`  | `0x62` | 将 stack 顶部值转换为 `i16`  |
+| `CastI32`  | `0x63` | 将 stack 顶部值转换为 `i32`  |
+| `CastI64`  | `0x64` | 将 stack 顶部值转换为 `i64`  |
+| `CastI128` | `0x65` | 将 stack 顶部值转换为 `i128` |
+| `CastI256` | `0x66` | 将 stack 顶部值转换为 `i256` |
+
+### 新算术指令
+
+| 指令       | Opcode | 描述                    |
+| -------- | ------ | --------------------- |
+| `Negate` | `0x67` | 算术取反；弹出一个有符号整数并推入其取反值 |
+
+### 新 Signature Token
+
+六个新的 signature token 在类型系统中表示有符号整数类型：
+
+- `I8`——有符号 8 位整数
+- `I16`——有符号 16 位整数
+- `I32`——有符号 32 位整数
+- `I64`——有符号 64 位整数
+- `I128`——有符号 128 位整数
+- `I256`——有符号 256 位整数
+
+这些 token 出现在使用有符号整数的函数签名、struct 字段定义和局部变量类型中。
+
+### 启用的功能
+
+有符号整数支持负值和补码算术，这简化了金融计算、坐标运算以及任何需要负数的领域。版本 9 是标准 Move 语言配置的默认 bytecode 版本。
+
+## 版本 10
+
+版本 10 添加了**带消息中止**指令，允许交易在中止时同时提供可读的错误字符串和数字中止码。
+
+### 新指令
+
+| 指令         | Opcode | 描述                              |
+| ---------- | ------ | ------------------------------- |
+| `AbortMsg` | `0x68` | 以 `u64` 错误码和可选的 UTF-8 消息字符串中止执行 |
+
+### 启用的功能
+
+在 v10 之前，`abort` 仅接受一个数字码，在不查阅 module 源码的情况下很难诊断故障。使用 `AbortMsg`，module 可以包含描述性的错误消息，这些消息会出现在交易输出中，大大提高了可调试性。版本 10 是 Move 语言 v2.4 和 v2.5 的默认 bytecode 版本。
+
+## 兼容性说明
+
+- VM 接受从 **v5 到当前最大版本**（撰写本文时为 v10）的 bytecode。在任何受支持版本编译的 module 可以在链上共存并相互调用。
+- 当 module 声明较旧的 bytecode 版本时，验证器会**拒绝在后续版本中引入的指令和类型**。例如，v6 的 module 不能使用 `PackVariant`（v7 指令）。
+- bytecode 版本编码为 module 二进制头部第 4 到第 7 字节中的**小端序 `u32`**，紧跟在魔数字节之后。头部布局的完整描述请参见 [Module 二进制格式](/zh/build/smart-contracts/bytecode/module-format)页面。
+- 发布版本号高于 VM 支持版本的 module 会导致交易在验证期间失败。

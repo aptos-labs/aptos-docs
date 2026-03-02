@@ -1,0 +1,441 @@
+---
+title: "Bytecode 类型系统"
+description: "Move bytecode 中类型的表示方式，包括签名 token、ability、泛型和 handle 间接引用模型。"
+sidebar:
+  label: "Type System"
+---
+
+Move bytecode 将每种类型表示为一个 **signature token**——一种带标签的递归数据结构，存储在 [Signature 表](/zh/build/smart-contracts/bytecode/module-format#table-types-reference)中。本页面介绍类型在二进制级别的编码方式、ability 如何约束类型，以及 handle 间接引用模型如何将类型连接到其定义。
+
+## Signature Token
+
+`SignatureToken` 是 Move bytecode 中核心的类型表示。每个 token 以一个标签字节开头，标识类型的种类，后面可选地跟随附加数据（内部 token、索引或类型参数列表）。
+
+### 快速参考表
+
+| Token                 | 标签     | 附加数据                                  | 版本  |
+| --------------------- | ------ | ------------------------------------- | --- |
+| `Bool`                | `0x01` | --                                    | v5+ |
+| `U8`                  | `0x02` | --                                    | v5+ |
+| `U64`                 | `0x03` | --                                    | v5+ |
+| `U128`                | `0x04` | --                                    | v5+ |
+| `Address`             | `0x05` | --                                    | v5+ |
+| `Reference`           | `0x06` | 内部 `SignatureToken`                   | v5+ |
+| `MutableReference`    | `0x07` | 内部 `SignatureToken`                   | v5+ |
+| `Struct`              | `0x08` | `StructHandleIndex`（ULEB128）          | v5+ |
+| `TypeParameter`       | `0x09` | `u16` 索引（ULEB128）                     | v5+ |
+| `Vector`              | `0x0A` | 内部 `SignatureToken`                   | v5+ |
+| `StructInstantiation` | `0x0B` | `StructHandleIndex` + 数量 + 类型参数 token | v5+ |
+| `Signer`              | `0x0C` | --                                    | v5+ |
+| `U16`                 | `0x0D` | --                                    | v6+ |
+| `U32`                 | `0x0E` | --                                    | v6+ |
+| `U256`                | `0x0F` | --                                    | v6+ |
+| `Function`            | `0x10` | 参数 token + 返回值 token + ability 掩码     | v8+ |
+| `I8`                  | `0x11` | --                                    | v9+ |
+| `I16`                 | `0x12` | --                                    | v9+ |
+| `I32`                 | `0x13` | --                                    | v9+ |
+| `I64`                 | `0x14` | --                                    | v9+ |
+| `I128`                | `0x15` | --                                    | v9+ |
+| `I256`                | `0x16` | --                                    | v9+ |
+
+### 原始类型 Token
+
+原始类型 token 不携带附加数据——标签字节本身就足以标识类型。
+
+**无符号整数：** `Bool`（0x01）、`U8`（0x02）、`U64`（0x03）、`U128`（0x04）、`U16`（0x0D）、`U32`（0x0E）、`U256`（0x0F）。所有无符号整数类型具有 `copy`、`drop` 和 `store` ability。
+
+**有符号整数（v9+）：** `I8`（0x11）、`I16`（0x12）、`I32`（0x13）、`I64`（0x14）、`I128`（0x15）、`I256`（0x16）。它们与无符号整数具有相同的 ability。
+
+**特殊类型：** `Address`（0x05）具有 `copy + drop + store`。`Signer`（0x0C）仅具有 `drop`（不能被复制或存储）。
+
+### 复合类型 Token
+
+**Vector**（0x0A）后跟一个内部 `SignatureToken`，表示元素类型。例如，`vector<u64>` 序列化为 `0x0A 0x03`——`Vector` 标签后跟 `U64` 标签。Vector 从其元素类型继承 `copy`、`drop` 和 `store`。
+
+**Struct**（0x08）后跟一个 ULEB128 编码的 `StructHandleIndex`，指向 StructHandle 表。这用于非泛型 struct 类型（或在此使用位置类型参数未被实例化的泛型 struct）。
+
+**StructInstantiation**（0x0B）表示具有具体类型参数的泛型 struct。其后跟随：
+
+1. 一个 ULEB128 编码的 `StructHandleIndex`
+2. 一个 ULEB128 编码的类型参数数量
+3. 对应数量的 `SignatureToken` 值，每个类型参数一个
+
+例如，`Table<address, u64>` 序列化为 `0x0B <handle_idx> 0x02 0x05 0x03`。
+
+### 引用 Token
+
+**Reference**（0x06）和 **MutableReference**（0x07）各包装一个内部 `SignatureToken`。引用始终具有 `copy + drop` ability。它们不能出现在 struct 内部——验证器会拒绝任何包含引用类型的 struct 字段。
+
+### 泛型类型参数 Token
+
+**TypeParameter**（0x09）后跟一个 ULEB128 编码的 `u16` 索引，引用外围泛型 struct 或函数的类型参数。例如，在函数 `fun foo<T, U>(x: T)` 中，参数 `T` 表示为 `0x09 0x00`（类型参数索引 0），`U` 表示为 `0x09 0x01`（类型参数索引 1）。
+
+### Function Token（v8+）
+
+**Function**（0x10）表示一等函数类型（用于 closure）。其序列化格式为：
+
+1. 一个 ULEB128 编码的参数类型数量
+2. 对应数量的参数 `SignatureToken` 值
+3. 一个 ULEB128 编码的返回类型数量
+4. 对应数量的返回值 `SignatureToken` 值
+5. 一个 `u8` ability 位掩码（参见 [Ability](#able)）
+
+### Signature Token 深度
+
+VM 对 signature token 强制执行最大嵌套深度 **256**。深度嵌套的类型如 `vector<vector<vector<...>>>` 在反序列化期间如果超过此限制将被拒绝。
+
+## Ability
+
+Move 使用四种 **ability** 来控制类型支持哪些操作。Ability 编码为 `u8` 位掩码，每种 ability 占据一个位。
+
+### Ability 位值
+
+| Ability | 位值     | 描述                                         |
+| ------- | ------ | ------------------------------------------ |
+| `copy`  | `0x01` | 值可以被复制（通过 `CopyLoc`、`ReadRef`）             |
+| `drop`  | `0x02` | 值可以被丢弃（通过 `Pop`、`WriteRef`、`StLoc`、离开作用域时） |
+| `store` | `0x04` | 值可以存在于全局存储中的 struct 内部                     |
+| `key`   | `0x08` | 类型可以作为全局存储操作的顶层键                           |
+
+位掩码是各个 ability 值的按位或。例如，`copy + drop + store` 编码为 `0x01 | 0x02 | 0x04 = 0x07`。空集为 `0x00`。
+
+### 常见 Ability 集
+
+| 集合名称         | Ability                   | 位掩码    | 使用者                           |
+| ------------ | ------------------------- | ------ | ----------------------------- |
+| `EMPTY`      | （无）                       | `0x00` | --                            |
+| `PRIMITIVES` | copy + drop + store       | `0x07` | Bool、U8、U64、U128、Address、整数类型 |
+| `SIGNER`     | drop                      | `0x02` | Signer                        |
+| `REFERENCES` | copy + drop               | `0x03` | Reference、MutableReference    |
+| `FUNCTIONS`  | drop                      | `0x02` | 函数类型的最低要求                     |
+| `ALL`        | copy + drop + store + key | `0x0F` | --                            |
+
+### Ability 如何约束指令
+
+bytecode 验证器在允许某些指令之前会检查 ability：
+
+- **`CopyLoc`** 和 **`ReadRef`** 要求类型具有 `copy`。
+- **`Pop`**、**`WriteRef`**、**`StLoc`**（覆盖时）和 **`Eq`/`Neq`** 要求 `drop`。当 `Ret` 执行时留在 local 中的值也要求 `drop`。
+- **`MoveTo`** 要求类型具有 `key`。**`MoveFrom`**、**`BorrowGlobal`**、**`BorrowGlobalMut`** 和 **`Exists`** 也要求 `key`。
+- 具有 `key` 的 struct 的字段必须具有 `store`（因为它们存储在全局存储中）。
+
+### 泛型的 Ability 要求
+
+当泛型 struct `S<T>` 声明 `has copy, drop` 时，类型参数 `T` 必须满足特定的 ability 约束，实例化 `S<ConcreteType>` 才能拥有这些 ability。规则是：
+
+- 要使 `S<T>` 具有 ability `a`，每个非 phantom 类型参数 `T` 必须具有 `a.requires()`。
+- `requires` 映射为：`copy` 要求 `copy`，`drop` 要求 `drop`，`store` 要求 `store`，`key` 要求 `store`。
+
+这些约束存储在 `StructTypeParameter` struct 中，该 struct 将每个类型参数与一个 `AbilitySet` 约束和一个 `is_phantom` 标志配对。
+
+### Phantom 类型参数
+
+声明为 **phantom** 的类型参数不会对 struct 的 ability 要求产生影响。phantom 参数不出现在 struct 的任何字段中——它仅作为类型标签存在。例如，在 `struct Coin<phantom T> has store { value: u64 }` 中，类型 `T` 不携带 ability 约束，因为它是 phantom。
+
+在 bytecode 级别，`StructTypeParameter` 为 phantom 参数记录 `is_phantom: true`。验证器确认 phantom 参数不会在字段类型中的非 phantom 位置使用。
+
+## Handle 间接引用模型
+
+Move bytecode 不会将类型名称、地址或签名直接内联到指令中。相反，它使用一套**索引**系统指向共享表。这种间接引用提供了紧凑的二进制编码、重复引用的去重和高效的 module 加载。
+
+### 索引类型
+
+| 索引类型                          | 指向                | Rust 类型 |
+| ----------------------------- | ----------------- | ------- |
+| `ModuleHandleIndex`           | Module handle 表   | `u16`   |
+| `StructHandleIndex`           | Struct handle 表   | `u16`   |
+| `FunctionHandleIndex`         | Function handle 表 | `u16`   |
+| `FieldHandleIndex`            | Field handle 表    | `u16`   |
+| `SignatureIndex`              | Signature 表       | `u16`   |
+| `IdentifierIndex`             | 标识符（字符串）表         | `u16`   |
+| `AddressIdentifierIndex`      | 地址表               | `u16`   |
+| `ConstantPoolIndex`           | 常量池               | `u16`   |
+| `StructDefinitionIndex`       | Struct 定义表        | `u16`   |
+| `FunctionDefinitionIndex`     | Function 定义表      | `u16`   |
+| `StructDefInstantiationIndex` | Struct 实例化表       | `u16`   |
+| `FunctionInstantiationIndex`  | Function 实例化表     | `u16`   |
+| `FieldInstantiationIndex`     | Field 实例化表        | `u16`   |
+
+所有索引类型都是 `u16` 值（每个表最多 65,535 个条目）。它们在二进制格式中序列化为 ULEB128。
+
+### 为什么使用索引而不是内联数据
+
+1. **紧凑的二进制大小。** 一个函数可能数十次引用同一个 struct 类型。使用索引后，每次引用仅需 1--2 字节的 ULEB128 值，而不是完整的 module 地址 + 名称字符串。
+2. **去重。** 相同的签名、标识符和地址只存储一次，通过索引引用。序列化器确保任何表中不存在重复条目。
+3. **高效加载。** VM 可以在 module 加载期间一次性解析 handle 并缓存结果。指令随后操作预解析的数据。
+
+### 间接引用链示例
+
+考虑指令 `Call(FunctionHandleIndex(3))`。VM 通过一系列表查找来解析调用目标：
+
+```
+Instruction:  Call(FunctionHandleIndex(3))
+                    |
+                    v
+FunctionHandle #3:
+  module:     ModuleHandleIndex(0)  ----> ModuleHandle #0:
+  name:       IdentifierIndex(5)            address: AddressIdentifierIndex(1) -> 0x1
+  parameters: SignatureIndex(2)             name:    IdentifierIndex(2)        -> "vector"
+  return_:    SignatureIndex(1)
+                    |
+                    v
+  IdentifierIndex(5) -> "push_back"
+  SignatureIndex(2)  -> [Vector(TypeParameter(0)), TypeParameter(0)]
+  SignatureIndex(1)  -> []
+```
+
+VM 的链式解析过程为：指令操作数到函数 handle，再到 module handle（从那里到账户地址和 module 名称）、标识符表（获取函数名称）以及签名表（获取参数和返回类型）。每一步都是按索引进行的数组查找。
+
+### Struct Handle 解析
+
+相同的模式适用于类型解析。`Struct(StructHandleIndex(2))` signature token 通过以下方式解析：
+
+```
+SignatureToken: Struct(StructHandleIndex(2))
+                         |
+                         v
+StructHandle #2:
+  module:          ModuleHandleIndex(1)  -> address + module name
+  name:            IdentifierIndex(4)    -> "Coin"
+  abilities:       0x07                  -> copy + drop + store
+  type_parameters: []                    -> (non-generic)
+```
+
+## Bytecode 级别的泛型
+
+Move 支持泛型（参数化的）类型和函数。在 bytecode 级别，泛型使用类型参数索引和实例化表来避免为每种具体类型重复定义。
+
+### 类型参数表示
+
+类型参数表示为 `u16` 索引（`TypeParameterIndex`）。在泛型函数或 struct 定义内部，对类型参数的引用使用 `TypeParameter(index)` signature token。索引 0 是第一个类型参数，索引 1 是第二个，依此类推。
+
+- 在 **struct handle** 中，类型参数存储为 `Vec<StructTypeParameter>`，其中每个条目携带 ability 约束和 phantom 标志。
+- 在 **function handle** 中，类型参数存储为 `Vec<AbilitySet>`，列出每个类型参数所需的 ability。
+
+### 实例化表
+
+当泛型函数或 struct 与具体类型参数一起使用时，bytecode 将实例化存储在单独的表中，而不是复制 handle。
+
+**FunctionInstantiation** 将一个 `FunctionHandleIndex` 与一个持有具体类型参数的 `SignatureIndex` 配对：
+
+| 字段                | 类型                    | 描述                     |
+| ----------------- | --------------------- | ---------------------- |
+| `handle`          | `FunctionHandleIndex` | 被实例化的泛型函数              |
+| `type_parameters` | `SignatureIndex`      | 指向 Signature 表中类型参数的索引 |
+
+**StructDefInstantiation** 将一个 `StructDefinitionIndex` 与一个 `SignatureIndex` 配对：
+
+| 字段                | 类型                      | 描述                     |
+| ----------------- | ----------------------- | ---------------------- |
+| `def`             | `StructDefinitionIndex` | 泛型 struct 定义           |
+| `type_parameters` | `SignatureIndex`        | 指向 Signature 表中类型参数的索引 |
+
+**FieldInstantiation** 将一个 `FieldHandleIndex` 与一个 `SignatureIndex` 配对：
+
+| 字段                | 类型                 | 描述                     |
+| ----------------- | ------------------ | ---------------------- |
+| `handle`          | `FieldHandleIndex` | 泛型 struct 中的字段         |
+| `type_parameters` | `SignatureIndex`   | 指向 Signature 表中类型参数的索引 |
+
+### 泛型指令
+
+操作泛型类型或函数的指令以成对的形式出现：基础指令和 `*Generic` 变体。基础指令使用直接的 handle 或定义索引，而泛型变体使用实例化索引。
+
+| 基础指令              | 泛型变体                     | 操作数类型                         |
+| ----------------- | ------------------------ | ----------------------------- |
+| `Call`            | `CallGeneric`            | `FunctionInstantiationIndex`  |
+| `Pack`            | `PackGeneric`            | `StructDefInstantiationIndex` |
+| `Unpack`          | `UnpackGeneric`          | `StructDefInstantiationIndex` |
+| `Exists`          | `ExistsGeneric`          | `StructDefInstantiationIndex` |
+| `MoveFrom`        | `MoveFromGeneric`        | `StructDefInstantiationIndex` |
+| `MoveTo`          | `MoveToGeneric`          | `StructDefInstantiationIndex` |
+| `ImmBorrowGlobal` | `ImmBorrowGlobalGeneric` | `StructDefInstantiationIndex` |
+| `MutBorrowGlobal` | `MutBorrowGlobalGeneric` | `StructDefInstantiationIndex` |
+| `ImmBorrowField`  | `ImmBorrowFieldGeneric`  | `FieldInstantiationIndex`     |
+| `MutBorrowField`  | `MutBorrowFieldGeneric`  | `FieldInstantiationIndex`     |
+
+### 完整示例：`vector::push_back<u64>(v, 42)`
+
+此泛型函数调用编译为 `CallGeneric` 指令。以下是解析链：
+
+1. 编译器生成 `CallGeneric(FunctionInstantiationIndex(N))`。
+2. `FunctionInstantiation #N` 包含：
+   - `handle`：`FunctionHandleIndex(M)`（指向 `push_back` 函数 handle）
+   - `type_parameters`：`SignatureIndex(K)`（指向包含 `[U64]` 的签名）
+3. `FunctionHandle #M` 包含：
+   - `module`：`ModuleHandleIndex`，指向 `0x1::vector`
+   - `name`：`IdentifierIndex`，指向 `"push_back"`
+   - `parameters`：`SignatureIndex`，指向 `[Vector(TypeParameter(0)), TypeParameter(0)]`
+   - `return_`：`SignatureIndex`，指向 `[]`
+   - `type_parameters`：`[AbilitySet::EMPTY]`（对 `T` 无约束）
+4. 在运行时，VM 将 `TypeParameter(0)` 替换为实例化中的 `U64`，得到有效参数类型 `[vector<u64>, u64]`。
+
+## 函数类型（v8+）
+
+Bytecode 版本 8 引入了一等 **函数类型** 以支持 closure。函数类型描述了可调用值的签名——其参数类型、返回类型以及 closure 必须满足的 ability。
+
+### Function Signature Token
+
+`Function` signature token（标签 `0x10`）携带：
+
+| 组成部分    | 编码                    |
+| ------- | --------------------- |
+| 参数数量    | ULEB128               |
+| 参数类型    | `SignatureToken` 值的序列 |
+| 返回值数量   | ULEB128               |
+| 返回类型    | `SignatureToken` 值的序列 |
+| Ability | `u8` 位掩码              |
+
+例如，函数类型 `|u64, bool| -> address` 具有 `drop` ability，序列化为：`0x10 0x02 0x03 0x01 0x01 0x05 0x02`——Function 标签、2 个参数、U64、Bool、1 个返回值、Address、drop 位掩码（0x02）。
+
+所有函数类型至少具有 `drop` ability。public 函数还获得 `copy` 和 `store`。private 函数获得 `copy` 和 `drop` 但不获得 `store`（因为它们在 module 升级后可能不再有效）。
+
+### Closure 指令
+
+三条指令与函数类型配合使用：
+
+- **`PackClosure(FunctionHandleIndex, ClosureMask)`**（opcode `0x58`）——通过捕获指定函数的部分参数来创建 closure。`ClosureMask` 是一个 `u64` 位掩码，指示从 stack 捕获哪些参数（位设置 = 已捕获）。其余参数成为 closure 的参数类型。
+
+- **`PackClosureGeneric(FunctionInstantiationIndex, ClosureMask)`**（opcode `0x59`）——与 `PackClosure` 相同，但用于泛型函数实例化。
+
+- **`CallClosure(SignatureIndex)`**（opcode `0x5A`）——调用一个 closure。`SignatureIndex` 描述期望的函数类型。closure 值位于 stack 顶部，剩余的（未捕获的）参数在其下方。
+
+### 简要示例
+
+给定函数 `fun add(x: u64, y: u64): u64`，创建并调用一个捕获第一个参数的 closure：
+
+```
+// Capture x=5, leaving a closure of type |u64| -> u64
+LdU64(5)
+PackClosure(FunctionHandleIndex(add), mask=0b01)
+// Stack: [closure]
+
+// Call the closure with y=10
+LdU64(10)
+CallClosure(SignatureIndex(|u64| -> u64))
+// Stack: [15]
+```
+
+掩码 `0b01` 表示"捕获参数 0"。生成的 closure 接受一个剩余参数（参数 1）并返回 `u64`。
+
+## Struct 定义
+
+Move bytecode 中的 struct（或 enum）类型分为两层：描述类型标识的 **handle** 和提供其字段的 **definition**。
+
+### StructHandle
+
+`StructHandle` 描述 struct 类型的公共接口：
+
+| 字段                | 类型                         | 描述                 |
+| ----------------- | -------------------------- | ------------------ |
+| `module`          | `ModuleHandleIndex`        | 定义此类型的 module      |
+| `name`            | `IdentifierIndex`          | 类型的名称              |
+| `abilities`       | `AbilitySet`（u8）           | 类型声明的 ability      |
+| `type_parameters` | `Vec<StructTypeParameter>` | 类型参数约束和 phantom 标志 |
+
+每个 `StructTypeParameter` 由以下部分组成：
+
+| 字段            | 类型           | 描述              |
+| ------------- | ------------ | --------------- |
+| `constraints` | `AbilitySet` | 类型参数所需的 ability |
+| `is_phantom`  | `bool`       | 该参数是否为 phantom  |
+
+### StructDefinition
+
+`StructDefinition` 将 handle 连接到类型的字段布局：
+
+| 字段                  | 类型                       | 描述                               |
+| ------------------- | ------------------------ | -------------------------------- |
+| `struct_handle`     | `StructHandleIndex`      | 指向对应的 StructHandle               |
+| `field_information` | `StructFieldInformation` | 字段布局（native、declared 或 variants） |
+
+`StructFieldInformation` 是一个具有三个变体的 enum：
+
+| 变体                 | 序列化标签  | 内容                            |
+| ------------------ | ------ | ----------------------------- |
+| `Native`           | `0x01` | 无字段（native 类型）                |
+| `Declared`         | `0x02` | `FieldDefinition` 条目列表        |
+| `DeclaredVariants` | `0x03` | `VariantDefinition` 条目列表（v7+） |
+
+### FieldDefinition
+
+struct 中的每个字段表示为：
+
+| 字段          | 类型                | 描述                       |
+| ----------- | ----------------- | ------------------------ |
+| `name`      | `IdentifierIndex` | 字段名称                     |
+| `signature` | `TypeSignature`   | 字段的类型（一个 SignatureToken） |
+
+### Variant Struct 定义（v7+）
+
+Bytecode 版本 7 使用 `DeclaredVariants` 字段信息添加了 enum 类型。每个 `VariantDefinition` 包含：
+
+| 字段       | 类型                     | 描述              |
+| -------- | ---------------------- | --------------- |
+| `name`   | `IdentifierIndex`      | variant 名称      |
+| `fields` | `Vec<FieldDefinition>` | 此 variant 特有的字段 |
+
+variant 索引是一个 `u16` 值，由 variant 在列表中的位置确定。附加表支持 variant 操作：
+
+- **StructVariantHandle**——将 `StructDefinitionIndex` 与 `VariantIndex` 配对，以标识特定的 variant。
+- **StructVariantInstantiation**——将 `StructVariantHandleIndex` 与 `SignatureIndex` 配对，用于泛型 variant 操作。
+- **VariantFieldHandle**——标识同一 enum 的多个 variant 之间共享的字段。
+- **VariantFieldInstantiation**——`VariantFieldHandle` 的泛型版本。
+
+## 可见性和访问控制
+
+函数的可见性和访问控制直接编码在 bytecode 中，控制谁可以调用函数以及它可以访问哪些资源。
+
+### 可见性标志
+
+`Visibility` enum 在每个 `FunctionDefinition` 中存储为 `u8`：
+
+| 可见性       | 值      | 描述                           |
+| --------- | ------ | ---------------------------- |
+| `Private` | `0x00` | 仅在定义 module 内可调用             |
+| `Public`  | `0x01` | 可从任何 module 或脚本调用            |
+| `Friend`  | `0x03` | 可从定义 module 和声明的友元 module 调用 |
+
+值 `0x02` 先前用于 `Script` 可见性，但现在已弃用，取而代之的是单独的 entry 修饰符。
+
+### Entry 函数
+
+`is_entry` 标志（序列化为 `u8`，其中 `0x04` 代表 entry 位）将函数标记为有效的交易入口点。Entry 函数可以直接被 Aptos 交易运行时调用。函数可以同时是 `public` 和 `entry`，或 `private` 和 `entry`。
+
+### 访问说明符（v7+）
+
+Bytecode 版本 7 向函数 handle 添加了**访问说明符**。访问说明符描述函数读取或写入哪些全局资源，支持对函数存储足迹的静态分析。
+
+每个 `AccessSpecifier` 包含：
+
+| 字段         | 类型                  | 描述                            |
+| ---------- | ------------------- | ----------------------------- |
+| `kind`     | `AccessKind`        | `Reads`（0x01）或 `Writes`（0x02） |
+| `negated`  | `bool`              | 说明符是否取反                       |
+| `resource` | `ResourceSpecifier` | 访问哪些资源                        |
+| `address`  | `AddressSpecifier`  | 在哪些地址                         |
+
+**ResourceSpecifier** 变体：
+
+| 变体                      | 标签     | 描述                |
+| ----------------------- | ------ | ----------------- |
+| `Any`                   | `0x01` | 任何资源              |
+| `DeclaredAtAddress`     | `0x02` | 在特定地址声明的资源        |
+| `DeclaredInModule`      | `0x03` | 在特定 module 中声明的资源 |
+| `Resource`              | `0x04` | 特定的 struct 类型     |
+| `ResourceInstantiation` | `0x05` | 特定的泛型 struct 实例化  |
+
+**AddressSpecifier** 变体：
+
+| 变体          | 标签     | 描述                                      |
+| ----------- | ------ | --------------------------------------- |
+| `Any`       | `0x01` | 任何存储地址                                  |
+| `Literal`   | `0x02` | 特定的字面地址                                 |
+| `Parameter` | `0x03` | 从函数参数派生（可选通过已知函数如 `object::address_of`） |
+
+如果函数 handle 没有访问说明符（`None`），VM 假定该函数可能访问任意资源。空的说明符列表（`Some([])`）表示没有全局存储依赖的纯函数。
+
+## 延伸阅读
+
+- [Module 二进制格式](/zh/build/smart-contracts/bytecode/module-format)——本页面中引用的每个表的序列化布局
+- [Bytecode 版本历史](/zh/build/smart-contracts/bytecode/version-history)——每个 signature token、指令和表类型是在哪个版本引入的

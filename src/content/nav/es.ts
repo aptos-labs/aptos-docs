@@ -68,6 +68,7 @@ const labels = {
   "smartContracts.group.aptosFeatures.dataStructures": "Estructuras de Datos",
   "smartContracts.group.aptosFeatures": "Características de Move en Aptos",
   "smartContracts.group.tooling": "Herramientas",
+  "smartContracts.group.tooling.bytecode": "Referencia de Bytecode",
   "smartContracts.group.tooling.move-prover": "Move Prover",
   "smartContracts.group.reference": "Referencia de Move",
 

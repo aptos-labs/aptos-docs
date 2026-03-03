@@ -249,7 +249,6 @@ export const sidebar = [
                     collapsed: true,
                     items: [
                       "build/sdks/community-sdks/kotlin-sdk/fetch-data/fetch-data-via-sdk",
-                      "build/sdks/community-sdks/kotlin-sdk/fetch-data/data-filters",
                     ],
                   }),
                   "build/sdks/community-sdks/kotlin-sdk/sponsored-transactions",

@@ -252,7 +252,6 @@ export const sidebar = [
                     ],
                   }),
                   "build/sdks/community-sdks/kotlin-sdk/sponsored-transactions",
-                  "build/sdks/community-sdks/kotlin-sdk/response-handling",
                   group("build.group.sdks.community-sdks.kotlin-sdk.for-ios-devs", {
                     collapsed: true,
                     items: [

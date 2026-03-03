@@ -1,0 +1,98 @@
+---
+title: "数据过滤"
+description: "使用 Kaptos 客户端的类型安全过滤和排序 DSL 函数处理索引器 GraphQL 查询"
+sidebar:
+  label: "数据过滤"
+---
+
+该页面目前仅提供英文版本。
+
+---
+
+Some read operations require additional parameters to filter the data returned from the network. Since the classes that
+define these parameters are auto-generated, they may not have the most idiomatic Kotlin names. To help with this, the SDK
+provides DSL-style builder functions to make it easier to create these parameter objects.
+
+For example, to fetch fungible asset metadata, a `FungibleAssetMetadataFilter` object is required. You can create this
+object using the `fungibleAssetMetadataFilter` builder function:
+
+```kotlin
+val filter = fungibleAssetMetadataFilter {
+    assetType = stringFilter { eq = "0x1::aptos_coin::AptosCoin" }
+}
+```
+
+This creates a filter that matches the `AptosCoin` asset type. You can then use this filter when calling the
+`getFungibleAssetMetadata` method:
+
+```kotlin
+val metadata = aptos.getFungibleAssetMetadata(filter)
+```
+
+The remainder of this document provides a comprehensive overview of the Domain-Specific Language (DSL) functions available for building type-safe `where` (filter) and `order_by` clauses for Aptos Indexer GraphQL queries.
+
+## Filter DSL Functions
+
+These functions are used to construct the `where` argument in a GraphQL query, allowing you to specify conditions for the data you want to retrieve.
+
+### Comparison Expression Builders
+
+These are the fundamental building blocks used within entity filters. They create comparison expressions for primitive types like strings, integers, and booleans.
+
+#### For Numeric and Timestamp Types
+
+The following builders share a common set of comparison operators for numeric and time-based values.
+
+- **`bigintFilter`**
+- **`numericFilter`**
+- **`intFilter`**
+- **`timestampFilter`**
+
+- **Purpose**: To create a comparison expression for `bigint`, `numeric`, `int`, and `timestamp` fields, respectively.
+- **Parameters**: Each function takes a lambda block where you can set the following comparison operators:
+  - `eq`: Equal to.
+  - `neq`: Not equal to.
+  - `gt`: Greater than.
+  - `gte`: Greater than or equal to.
+  - `lt`: Less than.
+  - `lte`: Less than or equal to.
+  - `inList`: The value must be in the provided list.
+  - `nin`: The value must not be in the provided list.
+  - `isNull`: `true` if the field should be null, `false` otherwise.
+
+#### For String Types
+
+- **`stringFilter`**
+  - **Purpose**: Creates a rich comparison expression for `String` fields.
+  - **Parameters**: In addition to the common operators (`eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `inList`, `nin`, `isNull`), it supports advanced pattern matching:
+  - `like`: Case-sensitive pattern match (e.g., `_like: "aptos%"`).
+  - `nlike`: Case-sensitive negative pattern match.
+  - `ilike`: Case-insensitive pattern match.
+  - `nilike`: Case-insensitive negative pattern match.
+  - `similar`: SQL `SIMILAR TO` pattern match.
+  - `nsimilar`: SQL `NOT SIMILAR TO` pattern match.
+  - `regex`: POSIX regular expression match.
+  - `nregex`: POSIX negative regular expression match.
+  - `iregex`: Case-insensitive POSIX regular expression match.
+  - `niregex`: Case-insensitive negative POSIX regular expression match.
+
+#### For Boolean Types
+
+- **`booleanFilter`**
+  - **Purpose**: Creates a comparison expression for `Boolean` fields.
+  - **Parameters**: A lambda block where you can set the following simple operators:
+  - `eq`: Equal to (`true` or `false`).
+  - `neq`: Not equal to.
+  - `isNull`: `true` if the field should be null.
+
+#### For JSON Types
+
+- **`jsonbFilter`**
+  - **Purpose**: Creates a comparison expression for fields with the `jsonb` type, often used for unstructured properties.
+  - **Parameters**: A lambda block with JSON-specific operators:
+  - `contains`: Checks if the JSONB value contains the specified JSONB.
+  - `containedIn`: Checks if the JSONB value is contained within the specified JSONB.
+  - `hasKey`: Checks if the JSONB value has a specific top-level key.
+  - `hasKeysAny`: Checks if the JSONB value has any of the keys in the provided list.
+  - `hasKeysAll`: Checks if the JSONB value has all of the keys in the provided list.
+  - Also supports common operators: `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `inList`, `nin`, `isNull`.

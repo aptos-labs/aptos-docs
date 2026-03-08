@@ -1,0 +1,211 @@
+---
+export interface Props {
+  copyLabel?: string;
+  copiedLabel?: string;
+}
+
+const { copyLabel = "Copy page", copiedLabel = "Copied!" } = Astro.props;
+---
+
+<copy-page-button>
+  <button class="copy-page-btn" type="button" aria-label={copyLabel}>
+    <svg
+      class="copy-icon"
+      xmlns="http://www.w3.org/2000/svg"
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect>
+      <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path>
+    </svg>
+    <svg
+      class="check-icon"
+      xmlns="http://www.w3.org/2000/svg"
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <path d="M20 6 9 17l-5-5"></path>
+    </svg>
+    <span class="copy-label">{copyLabel}</span>
+    <span class="copied-label">{copiedLabel}</span>
+  </button>
+</copy-page-button>
+
+<script>
+  import TurndownService from "turndown";
+
+  class CopyPageButton extends HTMLElement {
+    private button: HTMLButtonElement | null;
+    private turndownService: TurndownService | null = null;
+
+    constructor() {
+      super();
+      this.button = this.querySelector("button");
+      this.button?.addEventListener("click", () => this.handleCopy());
+    }
+
+    private getTurndown(): TurndownService {
+      if (!this.turndownService) {
+        this.turndownService = new TurndownService({
+          headingStyle: "atx",
+          codeBlockStyle: "fenced",
+          bulletListMarker: "-",
+        });
+
+        this.turndownService.addRule("codeBlock", {
+          filter: (node) => {
+            return node.nodeName === "PRE" && node.querySelector("code") !== null;
+          },
+          replacement: (_content, node) => {
+            const codeEl = (node as HTMLElement).querySelector("code");
+            if (!codeEl) return _content;
+            const lang =
+              codeEl.className
+                .split(" ")
+                .find((c) => c.startsWith("language-"))
+                ?.replace("language-", "") || "";
+            const code = codeEl.textContent || "";
+            return `\n\`\`\`${lang}\n${code.replace(/\n$/, "")}\n\`\`\`\n`;
+          },
+        });
+
+        this.turndownService.addRule("skipCopyButtons", {
+          filter: (node) => {
+            const el = node as HTMLElement;
+            return (
+              el.classList?.contains("copy") ||
+              (el.classList?.contains("expressive-code") === false &&
+                el.querySelector?.(".copy") !== null)
+            );
+          },
+          replacement: () => "",
+        });
+
+        this.turndownService.addRule("tables", {
+          filter: "table",
+          replacement: (_content, node) => {
+            const table = node as HTMLTableElement;
+            const rows = Array.from(table.querySelectorAll("tr"));
+            if (rows.length === 0) return _content;
+
+            const result: string[] = [];
+            const headerRow = rows[0];
+            const headerCells = Array.from(headerRow?.querySelectorAll("th, td") ?? []);
+            if (headerCells.length === 0) return _content;
+
+            result.push(`| ${headerCells.map((c) => (c.textContent || "").trim()).join(" | ")} |`);
+            result.push(`| ${headerCells.map(() => "---").join(" | ")} |`);
+
+            for (let i = 1; i < rows.length; i++) {
+              const cells = Array.from(rows[i]?.querySelectorAll("td, th") ?? []);
+              result.push(`| ${cells.map((c) => (c.textContent || "").trim()).join(" | ")} |`);
+            }
+
+            return `\n${result.join("\n")}\n`;
+          },
+        });
+
+        this.turndownService.remove(["script", "style", "nav", "button"]);
+      }
+      return this.turndownService;
+    }
+
+    private async handleCopy() {
+      const content = document.querySelector(".sl-markdown-content");
+      if (!content || !this.button) return;
+
+      try {
+        const title = document.querySelector("#_top")?.textContent?.trim() || "";
+        const clone = content.cloneNode(true) as HTMLElement;
+
+        clone
+          .querySelectorAll("button, .copy, .header-link, script, style, .not-content")
+          .forEach((el) => el.remove());
+
+        const turndown = this.getTurndown();
+        let markdown = turndown.turndown(clone.innerHTML);
+
+        if (title) {
+          markdown = `# ${title}\n\n${markdown}`;
+        }
+
+        markdown = markdown.replace(/\n{3,}/g, "\n\n").trim();
+
+        await navigator.clipboard.writeText(markdown);
+        this.showCopied();
+      } catch (err) {
+        console.error("Failed to copy page as markdown:", err);
+      }
+    }
+
+    private showCopied() {
+      this.button?.classList.add("copied");
+      setTimeout(() => {
+        this.button?.classList.remove("copied");
+      }, 2000);
+    }
+  }
+
+  customElements.define("copy-page-button", CopyPageButton);
+</script>
+
+<style>
+  copy-page-button {
+    display: inline-flex;
+  }
+
+  .copy-page-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.25rem 0.625rem;
+    font-size: var(--sl-text-xs);
+    font-weight: 500;
+    color: var(--sl-color-gray-3);
+    background: transparent;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 1rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    line-height: 1.5;
+  }
+
+  .copy-page-btn:hover {
+    color: var(--sl-color-white);
+    border-color: var(--sl-color-gray-3);
+    background: var(--sl-color-gray-6);
+  }
+
+  .copy-page-btn .check-icon,
+  .copy-page-btn .copied-label {
+    display: none;
+  }
+
+  .copy-page-btn.copied .copy-icon,
+  .copy-page-btn.copied .copy-label {
+    display: none;
+  }
+
+  .copy-page-btn.copied .check-icon,
+  .copy-page-btn.copied .copied-label {
+    display: inline;
+  }
+
+  .copy-page-btn.copied {
+    color: var(--sl-color-green-high);
+    border-color: var(--sl-color-green-high);
+  }
+</style>

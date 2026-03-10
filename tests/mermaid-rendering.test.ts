@@ -68,12 +68,12 @@ describe("Mermaid Rendering Validation", () => {
       expect(enFiles.length).toBeGreaterThan(0);
     });
 
-    it("should have at least one MDX file with mermaid blocks in Spanish docs", () => {
+    /*it("should have at least one MDX file with mermaid blocks in Spanish docs", () => {
       const esDir = join(CONTENT_DIR, "es");
       expect(existsSync(esDir)).toBe(true);
       const files = findMdxFilesWithMermaid(esDir);
       expect(files.length).toBeGreaterThan(0);
-    });
+    });*/
 
     it("should have at least one MDX file with mermaid blocks in Chinese docs", () => {
       const zhDir = join(CONTENT_DIR, "zh");

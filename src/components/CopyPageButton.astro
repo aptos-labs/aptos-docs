@@ -1,0 +1,645 @@
+---
+import claudeIcon from "../assets/images/claude-ai.svg";
+import chatgptIcon from "../assets/images/chatgpt.svg";
+
+export interface Props {
+  labels: {
+    button: string;
+    copied: string;
+    copyMarkdown: string;
+    copyMarkdownDesc: string;
+    copyPlainText: string;
+    copyPlainTextDesc: string;
+    copyUrl: string;
+    copyUrlDesc: string;
+    openInChatGPT: string;
+    openInClaude: string;
+    openInPerplexity: string;
+    aiSection: string;
+  };
+  pageUrl: string;
+}
+
+const { labels, pageUrl } = Astro.props;
+
+const aiPrompt = `Read from ${pageUrl} so I can ask questions about it. If there are subpages or important links, read those too. Give a very brief yet holistic and concise tldr, then guess at some questions i might have in the form of FAQ (include your answers or what steps you'd need to do to answer them) too. End by asking me what I'd like to know / do re ${pageUrl} specifically, noting key subpages and important links`;
+const claudeUrl = `https://claude.ai/new?q=${encodeURIComponent(aiPrompt)}`;
+const chatgptUrl = `https://chat.openai.com/?q=${encodeURIComponent(aiPrompt)}&hints=search`;
+const perplexityUrl = `https://www.perplexity.ai/?q=${encodeURIComponent(`Help me understand this Aptos documentation page: ${pageUrl}`)}`;
+---
+
+<copy-page-dropdown data-copied-label={labels.copied} data-button-label={labels.button}>
+  <div class="dropdown-wrapper">
+    <button class="dropdown-trigger" type="button" aria-label={labels.button} aria-expanded="false">
+      <svg
+        class="icon-copy"
+        xmlns="http://www.w3.org/2000/svg"
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect>
+        <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path>
+      </svg>
+      <svg
+        class="icon-check"
+        xmlns="http://www.w3.org/2000/svg"
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M20 6 9 17l-5-5"></path>
+      </svg>
+      <span class="trigger-label">{labels.button}</span>
+      <svg
+        class="icon-chevron"
+        xmlns="http://www.w3.org/2000/svg"
+        width="12"
+        height="12"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m6 9 6 6 6-6"></path>
+      </svg>
+    </button>
+
+    <div class="dropdown-menu" role="menu">
+      <button class="menu-item" role="menuitem" data-action="copy-markdown">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect>
+          <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path>
+        </svg>
+        <div class="menu-item-text">
+          <span class="menu-item-label">{labels.copyMarkdown}</span>
+          <span class="menu-item-desc">{labels.copyMarkdownDesc}</span>
+        </div>
+      </button>
+
+      <button class="menu-item" role="menuitem" data-action="copy-plain">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path>
+          <path d="M14 2v4a2 2 0 0 0 2 2h4"></path>
+        </svg>
+        <div class="menu-item-text">
+          <span class="menu-item-label">{labels.copyPlainText}</span>
+          <span class="menu-item-desc">{labels.copyPlainTextDesc}</span>
+        </div>
+      </button>
+
+      <button class="menu-item" role="menuitem" data-action="copy-url">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+        </svg>
+        <div class="menu-item-text">
+          <span class="menu-item-label">{labels.copyUrl}</span>
+          <span class="menu-item-desc">{labels.copyUrlDesc}</span>
+        </div>
+      </button>
+
+      <div class="menu-divider"></div>
+      <div class="menu-section-label">{labels.aiSection}</div>
+
+      <a
+        class="menu-item"
+        role="menuitem"
+        href={chatgptUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        <img src={chatgptIcon.src} alt="ChatGPT" width="16" height="16" />
+        <div class="menu-item-text">
+          <span class="menu-item-label">{labels.openInChatGPT}</span>
+        </div>
+        <svg
+          class="icon-external"
+          xmlns="http://www.w3.org/2000/svg"
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+          <polyline points="15 3 21 3 21 9"></polyline>
+          <line x1="10" y1="14" x2="21" y2="3"></line>
+        </svg>
+      </a>
+
+      <a
+        class="menu-item"
+        role="menuitem"
+        href={claudeUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        <img src={claudeIcon.src} alt="Claude" width="16" height="16" />
+        <div class="menu-item-text">
+          <span class="menu-item-label">{labels.openInClaude}</span>
+        </div>
+        <svg
+          class="icon-external"
+          xmlns="http://www.w3.org/2000/svg"
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+          <polyline points="15 3 21 3 21 9"></polyline>
+          <line x1="10" y1="14" x2="21" y2="3"></line>
+        </svg>
+      </a>
+
+      <a
+        class="menu-item"
+        role="menuitem"
+        href={perplexityUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10"></circle>
+          <path d="M12 16v-4"></path>
+          <path d="M12 8h.01"></path>
+        </svg>
+        <div class="menu-item-text">
+          <span class="menu-item-label">{labels.openInPerplexity}</span>
+        </div>
+        <svg
+          class="icon-external"
+          xmlns="http://www.w3.org/2000/svg"
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+          <polyline points="15 3 21 3 21 9"></polyline>
+          <line x1="10" y1="14" x2="21" y2="3"></line>
+        </svg>
+      </a>
+    </div>
+  </div>
+</copy-page-dropdown>
+
+<script>
+  import TurndownService from "turndown";
+
+  class CopyPageDropdown extends HTMLElement {
+    private trigger: HTMLButtonElement | null;
+    private menu: HTMLElement | null;
+    private turndownService: TurndownService | null = null;
+    private isOpen = false;
+
+    constructor() {
+      super();
+      this.trigger = this.querySelector(".dropdown-trigger");
+      this.menu = this.querySelector(".dropdown-menu");
+
+      this.trigger?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this.toggle();
+      });
+
+      this.menu?.addEventListener("click", (e) => {
+        const target = (e.target as HTMLElement).closest("[data-action]") as HTMLElement | null;
+        if (!target) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const action = target.dataset.action;
+        if (action) this.handleAction(action);
+      });
+
+      document.addEventListener("click", (e) => {
+        if (!this.contains(e.target as Node)) this.close();
+      });
+
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") this.close();
+      });
+    }
+
+    private toggle() {
+      this.isOpen ? this.close() : this.open();
+    }
+
+    private open() {
+      this.isOpen = true;
+      this.menu?.classList.add("open");
+      this.trigger?.setAttribute("aria-expanded", "true");
+    }
+
+    private close() {
+      this.isOpen = false;
+      this.menu?.classList.remove("open");
+      this.trigger?.setAttribute("aria-expanded", "false");
+    }
+
+    private getTurndown(): TurndownService {
+      if (!this.turndownService) {
+        this.turndownService = new TurndownService({
+          headingStyle: "atx",
+          codeBlockStyle: "fenced",
+          bulletListMarker: "-",
+        });
+
+        this.turndownService.addRule("codeBlock", {
+          filter: (node) => {
+            return node.nodeName === "PRE" && node.querySelector("code") !== null;
+          },
+          replacement: (_content, node) => {
+            const codeEl = (node as HTMLElement).querySelector("code");
+            if (!codeEl) return _content;
+            const lang =
+              codeEl.className
+                .split(" ")
+                .find((c) => c.startsWith("language-"))
+                ?.replace("language-", "") || "";
+            const code = codeEl.textContent || "";
+            return `\n\`\`\`${lang}\n${code.replace(/\n$/, "")}\n\`\`\`\n`;
+          },
+        });
+
+        this.turndownService.addRule("skipCopyButtons", {
+          filter: (node) => {
+            const el = node as HTMLElement;
+            return el.classList?.contains("copy") === true;
+          },
+          replacement: () => "",
+        });
+
+        this.turndownService.addRule("tables", {
+          filter: "table",
+          replacement: (_content, node) => {
+            const table = node as HTMLTableElement;
+            const rows = Array.from(table.querySelectorAll("tr"));
+            if (rows.length === 0) return _content;
+
+            const result: string[] = [];
+            const headerRow = rows[0];
+            const headerCells = Array.from(headerRow?.querySelectorAll("th, td") ?? []);
+            if (headerCells.length === 0) return _content;
+
+            result.push(`| ${headerCells.map((c) => (c.textContent || "").trim()).join(" | ")} |`);
+            result.push(`| ${headerCells.map(() => "---").join(" | ")} |`);
+
+            for (let i = 1; i < rows.length; i++) {
+              const cells = Array.from(rows[i]?.querySelectorAll("td, th") ?? []);
+              result.push(`| ${cells.map((c) => (c.textContent || "").trim()).join(" | ")} |`);
+            }
+
+            return `\n${result.join("\n")}\n`;
+          },
+        });
+
+        this.turndownService.remove(["script", "style", "nav", "button"]);
+      }
+      return this.turndownService;
+    }
+
+    private getCleanContent(): HTMLElement | null {
+      const content = document.querySelector(".sl-markdown-content");
+      if (!content) return null;
+      const clone = content.cloneNode(true) as HTMLElement;
+      clone
+        .querySelectorAll("button, .copy, .header-link, script, style, .not-content")
+        .forEach((el) => el.remove());
+      return clone;
+    }
+
+    private getPageTitle(): string {
+      return document.querySelector("#_top")?.textContent?.trim() || "";
+    }
+
+    private async handleAction(action: string) {
+      this.close();
+
+      switch (action) {
+        case "copy-markdown":
+          await this.copyMarkdown();
+          break;
+        case "copy-plain":
+          await this.copyPlainText();
+          break;
+        case "copy-url":
+          await this.copyUrl();
+          break;
+      }
+    }
+
+    private async copyMarkdown() {
+      const clone = this.getCleanContent();
+      if (!clone) return;
+
+      try {
+        const title = this.getPageTitle();
+        const turndown = this.getTurndown();
+        let markdown = turndown.turndown(clone.innerHTML);
+
+        if (title) {
+          markdown = `# ${title}\n\n${markdown}`;
+        }
+
+        markdown = markdown.replace(/\n{3,}/g, "\n\n").trim();
+        const source = `\n\n---\nSource: ${window.location.href}`;
+
+        await navigator.clipboard.writeText(markdown + source);
+        this.showCopied();
+      } catch (err) {
+        console.error("Failed to copy as markdown:", err);
+      }
+    }
+
+    private async copyPlainText() {
+      const clone = this.getCleanContent();
+      if (!clone) return;
+
+      try {
+        const title = this.getPageTitle();
+        let text = clone.textContent || "";
+        text = text.replace(/\n{3,}/g, "\n\n").trim();
+
+        if (title) {
+          text = `${title}\n\n${text}`;
+        }
+
+        const source = `\n\nSource: ${window.location.href}`;
+        await navigator.clipboard.writeText(text + source);
+        this.showCopied();
+      } catch (err) {
+        console.error("Failed to copy as plain text:", err);
+      }
+    }
+
+    private async copyUrl() {
+      try {
+        const title = this.getPageTitle();
+        const url = window.location.href;
+        const text = title ? `${title}\n${url}` : url;
+
+        await navigator.clipboard.writeText(text);
+        this.showCopied();
+      } catch (err) {
+        console.error("Failed to copy URL:", err);
+      }
+    }
+
+    private showCopied() {
+      if (!this.trigger) return;
+      this.trigger.classList.add("copied");
+      const label = this.trigger.querySelector(".trigger-label");
+      const copiedText = this.dataset.copiedLabel || "Copied!";
+      const originalText = this.dataset.buttonLabel || "Copy page";
+
+      if (label) label.textContent = copiedText;
+
+      setTimeout(() => {
+        this.trigger?.classList.remove("copied");
+        if (label) label.textContent = originalText;
+      }, 2000);
+    }
+  }
+
+  customElements.define("copy-page-dropdown", CopyPageDropdown);
+</script>
+
+<style>
+  copy-page-dropdown {
+    display: inline-flex;
+    position: relative;
+  }
+
+  .dropdown-wrapper {
+    position: relative;
+  }
+
+  .dropdown-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.3rem 0.625rem;
+    font-size: var(--sl-text-xs);
+    font-weight: 500;
+    color: var(--sl-color-gray-3);
+    background: transparent;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 1rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    line-height: 1.5;
+  }
+
+  .dropdown-trigger:hover {
+    color: var(--sl-color-white);
+    border-color: var(--sl-color-gray-3);
+    background: var(--sl-color-gray-6);
+  }
+
+  .dropdown-trigger[aria-expanded="true"] {
+    color: var(--sl-color-white);
+    border-color: var(--sl-color-gray-3);
+    background: var(--sl-color-gray-6);
+  }
+
+  .dropdown-trigger[aria-expanded="true"] .icon-chevron {
+    transform: rotate(180deg);
+  }
+
+  .icon-chevron {
+    transition: transform 0.2s ease;
+    margin-left: -0.125rem;
+  }
+
+  .icon-check {
+    display: none;
+  }
+
+  .dropdown-trigger.copied .icon-copy {
+    display: none;
+  }
+
+  .dropdown-trigger.copied .icon-check {
+    display: inline;
+  }
+
+  .dropdown-trigger.copied .icon-chevron {
+    display: none;
+  }
+
+  .dropdown-trigger.copied {
+    color: var(--sl-color-green-high);
+    border-color: var(--sl-color-green-high);
+  }
+
+  .dropdown-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 0.375rem);
+    right: 0;
+    z-index: 100;
+    min-width: 16rem;
+    padding: 0.375rem;
+    background: var(--sl-color-gray-6);
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.75rem;
+    box-shadow:
+      0 4px 6px -1px rgb(0 0 0 / 0.3),
+      0 2px 4px -2px rgb(0 0 0 / 0.2);
+  }
+
+  .dropdown-menu.open {
+    display: block;
+  }
+
+  .menu-item {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    width: 100%;
+    padding: 0.5rem 0.625rem;
+    font-size: var(--sl-text-xs);
+    color: var(--sl-color-gray-2);
+    background: transparent;
+    border: none;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    text-decoration: none;
+    text-align: left;
+    transition: background 0.15s ease;
+    line-height: 1.4;
+  }
+
+  .menu-item:hover {
+    background: var(--sl-color-gray-5);
+    color: var(--sl-color-white);
+  }
+
+  .menu-item svg,
+  .menu-item img {
+    flex-shrink: 0;
+    opacity: 0.7;
+  }
+
+  .menu-item:hover svg,
+  .menu-item:hover img {
+    opacity: 1;
+  }
+
+  .menu-item-text {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .menu-item-label {
+    display: block;
+    font-weight: 500;
+  }
+
+  .menu-item-desc {
+    display: block;
+    font-size: 0.6875rem;
+    color: var(--sl-color-gray-3);
+    margin-top: 0.0625rem;
+  }
+
+  .icon-external {
+    flex-shrink: 0;
+    opacity: 0.5;
+  }
+
+  .menu-divider {
+    height: 1px;
+    margin: 0.375rem 0.625rem;
+    background: var(--sl-color-gray-5);
+  }
+
+  .menu-section-label {
+    padding: 0.25rem 0.625rem 0.125rem;
+    font-size: 0.625rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--sl-color-gray-3);
+  }
+
+  @media (max-width: 30rem) {
+    .trigger-label {
+      display: none;
+    }
+
+    .icon-chevron {
+      display: none;
+    }
+
+    .dropdown-menu {
+      min-width: 14rem;
+    }
+  }
+</style>

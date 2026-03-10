@@ -72,6 +72,19 @@ export const AstroDocsI18nSchema = z
     // Upgrade guide
     "upgrade.implementationPR": z.string(),
 
+    // Copy page dropdown
+    "copyPage.button": z.string(),
+    "copyPage.copied": z.string(),
+    "copyPage.copyMarkdown": z.string(),
+    "copyPage.copyMarkdownDesc": z.string(),
+    "copyPage.copyPlainText": z.string(),
+    "copyPage.copyPlainTextDesc": z.string(),
+    "copyPage.copyUrl": z.string(),
+    "copyPage.copyUrlDesc": z.string(),
+    "copyPage.openInChatGPT": z.string(),
+    "copyPage.openInClaude": z.string(),
+    "copyPage.openInPerplexity": z.string(),
+    "copyPage.aiSection": z.string(),
     // DocSearch component strings
     // These two keys are Astro Docs-specific and apply to the search box in the header.
     "docsearch.button": z.string(),

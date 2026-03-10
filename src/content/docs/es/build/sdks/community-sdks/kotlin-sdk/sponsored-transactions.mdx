@@ -19,76 +19,64 @@ El flujo estándar para enviar una transacción patrocinada es el siguiente:
 
 ## Determinar Sobre Operación
 
-Como ya hemos visto en la sección anterior, puedes construir una transacción por ti mismo
-usando el método `buildTransaction.simple` o usar los constructores de transacciones pre-construidos
-como `transferCoinTransaction`. Sin embargo, en el caso de transacciones patrocinadas, necesitas
-especificar el parámetro opcional `withFeePayer` como `true` en todos los casos.
+Como ya hemos visto en secciones anteriores, puedes construir una transacción usando `buildSimpleTransaction` con el constructor de transacciones lean. Para transacciones patrocinadas, especifica `withFeePayer = true`.
 
 ```kotlin
-val txn = aptos.buildTransaction.simple(
-      sender = alice.accountAddress,
-      data =
-        entryFunctionData {
-          function = "0x1::coin::transfer"
-          typeArguments = typeArguments { +TypeTagStruct("0x1::aptos_coin::AptosCoin") }
-          functionArguments = functionArguments {
-            +bob.accountAddress
-            +U64(SEND_AMOUNT_UNITS.toULong())
-          }
-        },
-      withFeePayer = true,
-    )
-```
-
-O
-
-```kotlin
-val txn = aptos.transferCoinTransaction(
-      sender = alice,
-      receiver = bob.accountAddress,
-      amount = SEND_AMOUNT_UNITS,
-      withFeePayer = true,
-    )
+val txn =
+  aptos.buildSimpleTransaction(
+    sender = alice.accountAddress,
+    withFeePayer = true,
+  ) {
+    function = "0x1::coin::transfer"
+    typeArgs("0x1::aptos_coin::AptosCoin")
+    args(bob.accountAddress, 1_000_000UL)
+  }
 ```
 
 ## Firmar la Transacción
 
-Una vez que hayas construido una transacción, tú (el remitente) puedes firmarla usando el método `sign`.
+Una vez construida, el remitente firma la transacción usando `sign`.
 
 ```kotlin
-val aliceAuthenticator = aptos.sign(
-    sender = alice,
-    transaction = txn,
-)
+val aliceAuthenticator =
+  aptos.sign(signer = alice, transaction = txn)
 ```
 
 ## Firmar la Transacción como Pagador de Tarifas
 
-Para firmar la transacción como pagador de tarifas, puedes usar el método `signAsFeePayer`.
+El pagador de tarifas firma usando `signAsFeePayer`.
 
 ```kotlin
-val signerAuthenticator = aptos.signAsFeePayer(
-    feePayer = sponsor,
-    transaction = txn,
-)
+val feePayerAuthenticator =
+  aptos.signAsFeePayer(feePayer = sponsor, transaction = txn)
 ```
 
 ## Enviar la Transacción
 
-Finalmente, puedes enviar la transacción a la red usando el método `submit`.
+Envía la transacción con ambos autenticadores.
 
 ```kotlin
-val committedTxn = aptos.submitTransaction.simple(
+val pendingTxn =
+  aptos
+    .submitTransaction.simple(
       transaction = txn,
       senderAuthenticator = aliceAuthenticator,
-      feePayerAuthenticator = signerAuthenticator,
+      feePayerAuthenticator = feePayerAuthenticator,
     )
+    .expect("Failed to submit transaction")
 ```
 
 <Aside type="note" emoji="ℹ️">
-  Puedes colapsar los pasos de firmado del pagador de tarifas y envío en uno usando el método `signAndSubmitAsFeePayer`.
+  Puedes combinar el firmado del pagador de tarifas y el envío usando `signAndSubmitAsFeePayer`.
 
   ```kotlin
-    val committedTxn = aptos.signAndSubmitAsFeePayer(sponsor, aliceAuthenticator, txn)
+  val pendingTxn =
+    aptos
+      .signAndSubmitAsFeePayer(
+        feePayer = sponsor,
+        senderAuthenticator = aliceAuthenticator,
+        transaction = txn,
+      )
+      .expect("Failed to sign and submit as fee payer")
   ```
 </Aside>

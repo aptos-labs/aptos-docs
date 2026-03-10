@@ -245,7 +245,14 @@ export const sidebar = [
                   "build/sdks/community-sdks/kotlin-sdk/account",
                   "build/sdks/community-sdks/kotlin-sdk/building-transactions",
                   "build/sdks/community-sdks/kotlin-sdk/client-configuration",
-                  "build/sdks/community-sdks/kotlin-sdk/fetch-data-via-sdk",
+                  group("build.group.sdks.community-sdks.kotlin-sdk.fetch-data", {
+                    collapsed: true,
+                    items: [
+                      "build/sdks/community-sdks/kotlin-sdk/fetch-data/fetch-data-via-sdk",
+                      "build/sdks/community-sdks/kotlin-sdk/fetch-data/response-handling",
+                      "build/sdks/community-sdks/kotlin-sdk/fetch-data/data-filters",
+                    ],
+                  }),
                   "build/sdks/community-sdks/kotlin-sdk/sponsored-transactions",
                   group("build.group.sdks.community-sdks.kotlin-sdk.for-ios-devs", {
                     collapsed: true,

@@ -19,77 +19,64 @@ The standard flow for sending a sponsored transaction is as follows:
 
 ## Determine Upon Operation
 
-As we'd already seen in the previous section, you can build a transaction by yourself
-using the `buildTransaction.simple` method or use the pre-built transaction builders
-like `transferCoinTransaction`. However, in the case of sponsored transactions, you
-need to specify the optional `withFeePayer` parameter as `true` in all cases.
+As seen in previous sections, you can build a transaction using `buildSimpleTransaction` with the lean transaction builder. For sponsored transactions, specify `withFeePayer = true`.
 
 ```kotlin
-val txn = aptos.buildTransaction.simple(
-      sender = alice.accountAddress,
-      data =
-        entryFunctionData {
-          function = "0x1::coin::transfer"
-          typeArguments = typeArguments { +TypeTagStruct("0x1::aptos_coin::AptosCoin") }
-          functionArguments = functionArguments {
-            +bob.accountAddress
-            +U64(SEND_AMOUNT_UNITS.toULong())
-          }
-        },
-      withFeePayer = true,
-    )
-```
-
-OR
-
-```kotlin
-val txn = aptos.transferCoinTransaction(
-      sender = alice,
-      receiver = bob.accountAddress,
-      amount = SEND_AMOUNT_UNITS,
-      withFeePayer = true,
-    )
+val txn =
+  aptos.buildSimpleTransaction(
+    sender = alice.accountAddress,
+    withFeePayer = true,
+  ) {
+    function = "0x1::coin::transfer"
+    typeArgs("0x1::aptos_coin::AptosCoin")
+    args(bob.accountAddress, 1_000_000UL)
+  }
 ```
 
 ## Sign the Transaction
 
-Once you have built a transaction, you (the sender) can sign it using the `sign`
-method.
+Once built, the sender signs the transaction using `sign`.
 
 ```kotlin
-val aliceAuthenticator = aptos.sign(
-    sender = alice,
-    transaction = txn,
-)
+val aliceAuthenticator =
+  aptos.sign(signer = alice, transaction = txn)
 ```
 
 ## Sign the Transaction as Fee Payer
 
-To sign the transaction as a fee payer, you can use the `signAsFeePayer` method.
+The fee payer signs using `signAsFeePayer`.
 
 ```kotlin
-val signerAuthenticator = aptos.signAsFeePayer(
-    feePayer = sponsor,
-    transaction = txn,
-)
+val feePayerAuthenticator =
+  aptos.signAsFeePayer(feePayer = sponsor, transaction = txn)
 ```
 
 ## Submit the Transaction
 
-Finally, you can submit the transaction to the network using the `submit` method.
+Submit the transaction with both authenticators.
 
 ```kotlin
-val committedTxn = aptos.submitTransaction.simple(
+val pendingTxn =
+  aptos
+    .submitTransaction.simple(
       transaction = txn,
       senderAuthenticator = aliceAuthenticator,
-      feePayerAuthenticator = signerAuthenticator,
+      feePayerAuthenticator = feePayerAuthenticator,
     )
+    .expect("Failed to submit transaction")
 ```
 
 <Aside type="note" emoji="ℹ️">
-  You can collapse the fee payer signing and submitting steps into one by using the `signAndSubmitAsFeePayer` method.
+  You can combine fee payer signing and submission using `signAndSubmitAsFeePayer`.
 
   ```kotlin
-    val committedTxn = aptos.signAndSubmitAsFeePayer(sponsor, aliceAuthenticator, txn)
+  val pendingTxn =
+    aptos
+      .signAndSubmitAsFeePayer(
+        feePayer = sponsor,
+        senderAuthenticator = aliceAuthenticator,
+        transaction = txn,
+      )
+      .expect("Failed to sign and submit as fee payer")
   ```
 </Aside>

@@ -36,6 +36,7 @@ const labels = {
   "build.group.sdks.community-sdks.kotlin-sdk": "SDK de Kotlin",
   "build.group.sdks.community-sdks.swift-sdk": "SDK de Swift",
   "build.group.sdks.community-sdks.unity-opendive-sdk": "SDK de Unity OpenDive",
+  "build.group.sdks.community-sdks.kotlin-sdk.fetch-data": "Obtener Datos",
   "build.group.sdks.community-sdks.kotlin-sdk.for-ios-devs": "Para Desarrolladores de iOS",
   "build.group.sdks.official": "Oficiales",
   "build.group.sdks.community": "Comunidad",

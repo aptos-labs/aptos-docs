@@ -1,0 +1,118 @@
+---
+import { sidebarGroupIcons } from "../../astro.sidebar.ts";
+import labels from "../content/nav/en";
+
+interface SidebarEntry {
+  type: string;
+  label: string;
+  href?: string;
+  isCurrent?: boolean;
+  entries?: SidebarEntry[];
+  [key: string]: unknown;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const sidebarData = (Astro.locals.starlightRoute?.sidebar ?? []) as any as SidebarEntry[];
+
+const labelToKey: Record<string, string> = {};
+for (const [key, val] of Object.entries(labels)) {
+  if (typeof val === "string") labelToKey[val] = key;
+}
+
+function findFirstLink(entries: SidebarEntry[]): string | null {
+  for (const entry of entries) {
+    if (entry.type === "link" && entry.href) return entry.href;
+    if (entry.type === "group" && entry.entries) {
+      const link = findFirstLink(entry.entries);
+      if (link) return link;
+    }
+  }
+  return null;
+}
+
+function hasCurrentPage(entries: SidebarEntry[]): boolean {
+  return entries.some((entry) => {
+    if (entry.type === "link") return !!entry.isCurrent;
+    if (entry.type === "group" && entry.entries) return hasCurrentPage(entry.entries);
+    return false;
+  });
+}
+
+const topGroups = sidebarData
+  .filter((item): item is SidebarEntry & { entries: SidebarEntry[] } => item.type === "group")
+  .map((group, index) => {
+    let key = labelToKey[group.label] || "";
+    if (!key) {
+      const iconKeys = Object.keys(sidebarGroupIcons);
+      if (index < iconKeys.length) key = iconKeys[index] as string;
+    }
+    if (!key) key = group.label.toLowerCase().replace(/\s+/g, "");
+
+    return {
+      label: group.label,
+      icon: sidebarGroupIcons[key] || "ph:rocket-launch",
+      href: findFirstLink(group.entries) || "#",
+      isActive: hasCurrentPage(group.entries),
+    };
+  });
+---
+
+<nav class="top-nav" aria-label="Main navigation">
+  <div class="top-nav-inner">
+    {
+      topGroups.map(({ label, href, isActive }) => (
+        <a class:list={["top-nav-item", { active: isActive }]} href={href}>
+          {label}
+        </a>
+      ))
+    }
+  </div>
+</nav>
+
+<style>
+  .top-nav {
+    border-bottom: 1px solid var(--sl-color-hairline-shade);
+    background-color: var(--sl-color-bg-nav);
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .top-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .top-nav-inner {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    padding: 0 var(--sl-nav-pad-x);
+    max-width: 100%;
+  }
+
+  .top-nav-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.625rem 0.875rem;
+    font-size: var(--sl-text-sm);
+    font-weight: 500;
+    color: var(--sl-color-gray-3);
+    text-decoration: none;
+    white-space: nowrap;
+    border-bottom: 2px solid transparent;
+    transition:
+      color 0.15s ease,
+      border-color 0.15s ease;
+    margin-bottom: -1px;
+  }
+
+  .top-nav-item:hover {
+    color: var(--sl-color-white);
+  }
+
+  .top-nav-item.active {
+    color: var(--sl-color-white);
+    border-bottom-color: var(--sl-color-text-accent);
+  }
+</style>

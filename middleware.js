@@ -227,10 +227,10 @@ const SUPPORTED_LANGUAGES = [
     label: "English",
     default: true,
   },
-  {
-    code: "es",
-    label: "Español",
-  },
+  //{
+  //  code: "es",
+  //  label: "Español",
+  //},
   {
     code: "zh",
     label: "简体中文",

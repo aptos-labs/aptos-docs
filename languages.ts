@@ -1,9 +1,9 @@
 const allLanguages = {
   en: "English",
   // de: 'Deutsch',
-  es: "Español",
+  //es: "Español",
   zh: "简体中文",
-  ja: "日本語",
+  //ja: "日本語",
   // 'pt-br': 'Português do Brasil',
   // es: 'Español',
   // 'zh-cn': '简体中文',
@@ -21,7 +21,7 @@ const allLanguages = {
 // Build for two languages only to speed up Astro's smoke tests
 const twoLanguages = {
   en: "English",
-  es: "Español",
+  // es: "Español",
 } as const;
 
 /**

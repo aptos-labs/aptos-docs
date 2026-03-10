@@ -1,0 +1,177 @@
+---
+title: "Multi-Agent Transactions"
+description: "Build and submit transactions that require signatures from multiple accounts using the Aptos Rust SDK"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+Multi-agent transactions allow multiple accounts to participate in the logic of a Move contract. This is useful when a smart contract requires authorization from more than one party, such as atomic swaps, multi-party escrow, or any operation that needs to access resources from several accounts simultaneously.
+
+## When to Use Multi-Agent Transactions
+
+Multi-agent transactions are appropriate when:
+
+- **Atomic swaps** -- Two parties exchange assets in a single, atomic transaction where both must agree.
+- **Multi-party escrow** -- An escrow contract requires signatures from both the depositor and the arbiter to release funds.
+- **Shared resource access** -- A Move function needs `&signer` references from multiple accounts to read or modify their resources.
+
+<Aside type="note">
+  The Move entry function must accept multiple `&signer` parameters for multi-agent transactions to work. Standard functions like `0x1::aptos_account::transfer` only accept one signer and will produce a `NUMBER_OF_SIGNER_ARGUMENTS_MISMATCH` error if used with multiple agents.
+</Aside>
+
+## How to Build a Multi-Agent Transaction
+
+<Steps>
+  1. Build the entry function payload.
+
+     Create the payload for a Move function that accepts multiple signers.
+
+     ```rust
+     use aptos_sdk::types::EntryFunctionPayload;
+
+     let payload = EntryFunctionPayload::new(
+         "0x<address>::<module>::<function>".parse()?,
+         vec![],
+         vec![
+             // Function arguments go here
+         ],
+     );
+     ```
+
+  2. Build the raw transaction with `TransactionBuilder`.
+
+     Construct a raw transaction from the primary sender.
+
+     ```rust
+     use aptos_sdk::transaction_builder::TransactionBuilder;
+
+     let raw_txn = TransactionBuilder::new(payload, aptos.get_chain_id().await?)
+         .sender(alice.address())
+         .sequence_number(aptos.get_sequence_number(alice.address()).await?)
+         .max_gas_amount(10_000)
+         .gas_unit_price(100)
+         .expiration_timestamp_secs(
+             aptos.get_latest_ledger_info().await?.timestamp() + 60,
+         )
+         .build();
+     ```
+
+  3. Create a `MultiAgentRawTransaction` with secondary signer addresses.
+
+     Wrap the raw transaction to declare which additional accounts must co-sign.
+
+     ```rust
+     use aptos_sdk::types::MultiAgentRawTransaction;
+
+     let multi_agent_txn = MultiAgentRawTransaction::new(
+         raw_txn,
+         vec![bob.address()], // Secondary signer addresses
+     );
+     ```
+
+  4. Sign the transaction with all parties.
+
+     Use `sign_multi_agent_transaction` to produce a signed transaction that includes signatures from the primary sender and all secondary signers. Each secondary signer is passed as a trait reference (`&dyn Account`).
+
+     ```rust
+     let signed_txn = aptos.sign_multi_agent_transaction(
+         &multi_agent_txn,
+         &alice,                          // Primary signer
+         &[&bob as &dyn Account],         // Secondary signers
+     )?;
+     ```
+
+  5. Submit the transaction and wait for confirmation.
+
+     ```rust
+     let result = aptos.submit_and_wait(signed_txn).await?;
+     let success = result
+         .data
+         .get("success")
+         .and_then(|v| v.as_bool())
+         .unwrap_or(false);
+     println!("Transaction success: {}", success);
+     ```
+</Steps>
+
+## Common Errors
+
+- **`NUMBER_OF_SIGNER_ARGUMENTS_MISMATCH`** -- The number of signers provided does not match the number of `&signer` parameters in the Move function. Verify that your entry function expects exactly the number of signers you are providing (primary + secondary).
+- **`INVALID_AUTH_KEY`** -- One of the secondary signer addresses does not match the account that signed the transaction. Ensure the addresses in `MultiAgentRawTransaction::new` match the actual signing accounts.
+
+## Full Working Example
+
+```rust filename="src/main.rs"
+/// This example demonstrates a multi-agent transaction where two accounts
+/// (Alice and Bob) both sign a single transaction.
+///
+/// Note: You must deploy a Move module with a multi-signer entry function
+/// for this example to work. Replace the function reference below with
+/// your deployed contract.
+use aptos_sdk::{Aptos, AptosConfig};
+use aptos_sdk::account::{Account, Ed25519Account};
+use aptos_sdk::types::{EntryFunctionPayload, MultiAgentRawTransaction};
+use aptos_sdk::transaction_builder::TransactionBuilder;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    // Connect to testnet
+    let aptos = Aptos::new(AptosConfig::testnet())?;
+
+    // Generate and fund accounts
+    let alice = Ed25519Account::generate();
+    let bob = Ed25519Account::generate();
+    aptos.fund_account(alice.address(), 100_000_000).await?;
+    aptos.fund_account(bob.address(), 100_000_000).await?;
+
+    println!("Alice: {}", alice.address());
+    println!("Bob: {}", bob.address());
+
+    // 1. Build the payload for a multi-signer function
+    let payload = EntryFunctionPayload::new(
+        // Replace with your multi-agent Move function
+        "0x<address>::<module>::<function>".parse()?,
+        vec![],
+        vec![],
+    );
+
+    // 2. Build the raw transaction
+    let raw_txn = TransactionBuilder::new(payload, aptos.get_chain_id().await?)
+        .sender(alice.address())
+        .sequence_number(aptos.get_sequence_number(alice.address()).await?)
+        .max_gas_amount(10_000)
+        .gas_unit_price(100)
+        .expiration_timestamp_secs(
+            aptos.get_latest_ledger_info().await?.timestamp() + 60,
+        )
+        .build();
+
+    // 3. Create the multi-agent raw transaction
+    let multi_agent_txn = MultiAgentRawTransaction::new(
+        raw_txn,
+        vec![bob.address()],
+    );
+
+    // 4. Sign with both accounts
+    let signed_txn = aptos.sign_multi_agent_transaction(
+        &multi_agent_txn,
+        &alice,
+        &[&bob as &dyn Account],
+    )?;
+
+    // 5. Submit and wait for confirmation
+    let result = aptos.submit_and_wait(signed_txn).await?;
+    let success = result
+        .data
+        .get("success")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    println!("Transaction success: {}", success);
+
+    Ok(())
+}
+```
+
+<Aside type="tip">
+  For a complete runnable example using a deployed multi-signer contract, see the [multi\_agent.rs example](https://github.com/aptos-labs/aptos-rust-sdk/blob/main/examples/multi_agent.rs) in the Aptos Rust SDK repository.
+</Aside>

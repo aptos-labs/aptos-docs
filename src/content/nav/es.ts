@@ -30,6 +30,8 @@ const labels = {
   "build.group.sdks.unity-sdk": "SDK de Unity",
   "build.group.sdks.cpp-sdk": "SDK de C++",
   "build.group.sdks.rust-sdk": "SDK de Rust",
+  "build.group.sdks.rust-sdk.accounts": "Cuentas",
+  "build.group.sdks.rust-sdk.building-transactions": "Construir Transacciones",
   "build.group.sdks.wallet-adapter": "Adaptador de Wallet",
   "build.group.sdks.community-sdks": "SDKs de la Comunidad",
   "build.group.sdks.react-hooks": "React Hooks",

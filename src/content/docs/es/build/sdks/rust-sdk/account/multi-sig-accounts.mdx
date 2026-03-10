@@ -1,0 +1,92 @@
+---
+title: "Cuentas Multi-Firma"
+description: "Aprende a crear y usar cuentas multi-firma con el SDK de Rust para Aptos"
+sidebar:
+  label: "Cuentas Multi-Firma"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+El SDK de Rust para Aptos soporta cuentas multi-firma que requieren multiples partes para autorizar una transaccion. Esto es util para custodia compartida, wallets organizacionales y escenarios de gobernanza donde ninguna parte individual debe tener control unilateral.
+
+## MultiKeyAccount
+
+Un `MultiKeyAccount` implementa un esquema de firma de umbral M-de-N que soporta tipos de claves criptograficas mixtas. Puedes combinar claves Ed25519, Secp256k1 y Secp256r1 en una sola cuenta. Este es el enfoque recomendado para cuentas multi-firma.
+
+### Crear una Cuenta Multi-Firma
+
+Para crear un `MultiKeyAccount`, genera los pares de claves individuales primero, luego combina sus claves publicas con un umbral de firma:
+
+```rust
+use aptos_sdk::account::{
+    Ed25519Account, Secp256k1Account, MultiKeyAccount, AnyPublicKey,
+};
+
+// Generate signers with different key types
+let ed25519_signer = Ed25519Account::generate();
+let secp256k1_signer = Secp256k1Account::generate();
+let ed25519_signer_2 = Ed25519Account::generate();
+
+// Create a 2-of-3 multi-key account with mixed key types
+let multi_key_account = MultiKeyAccount::new(
+    vec![
+        AnyPublicKey::Ed25519(ed25519_signer.public_key().clone()),
+        AnyPublicKey::Secp256k1(secp256k1_signer.public_key().clone()),
+        AnyPublicKey::Ed25519(ed25519_signer_2.public_key().clone()),
+    ],
+    2, // signatures_required
+)?;
+
+println!("Multi-key address: {}", multi_key_account.address());
+```
+
+En este ejemplo, dos cualesquiera de los tres firmantes pueden autorizar una transaccion. El parametro `signatures_required` debe estar entre 1 y el numero total de claves publicas (inclusive). Los firmantes pueden usar cualquier tipo de clave soportado — Ed25519, Secp256k1 o Secp256r1 — permitiendo que un firmante use una wallet de software mientras otro usa un dispositivo de hardware con diferentes capacidades criptograficas.
+
+### Firmar con un MultiKeyAccount
+
+Al firmar una transaccion, proporcionas los firmantes individuales que participaran. El numero de firmantes debe alcanzar o superar el umbral:
+
+```rust
+// Sign with ed25519_signer and secp256k1_signer (2-of-3 threshold met)
+let signature = multi_key_account.sign_with_signers(
+    &message,
+    vec![&ed25519_signer, &secp256k1_signer],
+)?;
+```
+
+## MultiEd25519Account (Legacy)
+
+<Aside type="caution">
+  `MultiEd25519Account` existe por compatibilidad con cuentas antiguas en la cadena. Para nuevas cuentas multi-firma, usa `MultiKeyAccount` en su lugar — soporta las mismas configuraciones solo Ed25519 ademas de tipos de claves mixtas.
+</Aside>
+
+Un `MultiEd25519Account` implementa un esquema de firma de umbral M-de-N restringido unicamente a claves Ed25519. Si necesitas interactuar con una cuenta multi-firma existente en la cadena que fue creada con `MultiEd25519`, puedes cargarla de la siguiente manera:
+
+```rust
+use aptos_sdk::account::{Ed25519Account, MultiEd25519Account};
+
+// Generate three individual signers (all must be Ed25519)
+let signer_1 = Ed25519Account::generate();
+let signer_2 = Ed25519Account::generate();
+let signer_3 = Ed25519Account::generate();
+
+// Create a 2-of-3 multi-signature account
+let multi_account = MultiEd25519Account::new(
+    vec![
+        signer_1.public_key().clone(),
+        signer_2.public_key().clone(),
+        signer_3.public_key().clone(),
+    ],
+    2, // signatures_required
+)?;
+```
+
+La firma funciona de la misma manera que `MultiKeyAccount`:
+
+```rust
+// Sign with signer_1 and signer_3 (2-of-3 threshold met)
+let signature = multi_account.sign_with_signers(
+    &message,
+    vec![&signer_1, &signer_3],
+)?;
+```

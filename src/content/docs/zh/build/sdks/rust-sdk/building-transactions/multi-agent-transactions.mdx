@@ -1,0 +1,177 @@
+---
+title: "多代理交易"
+description: "使用 Aptos Rust SDK 构建和提交需要多个账户签名的交易"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+多代理交易允许多个账户参与 Move 合约的逻辑。当智能合约需要多方授权时，这非常有用，例如原子交换、多方托管，或任何需要同时访问多个账户资源的操作。
+
+## 何时使用多代理交易
+
+多代理交易适用于以下场景：
+
+- **原子交换** -- 双方在单笔原子交易中交换资产，双方都必须同意。
+- **多方托管** -- 托管合约需要存款人和仲裁人的签名才能释放资金。
+- **共享资源访问** -- Move 函数需要来自多个账户的 `&signer` 引用来读取或修改其资源。
+
+<Aside type="note">
+  Move 入口函数必须接受多个 `&signer` 参数，多代理交易才能工作。标准函数如 `0x1::aptos_account::transfer` 只接受一个签名者，如果与多个代理一起使用，将产生 `NUMBER_OF_SIGNER_ARGUMENTS_MISMATCH` 错误。
+</Aside>
+
+## 如何构建多代理交易
+
+<Steps>
+  1. 构建入口函数负载。
+
+     为接受多个签名者的 Move 函数创建负载。
+
+     ```rust
+     use aptos_sdk::types::EntryFunctionPayload;
+
+     let payload = EntryFunctionPayload::new(
+         "0x<address>::<module>::<function>".parse()?,
+         vec![],
+         vec![
+             // Function arguments go here
+         ],
+     );
+     ```
+
+  2. 使用 `TransactionBuilder` 构建原始交易。
+
+     从主要发送者构造原始交易。
+
+     ```rust
+     use aptos_sdk::transaction_builder::TransactionBuilder;
+
+     let raw_txn = TransactionBuilder::new(payload, aptos.get_chain_id().await?)
+         .sender(alice.address())
+         .sequence_number(aptos.get_sequence_number(alice.address()).await?)
+         .max_gas_amount(10_000)
+         .gas_unit_price(100)
+         .expiration_timestamp_secs(
+             aptos.get_latest_ledger_info().await?.timestamp() + 60,
+         )
+         .build();
+     ```
+
+  3. 使用次要签名者地址创建 `MultiAgentRawTransaction`。
+
+     包装原始交易以声明哪些额外账户必须共同签名。
+
+     ```rust
+     use aptos_sdk::types::MultiAgentRawTransaction;
+
+     let multi_agent_txn = MultiAgentRawTransaction::new(
+         raw_txn,
+         vec![bob.address()], // Secondary signer addresses
+     );
+     ```
+
+  4. 让所有参与方签署交易。
+
+     使用 `sign_multi_agent_transaction` 生成一个包含主要发送者和所有次要签名者签名的已签名交易。每个次要签名者作为 trait 引用（`&dyn Account`）传递。
+
+     ```rust
+     let signed_txn = aptos.sign_multi_agent_transaction(
+         &multi_agent_txn,
+         &alice,                          // Primary signer
+         &[&bob as &dyn Account],         // Secondary signers
+     )?;
+     ```
+
+  5. 提交交易并等待确认。
+
+     ```rust
+     let result = aptos.submit_and_wait(signed_txn).await?;
+     let success = result
+         .data
+         .get("success")
+         .and_then(|v| v.as_bool())
+         .unwrap_or(false);
+     println!("Transaction success: {}", success);
+     ```
+</Steps>
+
+## 常见错误
+
+- **`NUMBER_OF_SIGNER_ARGUMENTS_MISMATCH`** -- 提供的签名者数量与 Move 函数中的 `&signer` 参数数量不匹配。请验证您的入口函数期望的签名者数量（主要 + 次要）与您提供的完全一致。
+- **`INVALID_AUTH_KEY`** -- 次要签名者地址之一与签署交易的账户不匹配。请确保 `MultiAgentRawTransaction::new` 中的地址与实际签名账户匹配。
+
+## 完整工作示例
+
+```rust filename="src/main.rs"
+/// This example demonstrates a multi-agent transaction where two accounts
+/// (Alice and Bob) both sign a single transaction.
+///
+/// Note: You must deploy a Move module with a multi-signer entry function
+/// for this example to work. Replace the function reference below with
+/// your deployed contract.
+use aptos_sdk::{Aptos, AptosConfig};
+use aptos_sdk::account::{Account, Ed25519Account};
+use aptos_sdk::types::{EntryFunctionPayload, MultiAgentRawTransaction};
+use aptos_sdk::transaction_builder::TransactionBuilder;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    // Connect to testnet
+    let aptos = Aptos::new(AptosConfig::testnet())?;
+
+    // Generate and fund accounts
+    let alice = Ed25519Account::generate();
+    let bob = Ed25519Account::generate();
+    aptos.fund_account(alice.address(), 100_000_000).await?;
+    aptos.fund_account(bob.address(), 100_000_000).await?;
+
+    println!("Alice: {}", alice.address());
+    println!("Bob: {}", bob.address());
+
+    // 1. Build the payload for a multi-signer function
+    let payload = EntryFunctionPayload::new(
+        // Replace with your multi-agent Move function
+        "0x<address>::<module>::<function>".parse()?,
+        vec![],
+        vec![],
+    );
+
+    // 2. Build the raw transaction
+    let raw_txn = TransactionBuilder::new(payload, aptos.get_chain_id().await?)
+        .sender(alice.address())
+        .sequence_number(aptos.get_sequence_number(alice.address()).await?)
+        .max_gas_amount(10_000)
+        .gas_unit_price(100)
+        .expiration_timestamp_secs(
+            aptos.get_latest_ledger_info().await?.timestamp() + 60,
+        )
+        .build();
+
+    // 3. Create the multi-agent raw transaction
+    let multi_agent_txn = MultiAgentRawTransaction::new(
+        raw_txn,
+        vec![bob.address()],
+    );
+
+    // 4. Sign with both accounts
+    let signed_txn = aptos.sign_multi_agent_transaction(
+        &multi_agent_txn,
+        &alice,
+        &[&bob as &dyn Account],
+    )?;
+
+    // 5. Submit and wait for confirmation
+    let result = aptos.submit_and_wait(signed_txn).await?;
+    let success = result
+        .data
+        .get("success")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    println!("Transaction success: {}", success);
+
+    Ok(())
+}
+```
+
+<Aside type="tip">
+  有关使用已部署多签名者合约的完整可运行示例，请参阅 Aptos Rust SDK 仓库中的 [multi\_agent.rs 示例](https://github.com/aptos-labs/aptos-rust-sdk/blob/main/examples/multi_agent.rs)。
+</Aside>

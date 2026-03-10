@@ -214,8 +214,34 @@ export const sidebar = [
           "build/sdks/unity-sdk",
           // C++ SDK (no subpages found)
           "build/sdks/cpp-sdk",
-          // Rust SDK (no subpages found)
-          "build/sdks/rust-sdk",
+          group("build.group.sdks.rust-sdk", {
+            collapsed: true,
+            items: [
+              "build/sdks/rust-sdk",
+              "build/sdks/rust-sdk/quickstart",
+              "build/sdks/rust-sdk/fetch-data-via-sdk",
+              "build/sdks/rust-sdk/rust-examples",
+              "build/sdks/rust-sdk/smart-contracts",
+              group("build.group.sdks.rust-sdk.accounts", {
+                collapsed: true,
+                items: [
+                  "build/sdks/rust-sdk/account",
+                  "build/sdks/rust-sdk/account/multi-sig-accounts",
+                ],
+              }),
+              group("build.group.sdks.rust-sdk.building-transactions", {
+                collapsed: true,
+                items: [
+                  "build/sdks/rust-sdk/building-transactions",
+                  "build/sdks/rust-sdk/building-transactions/simulating-transactions",
+                  "build/sdks/rust-sdk/building-transactions/multi-agent-transactions",
+                  "build/sdks/rust-sdk/building-transactions/sponsoring-transactions",
+                  "build/sdks/rust-sdk/building-transactions/batching-transactions",
+                  "build/sdks/rust-sdk/building-transactions/script-transactions",
+                ],
+              }),
+            ],
+          }),
           group("build.group.sdks.wallet-adapter", {
             collapsed: true,
             items: [

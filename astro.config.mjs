@@ -155,10 +155,15 @@ export default defineConfig({
           rawContent: true,
           description:
             "Developer documentation for the Aptos blockchain — Move smart contracts, SDKs, APIs, indexer, node operations, and AI tools.",
+          details: [
+            "For AI coding tools, install the Aptos MCP server: `npx @aptos-labs/aptos-mcp`",
+            "It gives your IDE direct access to Aptos APIs, on-chain data, and Move contract helpers.",
+            "See <https://aptos.dev/build/ai> for setup guides (Claude Code, Cursor, and more).",
+          ].join("\n"),
           optionalLinks: [
             {
               label: "Aptos MCP Server",
-              url: "https://www.npmjs.com/package/@anthropic-ai/aptos-mcp",
+              url: "https://www.npmjs.com/package/@aptos-labs/aptos-mcp",
               description: "MCP server for AI coding tools",
             },
             {

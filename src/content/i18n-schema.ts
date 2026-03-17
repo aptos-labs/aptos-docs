@@ -83,6 +83,7 @@ export const AstroDocsI18nSchema = z
     "copyPage.copyUrlDesc": z.string(),
     "copyPage.openInChatGPT": z.string(),
     "copyPage.openInClaude": z.string(),
+    "copyPage.openInGemini": z.string(),
     "copyPage.openInPerplexity": z.string(),
     "copyPage.aiSection": z.string(),
     "copyPage.copySection": z.string(),

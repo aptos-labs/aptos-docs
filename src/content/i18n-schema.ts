@@ -85,6 +85,7 @@ export const AstroDocsI18nSchema = z
     "copyPage.openInClaude": z.string(),
     "copyPage.openInPerplexity": z.string(),
     "copyPage.aiSection": z.string(),
+    "copyPage.copySection": z.string(),
     // DocSearch component strings
     // These two keys are Astro Docs-specific and apply to the search box in the header.
     "docsearch.button": z.string(),

@@ -228,10 +228,6 @@ const SUPPORTED_LANGUAGES = [
     default: true,
   },
   {
-    code: "es",
-    label: "Español",
-  },
-  {
     code: "zh",
     label: "简体中文",
   },
@@ -369,8 +365,6 @@ export const config = {
     "/move-reference/:path*",
     "/en",
     "/en/:path*",
-    "/es",
-    "/es/:path*",
     "/zh",
     "/zh/:path*",
   ],

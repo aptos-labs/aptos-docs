@@ -1,0 +1,206 @@
+---
+title: "脚本交易"
+description: "使用 Aptos Rust SDK 将编译的 Move 脚本作为交易执行"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+除了调用已发布的入口函数外，您还可以将编译的 Move 脚本作为交易提交。脚本是独立的 Move 字节码片段，执行一次且不存储在链上。它们比入口函数调用提供更大的灵活性，因为脚本可以调用多个公共函数、使用任意逻辑，并在单笔交易中处理跨不同模块的类型。
+
+## 脚本与入口函数
+
+| 方面       | 入口函数                 | 脚本                      |
+| -------- | -------------------- | ----------------------- |
+| **部署**   | 必须作为链上 Move 模块的一部分发布 | 无需部署；字节码直接包含在交易中        |
+| **可复用性** | 任何引用该模块的交易都可调用       | 一次性使用；必须包含在每笔交易中        |
+| **灵活性**  | 受限于函数定义的签名和逻辑        | 可调用多个公共函数、使用条件判断，自由组合逻辑 |
+| **编译**   | 与模块一起编译和发布           | 使用 Aptos CLI 单独编译       |
+| **使用场景** | 标准操作（转账、质押、模块交互）     | 复杂的一次性操作、批量调用、迁移        |
+
+<Aside type="note">
+  脚本可以调用任何已发布 Move 模块中的任何 `public` 函数。它们不限于 `public entry` 函数。这使得脚本在一次性操作方面严格比入口函数负载更强大。
+</Aside>
+
+## 编译 Move 脚本
+
+在提交脚本交易之前，您需要将 Move 源代码编译为字节码。使用 Aptos CLI 编译您的脚本。
+
+<Steps>
+  1. 编写您的 Move 脚本。
+
+     创建一个名为 `my_script.move` 的文件，结构如下：
+
+     ```move filename="my_script.move"
+     script {
+         use std::signer;
+         use aptos_framework::aptos_account;
+         use aptos_framework::coin;
+         use aptos_framework::aptos_coin::AptosCoin;
+
+         fun main(sender: &signer, recipient: address, amount: u64) {
+             // Transfer APT from sender to recipient
+             aptos_account::transfer(sender, recipient, amount);
+
+             // Check the sender's remaining balance
+             let _balance = coin::balance<AptosCoin>(signer::address_of(sender));
+         }
+     }
+     ```
+
+  2. 使用 Aptos CLI 编译脚本。
+
+     ```shellscript
+     aptos move compile --named-addresses std=0x1,aptos_framework=0x1
+     ```
+
+     这将在 `build/` 目录中生成一个编译后的字节码文件（`.mv`）。您将在脚本交易负载中包含此字节码。
+</Steps>
+
+## 提交脚本交易
+
+获得编译后的字节码后，使用 `TransactionPayload::Script` 变体来构建和提交交易。
+
+<Steps>
+  1. 加载编译后的脚本字节码。
+
+     读取编译器生成的 `.mv` 文件为字节向量。
+
+     ```rust
+     let script_bytes = std::fs::read("build/my_script/bytecode_scripts/main.mv")?;
+     ```
+
+  2. 构建脚本负载。
+
+     使用字节码、类型参数和脚本参数构造 `TransactionPayload::Script`。
+
+     ```rust
+     use aptos_sdk::types::{TransactionPayload, ScriptPayload, ScriptArgument};
+
+     let script_payload = TransactionPayload::Script(ScriptPayload::new(
+         script_bytes,
+         vec![],  // Type arguments (empty if the script has no type parameters)
+         vec![
+             ScriptArgument::Address(bob.address()),
+             ScriptArgument::U64(10_000_000),
+         ],
+     ));
+     ```
+
+  3. 使用标准交易流程构建、签名和提交。
+
+     ```rust
+     use aptos_sdk::transaction_builder::TransactionBuilder;
+
+     let raw_txn = TransactionBuilder::new_with_payload(
+             script_payload,
+             aptos.get_chain_id().await?,
+         )
+         .sender(alice.address())
+         .sequence_number(aptos.get_sequence_number(alice.address()).await?)
+         .max_gas_amount(10_000)
+         .gas_unit_price(100)
+         .expiration_timestamp_secs(
+             aptos.get_latest_ledger_info().await?.timestamp() + 60,
+         )
+         .build();
+
+     let signed_txn = aptos.sign_transaction(&alice, raw_txn)?;
+     let result = aptos.submit_and_wait(signed_txn).await?;
+
+     let success = result
+         .data
+         .get("success")
+         .and_then(|v| v.as_bool())
+         .unwrap_or(false);
+     println!("Script transaction success: {}", success);
+     ```
+</Steps>
+
+## 何时使用脚本
+
+在以下情况下考虑使用脚本代替入口函数调用：
+
+- 您需要在单笔原子交易中**调用跨不同模块的多个函数**。
+- 您需要在同一交易中**使用一个函数调用的返回值作为另一个函数的输入**。
+- 您正在执行**一次性操作**（如数据迁移或空投），不值得部署新模块。
+- 您需要调用**未标记为 `entry`** 的 `public` 函数，这些函数无法通过入口函数负载直接调用。
+
+<Aside type="caution">
+  脚本将完整字节码添加到交易中，与调用已发布的入口函数相比，这增加了交易大小和 gas 成本。对于重复执行的操作，发布专用 Move 模块更为高效。
+</Aside>
+
+## 完整工作示例
+
+```rust filename="src/main.rs"
+/// This example demonstrates how to submit a compiled Move script as
+/// a transaction using the Aptos Rust SDK.
+use aptos_sdk::{Aptos, AptosConfig};
+use aptos_sdk::account::Ed25519Account;
+use aptos_sdk::types::{TransactionPayload, ScriptPayload, ScriptArgument};
+use aptos_sdk::transaction_builder::TransactionBuilder;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    // Connect to testnet
+    let aptos = Aptos::new(AptosConfig::testnet())?;
+
+    // Generate and fund accounts
+    let alice = Ed25519Account::generate();
+    let bob = Ed25519Account::generate();
+    aptos.fund_account(alice.address(), 100_000_000).await?;
+    aptos.fund_account(bob.address(), 100_000_000).await?;
+
+    println!("Alice: {}", alice.address());
+    println!("Bob: {}", bob.address());
+
+    // Load compiled script bytecode
+    // Replace this path with the actual path to your compiled .mv file
+    let script_bytes = std::fs::read("build/my_script/bytecode_scripts/main.mv")?;
+
+    // Build the script payload
+    let script_payload = TransactionPayload::Script(ScriptPayload::new(
+        script_bytes,
+        vec![],
+        vec![
+            ScriptArgument::Address(bob.address()),
+            ScriptArgument::U64(10_000_000),
+        ],
+    ));
+
+    // Build the raw transaction
+    let raw_txn = TransactionBuilder::new_with_payload(
+            script_payload,
+            aptos.get_chain_id().await?,
+        )
+        .sender(alice.address())
+        .sequence_number(aptos.get_sequence_number(alice.address()).await?)
+        .max_gas_amount(10_000)
+        .gas_unit_price(100)
+        .expiration_timestamp_secs(
+            aptos.get_latest_ledger_info().await?.timestamp() + 60,
+        )
+        .build();
+
+    // Sign and submit
+    let signed_txn = aptos.sign_transaction(&alice, raw_txn)?;
+    let result = aptos.submit_and_wait(signed_txn).await?;
+
+    let success = result
+        .data
+        .get("success")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    println!("\nScript transaction success: {}", success);
+
+    // Verify balances
+    println!("\n=== Final Balances ===");
+    println!("Alice: {} octas", aptos.get_balance(alice.address()).await?);
+    println!("Bob: {} octas", aptos.get_balance(bob.address()).await?);
+
+    Ok(())
+}
+```
+
+<Aside type="tip">
+  有关完整的可运行脚本交易示例，请参阅 Aptos Rust SDK 仓库中的 [script\_transaction.rs](https://github.com/aptos-labs/aptos-rust-sdk/blob/main/examples/script_transaction.rs)。
+</Aside>

@@ -1,0 +1,207 @@
+---
+title: "Patrocinar Transacciones"
+description: "Permite que otra cuenta pague las tarifas de gas en nombre del remitente de una transaccion usando el SDK de Rust para Aptos"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+Normalmente, la cuenta que ejecuta una transaccion paga las tarifas de gas. Con las transacciones patrocinadas (fee payer), una cuenta separada cubre el costo de gas en nombre del remitente. Esto es util para incorporar nuevos usuarios que aun no poseen APT, subsidiar costos de transaccion para los usuarios de tu aplicacion, o gestionar tarifas de gas desde una tesoreria centralizada.
+
+## Como Patrocinar una Transaccion
+
+<Steps>
+  1. Construir el payload de la funcion entry.
+
+     Crea el payload para la transaccion que el remitente desea ejecutar.
+
+     ```rust
+     use aptos_sdk::types::EntryFunctionPayload;
+
+     let payload = EntryFunctionPayload::new(
+         "0x1::aptos_account::transfer".parse()?,
+         vec![],
+         vec![bob.address().into(), 10_000_000u64.into()],
+     );
+     ```
+
+  2. Construir la transaccion raw con `TransactionBuilder`.
+
+     Construye una transaccion raw desde la cuenta del remitente.
+
+     ```rust
+     use aptos_sdk::transaction_builder::TransactionBuilder;
+
+     let raw_txn = TransactionBuilder::new(payload, aptos.get_chain_id().await?)
+         .sender(alice.address())
+         .sequence_number(aptos.get_sequence_number(alice.address()).await?)
+         .max_gas_amount(10_000)
+         .gas_unit_price(100)
+         .expiration_timestamp_secs(
+             aptos.get_latest_ledger_info().await?.timestamp() + 60,
+         )
+         .build();
+     ```
+
+  3. Crear una `FeePayerRawTransaction` que designe al patrocinador.
+
+     Envuelve la transaccion raw con la direccion del pagador de tarifas. Usa `new_simple` cuando no haya firmantes secundarios adicionales.
+
+     ```rust
+     use aptos_sdk::types::FeePayerRawTransaction;
+
+     let fee_payer_txn = FeePayerRawTransaction::new_simple(
+         raw_txn,
+         sponsor.address(),
+     );
+     ```
+
+  4. Firmar la transaccion con el remitente y el patrocinador.
+
+     Usa `sign_fee_payer_transaction` para producir una transaccion firmada. El segundo argumento es el remitente, el tercero es un slice vacio (usado para firmantes secundarios en transacciones patrocinadas multi-agente), y el cuarto es el pagador de tarifas.
+
+     ```rust
+     let signed_txn = aptos.sign_fee_payer_transaction(
+         &fee_payer_txn,
+         &alice,                // Sender
+         &[],                   // Secondary signers (empty for simple transactions)
+         &sponsor,              // Fee payer
+     )?;
+     ```
+
+  5. Enviar la transaccion y esperar confirmacion.
+
+     ```rust
+     let result = aptos.submit_and_wait(signed_txn).await?;
+     let success = result
+         .data
+         .get("success")
+         .and_then(|v| v.as_bool())
+         .unwrap_or(false);
+     println!("Transaction success: {}", success);
+     ```
+</Steps>
+
+<Aside type="note">
+  La cuenta del remitente no necesita tener APT para gas cuando un pagador de tarifas patrocina la transaccion. Sin embargo, el remitente debe tener fondos suficientes para cualquier transferencia de valor incluida en el payload de la transaccion.
+</Aside>
+
+## Transacciones Multi-Agente Patrocinadas
+
+Puedes combinar el patrocinio de pagador de tarifas con transacciones multi-agente. En este caso, proporciona los firmantes secundarios al construir la `FeePayerRawTransaction` y al firmar.
+
+```rust
+use aptos_sdk::types::FeePayerRawTransaction;
+
+// Create fee payer transaction with secondary signers
+let fee_payer_txn = FeePayerRawTransaction::new(
+    raw_txn,
+    vec![bob.address()],    // Secondary signer addresses
+    sponsor.address(),      // Fee payer address
+);
+
+// Sign with all parties
+let signed_txn = aptos.sign_fee_payer_transaction(
+    &fee_payer_txn,
+    &alice,                          // Primary sender
+    &[&bob as &dyn Account],         // Secondary signers
+    &sponsor,                        // Fee payer
+)?;
+```
+
+## Errores Comunes
+
+- **`INSUFFICIENT_BALANCE_FOR_TRANSACTION_FEE`** -- La cuenta del patrocinador no tiene suficiente APT para cubrir la tarifa de gas maxima posible. El patrocinador debe tener al menos `max_gas_amount * gas_unit_price` octas. Puedes simular la transaccion primero para obtener una estimacion de gas mas ajustada, luego establecer `max_gas_amount` en consecuencia. Consulta [Simular Transacciones](/es/build/sdks/rust-sdk/building-transactions/simulating-transactions) para mas detalles.
+- **`INVALID_AUTH_KEY`** -- La direccion del pagador de tarifas especificada en `FeePayerRawTransaction` no coincide con la cuenta que firmo como pagador de tarifas. Verifica que pases la cuenta del patrocinador correcta tanto al constructor como a la funcion de firma.
+
+## Ejemplo Completo Funcional
+
+```rust filename="src/main.rs"
+/// This example demonstrates a sponsored transaction where a separate
+/// account (sponsor) pays the gas fees for Alice's transfer to Bob.
+use aptos_sdk::{Aptos, AptosConfig};
+use aptos_sdk::account::Ed25519Account;
+use aptos_sdk::types::{EntryFunctionPayload, FeePayerRawTransaction};
+use aptos_sdk::transaction_builder::TransactionBuilder;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    // Connect to testnet
+    let aptos = Aptos::new(AptosConfig::testnet())?;
+
+    // Generate accounts
+    let alice = Ed25519Account::generate();
+    let bob = Ed25519Account::generate();
+    let sponsor = Ed25519Account::generate();
+
+    // Fund accounts -- note that Alice only needs a small amount for the
+    // transfer itself, while the sponsor needs enough to cover gas.
+    aptos.fund_account(alice.address(), 100_000_000).await?;
+    aptos.fund_account(bob.address(), 100_000_000).await?;
+    aptos.fund_account(sponsor.address(), 100_000_000).await?;
+
+    println!("Alice: {}", alice.address());
+    println!("Bob: {}", bob.address());
+    println!("Sponsor: {}", sponsor.address());
+
+    // Check initial balances
+    let alice_balance = aptos.get_balance(alice.address()).await?;
+    let sponsor_balance = aptos.get_balance(sponsor.address()).await?;
+    println!("\n=== Initial Balances ===");
+    println!("Alice: {} octas", alice_balance);
+    println!("Sponsor: {} octas", sponsor_balance);
+
+    // 1. Build the payload
+    let payload = EntryFunctionPayload::new(
+        "0x1::aptos_account::transfer".parse()?,
+        vec![],
+        vec![bob.address().into(), 10_000_000u64.into()],
+    );
+
+    // 2. Build the raw transaction
+    let raw_txn = TransactionBuilder::new(payload, aptos.get_chain_id().await?)
+        .sender(alice.address())
+        .sequence_number(aptos.get_sequence_number(alice.address()).await?)
+        .max_gas_amount(10_000)
+        .gas_unit_price(100)
+        .expiration_timestamp_secs(
+            aptos.get_latest_ledger_info().await?.timestamp() + 60,
+        )
+        .build();
+
+    // 3. Create the fee payer transaction
+    let fee_payer_txn = FeePayerRawTransaction::new_simple(
+        raw_txn,
+        sponsor.address(),
+    );
+
+    // 4. Sign with both the sender and the sponsor
+    let signed_txn = aptos.sign_fee_payer_transaction(
+        &fee_payer_txn,
+        &alice,
+        &[],
+        &sponsor,
+    )?;
+
+    // 5. Submit and wait
+    let result = aptos.submit_and_wait(signed_txn).await?;
+    let success = result
+        .data
+        .get("success")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    println!("\nTransaction success: {}", success);
+
+    // Verify that the sponsor paid the gas, not Alice
+    let new_alice_balance = aptos.get_balance(alice.address()).await?;
+    let new_sponsor_balance = aptos.get_balance(sponsor.address()).await?;
+    println!("\n=== Balances After Transfer ===");
+    println!("Alice: {} octas (paid only the transfer amount)", new_alice_balance);
+    println!("Sponsor: {} octas (paid the gas fee)", new_sponsor_balance);
+
+    Ok(())
+}
+```
+
+<Aside type="tip">
+  Para un ejemplo completo ejecutable, consulta [sponsored\_transaction.rs](https://github.com/aptos-labs/aptos-rust-sdk/blob/main/examples/sponsored_transaction.rs) en el repositorio del SDK de Rust para Aptos.
+</Aside>

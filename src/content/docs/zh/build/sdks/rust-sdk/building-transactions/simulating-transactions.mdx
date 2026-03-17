@@ -1,0 +1,174 @@
+---
+title: "模拟交易"
+description: "使用 Rust SDK 对 Aptos 交易进行预验证和 gas 估算"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+模拟交易允许您在支付费用之前预览提交交易的成本和效果。您可以使用此功能来估算 gas 成本、验证交易是否会成功，以及检查结果状态变更和事件。
+
+## 如何模拟交易
+
+<Steps>
+  1. 构建交易负载。
+
+     为您要模拟的交易创建入口函数负载。
+
+     ```rust
+     use aptos_sdk::types::EntryFunctionPayload;
+
+     let payload = EntryFunctionPayload::new(
+         "0x1::aptos_account::transfer".parse()?,
+         vec![],
+         vec![bob.address().into(), 10_000_000u64.into()],
+     );
+     ```
+
+  2. 使用 `simulate` 方法进行模拟。
+
+     将发送者账户和负载传递给 `simulate` 方法。这会将交易提交到全节点进行模拟，而不会在链上执行。
+
+     ```rust
+     let result = aptos.simulate(&alice, payload).await?;
+     ```
+
+  3. 检查模拟结果。
+
+     结果提供了多种方法来检查交易提交后会发生什么。
+
+     ```rust
+     println!("Success: {}", result.success());
+     println!("Gas used: {}", result.gas_used());
+     println!("Gas unit price: {}", result.gas_unit_price());
+     println!("VM status: {}", result.vm_status());
+     println!("Events: {:?}", result.events());
+     println!("Changes: {:?}", result.changes());
+     ```
+</Steps>
+
+<Aside type="note">
+  模拟的交易永远不会提交到区块链。它们使用当前的链上状态来预测结果，不会消耗 gas 或更改任何账户余额。
+</Aside>
+
+## 使用自定义 Gas 参数模拟
+
+如果您想测试交易在特定 gas 设置下的行为，请使用 `TransactionBuilder` 构建带有自定义参数的签名交易，然后使用 `simulate_signed` 进行模拟。
+
+```rust
+use aptos_sdk::transaction_builder::TransactionBuilder;
+
+// Build a raw transaction with a low max gas amount
+let raw_txn = TransactionBuilder::new(payload.clone(), aptos.get_chain_id().await?)
+    .sender(alice.address())
+    .max_gas_amount(1_000) // Set a low gas limit for testing
+    .gas_unit_price(100)
+    .sequence_number(aptos.get_sequence_number(alice.address()).await?)
+    .expiration_timestamp_secs(aptos.get_latest_ledger_info().await?.timestamp() + 60)
+    .build();
+
+// Sign the transaction
+let signed_txn = aptos.sign_transaction(&alice, raw_txn)?;
+
+// Simulate the signed transaction
+let result = aptos.simulate_signed(signed_txn).await?;
+println!("Success: {}", result.success());
+println!("Gas used: {}", result.gas_used());
+```
+
+<Aside type="caution">
+  如果您将 `max_gas_amount` 设置得太低，模拟将报告失败，并显示表示 gas 不足错误的 VM 状态。这对于了解交易所需的最低 gas 很有用。
+</Aside>
+
+## Gas 估算快捷方式
+
+SDK 提供了 `estimate_gas` 便捷方法，它会模拟交易并返回一个包含 20% 缓冲区的 gas 估算值，以应对模拟和实际提交之间的微小状态变化。
+
+```rust
+let estimated_gas = aptos.estimate_gas(&alice, payload.clone()).await?;
+println!("Estimated gas (with 20% buffer): {}", estimated_gas);
+```
+
+这是在生产交易中设置 `max_gas_amount` 时获取可靠 gas 估算的推荐方法。
+
+## 预检查
+
+模拟在花费 gas 之前检测错误特别有价值。您可以捕获的常见错误包括：
+
+- **`RESOURCE_ALREADY_EXISTS`** -- 尝试创建链上已存在的账户或资源。
+- **`RESOURCE_NOT_FOUND`** -- 引用在预期地址不存在的资源。
+- **`INSUFFICIENT_BALANCE`** -- 发送者没有足够的资金来完成转账。
+- **`SEQUENCE_NUMBER_TOO_OLD`** -- 交易使用了已被消耗的序列号。
+
+```rust
+let result = aptos.simulate(&alice, payload.clone()).await?;
+
+if !result.success() {
+    eprintln!("Transaction would fail: {}", result.vm_status());
+    // Handle the error before submitting on-chain
+} else {
+    println!("Transaction would succeed, gas cost: {}", result.gas_used());
+}
+```
+
+## 完整工作示例
+
+```rust filename="src/main.rs"
+/// This example demonstrates how to simulate a transaction to validate
+/// it and estimate gas costs before submitting on-chain.
+use aptos_sdk::{Aptos, AptosConfig};
+use aptos_sdk::account::Ed25519Account;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    // Connect to testnet
+    let aptos = Aptos::new(AptosConfig::testnet())?;
+
+    // Generate and fund accounts
+    let alice = Ed25519Account::generate();
+    let bob = Ed25519Account::generate();
+    aptos.fund_account(alice.address(), 100_000_000).await?;
+    aptos.fund_account(bob.address(), 100_000_000).await?;
+
+    println!("Alice: {}", alice.address());
+    println!("Bob: {}", bob.address());
+
+    // Build the transaction payload
+    use aptos_sdk::types::EntryFunctionPayload;
+
+    let payload = EntryFunctionPayload::new(
+        "0x1::aptos_account::transfer".parse()?,
+        vec![],
+        vec![bob.address().into(), 10_000_000u64.into()],
+    );
+
+    // 1. Basic simulation
+    println!("\n=== Basic Simulation ===\n");
+    let result = aptos.simulate(&alice, payload.clone()).await?;
+    println!("Success: {}", result.success());
+    println!("Gas used: {}", result.gas_used());
+    println!("Gas unit price: {}", result.gas_unit_price());
+    println!("VM status: {}", result.vm_status());
+
+    // 2. Gas estimation with buffer
+    println!("\n=== Gas Estimation ===\n");
+    let estimated_gas = aptos.estimate_gas(&alice, payload.clone()).await?;
+    println!("Estimated gas (with 20% buffer): {}", estimated_gas);
+
+    // 3. Pre-flight validation
+    println!("\n=== Pre-flight Check ===\n");
+    if result.success() {
+        println!("Transaction is valid. Proceeding to submit...");
+        let committed = aptos.sign_submit_and_wait(&alice, payload).await?;
+        let success = committed
+            .data
+            .get("success")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        println!("Transaction committed. Success: {}", success);
+    } else {
+        eprintln!("Transaction would fail: {}", result.vm_status());
+    }
+
+    Ok(())
+}
+```

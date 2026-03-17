@@ -1,0 +1,205 @@
+---
+title: "Smart Contracts"
+description: "Learn how to deploy Move modules, call entry functions, read contract state, and use type-safe bindings with the Aptos Rust SDK"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+The Rust SDK provides tools for deploying, interacting with, and querying Move smart contracts on Aptos.
+
+## Calling Entry Functions
+
+Entry functions are the primary way to interact with smart contracts. Use `InputEntryFunctionData` for type-safe payload construction:
+
+```rust
+use aptos_sdk::transaction::InputEntryFunctionData;
+
+// Simple function call
+let payload = InputEntryFunctionData::new("0x1::aptos_account::transfer")
+    .arg(recipient.address())
+    .arg(1_000_000u64)
+    .build()?;
+
+let result = aptos.sign_submit_and_wait(&sender, payload, None).await?;
+```
+
+### Functions with Type Arguments
+
+For generic functions, use `.type_arg()`:
+
+```rust
+let payload = InputEntryFunctionData::new("0x1::coin::transfer")
+    .type_arg("0x1::aptos_coin::AptosCoin")
+    .arg(recipient.address())
+    .arg(500_000u64)
+    .build()?;
+```
+
+### Convenience Helpers
+
+```rust
+// Quick APT transfer
+let payload = InputEntryFunctionData::transfer_apt(recipient.address(), 1_000_000)?;
+
+// Generic coin transfer
+let payload = InputEntryFunctionData::transfer_coin(
+    "0x1::aptos_coin::AptosCoin",
+    recipient.address(),
+    1_000_000,
+)?;
+```
+
+### Manual EntryFunction Construction
+
+For full control, construct `EntryFunction` directly with BCS-encoded arguments:
+
+```rust
+use aptos_sdk::transaction::{EntryFunction, TransactionPayload};
+use aptos_sdk::types::MoveModuleId;
+
+let entry_fn = EntryFunction::new(
+    MoveModuleId::from_str_strict("0x1::aptos_account")?,
+    "transfer",
+    vec![], // No type arguments
+    vec![
+        aptos_bcs::to_bytes(&recipient.address())?,
+        aptos_bcs::to_bytes(&100_000u64)?,
+    ],
+);
+
+let payload = TransactionPayload::EntryFunction(entry_fn);
+let result = aptos.sign_submit_and_wait(&sender, payload, None).await?;
+```
+
+## Reading Contract State
+
+### View Functions
+
+View functions are read-only and do not modify state:
+
+```rust
+// JSON-encoded call
+let result = aptos
+    .view(
+        "0x1::coin::balance",
+        vec!["0x1::aptos_coin::AptosCoin".to_string()],
+        vec![serde_json::json!(account.address())],
+    )
+    .await?;
+println!("Balance: {:?} octas", result);
+
+// BCS-encoded call with typed output
+let balance: u64 = aptos
+    .view_bcs(
+        "0x1::coin::balance",
+        vec!["0x1::aptos_coin::AptosCoin".to_string()],
+        vec![aptos_bcs::to_bytes(&account.address())?],
+    )
+    .await?;
+```
+
+### Querying Account Modules
+
+List all modules deployed to an account:
+
+```rust
+let modules = aptos.fullnode().get_account_modules(address).await?;
+for module in &modules.data {
+    if let Some(abi) = &module.abi {
+        let entry_count = abi.exposed_functions.iter().filter(|f| f.is_entry).count();
+        let view_count = abi.exposed_functions.iter().filter(|f| f.is_view).count();
+        println!("{}::{} ({} entry, {} view functions)", abi.address, abi.name, entry_count, view_count);
+    }
+}
+```
+
+## Deploying Move Modules
+
+Deploying a Move module requires compiling it first, then publishing the bytecode on-chain.
+
+<Steps>
+  1. Write your Move module and compile it
+
+     ```bash
+     aptos move compile --save-metadata
+     ```
+
+     This produces bytecode files (`.mv`) and a `package-metadata.bcs` file in the `build/` directory.
+
+  2. Read the compiled bytecode
+
+     ```rust
+     use std::fs;
+
+     let metadata = fs::read("build/MyModule/package-metadata.bcs")?;
+     let module_bytecode = fs::read("build/MyModule/bytecode_modules/my_module.mv")?;
+     ```
+
+  3. Create the publish transaction
+
+     ```rust
+     use aptos_sdk::transaction::EntryFunction;
+     use aptos_sdk::types::MoveModuleId;
+
+     let payload = EntryFunction::new(
+         MoveModuleId::from_str_strict("0x1::code")?,
+         "publish_package_txn",
+         vec![],
+         vec![
+             aptos_bcs::to_bytes(&metadata)?,
+             aptos_bcs::to_bytes(&vec![module_bytecode])?,
+         ],
+     );
+     ```
+
+  4. Submit the deployment
+
+     ```rust
+     let result = aptos
+         .sign_submit_and_wait(&deployer, payload.into(), None)
+         .await?;
+     ```
+</Steps>
+
+<Aside type="note">
+  Module deployment requires the deployer account to have sufficient APT to cover gas fees. On testnet, use the faucet to fund the account first.
+</Aside>
+
+## Type-Safe Contract Bindings
+
+The `aptos_contract!` macro generates type-safe Rust bindings from a Move module's ABI. This requires the `macros` feature flag.
+
+```toml filename="Cargo.toml"
+[dependencies]
+aptos-sdk = { git = "https://github.com/aptos-labs/aptos-rust-sdk", package = "aptos-sdk", features = ["macros"] }
+```
+
+```rust
+use aptos_sdk::aptos_contract;
+
+// Generate bindings from an ABI JSON string or file
+aptos_contract!(MyContract, "path/to/abi.json");
+```
+
+The macro generates type-safe functions for all entry and view functions in the module, providing compile-time checks for argument types and counts.
+
+<Aside type="note">
+  See the [contract\_bindings](https://github.com/aptos-labs/aptos-rust-sdk/blob/main/crates/aptos-sdk/examples/contract_bindings.rs) and [codegen](https://github.com/aptos-labs/aptos-rust-sdk/blob/main/crates/aptos-sdk/examples/codegen.rs) examples for complete usage.
+</Aside>
+
+## NFT Operations
+
+The SDK supports NFT operations through entry functions on the Aptos token standards:
+
+```rust
+// NFT operations use the standard entry function pattern
+let payload = InputEntryFunctionData::new("0x4::collection::create_unlimited_collection")
+    .arg(move_string("My Collection"))      // collection name
+    .arg(move_string("A cool collection"))   // description
+    .arg(move_string("https://example.com")) // URI
+    .build()?;
+```
+
+<Aside type="note">
+  See the [nft\_operations](https://github.com/aptos-labs/aptos-rust-sdk/blob/main/crates/aptos-sdk/examples/nft_operations.rs) example for complete NFT workflows including creating collections, minting tokens, and transferring NFTs.
+</Aside>

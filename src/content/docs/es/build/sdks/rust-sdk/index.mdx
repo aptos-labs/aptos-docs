@@ -1,0 +1,90 @@
+---
+title: "SDK de Rust"
+description: "SDK oficial de Rust para la blockchain de Aptos: idiomatico, asincrono y rico en funcionalidades con soporte para multiples esquemas de firma"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+El [SDK de Rust para Aptos](https://github.com/aptos-labs/aptos-rust-sdk) es un SDK idiomatico y facil de usar para la blockchain de Aptos, con paridad de funcionalidades respecto al SDK de TypeScript. Proporciona todo lo necesario para interactuar con la red de Aptos: gestion de cuentas, construccion de transacciones, consulta de datos e interaccion con contratos inteligentes.
+
+## Instalacion
+
+Agrega el SDK a tu `Cargo.toml`:
+
+```toml filename="Cargo.toml"
+[dependencies]
+aptos-sdk = { git = "https://github.com/aptos-labs/aptos-rust-sdk", package = "aptos-sdk" }
+tokio = { version = "1", features = ["full"] }
+anyhow = "1"
+```
+
+<Aside type="note">
+  El SDK requiere un runtime asincrono. Todos los ejemplos en esta documentacion usan [tokio](https://tokio.rs/).
+</Aside>
+
+## Feature Flags
+
+El SDK utiliza feature flags de Cargo para mantener las compilaciones ligeras. Habilita solo lo que necesites:
+
+| Feature     | Por defecto | Descripcion                                                                          |
+| ----------- | ----------- | ------------------------------------------------------------------------------------ |
+| `ed25519`   | Si          | Esquema de firma Ed25519 (el mas comun)                                              |
+| `secp256k1` | Si          | Firmas ECDSA Secp256k1 (compatible con Bitcoin/Ethereum)                             |
+| `secp256r1` | Si          | Firmas ECDSA P-256 (compatible con WebAuthn/passkey)                                 |
+| `mnemonic`  | Si          | Soporte para frases mnemonicas BIP-39                                                |
+| `indexer`   | Si          | Cliente de indexador GraphQL para consultar datos indexados                          |
+| `faucet`    | Si          | Integracion con faucet de testnet para financiar cuentas                             |
+| `bls`       | No          | Firmas BLS12-381                                                                     |
+| `keyless`   | No          | Autenticacion keyless basada en OIDC                                                 |
+| `macros`    | No          | Macros procedurales para bindings de contratos con tipado seguro (`aptos_contract!`) |
+
+Para una compilacion minima con solo soporte Ed25519:
+
+```toml filename="Cargo.toml"
+[dependencies]
+aptos-sdk = { git = "https://github.com/aptos-labs/aptos-rust-sdk", package = "aptos-sdk", default-features = false, features = ["ed25519"] }
+```
+
+Para habilitar todas las funcionalidades:
+
+```toml filename="Cargo.toml"
+[dependencies]
+aptos-sdk = { git = "https://github.com/aptos-labs/aptos-rust-sdk", package = "aptos-sdk", features = ["full"] }
+```
+
+## Ejemplo Rapido
+
+```rust
+use aptos_sdk::{Aptos, AptosConfig};
+use aptos_sdk::account::Ed25519Account;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    // Connect to testnet
+    let aptos = Aptos::new(AptosConfig::testnet())?;
+
+    // Generate a new account
+    let account = Ed25519Account::generate();
+    println!("Address: {}", account.address());
+
+    // Check balance
+    let balance = aptos.get_balance(account.address()).await?;
+    println!("Balance: {} octas", balance);
+
+    Ok(())
+}
+```
+
+## Referencia de la API
+
+Para la documentacion completa de la API, consulta la [referencia en docs.rs](https://docs.rs/aptos-sdk/latest/aptos_sdk/).
+
+## Requisitos
+
+- **Rust:** 1.90 o posterior
+- **Runtime asincrono:** tokio (recomendado)
+- **Acceso a la red:** Conexion a un endpoint REST de un fullnode de Aptos
+
+<Aside type="caution" title="SDK Legacy">
+  El SDK de Rust anterior ubicado en el [repositorio aptos-core](https://github.com/aptos-labs/aptos-core/tree/main/sdk) ya no se mantiene activamente. Los proyectos nuevos deben usar este SDK independiente (`aptos-rust-sdk`). Si estas migrando desde el SDK anterior, la API ha sido rediseniada para ser mas ergonomica; consulta el [repositorio de GitHub](https://github.com/aptos-labs/aptos-rust-sdk) para obtener orientacion sobre la migracion.
+</Aside>

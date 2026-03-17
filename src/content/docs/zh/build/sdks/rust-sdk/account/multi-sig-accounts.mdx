@@ -1,0 +1,92 @@
+---
+title: "多重签名账户"
+description: "学习如何使用 Aptos Rust SDK 创建和使用多重签名账户"
+sidebar:
+  label: "多签账户"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Aptos Rust SDK 支持需要多方授权交易的多重签名账户。这适用于共享托管、组织钱包和治理场景，在这些场景中任何单方不应拥有单边控制权。
+
+## MultiKeyAccount
+
+`MultiKeyAccount` 实现了支持混合加密密钥类型的 M-of-N 门限签名方案。您可以在单个账户中组合 Ed25519、Secp256k1 和 Secp256r1 密钥。这是创建多重签名账户的推荐方式。
+
+### 创建多重签名账户
+
+要创建 `MultiKeyAccount`，首先生成各个密钥对，然后将其公钥与签名门限组合：
+
+```rust
+use aptos_sdk::account::{
+    Ed25519Account, Secp256k1Account, MultiKeyAccount, AnyPublicKey,
+};
+
+// Generate signers with different key types
+let ed25519_signer = Ed25519Account::generate();
+let secp256k1_signer = Secp256k1Account::generate();
+let ed25519_signer_2 = Ed25519Account::generate();
+
+// Create a 2-of-3 multi-key account with mixed key types
+let multi_key_account = MultiKeyAccount::new(
+    vec![
+        AnyPublicKey::Ed25519(ed25519_signer.public_key().clone()),
+        AnyPublicKey::Secp256k1(secp256k1_signer.public_key().clone()),
+        AnyPublicKey::Ed25519(ed25519_signer_2.public_key().clone()),
+    ],
+    2, // signatures_required
+)?;
+
+println!("Multi-key address: {}", multi_key_account.address());
+```
+
+在此示例中，三个签名者中的任意两个即可授权交易。`signatures_required` 参数必须在 1 和公钥总数（含）之间。签名者可以使用任何支持的密钥类型 — Ed25519、Secp256k1 或 Secp256r1 — 允许一个签名者使用软件钱包，而另一个使用具有不同加密能力的硬件设备。
+
+### 使用 MultiKeyAccount 签名
+
+签署交易时，您需要提供将参与的各个签名者。签名者数量必须达到或超过门限：
+
+```rust
+// Sign with ed25519_signer and secp256k1_signer (2-of-3 threshold met)
+let signature = multi_key_account.sign_with_signers(
+    &message,
+    vec![&ed25519_signer, &secp256k1_signer],
+)?;
+```
+
+## MultiEd25519Account（旧版）
+
+<Aside type="caution">
+  `MultiEd25519Account` 为了与链上旧账户的兼容性而存在。对于新的多重签名账户，请改用 `MultiKeyAccount` — 它支持相同的纯 Ed25519 配置以及混合密钥类型。
+</Aside>
+
+`MultiEd25519Account` 实现了仅限 Ed25519 密钥的 M-of-N 门限签名方案。如果您需要与链上使用 `MultiEd25519` 创建的现有多签账户交互，可以按如下方式加载：
+
+```rust
+use aptos_sdk::account::{Ed25519Account, MultiEd25519Account};
+
+// Generate three individual signers (all must be Ed25519)
+let signer_1 = Ed25519Account::generate();
+let signer_2 = Ed25519Account::generate();
+let signer_3 = Ed25519Account::generate();
+
+// Create a 2-of-3 multi-signature account
+let multi_account = MultiEd25519Account::new(
+    vec![
+        signer_1.public_key().clone(),
+        signer_2.public_key().clone(),
+        signer_3.public_key().clone(),
+    ],
+    2, // signatures_required
+)?;
+```
+
+签名方式与 `MultiKeyAccount` 相同：
+
+```rust
+// Sign with signer_1 and signer_3 (2-of-3 threshold met)
+let signature = multi_account.sign_with_signers(
+    &message,
+    vec![&signer_1, &signer_3],
+)?;
+```

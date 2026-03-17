@@ -209,3 +209,25 @@ module example::hello {
 - [Starlight Documentation](https://starlight.astro.build/)
 - [MDX Documentation](https://mdxjs.com/)
 - [Aptos Developer Portal](https://aptos.dev)
+
+## Cursor Cloud specific instructions
+
+This is a single-service Astro/Starlight documentation site. No databases, Docker, or external services are required for local development.
+
+### Environment setup
+
+- Ensure `.env` exists (copy from `.env.example` if missing). Default values are sufficient for local dev; optional services (Firebase, Algolia, OG images) degrade gracefully when their env vars are empty.
+- Run `pnpm install` to install dependencies. pnpm may warn about ignored build scripts for native packages (`@swc/core`, `esbuild`, `sharp`, etc.) — these warnings are safe to ignore as the packages ship pre-built binaries.
+
+### Running the dev server
+
+- `pnpm dev` starts the Astro dev server at `http://localhost:4321`.
+- The `predev` script automatically builds middleware matcher and starts middleware watcher in the background.
+- Search (Algolia DocSearch) is disabled in dev mode; this is expected.
+
+### Linting and testing
+
+- `pnpm lint` runs Biome and Prettier in parallel (not ESLint, despite what some comments say).
+- `pnpm test` runs Vitest tests.
+- `pnpm check` runs Astro type checking.
+- Git hooks: `pre-commit` runs `nano-staged` (Biome + Prettier on staged files), `pre-push` runs `astro check --noSync`.

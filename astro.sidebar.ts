@@ -828,6 +828,7 @@ export const sidebar = [
         collapsed: true,
         items: ["build/ai/aptos-mcp", "build/ai/aptos-mcp/claude", "build/ai/aptos-mcp/cursor"],
       }),
+      "build/ai/aptos-agent-skills",
       {
         label: "LLMs.txt",
         link: "llms-txt",

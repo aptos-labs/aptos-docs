@@ -7,16 +7,16 @@ sidebar:
 
 import { Aside } from '@astrojs/starlight/components';
 
-An account on the Aptos blockchain represents access control over a set of assets including on-chain currency and NFTs. In Aptos, these assets are represented by a Move language primitive known as a **resource** that emphasizes both access control and scarcity.
+An account on Aptos controls a set of on-chain assets, including tokens and NFTs. These assets are represented by a Move language primitive called a **resource**, which enforces both access control and scarcity.
 
-Each account on the Aptos blockchain is identified by a 32-byte account address. You can employ the Aptos Name Service at [www.aptosnames.com](https://www.aptosnames.com/) to secure .apt domains for key accounts to make them memorable and unique.
+Each account is identified by a 32-byte address. You can use the [Aptos Name Service](https://www.aptosnames.com/) to register human-readable `.apt` domains for key accounts.
 
-Different from other blockchains where accounts and addresses are implicit, accounts on Aptos are explicit and need to be created before they can execute transactions. The account can be created explicitly or implicitly by transferring Aptos tokens (APT) there. See the [Creating an account](#creating-an-account) section for more details. In a way, this is similar to other chains where an address needs to be sent funds for gas before it can send transactions.
+Unlike blockchains where accounts are implicit (just an address with a balance), Aptos accounts are explicit and backed by on-chain resources that enable features like key rotation and native multisig. However, with [Stateless Accounts (AIP-115)](/build/aips/aip-115), you no longer need to set up an account before using it. Any valid address is treated as an account by default, and you can send transactions as long as you hold the private key. The on-chain `Account` resource is created automatically only when first needed (for example, when rotating keys). See [Creating an account](#creating-an-account) for how addresses are derived.
 
-Explicit accounts allow first-class features that are not available on other networks such as:
+Aptos accounts offer features not available on most other networks:
 
-- Rotating authentication key. The account's authentication key can be changed to be controlled via a different private key. This is similar to changing passwords in the web2 world.
-- Native multisig support. Accounts on Aptos support k-of-n multisig using both Ed25519 and Secp256k1 ECDSA signature schemes when constructing the authentication key.
+- **Key rotation.** The account's authentication key can be changed to use a different private key, similar to changing a password.
+- **Native multisig.** Accounts support k-of-n multisig using Ed25519 and Secp256k1 ECDSA signature schemes.
 
 There are three types of accounts on Aptos:
 
@@ -49,6 +49,13 @@ When a user requests to create an account, for example, by using the [Aptos SDK]
 
 The user should use the private key for signing the transactions associated with this account.
 
+<Aside type="note">
+  With [Stateless Accounts (AIP-115)](/build/aips/aip-115), you no longer need to create an account on-chain before
+  sending transactions. For example, a new user can submit a [sponsored transaction](/build/guides/sponsored-transactions)
+  from a freshly generated address without first funding the account or registering it on-chain. The steps above still
+  apply for deriving your address from a key pair.
+</Aside>
+
 ## Account sequence number
 
 The sequence number for an account indicates the number of transactions that have been submitted and committed on-chain
@@ -66,6 +73,8 @@ replay attacks of older transactions and guarantees ordering of future transacti
   Multi-agent transactions (transactions involving multiple signing accounts) only increase the sequence number of the
   primary signer (sender) account. The sequence number of the secondary signers (receivers) is not increased.
 </Aside>
+
+Aptos also supports [orderless transactions](/build/guides/orderless-transactions) which use a unique nonce instead of a sequence number. This enables parallel transaction submission from multiple machines without coordinating sequence numbers. See [AIP-123](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-123-orderless-transactions.md) for the full specification.
 
 ## Authentication key
 

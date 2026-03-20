@@ -4,7 +4,7 @@ A high-performance Rust tool for automatically fixing localized documentation li
 
 ## Problem
 
-Localized documentation (Spanish, Chinese, etc.) often contains internal links that lack proper locale prefixes. For example, a link to `/guide/setup` in Spanish docs should be `/es/guide/setup`.
+Localized documentation (Chinese, etc.) often contains internal links that lack proper locale prefixes. For example, a link to `/guide/setup` in Chinese docs should be `/zh/guide/setup`.
 
 ## Solution
 
@@ -41,7 +41,7 @@ pnpm fix-i18n-links
 
 The tool will:
 
-1. Auto-discover locale directories (e.g., `es/`, `zh/`)
+1. Auto-discover locale directories (e.g., `zh/`)
 2. Process all `.mdx` files in each locale
 3. Fix internal links by adding locale prefixes
 4. Report the number of files and links fixed

@@ -31,7 +31,8 @@ export function htmlToLlmsMarkdown(html: string, shouldMinify = false): string {
   const sanitizedHtml = stripHtmlForLlmsExport(html, shouldMinify);
   let markdown = turndown.turndown(sanitizedHtml).trim();
   if (shouldMinify) {
-    markdown = markdown.replace(/\s+/g, " ");
+    // Collapse horizontal whitespace only; keep newlines so fenced code, lists, and headings stay valid Markdown.
+    markdown = markdown.replace(/[ \t]+/g, " ");
   }
   return markdown;
 }

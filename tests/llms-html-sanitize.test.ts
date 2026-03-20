@@ -40,8 +40,16 @@ describe("LLMs HTML sanitization and Markdown export", () => {
     expect(md).toMatch(/bold/);
   });
 
-  it("collapses whitespace when minify is true", () => {
-    const md = htmlToLlmsMarkdown("<p>One</p>\n\n<p>Two</p>", true);
-    expect(md).not.toMatch(/\n\n/);
+  it("when minifying, collapses runs of spaces and tabs only (preserves newlines)", () => {
+    const md = htmlToLlmsMarkdown("<p>One    two     three</p>", true);
+    expect(md).not.toMatch(/ {2,}/);
+  });
+
+  it("when minifying, keeps line breaks inside fenced code from Turndown", () => {
+    const md = htmlToLlmsMarkdown("<pre><code>const a = 1;\nconst b = 2;</code></pre>", true);
+    expect(md).toContain("```");
+    expect(md).toMatch(/a\s*=\s*1/);
+    expect(md).toMatch(/b\s*=\s*2/);
+    expect(md).toContain("\n");
   });
 });

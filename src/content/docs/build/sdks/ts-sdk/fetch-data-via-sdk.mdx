@@ -42,18 +42,27 @@ The `Aptos` client can out of the box query both network data from [fullnodes](h
 
 ## Using Generic Queries
 
-Some queries are intentionally broad, but this can make inferring the proper return type difficult. To accommodate that, these broad requests like `getAccountResources` allow you to specify what the expected response type should be.
+Some queries are intentionally broad, but this can make inferring the proper return type difficult. To accommodate that, broad requests like `getAccountResources` allow you to specify what the expected response type should be when you use `getAccountResource`.
+
+After the [Fungible Asset migration](/build/smart-contracts/fungible-asset), use [`getAccountAPTAmount`](https://aptos-labs.github.io/aptos-ts-sdk/) for APT balances. New accounts may not publish the legacy `0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>` resource, so reading it with `getAccountResource` can return "resource not found".
 
 ```typescript filename="fetch-data.ts"
-type Coin = { coin: { value: string } };
-
-const resource = await aptos.getAccountResource<Coin>({
+const aptAmount = await aptos.getAccountAPTAmount({
   accountAddress: testAccount.accountAddress,
-  resourceType: "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>",
+});
+```
+
+For other on-chain resources, use `getAccountResource` with a generic type parameter:
+
+```typescript filename="fetch-data.ts"
+type OnChainAccount = { sequence_number: string; authentication_key: string };
+
+const accountResource = await aptos.getAccountResource<OnChainAccount>({
+  accountAddress: testAccount.accountAddress,
+  resourceType: "0x1::account::Account",
 });
 
-// Now you have access to the response type property
-const value = resource.coin.value;
+const sequenceNumber = accountResource.sequence_number;
 ```
 
 ## Using Move View Functions

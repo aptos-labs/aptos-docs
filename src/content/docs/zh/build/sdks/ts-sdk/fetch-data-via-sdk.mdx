@@ -42,18 +42,27 @@ const tokens = await aptos.getAccountOwnedTokens({ accountAddress: "0x123" });
 
 ## 使用通用查询
 
-某些查询设计上是宽泛的,但这可能使得推断正确的返回类型变得困难.为了适应这种情况,像 `getAccountResources` 这样的广泛请求允许你指定预期的响应类型.
+某些查询设计上是宽泛的,但这可能使得推断正确的返回类型变得困难.为了适应这种情况,像 `getAccountResources` 这样的广泛请求允许你在使用 `getAccountResource` 时指定预期的响应类型.
+
+在[同质化资产迁移](/zh/build/smart-contracts/fungible-asset)之后,请使用 [`getAccountAPTAmount`](https://aptos-labs.github.io/aptos-ts-sdk/) 查询 APT 余额.新账户可能不会发布旧版 `0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>` 资源,因此用 `getAccountResource` 读取它可能返回「资源未找到」.
 
 ```typescript filename="fetch-data.ts"
-type Coin = { coin: { value: string } };
-
-const resource = await aptos.getAccountResource<Coin>({
+const aptAmount = await aptos.getAccountAPTAmount({
   accountAddress: testAccount.accountAddress,
-  resourceType: "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>",
+});
+```
+
+对于其他链上资源,可使用带泛型类型参数的 `getAccountResource`:
+
+```typescript filename="fetch-data.ts"
+type OnChainAccount = { sequence_number: string; authentication_key: string };
+
+const accountResource = await aptos.getAccountResource<OnChainAccount>({
+  accountAddress: testAccount.accountAddress,
+  resourceType: "0x1::account::Account",
 });
 
-// 现在你可以访问响应类型属性
-const value = resource.coin.value;
+const sequenceNumber = accountResource.sequence_number;
 ```
 
 ## 使用 Move 视图函数

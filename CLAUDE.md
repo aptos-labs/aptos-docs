@@ -4,7 +4,7 @@ This document provides essential guidelines for AI agents working on the Aptos D
 
 ## Project Overview
 
-This repository contains the official Aptos Developer Documentation, built using [Astro](https://astro.build/) and [Starlight](https://starlight.astro.build/). The documentation is available in multiple languages including English, Spanish (es), and Chinese (zh).
+This repository contains the official Aptos Developer Documentation, built using [Astro](https://astro.build/) and [Starlight](https://starlight.astro.build/). The documentation is available in English and Chinese (zh).
 
 ## Machine-readable documentation for agents
 
@@ -42,7 +42,6 @@ pnpm dev            # Start development server (http://localhost:4321)
 src/
 ├── content/
 │   ├── docs/           # Main English documentation
-│   │   ├── es/         # Spanish translations
 │   │   └── zh/         # Chinese translations
 │   ├── i18n/           # UI translations
 │   └── nav/            # Sidebar translations
@@ -66,18 +65,20 @@ Run these commands after making changes to ensure code quality.
 
 ### 2. Translation Requirements
 
-**All documentation changes must be translated and verified in both Chinese and Spanish versions.**
+**All documentation changes must be translated and verified in the Chinese version.**
 
 - **English docs:** `src/content/docs/`
-- **Spanish docs:** `src/content/docs/es/`
 - **Chinese docs:** `src/content/docs/zh/`
 
 When modifying documentation:
 
 1. Make the change in the English version first
-2. Create or update the corresponding Spanish translation in `es/`
-3. Create or update the corresponding Chinese translation in `zh/`
-4. Ensure all internal links use the correct language prefix (e.g., `/es/network/` for Spanish)
+2. Create or update the corresponding Chinese translation in `zh/`
+3. Ensure all internal links use the correct language prefix (e.g., `/zh/network/` for Chinese)
+
+**No Spanish documentation tree:** Do not add pages under `src/content/docs/es/`. The site does not ship Spanish MDX/Markdown docs.
+
+**Translated PDFs and external assets:** You may still link official non-English files when appropriate—for example the Spanish white paper PDF (`aptos-whitepaper_es.pdf`) from the [Aptos white paper](/network/blockchain/aptos-white-paper) page alongside other language PDFs.
 
 ### 3. Commit Message Requirements
 
@@ -105,7 +106,7 @@ Example:
 docs: add glossary entry for BlockSTM
 
 Added definition and example for BlockSTM parallel execution engine.
-Updated Spanish and Chinese translations accordingly.
+Updated Chinese translation accordingly.
 ```
 
 ### 4. Grammar and Style
@@ -125,7 +126,6 @@ Updated Spanish and Chinese translations accordingly.
 The glossary is located at:
 
 - **English:** `src/content/docs/network/glossary.mdx`
-- **Spanish:** `src/content/docs/es/network/glossary.mdx`
 - **Chinese:** `src/content/docs/zh/network/glossary.mdx`
 
 When adding a new term to the glossary:
@@ -164,7 +164,6 @@ sidebar:
 Use relative paths without the file extension:
 
 - English: `/network/blockchain/accounts`
-- Spanish: `/es/network/blockchain/accounts`
 - Chinese: `/zh/network/blockchain/accounts`
 
 ## Content Guidelines
@@ -194,18 +193,16 @@ module example::hello {
 
 1. Create the MDX file in the appropriate directory
 2. Add frontmatter with title and description
-3. Create Spanish translation in `es/` subdirectory
-4. Create Chinese translation in `zh/` subdirectory
-5. Update sidebar configuration if needed (`astro.sidebar.ts`)
-6. Run `pnpm lint` and `pnpm format`
+3. Create Chinese translation in `zh/` subdirectory
+4. Update sidebar configuration if needed (`astro.sidebar.ts`)
+5. Run `pnpm lint` and `pnpm format`
 
 ### Updating the Glossary
 
 1. Add the term to `src/content/docs/network/glossary.mdx`
-2. Add Spanish translation to `src/content/docs/es/network/glossary.mdx`
-3. Add Chinese translation to `src/content/docs/zh/network/glossary.mdx`
-4. Ensure alphabetical ordering within each section
-5. Include definition, examples, and links to related content
+2. Add Chinese translation to `src/content/docs/zh/network/glossary.mdx`
+3. Ensure alphabetical ordering within each section
+4. Include definition, examples, and links to related content
 
 ## Resources
 

@@ -58,7 +58,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     if locales.is_empty() {
-        println!("{}", "ℹ️  No locale directories found (looking for 2-letter codes like es, zh)".yellow());
+        println!("{}", "ℹ️  No locale directories found (looking for 2-letter locale folders like zh)".yellow());
         return Ok(());
     }
 

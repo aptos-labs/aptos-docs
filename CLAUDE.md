@@ -6,6 +6,10 @@ This document provides essential guidelines for AI agents working on the Aptos D
 
 This repository contains the official Aptos Developer Documentation, built using [Astro](https://astro.build/) and [Starlight](https://starlight.astro.build/). The documentation is available in multiple languages including English, Spanish (es), and Chinese (zh).
 
+## Machine-readable documentation for agents
+
+Production docs are indexed for LLMs and coding agents at [https://aptos.dev/llms.txt](https://aptos.dev/llms.txt) (same content as [https://aptos.dev/.well-known/llms.txt](https://aptos.dev/.well-known/llms.txt)). For IDE access to Aptos APIs and on-chain data, use the Aptos MCP server (`npx @aptos-labs/aptos-mcp`); see the live [AI tools](https://aptos.dev/build/ai) page.
+
 ## Development Setup
 
 ### Prerequisites

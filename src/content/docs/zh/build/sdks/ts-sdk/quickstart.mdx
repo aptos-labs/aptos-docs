@@ -155,6 +155,8 @@ import { Aside, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
          function: "0x1::aptos_account::transfer",
          functionArguments: [bob.accountAddress, 100],
        },
+       // 降低默认 gas 上限以适配常见 devnet 水龙头额度（1 APT）
+       options: { maxGasAmount: 100_000 },
      });
      ...
      ```
@@ -225,8 +227,6 @@ import { Aside, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
 
 import { Account, Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
 
-const APTOS_COIN = "0x1::aptos_coin::AptosCoin";
-const COIN_STORE = `0x1::coin::CoinStore<${APTOS_COIN}>`;
 const ALICE_INITIAL_BALANCE = 100_000_000;
 const BOB_INITIAL_BALANCE = 100;
 const TRANSFER_AMOUNT = 100;
@@ -263,20 +263,16 @@ async function example() {
   });
   console.log("Alice 和 Bob 的账户已成功注资！");
 
-  // 查询新注资账户的余额
+  // 查询新注资账户的余额（使用同质化资产余额接口；新账户可能没有旧版 CoinStore 资源）
   console.log("\n=== 余额 ===\n");
-  const aliceAccountBalance = await aptos.getAccountResource({
+  const aliceBalance = await aptos.getAccountAPTAmount({
     accountAddress: alice.accountAddress,
-    resourceType: COIN_STORE,
   });
-  const aliceBalance = Number(aliceAccountBalance.coin.value);
   console.log(`Alice 的余额是: ${aliceBalance}`);
 
-  const bobAccountBalance = await aptos.getAccountResource({
+  const bobBalance = await aptos.getAccountAPTAmount({
     accountAddress: bob.accountAddress,
-    resourceType: COIN_STORE,
   });
-  const bobBalance = Number(bobAccountBalance.coin.value);
   console.log(`Bob 的余额是: ${bobBalance}`);
 
   // 从 Alice 账户向 Bob 账户发送交易
@@ -285,8 +281,9 @@ async function example() {
     data: {
       // Aptos 上的所有交易都是通过智能合约实现的。
       function: "0x1::aptos_account::transfer",
-      functionArguments: [bob.accountAddress, 100],
+      functionArguments: [bob.accountAddress, TRANSFER_AMOUNT],
     },
+    options: { maxGasAmount: 100_000 },
   });
 
   console.log("\n=== 转账交易 ===\n");
@@ -299,19 +296,16 @@ async function example() {
   const executedTransaction = await aptos.waitForTransaction({
     transactionHash: committedTxn.hash,
   });
-  console.log("交易哈希:", executedTransaction.hash);  console.log("\n=== 转账后余额 ===\n");
-  const newAliceAccountBalance = await aptos.getAccountResource({
+  console.log("交易哈希:", executedTransaction.hash);
+  console.log("\n=== 转账后余额 ===\n");
+  const newAliceBalance = await aptos.getAccountAPTAmount({
     accountAddress: alice.accountAddress,
-    resourceType: COIN_STORE,
   });
-  const newAliceBalance = Number(newAliceAccountBalance.coin.value);
   console.log(`Alice 的余额是: ${newAliceBalance}`);
 
-  const newBobAccountBalance = await aptos.getAccountResource({
+  const newBobBalance = await aptos.getAccountAPTAmount({
     accountAddress: bob.accountAddress,
-    resourceType: COIN_STORE,
   });
-  const newBobBalance = Number(newBobAccountBalance.coin.value);
   console.log(`Bob 的余额是: ${newBobBalance}`);
 
   // Bob 应该收到转账金额

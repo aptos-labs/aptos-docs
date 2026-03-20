@@ -159,6 +159,8 @@ import { Aside, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
          function: "0x1::aptos_account::transfer",
          functionArguments: [bob.accountAddress, 100],
        },
+       // Lower default gas fits typical devnet faucet funding (1 APT)
+       options: { maxGasAmount: 100_000 },
      });
      ...
      ```
@@ -229,8 +231,6 @@ import { Aside, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
 
 import { Account, Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
 
-const APTOS_COIN = "0x1::aptos_coin::AptosCoin";
-const COIN_STORE = `0x1::coin::CoinStore<${APTOS_COIN}>`;
 const ALICE_INITIAL_BALANCE = 100_000_000;
 const BOB_INITIAL_BALANCE = 100;
 const TRANSFER_AMOUNT = 100;
@@ -267,20 +267,17 @@ async function example() {
   });
   console.log("Alice and Bob's accounts have been funded!");
 
-  // Look up the newly funded account's balances
+  // Look up the newly funded account's balances (uses Fungible Asset balance APIs;
+  // legacy CoinStore resources may be absent on new accounts)
   console.log("\n=== Balances ===\n");
-  const aliceAccountBalance = await aptos.getAccountResource({
+  const aliceBalance = await aptos.getAccountAPTAmount({
     accountAddress: alice.accountAddress,
-    resourceType: COIN_STORE,
   });
-  const aliceBalance = Number(aliceAccountBalance.coin.value);
   console.log(`Alice's balance is: ${aliceBalance}`);
 
-  const bobAccountBalance = await aptos.getAccountResource({
+  const bobBalance = await aptos.getAccountAPTAmount({
     accountAddress: bob.accountAddress,
-    resourceType: COIN_STORE,
   });
-  const bobBalance = Number(bobAccountBalance.coin.value);
   console.log(`Bob's balance is: ${bobBalance}`);
 
   // Send a transaction from Alice's account to Bob's account
@@ -289,8 +286,9 @@ async function example() {
     data: {
       // All transactions on Aptos are implemented via smart contracts.
       function: "0x1::aptos_account::transfer",
-      functionArguments: [bob.accountAddress, 100],
+      functionArguments: [bob.accountAddress, TRANSFER_AMOUNT],
     },
+    options: { maxGasAmount: 100_000 },
   });
 
   console.log("\n=== Transfer transaction ===\n");
@@ -306,18 +304,14 @@ async function example() {
   console.log("Transaction hash:", executedTransaction.hash);
 
   console.log("\n=== Balances after transfer ===\n");
-  const newAliceAccountBalance = await aptos.getAccountResource({
+  const newAliceBalance = await aptos.getAccountAPTAmount({
     accountAddress: alice.accountAddress,
-    resourceType: COIN_STORE,
   });
-  const newAliceBalance = Number(newAliceAccountBalance.coin.value);
   console.log(`Alice's balance is: ${newAliceBalance}`);
 
-  const newBobAccountBalance = await aptos.getAccountResource({
+  const newBobBalance = await aptos.getAccountAPTAmount({
     accountAddress: bob.accountAddress,
-    resourceType: COIN_STORE,
   });
-  const newBobBalance = Number(newBobAccountBalance.coin.value);
   console.log(`Bob's balance is: ${newBobBalance}`);
 
   // Bob should have the transfer amount

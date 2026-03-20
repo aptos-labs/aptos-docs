@@ -22,6 +22,7 @@ describe("LLMs static build output", () => {
     expect(body).toContain("Machine-readable documentation");
     expect(body).toContain("llms-small.txt");
     expect(body).toContain("llms-full.txt");
+    expect(body).toContain("aptos-spec.json");
     expect(body).toContain("## Start Here");
     expect(body).toMatch(/\.md\)/);
   });

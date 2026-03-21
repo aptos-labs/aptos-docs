@@ -1,0 +1,130 @@
+diff --git a/index.ts b/index.ts
+index f8277dc78db878b6a54da7ef7a92596c91b77528..53c6b514f8c8f48a0d563f186041da5bb201ded0 100644
+--- a/index.ts
++++ b/index.ts
+@@ -1,12 +1,13 @@
+ import type { StarlightPlugin } from '@astrojs/starlight/types'
+ import type { IntegrationResolvedRoute } from 'astro'
+ import { AstroError } from 'astro/errors'
++import { green } from 'kleur/colors'
+ 
+ import { clearContentLayerCache } from './libs/astro'
+ import { StarlightLinksValidatorOptionsSchema, type StarlightLinksValidatorUserOptions } from './libs/config'
+ import { pathnameToSlug, stripTrailingSlash } from './libs/path'
+ import { remarkStarlightLinksValidator, type RemarkStarlightLinksValidatorConfig } from './libs/remark'
+-import { logErrors, validateLinks } from './libs/validation'
++import { logErrors, logRelativeLinkWarnings, splitRelativeLinkErrors, validateLinks } from './libs/validation'
+ 
+ export type { StarlightLinksValidatorOptions } from './libs/config'
+ 
+@@ -69,9 +70,11 @@ export default function starlightLinksValidatorPlugin(
+ 
+               const errors = validateLinks(pages, customPages, dir, astroConfig, starlightConfig, options.data)
+ 
+-              const hasInvalidLinkToCustomPage = logErrors(logger, errors, site)
++              const { fatalErrors, relativeErrors } = splitRelativeLinkErrors(errors)
++              logRelativeLinkWarnings(logger, relativeErrors, site)
+ 
+-              if (errors.size > 0) {
++              if (fatalErrors.size > 0) {
++                const hasInvalidLinkToCustomPage = logErrors(logger, fatalErrors, site)
+                 throwPluginError(
+                   'Links validation failed.',
+                   hasInvalidLinkToCustomPage
+@@ -79,6 +82,16 @@ export default function starlightLinksValidatorPlugin(
+                     : undefined,
+                 )
+               }
++
++              if (relativeErrors.size > 0) {
++                logger.info(
++                  green(
++                    '✓ Link validation passed (relative-link issues above are warnings only).\n',
++                  ),
++                )
++              } else {
++                logErrors(logger, fatalErrors, site)
++              }
+             },
+           },
+         })
+diff --git a/libs/validation.ts b/libs/validation.ts
+index d5436cdab642e018f97d81834045c115b1e4a974..7e3b263884b0b59e31370228abb66efa265590f2 100644
+--- a/libs/validation.ts
++++ b/libs/validation.ts
+@@ -4,7 +4,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
+ 
+ import type { StarlightUserConfig as StarlightUserConfigWithPlugins } from '@astrojs/starlight/types'
+ import type { AstroConfig, AstroIntegrationLogger } from 'astro'
+-import { bgGreen, black, blue, dim, green, red } from 'kleur/colors'
++import { bgGreen, black, blue, dim, green, red, yellow } from 'kleur/colors'
+ import picomatch from 'picomatch'
+ import terminalLink from 'terminal-link'
+ 
+@@ -327,3 +327,66 @@ interface ValidationContext {
+ }
+ 
+ export type StarlightUserConfig = Omit<StarlightUserConfigWithPlugins, 'plugins'>
++
++/**
++ * Splits validation results so "relative link" policy violations can be logged as warnings
++ * without failing the production build (aptos-docs).
++ */
++export function splitRelativeLinkErrors(errors: ValidationErrors): {
++  fatalErrors: ValidationErrors
++  relativeErrors: ValidationErrors
++} {
++  const fatalErrors: ValidationErrors = new Map()
++  const relativeErrors: ValidationErrors = new Map()
++
++  for (const [id, { errors: validationErrors, file }] of errors) {
++    const relativeOnly = validationErrors.filter((e) => e.type === ValidationErrorType.RelativeLink)
++    const fatalOnly = validationErrors.filter((e) => e.type !== ValidationErrorType.RelativeLink)
++
++    if (fatalOnly.length > 0) {
++      fatalErrors.set(id, { errors: fatalOnly, file })
++    }
++    if (relativeOnly.length > 0) {
++      relativeErrors.set(id, { errors: relativeOnly, file })
++    }
++  }
++
++  return { fatalErrors, relativeErrors }
++}
++
++export function logRelativeLinkWarnings(
++  pluginLogger: AstroIntegrationLogger,
++  errors: ValidationErrors,
++  site: AstroConfig['site'],
++): void {
++  if (errors.size === 0) {
++    return
++  }
++
++  const logger = pluginLogger.fork('')
++
++  const warnCount = [...errors.values()].reduce(
++    (acc, { errors: validationErrors }) => acc + validationErrors.length,
++    0,
++  )
++
++  logger.warn(
++    yellow(
++      `⚠ Found ${warnCount} ${pluralize(warnCount, 'relative link issue')} in ${errors.size} ${pluralize(errors.size, 'file')} (warning only; build continues).`,
++    ),
++  )
++
++  for (const [id, { errors: validationErrors, file }] of errors) {
++    logger.warn(`${yellow('▶')} ${blue(terminalLink(id, pathToFileURL(file).toString(), { fallback: false }))}`)
++
++    for (const [index, validationError] of validationErrors.entries()) {
++      logger.warn(
++        `  ${blue(`${index < validationErrors.length - 1 ? '├' : '└'}─`)} ${validationError.link}${dim(
++          ` - ${formatValidationError(validationError, site)}`,
++        )}`,
++      )
++    }
++  }
++
++  process.stdout.write('\n')
++}

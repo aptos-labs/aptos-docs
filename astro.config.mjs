@@ -144,6 +144,13 @@ export default defineConfig({
               return true;
             }
 
+            // Same-site absolute URL becomes `/.well-known/llms.txt`; after stripping `/` the path
+            // starts with `.` and is misclassified as a relative link. Production serves this via
+            // Vercel redirect to /llms.txt, not as a doc route.
+            if (link.includes("/.well-known/llms.txt")) {
+              return true;
+            }
+
             // Exclude specific problematic links from external move-reference content
             const excludeLinks = [
               "https://aptos.dev/move/book/SUMMARY",

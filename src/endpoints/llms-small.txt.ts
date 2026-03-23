@@ -3,6 +3,7 @@ import {
   cacheHeaders,
   generateLlmsDocument,
   getEnglishDocs,
+  LLMS_FEED_AGENT_SKILLS_CALLOUT,
   LLMS_SMALL_DOC_IDS,
   orderDocs,
 } from "../lib/llms";
@@ -16,8 +17,9 @@ export const GET: APIRoute = async (context) => {
 
   const body = await generateLlmsDocument(docs, context, {
     minify: true,
-    description:
-      "This is the curated low-token Aptos developer documentation set for AI agents and IDE assistants.",
+    description: `${LLMS_FEED_AGENT_SKILLS_CALLOUT}
+
+This is the curated low-token Aptos developer documentation set for AI agents and IDE assistants.`,
   });
 
   return new Response(body, {

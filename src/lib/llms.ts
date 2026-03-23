@@ -1,4 +1,5 @@
 import { type CollectionEntry, getCollection, render } from "astro:content";
+import mdxJsxServer from "@astrojs/mdx/server.js";
 import reactServer from "@astrojs/react/server.js";
 import type { APIContext } from "astro";
 import { experimental_AstroContainer } from "astro/container";
@@ -7,8 +8,21 @@ import { htmlToLlmsMarkdown } from "./llms-html-sanitize";
 
 const CACHE_CONTROL_TTL = 60 * 60;
 
+/** Prepended to llms-small.txt and llms-full.txt so agents see skills alongside corpus text. */
+export const LLMS_FEED_AGENT_SKILLS_CALLOUT =
+  "Aptos Agent Skills (https://github.com/aptos-labs/aptos-agent-skills) cover common workflows: write-contracts, generate-tests, security-audit, deploy-contracts, use-ts-sdk, ts-sdk-transactions, create-aptos-project, analyze-gas-optimization, modernize-move. Install the skill that matches the task before deep work.";
+
+// Starlight MDX emits Astro JSX (`astro:jsx`); React alone cannot render those nodes.
 const astroContainer = await experimental_AstroContainer.create({
-  renderers: [{ name: "@astrojs/react", ssr: reactServer }],
+  renderers: [
+    { name: "astro:jsx", ssr: mdxJsxServer },
+    { name: "@astrojs/react", ssr: reactServer },
+  ],
+});
+
+astroContainer.addClientRenderer({
+  name: "@astrojs/react",
+  entrypoint: "@astrojs/react/client.js",
 });
 
 export type { LlmsSection } from "./llms-curated-ids";

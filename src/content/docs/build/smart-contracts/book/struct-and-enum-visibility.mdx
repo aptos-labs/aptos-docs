@@ -1,0 +1,65 @@
+---
+title: "Struct and Enum Visibility"
+description: "Learn how visibility modifiers for structs and enums in Move 2.4 enable controlled cross-module access to type operations."
+---
+
+_Since language version 2.4_
+
+By default, struct and enum construction, destruction, and field access are restricted to the defining module. Move 2.4 introduces explicit visibility modifiers that allow external modules to perform these operations.
+
+## Visibility Levels
+
+Three modifiers are available, mirroring the function visibility keywords:
+
+| Modifier  | Accessible from                                     |
+| --------- | --------------------------------------------------- |
+| `public`  | Any module                                          |
+| `package` | All modules in the same package                     |
+| `friend`  | Modules declared as `friend` in the defining module |
+
+`public(package)` and `public(friend)` are accepted as aliases for `package` and `friend` respectively, but are discouraged and will be deprecated. Prefer the shorthand forms.
+
+## Performance Consideration
+
+Cross-module type operations are currently compiled into function calls rather than direct bytecode instructions. Thus, they are not a zero-cost abstraction yet: they are more expensive than the equivalent operations performed within the defining module. This is expected to change in the future with VM improvements. In the meantime, use visibility modifiers only when the cross-module access is genuinely needed.
+
+## Restrictions
+
+**Types with the `key` ability cannot have visibility modifiers.** Types stored as roots in global storage must remain module-private to preserve global storage access control.
+
+```move
+// ERROR: types with the key ability cannot be public, package, or friend
+public struct Resource has key { value: u64 }
+public enum VersionedData has key { V1 { name: vector<u8> } }
+```
+
+**Global storage operations remain module-only.** Even for `public` types, `move_to`, `move_from`, `borrow_global`, and `borrow_global_mut` are restricted to the defining module.
+
+## Transaction Arguments
+
+`public` structs and enums can be passed as entry and view function arguments if the type has the `copy` ability and does not have the `key` ability. All field types must themselves be valid argument types, recursively.
+
+```move
+module 0x42::types {
+    public struct Point has copy, drop {
+        x: u64,
+        y: u64,
+    }
+
+    public enum Direction has copy, drop {
+        North, South, East, West,
+    }
+
+    // Both Point and Direction can be passed directly as transaction arguments
+    entry fun move_to_point(s: &signer, destination: Point) { .. }
+    entry fun move_player(s: &signer, dir: Direction) { .. }
+}
+```
+
+## Upgradability
+
+Visibility can be broadened in a package upgrade but not narrowed:
+
+- A private type can be upgraded to `package`, `friend`, or `public`.
+- A `friend` or `package` type can be upgraded to `public`.
+- A `friend` or `package` type can be downgraded back to private.

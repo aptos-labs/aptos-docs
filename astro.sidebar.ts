@@ -455,6 +455,7 @@ export const sidebar = [
           "build/smart-contracts/book/loops",
           "build/smart-contracts/book/functions",
           "build/smart-contracts/book/enums",
+          "build/smart-contracts/book/struct-and-enum-visibility",
           "build/smart-contracts/book/constants",
           "build/smart-contracts/book/generics",
           "build/smart-contracts/book/uses",

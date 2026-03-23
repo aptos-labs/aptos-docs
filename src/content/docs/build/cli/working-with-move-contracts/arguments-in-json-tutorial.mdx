@@ -387,6 +387,90 @@ aptos move view --json-file view_function_arguments.json
 }
 ```
 
+## Public structs and enums as arguments
+
+_Since Move 2.4_
+
+`public` structs and enums with the `copy` ability and without the `key` ability can be passed as entry and view function arguments via `--json-file`. The CLI fetches the module ABI from on-chain to validate field names and types, then BCS-encodes the value automatically.
+
+### Struct arguments
+
+Represent a struct value as a JSON object with field names as keys:
+
+```json filename="entry_function_arguments.json"
+{
+    "function_id": "0x42::shapes::move_to_point",
+    "args": [
+        {
+            "type": "address",
+            "value": "0xace"
+        },
+        {
+            "type": "0x42::shapes::Point",
+            "value": {
+                "x": 10,
+                "y": 20
+            }
+        }
+    ]
+}
+```
+
+Nested structs are supported — each nested struct field is itself a JSON object with its own field names:
+
+```json
+{
+    "type": "0x42::shapes::Line",
+    "value": {
+        "start": { "x": 0, "y": 0 },
+        "end":   { "x": 10, "y": 20 }
+    }
+}
+```
+
+### Enum arguments
+
+Represent an enum value as a JSON object with the variant name as the single key. For variants with no fields, use an empty object as the value:
+
+```json
+{
+    "type": "0x42::types::Direction",
+    "value": { "North": {} }
+}
+```
+
+For variants with named fields, include the fields inside the variant object:
+
+```json
+{
+    "type": "0x42::types::Shape",
+    "value": { "Circle": { "radius": 10 } }
+}
+```
+
+### Vectors of structs or enums
+
+Wrap the values in a JSON array:
+
+```json
+{
+    "type": "vector<0x42::shapes::Point>",
+    "value": [
+        { "x": 1, "y": 2 },
+        { "x": 3, "y": 4 }
+    ]
+}
+```
+
+Then run with:
+
+```sh filename="Terminal"
+aptos move run \
+    --json-file entry_function_arguments.json \
+    --private-key-file ace.key \
+    --assume-yes
+```
+
 ## Script functions
 
 The package also contains a script, `set_vals.move`, which is a wrapper for the setter function:

@@ -211,6 +211,68 @@ fun example_destroy_shapes() {
 }
 ```
 
+## Enum Visibility
+
+_Since language version 2.4_
+
+By default, enum construction, deconstruction, matching, and field selection are restricted to the defining module. Move 2.4 introduces explicit visibility modifiers for enums, following the same model described in [Struct and Enum Visibility](/build/smart-contracts/book/struct-and-enum-visibility).
+
+### Syntax
+
+Place the modifier before the `enum` keyword. For enums with abilities, the `has` clause follows the variant list as usual:
+
+```move
+module 0x42::types {
+    // Accessible from any module
+    public enum Color has copy, drop {
+        Red, Green, Blue,
+    }
+
+    // Accessible from modules in the same package
+    package enum Status has drop {
+        Active,
+        Inactive,
+    }
+}
+
+module 0x42::lib {
+    friend 0x42::consumer;
+
+    // Accessible only from declared friend modules
+    friend enum Event has drop {
+        Created, Updated, Deleted,
+    }
+}
+```
+
+### Cross-Module Access
+
+External modules with sufficient visibility can construct and destruct the enum, test variants and select fields from variants and mutate them.
+
+```move
+module 0x42::types {
+    public enum Shape has drop {
+        Circle { radius: u64 },
+        Rectangle { width: u64, height: u64 },
+    }
+}
+
+module 0x42::user {
+    use 0x42::types::Shape;
+
+    fun area(s: Shape): u64 {
+        match (s) {
+            Shape::Circle { radius } => radius * radius,
+            Shape::Rectangle { width, height } => width * height,
+        }
+    }
+
+    fun is_circle(s: &Shape): bool {
+        s is Shape::Circle
+    }
+}
+```
+
 ## Enum Type Upgrade Compatibility
 
 An enum type can be upgraded by another enum type if the new type only adds new variants at the end of the variant list. All variants present in the old enum type must also appear in the new type, in the same order and starting from the beginning. Consider the `VersionedData` type, which might have begun with a single version:

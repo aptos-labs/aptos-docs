@@ -342,7 +342,67 @@ module 0x2::n {
 }
 ```
 
-Note that structs do not have visibility modifiers (e.g., `public` or `private`).
+By default, structs do not have visibility modifiers—all struct operations are restricted to the defining module. Move 2.4 introduces explicit visibility modifiers; see [Struct Visibility](#struct-visibility) below.
+
+## Struct Visibility
+
+_Since language version 2.4_
+
+By default, struct construction, destruction, and field access are module-private, as described in [Privileged Struct Operations](#privileged-struct-operations). Move 2.4 introduces explicit visibility modifiers that allow external modules to perform these operations. See [Struct and Enum Visibility](/build/smart-contracts/book/struct-and-enum-visibility) for shared rules on visibility levels, performance, restrictions, transaction arguments, and upgradability.
+
+### Syntax
+
+Place the modifier before the `struct` keyword:
+
+```move
+module 0x42::shapes {
+    // Accessible from any module
+    public struct Point {
+        x: u64,
+        y: u64,
+    }
+
+    // Accessible from modules in the same package
+    package struct Config {
+        value: u64,
+    }
+}
+
+module 0x42::lib {
+    friend 0x42::consumer;
+
+    // Accessible only from declared friend modules
+    friend struct Token {
+        amount: u64,
+    }
+}
+```
+
+### Cross-Module Access
+
+External modules with sufficient visibility can construct and destruct the struct, read and mutate its fields.
+
+```move
+module 0x42::shapes {
+    public struct Point {
+        x: u64,
+        y: u64,
+    }
+}
+
+module 0x42::user {
+    use 0x42::shapes::Point;
+
+    fun mirror(p: Point): Point {
+        let Point { x, y } = p;   // destruct
+        Point { x: y, y: x }     // construct
+    }
+
+    fun shift_x(p: &mut Point, delta: u64) {
+        p.x = p.x + delta;       // read and write to fields
+    }
+}
+```
 
 ## Ownership
 

@@ -86,12 +86,13 @@ export type Props = Parameters<typeof Card>[0];
     const PREFIXES: { re: RegExp; label: string }[] = [
       { re: /^\s*NEW\s*!/i, label: "NEW" },
       { re: /^\s*NEW\s+/i, label: "NEW" },
+      // Full-width ！; \s* allows optional space before the mark (e.g. "新 ！")
       { re: /^\s*新\s*！/, label: "新" },
-      { re: /^\s*新！/, label: "新" },
+      { re: /^\s*新\s+/, label: "新" },
     ];
 
     const processList = (root: Element): void => {
-      for (const a of root.querySelectorAll<HTMLAnchorElement>(".link-list a")) {
+      for (const a of root.querySelectorAll<HTMLAnchorElement>(":scope a")) {
         if (a.querySelector(".list-card-new-badge")) continue;
 
         const first = a.firstChild;
@@ -113,7 +114,6 @@ export type Props = Parameters<typeof Card>[0];
 
         const badge = document.createElement("span");
         badge.className = "sl-badge tip small list-card-new-badge";
-        badge.setAttribute("aria-hidden", "true");
         badge.textContent = matched.label;
 
         const textWrap = document.createElement("span");

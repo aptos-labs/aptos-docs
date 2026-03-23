@@ -14,9 +14,7 @@ export const GET: APIRoute = async (context) => {
   const docs = orderDocs(await getEnglishDocs(), FULL_PRIORITY_DOC_IDS);
 
   const body = await generateLlmsDocument(docs, context, {
-    description: `${LLMS_FEED_AGENT_SKILLS_CALLOUT}
-
-This is the full Aptos developer documentation corpus in rendered Markdown.`,
+    description: `${LLMS_FEED_AGENT_SKILLS_CALLOUT}\n\nThis is the full Aptos developer documentation corpus in rendered Markdown.`,
   });
 
   return new Response(body, {

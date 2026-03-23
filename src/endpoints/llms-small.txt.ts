@@ -17,9 +17,7 @@ export const GET: APIRoute = async (context) => {
 
   const body = await generateLlmsDocument(docs, context, {
     minify: true,
-    description: `${LLMS_FEED_AGENT_SKILLS_CALLOUT}
-
-This is the curated low-token Aptos developer documentation set for AI agents and IDE assistants.`,
+    description: `${LLMS_FEED_AGENT_SKILLS_CALLOUT}\n\nThis is the curated low-token Aptos developer documentation set for AI agents and IDE assistants.`,
   });
 
   return new Response(body, {

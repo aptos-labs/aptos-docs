@@ -1,15 +1,30 @@
 ---
+import { Badge } from "@astrojs/starlight/components";
 import Card from "./Card.astro";
+
 export type Props = Parameters<typeof Card>[0];
 ---
 
 <Card {...Astro.props}>
+  {/* Ensures Starlight badge CSS variables and base .sl-badge rules load on the home page */}
+  <Badge
+    text=""
+    variant="tip"
+    size="small"
+    class="list-card-badge-style-anchor"
+    aria-hidden="true"
+  />
   <div class="link-list">
     <slot />
   </div>
 </Card>
 
 <style>
+  /* Load Starlight badge styles; keep out of layout and accessibility tree visuals */
+  .list-card-badge-style-anchor {
+    display: none !important;
+  }
+
   .link-list :global(ul) {
     list-style-type: none;
     padding: 0;
@@ -32,6 +47,19 @@ export type Props = Parameters<typeof Card>[0];
     text-decoration: none;
   }
 
+  .link-list :global(a .list-card-new-badge) {
+    flex-shrink: 0;
+    line-height: 1;
+    font-size: var(--sl-text-xs);
+    padding: 0.125rem 0.375rem;
+    margin-inline-end: 0.25rem;
+  }
+
+  .link-list :global(a > .link-card-link-text) {
+    flex: 1;
+    min-width: 0;
+  }
+
   /* Add arrow icon to links. */
   .link-list :global(a::after) {
     content: "";
@@ -49,3 +77,63 @@ export type Props = Parameters<typeof Card>[0];
     transform: matrix(-1, 0, 0, 1, 0, 0);
   }
 </style>
+
+<script>
+  (() => {
+    if (typeof window === "undefined") return;
+
+    /** Match sidebar NEW badges (tip variant); English shows "NEW" like the sidebar label. */
+    const PREFIXES: { re: RegExp; label: string }[] = [
+      { re: /^\s*NEW\s*!/i, label: "NEW" },
+      { re: /^\s*NEW\s+/i, label: "NEW" },
+      { re: /^\s*新\s*！/, label: "新" },
+      { re: /^\s*新！/, label: "新" },
+    ];
+
+    const processList = (root: Element): void => {
+      for (const a of root.querySelectorAll<HTMLAnchorElement>(".link-list a")) {
+        if (a.querySelector(".list-card-new-badge")) continue;
+
+        const first = a.firstChild;
+        if (!first || first.nodeType !== Node.TEXT_NODE) continue;
+
+        const raw = first.textContent ?? "";
+        let matched: { end: number; label: string } | null = null;
+        for (const { re, label } of PREFIXES) {
+          const m = raw.match(re);
+          if (m?.[0]) {
+            matched = { end: m[0].length, label };
+            break;
+          }
+        }
+        if (!matched) continue;
+
+        let rest = raw.slice(matched.end);
+        if (rest.startsWith(" ")) rest = rest.slice(1);
+
+        const badge = document.createElement("span");
+        badge.className = "sl-badge tip small list-card-new-badge";
+        badge.setAttribute("aria-hidden", "true");
+        badge.textContent = matched.label;
+
+        const textWrap = document.createElement("span");
+        textWrap.className = "link-card-link-text";
+        textWrap.textContent = rest;
+
+        a.replaceChildren(badge, textWrap);
+      }
+    };
+
+    const run = (): void => {
+      for (const el of document.querySelectorAll(".link-list")) processList(el);
+    };
+
+    run();
+
+    const win = window as Window & { __listCardNewBadgeInit?: boolean };
+    if (!win.__listCardNewBadgeInit) {
+      win.__listCardNewBadgeInit = true;
+      document.addEventListener("astro:page-load", run);
+    }
+  })();
+</script>

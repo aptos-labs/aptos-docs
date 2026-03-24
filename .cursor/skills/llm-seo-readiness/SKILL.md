@@ -15,7 +15,7 @@ description: >-
 - **Curated lists**: If a page should appear in the LLM index or early in full corpus, update `src/lib/llms-curated-ids.ts` (`LLMS_INDEX_SECTIONS`, `LLMS_SMALL_DOC_IDS`, `FULL_PRIORITY_DOC_IDS` as appropriate). Build fails if an id is missing from English non-draft docs.
 - **Index copy**: User-facing explanations live in `src/content/docs/llms-txt.mdx`, `src/content/docs/build/ai.mdx`, and the Chinese `zh/` counterparts—keep URLs and feed names aligned with `src/pages/llms-index.ts`.
 - **HTML → Markdown**: Shared logic is `src/lib/llms-html-sanitize.ts`. When minifying for `llms-small.txt`, collapse **spaces/tabs only**—never all `\s` (newlines must survive for fenced code and Markdown structure).
-- **Route wiring**: Custom handlers are swapped in via `src/integrations/llms-txt-index.ts`; endpoint implementations live under `src/pages/llms-index.ts`, `src/endpoints/llms-small.txt.ts`, `src/endpoints/llms-full.txt.ts`.
+- **Route wiring**: Custom handlers are swapped in via `src/integrations/llms-txt-index.ts`; endpoint implementations live under `src/pages/llms-index.ts`, `src/pages/llms-small.txt.ts`, `src/pages/llms-full.txt.ts`.
 - **Robots**: `public/robots.txt` should stay consistent with sitemap URL and, when feeds change, the commented LLMs.txt pointers at the bottom.
 
 ## SEO
@@ -42,7 +42,7 @@ For full coverage: `pnpm test` and a production `pnpm build` when touching route
 |------|-------------------|
 | Curation | `src/lib/llms-curated-ids.ts`, `src/lib/llms.ts` |
 | llms.txt body | `src/pages/llms-index.ts` |
-| Feed endpoints | `src/endpoints/llms-small.txt.ts`, `src/endpoints/llms-full.txt.ts` |
+| Feed endpoints | `src/pages/llms-small.txt.ts`, `src/pages/llms-full.txt.ts` |
 | Plugin override | `src/integrations/llms-txt-index.ts` |
 | Markdown export / sanitize | `src/lib/llms-html-sanitize.ts`, `src/pages/[...slug].md.ts` |
 | User docs | `src/content/docs/llms-txt.mdx`, `build/ai.mdx`, `zh/` |

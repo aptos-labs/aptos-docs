@@ -1,10 +1,10 @@
-import type { z } from "astro:schema";
+import type { z } from "astro/zod";
 import { jwtVerify } from "jose";
 import { invariant } from "~/lib/invariant";
 import { OGImageError } from "~/lib/og-image/errors";
 import { getOgImageSecret } from "./getOgImageSecret";
 
-export async function parseTokenOptions<Schema extends z.AnyZodObject>(
+export async function parseTokenOptions<Schema extends z.ZodObject>(
   signedJWTToken: string | null,
   schema: Schema,
 ): Promise<z.infer<Schema>> {

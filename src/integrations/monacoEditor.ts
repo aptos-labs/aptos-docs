@@ -1,10 +1,9 @@
 import path from "node:path";
 import type { AstroIntegration } from "astro";
-import type { Plugin as VitePlugin } from "vite";
 import monacoEditorPluginImport, { type IMonacoEditorOpts } from "vite-plugin-monaco-editor";
 
 /** Handle both ESM default export and CJS export */
-type MonacoFactory = (options: IMonacoEditorOpts) => VitePlugin;
+type MonacoFactory = (options: IMonacoEditorOpts) => unknown;
 type MonacoModule = MonacoFactory | { default: MonacoFactory };
 
 function resolveMonacoFactory(mod: MonacoModule): MonacoFactory {
@@ -34,6 +33,7 @@ export function monacoEditorIntegration(): AstroIntegration {
           globalAPI: false,
         });
 
+        // @ts-expect-error vite-plugin-monaco-editor is built against Vite 6 types
         updateConfig({ vite: { plugins: [monaco] } });
       },
     },

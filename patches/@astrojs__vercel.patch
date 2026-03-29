@@ -1,16 +1,16 @@
 diff --git a/dist/index.d.ts b/dist/index.d.ts
-index 2f2ec366c9816a861d1ee145923a32f46070af32..1e3c569cacaa8b345c7d27358d80859d6f3da5dd 100644
+index 3dbade370d1565aa795d48d63c5e237a6ada041d..a4e65afb10dbfebbfd6f5baad018bdc93d6dfc9b 100644
 --- a/dist/index.d.ts
 +++ b/dist/index.d.ts
-@@ -44,7 +44,14 @@ export interface VercelServerlessConfig {
+@@ -52,7 +52,14 @@ export interface VercelServerlessConfig {
       * Here the list of the headers that are added:
       * - The CSP header of the static pages is added when CSP support is enabled.
       */
--    experimentalStaticHeaders?: boolean;
-+    experimentalStaticHeaders?: boolean | {
+-    staticHeaders?: boolean;
++    staticHeaders?: boolean | {
 +        /**
-+         * How to emit CSP for prerendered/static pages when Astro experimental CSP is enabled.
-+         * - 'per-route' (default): current behavior — one `routes` entry per path with a CSP header
++         * How to emit CSP for prerendered/static pages when Astro CSP is enabled.
++         * - 'per-route' (default): one `routes` entry per path with a CSP header
 +         * - 'global': collapse to a single catch-all `/(.*)`  route with the CSP header
 +         */
 +        cspMode?: 'per-route' | 'global';
@@ -19,20 +19,20 @@ index 2f2ec366c9816a861d1ee145923a32f46070af32..1e3c569cacaa8b345c7d27358d80859d
  interface VercelISRConfig {
      /**
 diff --git a/dist/index.js b/dist/index.js
-index 77a4965d20328c3f0fb89547719eb0c73ecd9f66..c3ce83904f299b10def203fc3c1c2cde620b0d82 100644
+index f99edd8647b5b2519c431ab87b3843b1aca855f8..3792faa60941c47241dc6154bc050774f17598db 100644
 --- a/dist/index.js
 +++ b/dist/index.js
-@@ -421,8 +421,19 @@ function vercelAdapter({
+@@ -396,8 +396,19 @@ function vercelAdapter({
            if (!normalized.routes) {
              normalized.routes = [];
            }
--          if (experimentalStaticHeaders) {
+-          if (staticHeaders) {
 -            const routesWithConfigHeaders = createRoutesWithStaticHeaders(_routeToHeaders, _config);
 +          const _staticHeadersEnabled =
-+            experimentalStaticHeaders === true || typeof experimentalStaticHeaders === 'object';
++            staticHeaders === true || typeof staticHeaders === 'object';
 +          const _cspMode =
-+            typeof experimentalStaticHeaders === 'object' && experimentalStaticHeaders?.cspMode
-+              ? experimentalStaticHeaders.cspMode
++            typeof staticHeaders === 'object' && staticHeaders?.cspMode
++              ? staticHeaders.cspMode
 +              : 'per-route';
 +
 +          if (_staticHeadersEnabled) {
@@ -44,14 +44,14 @@ index 77a4965d20328c3f0fb89547719eb0c73ecd9f66..c3ce83904f299b10def203fc3c1c2cde
              const fileSystemRouteIndex = normalized.routes.findIndex(
                (r) => "handle" in r && r.handle === "filesystem"
              );
-@@ -563,20 +574,29 @@ function getRuntime(process2, logger) {
+@@ -538,20 +549,29 @@ function getRuntime(process2, logger) {
    }
    return "nodejs24.x";
  }
 -function createRoutesWithStaticHeaders(staticHeaders, config) {
 +function createRoutesWithStaticHeaders(staticHeaders, config, cspMode = 'per-route') {
    const vercelHeaders = [];
-+  if (!config.experimental.csp) return vercelHeaders;
++  if (!config.security.csp) return vercelHeaders;
 +
 +  if (cspMode === 'global') {
 +    let csp;
@@ -66,7 +66,7 @@ index 77a4965d20328c3f0fb89547719eb0c73ecd9f66..c3ce83904f299b10def203fc3c1c2cde
 +  }
 +
    for (const [pathname, { headers }] of staticHeaders.entries()) {
--    if (config.experimental.csp) {
+-    if (config.security.csp) {
 -      const csp = headers.get("Content-Security-Policy");
 -      if (csp) {
 -        const _headers = {

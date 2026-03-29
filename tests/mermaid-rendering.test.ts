@@ -133,44 +133,59 @@ describe("Mermaid Rendering Validation", () => {
   });
 
   describe("Build output validation", () => {
-    const distDir = join(ROOT, "dist/server/chunks");
+    const htmlFile = join(ROOT, "dist/client/network/blockchain/blockchain-deep-dive/index.html");
+    const legacyDistDir = join(ROOT, "dist/server/chunks");
+    const hasHtml = existsSync(htmlFile);
+    const hasLegacy = existsSync(legacyDistDir);
 
-    it.skipIf(!existsSync(distDir))(
+    it.skipIf(!hasHtml && !hasLegacy)(
       "should render mermaid blocks as <pre class='mermaid'>, not as Expressive Code",
       () => {
-        const chunks = readdirSync(distDir).filter(
-          (f) => f.startsWith("blockchain-deep-dive") && f.endsWith(".mjs"),
-        );
-        expect(chunks.length).toBeGreaterThan(0);
-
-        for (const chunk of chunks) {
-          const content = readFileSync(join(distDir, chunk), "utf-8");
-          if (content.includes("graph LR") || content.includes("graph TD")) {
-            expect(content).toContain('class=\\"mermaid\\"');
-            expect(content).not.toMatch(/expressive-code.*language-mermaid/);
+        if (hasHtml) {
+          const content = readFileSync(htmlFile, "utf-8");
+          expect(content).toContain('class="mermaid"');
+          expect(content).not.toMatch(/expressive-code.*language-mermaid/);
+        } else {
+          const chunks = readdirSync(legacyDistDir).filter(
+            (f) => f.startsWith("blockchain-deep-dive") && f.endsWith(".mjs"),
+          );
+          expect(chunks.length).toBeGreaterThan(0);
+          for (const chunk of chunks) {
+            const content = readFileSync(join(legacyDistDir, chunk), "utf-8");
+            if (content.includes("graph LR") || content.includes("graph TD")) {
+              expect(content).toContain('class=\\"mermaid\\"');
+              expect(content).not.toMatch(/expressive-code.*language-mermaid/);
+            }
           }
         }
       },
     );
 
-    it.skipIf(!existsSync(distDir))(
+    it.skipIf(!hasHtml && !hasLegacy)(
       "should preserve mermaid diagram content in the rendered output",
       () => {
-        const chunks = readdirSync(distDir).filter(
-          (f) => f.startsWith("blockchain-deep-dive") && f.endsWith(".mjs"),
-        );
-
-        let foundMermaid = false;
-        for (const chunk of chunks) {
-          const content = readFileSync(join(distDir, chunk), "utf-8");
-          const mermaidMatch = /pre class=\\"mermaid\\"[^>]*>(.*?)(?=<\/pre>)/s.exec(content);
+        if (hasHtml) {
+          const content = readFileSync(htmlFile, "utf-8");
+          const mermaidMatch = /pre class="mermaid"[^>]*>(.*?)(?=<\/pre>)/s.exec(content);
+          expect(mermaidMatch).not.toBeNull();
           if (mermaidMatch) {
-            foundMermaid = true;
-            const diagramContent = mermaidMatch[1];
-            expect(diagramContent).toMatch(/graph\s+(LR|TD|TB|RL|BT)/);
+            expect(mermaidMatch[1]).toMatch(/graph\s+(LR|TD|TB|RL|BT)/);
           }
+        } else {
+          const chunks = readdirSync(legacyDistDir).filter(
+            (f) => f.startsWith("blockchain-deep-dive") && f.endsWith(".mjs"),
+          );
+          let foundMermaid = false;
+          for (const chunk of chunks) {
+            const content = readFileSync(join(legacyDistDir, chunk), "utf-8");
+            const mermaidMatch = /pre class=\\"mermaid\\"[^>]*>(.*?)(?=<\/pre>)/s.exec(content);
+            if (mermaidMatch) {
+              foundMermaid = true;
+              expect(mermaidMatch[1]).toMatch(/graph\s+(LR|TD|TB|RL|BT)/);
+            }
+          }
+          expect(foundMermaid).toBe(true);
         }
-        expect(foundMermaid).toBe(true);
       },
     );
 

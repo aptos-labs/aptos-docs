@@ -11,8 +11,8 @@ import { describe, expect, it } from "vitest";
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const ROOT = resolve(__dirname, "..");
 const LLMS_TXT = join(ROOT, "dist/client/llms.txt");
-const LLMS_SMALL_SERVER = join(ROOT, "dist/server/pages/llms-small.txt.astro.mjs");
-const LLMS_FULL_SERVER = join(ROOT, "dist/server/pages/llms-full.txt.astro.mjs");
+const LLMS_SMALL_OUTPUT = join(ROOT, "dist/client/llms-small.txt");
+const LLMS_FULL_OUTPUT = join(ROOT, "dist/client/llms-full.txt");
 
 const hasBuildOutput = existsSync(LLMS_TXT);
 
@@ -29,11 +29,8 @@ describe("LLMs static build output", () => {
     expect(body).toMatch(/\.md\)/);
   });
 
-  it.skipIf(!hasBuildOutput)(
-    "server bundle includes llms-small and llms-full route modules",
-    () => {
-      expect(existsSync(LLMS_SMALL_SERVER), "expected llms-small route in server build").toBe(true);
-      expect(existsSync(LLMS_FULL_SERVER), "expected llms-full route in server build").toBe(true);
-    },
-  );
+  it.skipIf(!hasBuildOutput)("build output includes llms-small.txt and llms-full.txt", () => {
+    expect(existsSync(LLMS_SMALL_OUTPUT), "expected llms-small.txt in build output").toBe(true);
+    expect(existsSync(LLMS_FULL_OUTPUT), "expected llms-full.txt in build output").toBe(true);
+  });
 });

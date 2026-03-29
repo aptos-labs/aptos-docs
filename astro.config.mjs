@@ -255,7 +255,7 @@ export default defineConfig({
   ],
   adapter: process.env.VERCEL
     ? vercel({
-        experimentalStaticHeaders: {
+        staticHeaders: {
           cspMode: "global",
         },
         edgeMiddleware: false,
@@ -268,7 +268,7 @@ export default defineConfig({
       })
     : node({
         mode: "standalone",
-        experimentalStaticHeaders: true,
+        staticHeaders: true,
       }),
   vite: {
     plugins: [tailwindcss()],
@@ -361,35 +361,35 @@ export default defineConfig({
     },
     validateSecrets: true,
   },
-  experimental: {
+  security: {
     csp: cspConfig,
-    fonts: [
-      {
-        provider: fontProviders.local(),
-        name: "Atkinson Hyperlegible Next",
-        cssVariable: "--font-atkinson-hyperlegible-next",
-        optimizedFallbacks: false,
-        options: {
-          variants: [
-            {
-              weight: "200 800",
-              style: "normal",
-              src: ["./src/assets/fonts/AtkinsonHyperlegibleNext-VariableFont_wght.woff2"],
-              variationSettings: "normal",
-              display: "swap",
-            },
-            {
-              weight: "200 800",
-              style: "italic",
-              src: ["./src/assets/fonts/AtkinsonHyperlegibleNext-Italic-VariableFont_wght.woff2"],
-              variationSettings: "normal",
-              display: "swap",
-            },
-          ],
-        },
-      },
-    ],
   },
+  fonts: [
+    {
+      provider: fontProviders.local(),
+      name: "Atkinson Hyperlegible Next",
+      cssVariable: "--font-atkinson-hyperlegible-next",
+      optimizedFallbacks: false,
+      options: {
+        variants: [
+          {
+            weight: "200 800",
+            style: "normal",
+            src: ["./src/assets/fonts/AtkinsonHyperlegibleNext-VariableFont_wght.woff2"],
+            variationSettings: "normal",
+            display: "swap",
+          },
+          {
+            weight: "200 800",
+            style: "italic",
+            src: ["./src/assets/fonts/AtkinsonHyperlegibleNext-Italic-VariableFont_wght.woff2"],
+            variationSettings: "normal",
+            display: "swap",
+          },
+        ],
+      },
+    },
+  ],
   redirects: {
     /**
      * Development-only redirects when Move Reference is disabled

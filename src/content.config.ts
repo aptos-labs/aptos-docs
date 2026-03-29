@@ -1,9 +1,10 @@
 // src/content/config.ts
 
-import { type CollectionEntry, defineCollection, z } from "astro:content";
+import { type CollectionEntry, defineCollection } from "astro:content";
 import { docsLoader, i18nLoader } from "@astrojs/starlight/loaders";
 import { docsSchema, i18nSchema } from "@astrojs/starlight/schema";
 import type { StarlightIcon } from "@astrojs/starlight/types";
+import { z } from "astro/zod";
 import { moveReferenceLoader } from "./loaders/moveReference";
 import type { BranchConfig, ModuleConfig } from "./loaders/moveReference/types";
 

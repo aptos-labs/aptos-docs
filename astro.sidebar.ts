@@ -89,7 +89,7 @@ export const sidebar = [
         collapsed: true,
         items: [
           "build/guides/exchanges",
-          "build/guides/system-integrators-guide",
+          "build/guides/application-integration",
           "build/guides/oracles",
         ],
       }),

@@ -5,6 +5,15 @@ import "@scalar/api-client/style.css";
 <div id="scalar-container"></div>
 
 <style>
+  /*
+   * Establish a root-level stacking context above Starlight (--sl-z-index-menu: 5, navbar: 10).
+   * Without this, fixed children can still lose to the sidebar even when the host is on <body>.
+   */
+  #scalar-container {
+    position: relative;
+    z-index: 100010;
+  }
+
   #scalar-modal-container :global(.scalar-app-exit) {
     background-color: rgba(0 0 0 / 0.8);
   }
@@ -25,9 +34,8 @@ import "@scalar/api-client/style.css";
     document.getElementById("scalar-container"),
     "Scalar modal container not found!",
   );
-  // Starlight's `.main-pane` uses `isolation: isolate` (TwoColumnContent), which traps
-  // Scalar's overlay z-index so the docs sidebar (`z-index: 5`) paints on top. Mount on
-  // <body> so the API client modal stacks above the sidebar.
+  // Move off the doc layout tree: TwoColumnContent used to isolate `.main-pane`, and the
+  // container needs its own stacking context so Scalar's fixed overlay wins over the sidebar.
   document.body.appendChild(scalarContainer);
 
   const servers = [

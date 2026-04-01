@@ -5,10 +5,9 @@ import "@scalar/api-client/style.css";
 <div id="scalar-container"></div>
 
 <style>
-  /* Host on <body> (see script); sit above Starlight nav (--sl-z-index-navbar). */
+  /* Host on <body> (see script); above Starlight nav chrome. */
   #scalar-container {
     position: relative;
-    /* Literal: z-index does not support calc() in all engines; matches navbar + 1 today. */
     z-index: 11;
   }
 
@@ -26,6 +25,13 @@ import "@scalar/api-client/style.css";
   import { createApiClientModal } from "@scalar/api-client/layouts/Modal";
   import type { ScalarModalOpenEvent } from "./types";
   import { observeThemeChange } from "~/lib/theme";
+  import { ensureNonNullable } from "~/lib/ensureNonNullable";
+
+  const scalarContainer = ensureNonNullable(
+    document.getElementById("scalar-container"),
+    "Scalar modal container not found!",
+  );
+  document.body.appendChild(scalarContainer);
 
   const servers = [
     {
@@ -47,53 +53,20 @@ import "@scalar/api-client/style.css";
   };
 
   observeThemeChange((theme) => {
-    const host = document.getElementById("scalar-container");
-    if (!host) return;
-    host.classList.remove(...Object.values(starlightThemeClassMap));
-    host.classList.add(starlightThemeClassMap[theme]);
+    scalarContainer.classList.remove(...Object.values(starlightThemeClassMap));
+    scalarContainer.classList.add(starlightThemeClassMap[theme]);
   });
 
-  // Initialize modal once per host - the new sync API requires loading the spec separately
+  // Initialize modal once and reuse - the new sync API requires loading the spec separately
   let modalClient: ReturnType<typeof createApiClientModal>["client"] | null = null;
   let specLoaded = false;
   let specLoadAttempts = 0;
   const MAX_SPEC_LOAD_ATTEMPTS = 3;
-  /** DOM node the Vue app is mounted on; ClientRouter replaces <body>, so this must be reset on navigation. */
-  let mountedHost: HTMLElement | null = null;
-
-  function teardownModal() {
-    modalClient?.app?.unmount();
-    modalClient = null;
-    specLoaded = false;
-    mountedHost = null;
-  }
-
-  /** Move host to body and reset the Scalar client if the host node was swapped (view transition). */
-  function ensureScalarHost(): HTMLElement | null {
-    const el = document.getElementById("scalar-container");
-    if (!el) {
-      teardownModal();
-      return null;
-    }
-    if (el.parentElement !== document.body) {
-      document.body.appendChild(el);
-    }
-    if (mountedHost !== el) {
-      teardownModal();
-      mountedHost = el;
-    }
-    return el;
-  }
 
   async function getModalClient() {
-    const host = ensureScalarHost();
-    if (!host) {
-      throw new Error("Scalar modal is not available on this page.");
-    }
-
     if (!modalClient) {
       const { client } = createApiClientModal({
-        el: host,
+        el: scalarContainer,
         configuration: {
           servers,
           showSidebar: false,
@@ -160,10 +133,4 @@ import "@scalar/api-client/style.css";
     },
     { passive: true },
   );
-
-  // ClientRouter replaces the entire <body>; this module script runs only once, so re-sync after each navigation.
-  document.addEventListener("astro:page-load", () => {
-    ensureScalarHost();
-  });
-  ensureScalarHost();
 </script>

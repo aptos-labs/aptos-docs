@@ -42,10 +42,22 @@ function readAstroConfig(): string {
   return readFileSync(join(ROOT, "astro.config.mjs"), "utf-8");
 }
 
-/** Walk dist/client for HTML that references the blockchain-deep-dive doc route. */
+/**
+ * HTML for the blockchain-deep-dive doc page.
+ * Do not match on URL substring alone: many pages embed that path in the sidebar
+ * before `network/blockchain/...` is visited, which broke CI (wrong file, no mermaid).
+ */
 function findBlockchainDeepDiveHtml(distClient: string): string | null {
   if (!existsSync(distClient)) return null;
-  const needle = "/network/blockchain/blockchain-deep-dive";
+  const preferred = [
+    join(distClient, "network/blockchain/blockchain-deep-dive/index.html"),
+    join(distClient, "zh/network/blockchain/blockchain-deep-dive/index.html"),
+    join(distClient, "network/blockchain/blockchain-deep-dive.html"),
+    join(distClient, "zh/network/blockchain/blockchain-deep-dive.html"),
+  ];
+  for (const p of preferred) {
+    if (existsSync(p)) return p;
+  }
   const stack: string[] = [distClient];
   while (stack.length > 0) {
     const dir = stack.pop() as string;
@@ -65,15 +77,12 @@ function findBlockchainDeepDiveHtml(distClient: string): string | null {
       }
       if (st.isDirectory()) {
         stack.push(full);
-      } else if (st.isFile() && name.endsWith(".html")) {
-        try {
-          const content = readFileSync(full, "utf-8");
-          if (content.includes(needle)) {
-            return full;
-          }
-        } catch {
-          /* unreadable file */
-        }
+      } else if (
+        st.isFile() &&
+        name.endsWith(".html") &&
+        full.includes(`${join("blockchain", "blockchain-deep-dive")}`)
+      ) {
+        return full;
       }
     }
   }
@@ -93,7 +102,7 @@ function assertDistPresentForMermaidTests(distClient: string, legacyDistDir: str
   if (htmlPath || legacyOk) return;
   const rel = relative(ROOT, distClient) || distClient;
   throw new Error(
-    `Build output exists under ${rel} but no HTML for blockchain-deep-dive was found (expected a page linking to /network/blockchain/blockchain-deep-dive). Update the mermaid test locator if routes changed.`,
+    `Build output exists under ${rel} but no HTML was found at network/blockchain/blockchain-deep-dive (or zh/...). Update the mermaid test locator if doc routes changed.`,
   );
 }
 

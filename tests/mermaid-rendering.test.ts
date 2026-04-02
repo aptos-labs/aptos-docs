@@ -9,8 +9,8 @@
  * regression guard.
  */
 
-import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
@@ -40,6 +40,61 @@ function countMermaidBlocks(filePath: string): number {
 
 function readAstroConfig(): string {
   return readFileSync(join(ROOT, "astro.config.mjs"), "utf-8");
+}
+
+/** Walk dist/client for HTML that references the blockchain-deep-dive doc route. */
+function findBlockchainDeepDiveHtml(distClient: string): string | null {
+  if (!existsSync(distClient)) return null;
+  const needle = "/network/blockchain/blockchain-deep-dive";
+  const stack: string[] = [distClient];
+  while (stack.length > 0) {
+    const dir = stack.pop() as string;
+    let names: string[];
+    try {
+      names = readdirSync(dir);
+    } catch {
+      continue;
+    }
+    for (const name of names) {
+      const full = join(dir, name);
+      let st: ReturnType<typeof statSync>;
+      try {
+        st = statSync(full);
+      } catch {
+        continue;
+      }
+      if (st.isDirectory()) {
+        stack.push(full);
+      } else if (st.isFile() && name.endsWith(".html")) {
+        try {
+          const content = readFileSync(full, "utf-8");
+          if (content.includes(needle)) {
+            return full;
+          }
+        } catch {
+          /* unreadable file */
+        }
+      }
+    }
+  }
+  return null;
+}
+
+function assertDistPresentForMermaidTests(distClient: string, legacyDistDir: string): void {
+  const clientExists = existsSync(distClient) && statSync(distClient).isDirectory();
+  const legacyExists = existsSync(legacyDistDir) && statSync(legacyDistDir).isDirectory();
+  if (!clientExists && !legacyExists) return;
+  const htmlPath = findBlockchainDeepDiveHtml(distClient);
+  const legacyOk =
+    legacyExists &&
+    readdirSync(legacyDistDir).some(
+      (f) => f.startsWith("blockchain-deep-dive") && f.endsWith(".mjs"),
+    );
+  if (htmlPath || legacyOk) return;
+  const rel = relative(ROOT, distClient) || distClient;
+  throw new Error(
+    `Build output exists under ${rel} but no HTML for blockchain-deep-dive was found (expected a page linking to /network/blockchain/blockchain-deep-dive). Update the mermaid test locator if routes changed.`,
+  );
 }
 
 interface PkgJson {
@@ -133,10 +188,15 @@ describe("Mermaid Rendering Validation", () => {
   });
 
   describe("Build output validation", () => {
-    const htmlFile = join(ROOT, "dist/client/network/blockchain/blockchain-deep-dive/index.html");
+    const distClient = join(ROOT, "dist/client");
     const legacyDistDir = join(ROOT, "dist/server/chunks");
-    const hasHtml = existsSync(htmlFile);
+    const htmlFile = findBlockchainDeepDiveHtml(distClient);
+    const hasHtml = htmlFile !== null;
     const hasLegacy = existsSync(legacyDistDir);
+
+    it("should resolve blockchain-deep-dive HTML when client build output exists", () => {
+      assertDistPresentForMermaidTests(distClient, legacyDistDir);
+    });
 
     it.skipIf(!hasHtml && !hasLegacy)(
       "should render mermaid blocks as <pre class='mermaid'>, not as Expressive Code",

@@ -5,6 +5,12 @@ import "@scalar/api-client/style.css";
 <div id="scalar-container"></div>
 
 <style>
+  /* Host on <body> (see script); above Starlight nav chrome. */
+  #scalar-container {
+    position: relative;
+    z-index: 11;
+  }
+
   #scalar-modal-container :global(.scalar-app-exit) {
     background-color: rgba(0 0 0 / 0.8);
   }
@@ -19,12 +25,7 @@ import "@scalar/api-client/style.css";
   import { createApiClientModal } from "@scalar/api-client/layouts/Modal";
   import type { ScalarModalOpenEvent } from "./types";
   import { observeThemeChange } from "~/lib/theme";
-  import { ensureNonNullable } from "~/lib/ensureNonNullable";
 
-  const scalarContainer = ensureNonNullable(
-    document.getElementById("scalar-container"),
-    "Scalar modal container not found!",
-  );
   const servers = [
     {
       description: "testnet",
@@ -45,20 +46,56 @@ import "@scalar/api-client/style.css";
   };
 
   observeThemeChange((theme) => {
-    scalarContainer.classList.remove(...Object.values(starlightThemeClassMap));
-    scalarContainer.classList.add(starlightThemeClassMap[theme]);
+    const el = document.getElementById("scalar-container");
+    if (!el) return;
+    el.classList.remove(...Object.values(starlightThemeClassMap));
+    el.classList.add(starlightThemeClassMap[theme]);
   });
 
-  // Initialize modal once and reuse - the new sync API requires loading the spec separately
+  // ClientRouter replaces <body>; this module runs once, so the host node is recreated per navigation.
   let modalClient: ReturnType<typeof createApiClientModal>["client"] | null = null;
   let specLoaded = false;
   let specLoadAttempts = 0;
   const MAX_SPEC_LOAD_ATTEMPTS = 3;
+  let hostElement: HTMLElement | null = null;
+
+  function unbindScalarClient() {
+    modalClient?.app?.unmount();
+    modalClient = null;
+    specLoaded = false;
+    specLoadAttempts = 0;
+  }
+
+  /** Keep the live #scalar-container on document.body; reset Vue when the DOM node is new. */
+  function syncScalarHost(): HTMLElement | null {
+    const el = document.getElementById("scalar-container");
+    if (!el) {
+      unbindScalarClient();
+      hostElement = null;
+      return null;
+    }
+    if (el.parentElement !== document.body) {
+      document.body.appendChild(el);
+    }
+    if (hostElement !== el) {
+      unbindScalarClient();
+      hostElement = el;
+      const theme = document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+      el.classList.remove(...Object.values(starlightThemeClassMap));
+      el.classList.add(starlightThemeClassMap[theme]);
+    }
+    return hostElement;
+  }
 
   async function getModalClient() {
+    const host = syncScalarHost();
+    if (!host) {
+      throw new Error("Scalar modal host is not on this page.");
+    }
+
     if (!modalClient) {
       const { client } = createApiClientModal({
-        el: scalarContainer,
+        el: host,
         configuration: {
           servers,
           showSidebar: false,
@@ -125,4 +162,7 @@ import "@scalar/api-client/style.css";
     },
     { passive: true },
   );
+
+  document.addEventListener("astro:page-load", syncScalarHost);
+  syncScalarHost();
 </script>

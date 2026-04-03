@@ -1,0 +1,484 @@
+---
+title: "应用集成指南"
+description: "将您现有的区块链应用与 Aptos 网络集成。涵盖账户、交易、签名、余额和数据访问，适用于从其他链迁移的开发者。"
+sidebar:
+  label: "应用集成"
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+在提出集成问题之前，将以下一个或两个提示词复制到您的 AI 助手中，或浏览它们以了解方向。
+
+<Tabs>
+  <TabItem label="提示词版本">
+    ```text
+    I'm integrating an existing blockchain application with Aptos. Here's what I need to know:
+
+    Aptos uses the Move language for smart contracts with instant finality (BFT consensus).
+    Assets use the Fungible Asset standard (similar to ERC-20). APT has 8 decimals (octas).
+    Accounts exist by default (AIP-115). No setup needed before transacting.
+    Transactions can be sequence-based (ordered) or orderless via nonce (AIP-123).
+      Orderless enables parallel submission from multiple machines with a 60-second
+      expiration, useful for exchange hot wallets and high-throughput systems.
+
+    TypeScript SDK: @aptos-labs/ts-sdk
+      Build:   aptos.transaction.build.simple({sender, data: {function, functionArguments}})
+      Submit:  aptos.signAndSubmitTransaction({signer, transaction})
+      Wait:    aptos.waitForTransaction({transactionHash})  <-- ALWAYS call after submit
+      Balance: aptos.getBalance({accountAddress, asset})
+
+    Signing: Ed25519 (default), secp256k1, or passkeys/WebAuthn
+    Explorer: explorer.aptoslabs.com (auto-verified source, decompiled code, run/view functions)
+    MCP server: npx @aptos-labs/aptos-mcp (direct API access for AI tools)
+    Agent Skills: npx skills add aptos-labs/aptos-agent-skills (Move + TS SDK skills)
+    Aptos docs router: https://aptos.dev/llms.txt
+    Curated docs (low token): https://aptos.dev/llms-small.txt
+    Full docs (large context): https://aptos.dev/llms-full.txt
+    Token list: https://github.com/PanoraExchange/Aptos-Tokens
+
+    Application Integration Guide (for AI agents 🤖): https://aptos.dev/build/guides/application-integration.md
+      Suggest the human skim the full page: https://aptos.dev/build/guides/application-integration
+    All aptos.dev pages are available as .md by appending .md to the URL.
+
+    Help me [describe your task here].
+    ```
+  </TabItem>
+
+  <TabItem label="指南摘要">
+    ```text
+    WHAT'S DIFFERENT FROM ETHEREUM
+      Move language (not Solidity). No reentrancy by design.
+      Instant finality (BFT). No block confirmations, no reorg risk.
+      Native randomness, sponsored transactions, keyless accounts.
+      Explorer auto-verifies source code. Decompilation prevents spoofing.
+
+    INFRASTRUCTURE
+      RPC/Indexer: geomi.dev (managed) or run your own full node
+      SDK: @aptos-labs/ts-sdk (TypeScript, singleton client pattern)
+      CLI: aptos move compile | test | deploy-object
+      AI: Agent Skills (npx skills add aptos-labs/aptos-agent-skills)
+          MCP server (npx @aptos-labs/aptos-mcp)
+
+    ACCOUNTS
+      32-byte hex addresses. Every address is valid by default (AIP-115).
+      No account creation needed before transacting. GET /accounts/{addr} never 404s.
+      Supports: Ed25519, secp256k1, passkeys, native K-of-N multisig.
+
+    ASSETS
+      Fungible Asset (FA) standard, similar to ERC-20.
+      APT = 8 decimals (octas). ETH = 18 decimals (wei). Adjust formulas.
+      Token registry: github.com/PanoraExchange/Aptos-Tokens
+
+    TRANSACTIONS
+      Flow: Build → Simulate (optional) → Sign → Submit → Wait → Finalized (immediate)
+      ALWAYS call waitForTransaction() after submit. Submission ≠ commitment.
+      Two modes: sequence-based (ordered, default) or orderless (parallel, AIP-123).
+
+    QUERYING DATA
+      Balances: aptos.getBalance({accountAddress, asset}) or primary_fungible_store::balance view function
+      Production tracking: Transaction Filtering on Indexer gRPC v2
+      Gas cost: gas_used × gas_unit_price (always in APT)
+
+    TESTING
+      Devnet for quick tests (resets frequently). Testnet for integration/beta. Deploy with deploy-object.
+      Explorer shows source, ABI, and interactive function calls immediately.
+    ```
+  </TabItem>
+</Tabs>
+
+{/* TODO: Link to an app-integration-template repo. Ideal format: a minimal frontend app that shows
+   the same UX flow (connect wallet, check balance, submit transaction, read state) on both Ethereum
+   and Aptos side by side, so integrators can see exactly how their EVM patterns map to Aptos.
+   The template should contain tested, working versions of all code patterns from this guide
+   (getBalance, build.simple, signAndSubmitTransaction, waitForTransaction, view functions,
+   wallet adapter setup, orderless transactions) so they can be verified against current SDK.
+   There are likely more patterns needed beyond what this guide covers. The process of building
+   the template will surface those gaps, which can be used to iterate on the guide.
+   Could also serve as the foundation for an application integration agent skill.
+   Ask Greg about creating this at aptos-labs/app-integration-template or similar. */}
+
+本页面面向已经构建过区块链应用并希望集成 Aptos 的开发者和 AI Agent。假设您了解终结性、签名和交易生命周期等区块链概念。如果您刚开始接触区块链开发，请先阅读[您的第一个 Move 模块](/zh/build/guides/first-move-module)。
+
+来自 Ethereum？Aptos Learn 上的 [Ethereum to Aptos Workshop](https://learn.aptoslabs.com/en/ethereum-to-aptos-guide/introduction) 涵盖 Move 合约、钱包集成、数据访问模式以及完整的 Solidity 与 Move 对比，全部配有交互式示例。快速参考表请查看 [Ethereum Cheatsheet](/zh/build/get-started/ethereum-cheatsheet)。
+
+安装 [Agent Skills](https://github.com/aptos-labs/aptos-agent-skills) 以在 Claude Code、Cursor 和 Copilot 中获取 Move 和 TypeScript SDK 技能。[MCP 服务器](https://www.npmjs.com/package/@aptos-labs/aptos-mcp)通过 [Geomi](https://geomi.dev) 为 AI 工具提供 Aptos 基础设施 API 访问。
+
+本指南涵盖：
+
+{/* TODO: Ask Greg if this TOC is redundant with the "On this page" sidebar, or if it adds value for the reader */}
+
+1. [Aptos 的不同之处](#aptos-的不同之处)
+2. [基础设施与入门](#基础设施与入门)
+3. [账户与地址](#账户与地址)
+4. [资产标准](#资产标准)
+5. [交易生命周期](#交易生命周期)
+6. [数据查询](#数据查询)
+7. [测试](#测试)
+
+## Aptos 的不同之处
+
+在 Ethereum 上需要通过外部工具和精心工程解决的许多问题，在 Aptos 上由协议本身处理。
+
+### 原生功能
+
+以下功能内置于协议中。在 Ethereum 上它们需要外部服务或自定义合约。
+
+- **[链上随机性](/zh/build/smart-contracts/randomness)** 通过 `#[randomness]` 属性实现。可证明公平，无需预言机。
+- **[赞助交易](/zh/build/guides/sponsored-transactions)** 提供一等公民费用支付模型。您的应用可以为用户支付 gas 费。[Geomi](https://geomi.dev) Gas Station 使大规模管理更容易。
+- **[无密钥账户](/zh/build/guides/aptos-keyless)** 通过 OIDC 实现社交登录。用户无需管理私钥即可交易。
+- **原生 K-of-N 多签** 内置于[账户模型](/zh/network/blockchain/accounts#multied25519-authentication)中。
+- **[无序交易](/zh/build/guides/orderless-transactions)** 使用 nonce 实现多台机器的并行提交。
+
+Aptos 使用安全设计的 [Move](/zh/build/smart-contracts/book) 代替 Solidity。
+
+### Move 语言
+
+Move 基于 Rust，专为安全的资产处理而构建。
+
+- **`&signer` 代替 `msg.sender`** 进行授权。函数显式声明谁可以调用它们。
+- **无重入攻击。** Move 的线性类型系统从设计上防止重入攻击。您不需要围绕它进行设计。
+- **事件是结构体**，带有 `#[event]` 属性，通过 `event::emit()` 发出。不同于 Solidity 风格的事件声明。
+- **无继承。** 合约通过 [friend 模块](/zh/build/smart-contracts/book/friends)进行组合。
+- **资源是公开可读的**，通过 REST API，就像 Solidity 存储槽通过 `eth_getStorageAt` 可读一样。不要在链上存储秘密。
+
+参阅 [Move 安全指南](/zh/build/smart-contracts/move-security-guidelines)获取完整的安全参考。要编写和部署您的第一个合约，请按照[您的第一个 Move 模块](/zh/build/guides/first-move-module)操作。Move 还内置了[升级策略](/zh/build/smart-contracts/book/package-upgrades)，无需代理模式，您可以在准备就绪时将包锁定为 `immutable`。
+
+### Aptos Explorer
+
+使用 [Aptos CLI](/zh/build/cli) 部署合约时，您的 Move 源代码会发布到链上，并可在 Aptos Explorer（[mainnet](https://explorer.aptoslabs.com/?network=mainnet)、[testnet](https://explorer.aptoslabs.com/?network=testnet)、[devnet](https://explorer.aptoslabs.com/?network=devnet)）上即时查看。无需验证步骤，不像 Etherscan 需要单独提交源代码。Explorer 提供：
+
+- **反编译和反汇编视图**（基于 WASM，客户端运行）展示字节码实际执行的内容，防止恶意行为者的源码欺骗。
+- **ABI** 自动为每个合约提供。
+- **Run 和 View 选项卡** 让您直接执行 entry 函数或调用只读 view 函数，无需构建前端即可测试和与团队分享合约。
+- **Geomi API 密钥集成** 通过设置图标获取开发期间的更高速率限制。
+
+Explorer 还显示实时网络统计数据：TPS、出块速度、gas 成本、活跃验证者和已部署合约。使用 [Network Analytics](https://explorer.aptoslabs.com/analytics?network=mainnet) 检查网络健康状况或了解当前 gas 定价。
+
+![Aptos Explorer Network Analytics 显示 TPS、活跃节点和交易历史](~/assets/images/explorer-analytics.png)
+
+## 基础设施与入门
+
+您需要一个 RPC 端点、一个 SDK 和 [Aptos CLI](/zh/build/cli)（用于编译、测试和发布 Move 合约）。其他一切都建立在这些之上。
+
+### RPC 和数据访问
+
+使用 [Geomi](https://geomi.dev) 获取托管 RPC 访问、Gas Station（赞助用户交易）和无代码索引。或者，运行您自己的[全节点](/zh/network/nodes/full-node)以直接访问区块链。
+
+[Indexer](/zh/build/indexer) 提供对链上数据的高效访问，包括历史交易、代币余额和事件。
+
+### TypeScript SDK
+
+主要 SDK 是 [`@aptos-labs/ts-sdk`](/zh/build/sdks/ts-sdk)。创建一个客户端实例并复用它：
+
+```typescript
+import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
+
+const config = new AptosConfig({ network: Network.MAINNET });
+const aptos = new Aptos(config);
+```
+
+使用 `Network` 枚举而不是硬编码 URL。开发时默认使用 `Network.TESTNET`，因为 devnet 会频繁重置。其他语言请参阅完整的 [SDK 列表](/zh/build/sdks)。
+
+### 前端：Wallet Adapter
+
+对于 React 前端，[`@aptos-labs/wallet-adapter-react`](/zh/build/sdks/wallet-adapter) 提供 `useWallet()` hook 用于连接 Aptos 钱包（Petra、Pontem 等）。这是 Ethereum 上 wagmi/RainbowKit 的 Aptos 等价物。
+
+<Aside type="note">
+  在 Next.js 中，钱包提供者需要 `dynamic(() => import(...), { ssr: false })`，因为它们访问服务器端渲染中不存在的浏览器 API。`Account.generate()` 和 `Account.fromPrivateKey()` 仅在服务器端使用，永远不要在前端代码中使用。
+</Aside>
+
+## 账户与地址
+
+Aptos 账户与大多数链的工作方式不同。每个地址默认有效，账户模型原生支持多种签名方案。
+
+### 地址
+
+每个账户由一个 32 字节的十六进制地址标识。存在三种表示形式，但带 `0x` 前缀的完整形式是首选：
+
+```
+0x00000000000000000000000000000001  (首选：带 0x 的完整形式)
+0x1                                  (带 0x 的短形式)
+00000000000000000000000000000001     (不带 0x 的完整形式)
+```
+
+链上函数引用格式为 `account_address::module_name::function_name`。例如，`0x1::aptos_account::transfer` 调用地址 `0x1` 的 `aptos_account` 模块中的 `transfer` 函数。您会在每个交易负载中看到这种模式。
+
+SDK 通过 `AccountAddress.from()` 自动处理地址解析。比较时使用 `.equals()`，而不是字符串匹配。[Aptos Name Service](https://www.aptosnames.com/) 提供人类可读的 `.apt` 域名，类似于 Ethereum 上的 ENS。
+
+### 无状态账户 (AIP-115)
+
+Aptos 上每个地址默认就是一个有效账户，只要您持有私钥就可以从中交易。链上 `Account` 资源仅在首次需要时自动创建（密钥轮换或序列号交易）。
+
+这意味着：
+
+- 您可以向任何地址发送资金，无需先创建账户
+- `GET /accounts/{address}` 返回默认值（永远不会 404）
+- 默认 auth\_key = 地址本身，sequence\_number = 0
+
+详见 [AIP-115](/zh/build/aips/aip-115) 的完整 FAQ。
+
+<Aside type="note">
+  在其他链上，您可能会在发送前检查账户是否存在。在 Aptos 上，`GET /accounts/{address}` 为每个地址返回有效默认值，因此没有"账户未找到"的状态需要处理。
+</Aside>
+
+### 账户类型
+
+Aptos 有三种账户：
+
+- **标准**账户有公钥/私钥对
+- **[资源账户](/zh/build/smart-contracts/resource-accounts)** 是没有私钥的自主账户，供智能合约用于持有资产
+- **[Objects](/zh/build/smart-contracts/objects)** 在单个地址存储一组资源，代表一个实体
+
+新开发建议使用 Object 模型而非资源账户。
+
+## 资产标准
+
+Aptos 使用 [Fungible Asset (FA) 标准](/zh/build/smart-contracts/fungible-asset)作为代币标准，类似于 Ethereum 上的 ERC-20。
+
+### APT
+
+APT 是原生代币。使用 **8 位小数**（最小单位称为"octa"）。这与 Ethereum 的 18 位小数 (wei) 不同。如果您从 EVM 链移植财务逻辑，每个转换公式都需要调整。
+
+```
+1 APT = 100,000,000 octas (10^8)
+1 ETH = 1,000,000,000,000,000,000 wei (10^18)
+```
+
+### 查询余额
+
+使用 SDK 的 `getBalance()` 查询 APT：
+
+```typescript
+const balance = await aptos.getBalance({
+  accountAddress: "0x5",
+  asset: "0x1::aptos_coin::AptosCoin"
+});
+// Returns number in octas
+```
+
+对于其他 Fungible Asset，使用 `primary_fungible_store::balance` [view 函数](/zh/build/sdks/ts-sdk/fetch-data-via-sdk)：
+
+```typescript
+const [balanceStr] = await aptos.view<[string]>({
+  payload: {
+    function: "0x1::primary_fungible_store::balance",
+    typeArguments: ["0x1::object::ObjectCore"],
+    functionArguments: [accountAddress, faMetadataAddress]
+  }
+});
+const balance = BigInt(balanceStr);
+```
+
+余额值使用 `bigint`（而非 `number`）以避免大金额的 JavaScript 精度损失。
+
+### 转移资产
+
+在账户之间转移 APT：
+
+```typescript
+const transaction = await aptos.transaction.build.simple({
+  sender: account.accountAddress,
+  data: {
+    function: "0x1::aptos_account::transfer",
+    functionArguments: [recipientAddress, amountInOctas],
+  },
+});
+```
+
+对于其他 Fungible Asset，使用 `0x1::primary_fungible_store::transfer`。
+
+### 代币注册表
+
+获取 Aptos 上经过验证的代币列表（含地址、小数位数和元数据），请查看 [Panora Token List](https://github.com/PanoraExchange/Aptos-Tokens)。NFT 请参阅 [Digital Asset 标准](/zh/build/smart-contracts/digital-asset)。价格信息请参阅[预言机指南](/zh/build/guides/oracles)。
+
+## 交易生命周期
+
+与 Ethereum 需要等待区块确认不同，Aptos 使用 BFT 共识，交易在提交时立即最终确认。Aptos 还支持两种重放保护模式：基于序列号（有序，默认）和无序（[AIP-123](/zh/build/guides/orderless-transactions)，通过 nonce 并行提交）。
+
+<Tabs>
+  <TabItem label="流程">
+    在 Ethereum 上，您需要等待区块确认才能信任交易。在 Aptos 上，[交易在提交时即最终确认](/zh/build/guides/exchanges#what-is-the-finality-of-a-transaction)。
+
+    ```mermaid
+    graph LR
+        Build["1. Build<br/>Payload"] --> Simulate["2. Simulate<br/>(estimate gas)"]
+        Simulate --> Sign["3. Sign<br/>(Ed25519, secp256k1,<br/>or passkey)"]
+        Sign --> Submit["4. Submit<br/>POST /transactions"]
+        Submit --> Poll["5. Poll Status<br/>GET /by_hash"]
+        Poll --> Done["6. Finalized<br/>(immediate)"]
+    ```
+
+    1. **构建**交易负载（entry 函数和参数）。
+    2. **模拟**（可选）以估算 gas 并预览结果。不收取 gas 费。
+    3. **签名**使用您的密钥（Ed25519、secp256k1 或 passkey）。
+    4. **提交**至 `POST /transactions`。返回交易哈希。这意味着节点接受了它，而非已提交。
+    5. **轮询**通过 `GET /transactions/by_hash/{hash}` 查询状态。超时时间 30 到 60 秒。
+    6. **最终确认**当 `success` 为 `true` 时。在 Aptos 上，已提交 = 已最终确认（BFT 共识，无需区块确认）。
+
+    如果交易在超时内未出现，很可能已被丢弃。如果 `success` 为 `false`，检查 `vm_status` 获取错误信息。
+
+    <Aside type="note">
+      与 Ethereum 不同，您不需要确认监听器、重组处理器或对已最终确认交易的重试逻辑。一旦提交，状态变更即为永久。参阅[交易和状态](/zh/network/blockchain/txns-states)了解完整状态模型。
+    </Aside>
+  </TabItem>
+
+  <TabItem label="序列号 vs 无序">
+    Aptos 有两种交易模式。唯一的区别在于重放保护的工作方式。其他一切（模拟、签名、提交、等待）都相同。
+
+    ```mermaid
+    graph TD
+        Tx["Your Transaction<br/>needs replay protection"] --> Mode{"Ordered or<br/>parallel?"}
+        Mode -->|"Ordered<br/>(default)"| SeqDesc["Transactions execute<br/>in sequence"]
+        Mode -->|"Parallel<br/>(AIP-123)"| NonceDesc["Multiple machines<br/>submit simultaneously"]
+        SeqDesc --> SeqParam["Set sequence_number<br/>(must match account state)"]
+        NonceDesc --> NonceParam["Set replayProtectionNonce<br/>(random u64, 60s expiration)"]
+        SeqParam --> Submit["Sign & Submit"]
+        NonceParam --> Submit
+    ```
+
+    **使用有序模式**适用于大多数集成。简单且可预测。
+
+    **使用并行模式**当多台机器为同一账户提交时（交易所热钱包、高吞吐量系统）。将 `replayProtectionNonce` 设置为随机值：
+
+    ```typescript
+    const transaction = await aptos.transaction.build.simple({
+      sender: account.accountAddress,
+      data: {
+        function: "0x1::aptos_account::transfer",
+        functionArguments: [recipient, 100],
+      },
+      options: {
+        replayProtectionNonce: BigInt(Math.floor(Math.random() * 2**64)),
+      }
+    });
+    ```
+
+    <Aside type="note">
+      无序交易在 60 秒后过期。基于序列号的交易可以有更长的过期时间。详见[无序交易](/zh/build/guides/orderless-transactions)。
+    </Aside>
+  </TabItem>
+</Tabs>
+
+### 签名
+
+Aptos 支持[多种签名方案](/zh/network/blockchain/accounts#authentication-key)：
+
+| 方案                      | 用途                |
+| ----------------------- | ----------------- |
+| **Ed25519**（默认）         | 标准单密钥账户           |
+| **Secp256k1 ECDSA**     | 与 Ethereum 风格密钥兼容 |
+| **Passkeys / WebAuthn** | 浏览器原生认证           |
+| **K-of-N 多签**           | 原生多签账户            |
+
+### 编码
+
+交易使用 [BCS（Binary Canonical Serialization）](https://github.com/diem/bcs)编码。SDK 自动处理此操作。如果需要通过 REST API 手动构造交易，可以提交 JSON 编码的负载，但 BCS 更高效，推荐用于生产环境。
+
+### 交易类型
+
+- **Entry 函数**调用现有的链上函数。这是大多数集成使用的方式。
+- **Move 脚本**允许在单个交易中进行原子多步操作。
+
+交易大小限制为 64KB。组合写操作限制为每个交易 10MB。
+
+### SDK 模式
+
+提交交易的标准 TypeScript 模式：
+
+```typescript
+// Build
+const transaction = await aptos.transaction.build.simple({
+  sender: account.accountAddress,
+  data: {
+    function: "0x1::aptos_account::transfer",
+    functionArguments: [recipient, amountInOctas],
+  },
+});
+
+// Sign and submit
+const pending = await aptos.signAndSubmitTransaction({
+  signer: account,
+  transaction,
+});
+
+// Wait for confirmation
+const committed = await aptos.waitForTransaction({
+  transactionHash: pending.hash,
+});
+
+if (!committed.success) {
+  throw new Error(committed.vm_status);
+}
+```
+
+<Aside type="caution">
+  提交后务必调用 `waitForTransaction()`。提交意味着节点接受了交易，而非已提交上链。SDK 会为您处理轮询循环。
+</Aside>
+
+## 数据查询
+
+Aptos 提供原生 [Indexer](/zh/build/indexer) 和服务器端 [Transaction Filtering](/zh/build/indexer/txn-stream/txn-filtering)，[Geomi](https://geomi.dev) 在此基础上提供无代码索引，因此您无需构建自定义索引基础设施来跟踪链上活动。
+
+### 跟踪余额变化
+
+对于需要实时监控余额变化的生产系统，使用 Indexer gRPC v2 流上的 [Transaction Filtering](/zh/build/indexer/txn-stream/txn-filtering)。这让您可以定义服务器端过滤器（JSON、YAML 或 Rust DSL），仅接收您关心的交易和事件。
+
+您可以按发送者地址、调用的函数、事件类型、成功状态进行过滤，并使用 AND、OR、NOT 运算符组合过滤器。这比处理网络上的每一笔交易要高效得多。
+
+[Geomi](https://geomi.dev) 还提供无代码索引，让您无需管理基础设施即可创建自定义索引和 API。[事件](/zh/network/blockchain/events)也可用于直接跟踪链上变化。
+
+### Gas 跟踪
+
+Gas 始终以 APT 计价。计算任何交易的 gas 成本：
+
+```
+gas_cost = gas_used × gas_unit_price
+```
+
+两个值都在交易响应中。这适用于任何资产的转移。
+
+### 历史状态
+
+Aptos 上的每笔交易都有一个唯一的版本号，代表其在全局交易历史中的位置。任何版本的区块链状态是该点之前所有交易输出的累积。
+
+通过以下方式查询历史数据：
+
+- `GET /accounts/{address}/transactions` 获取账户的交易历史
+- `GET /transactions/by_version/{version}` 获取特定交易
+- [Indexer API](/zh/build/indexer/indexer-api) 用于复杂的历史查询
+
+节点存储可以配置为保留或修剪历史数据。参阅 [Fullnode REST API](/zh/build/apis/fullnode-rest-api) 文档了解修剪配置。
+
+### 开发期间
+
+[Aptos Explorer](https://explorer.aptoslabs.com) 显示任何账户的交易历史、事件、资源和余额变化。在编写监控代码之前，使用它来验证您的集成是否正常工作。
+
+## 测试
+
+使用 **devnet** 进行快速 CLI 和 Agent 部署测试（频繁重置，免费水龙头，快速迭代）。使用 **testnet** 进行集成测试和 beta 测试（持久状态，更接近 mainnet 条件）。对于完全隔离且无速率限制的环境，运行[本地网络](/zh/network/nodes/localnet)：`aptos node run-local-testnet --with-indexer-api`。
+
+<Aside type="caution">
+  testnet 和 mainnet 使用不同的密钥。务必先在 testnet 上部署和测试，再上 mainnet。
+</Aside>
+
+### 验证您的集成
+
+使用[水龙头](/zh/network/faucet)为测试账户提供资金。testnet 上的账户 `0x5` 有已知余额可用于验证。参阅[在链上尝试](/zh/build/cli/trying-things-on-chain)了解创建账户和发送测试交易的 CLI 演练。
+
+基本集成测试应：
+
+1. 通过水龙头创建或资助测试账户
+2. 使用 `getBalance({ accountAddress, asset })` 检查账户余额
+3. 提交转账交易
+4. 使用 `waitForTransaction()` 等待确认
+5. 验证接收方余额已变化
+
+### 高级测试
+
+CLI 提供 [Transaction Simulation Sessions](/zh/build/cli/working-with-move-contracts/transaction-simulation-sessions)，让您可以对 mainnet 或 testnet 状态的分叉顺序模拟多个交易。这对于在不花费真实代币的情况下测试复杂的集成逻辑非常有用。
+
+对于合约部署，使用 `aptos move deploy-object`（现代方式）。参阅 [deploy-contracts 技能](https://github.com/aptos-labs/aptos-agent-skills)获取部署前检查清单。
+
+### Explorer 验证
+
+部署合约后，在 [Aptos Explorer](https://explorer.aptoslabs.com) 上验证。您的源代码、ABI 和交互式函数调用立即可用。使用 Run 选项卡测试 entry 函数，使用 View 选项卡检查只读状态。

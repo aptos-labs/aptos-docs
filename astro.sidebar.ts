@@ -438,6 +438,7 @@ export const sidebar = [
       group("smartContracts.group.moveBook", {
         collapsed: true,
         items: [
+          "build/smart-contracts/book/SUMMARY",
           "build/smart-contracts/book/modules-and-scripts",
           "build/smart-contracts/book/structs-and-resources",
           "build/smart-contracts/book/integers",

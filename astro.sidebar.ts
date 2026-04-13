@@ -468,6 +468,7 @@ export const sidebar = [
           "build/smart-contracts/book/coding-conventions",
           "build/smart-contracts/book/move-tutorial",
           "build/smart-contracts/book/standard-library",
+          "build/smart-contracts/book/move-2",
         ],
       }),
 
@@ -583,8 +584,6 @@ export const sidebar = [
           "build/smart-contracts/error-codes",
         ],
       }),
-
-      "build/smart-contracts/book/move-2", // Release Notes
     ],
   }),
 

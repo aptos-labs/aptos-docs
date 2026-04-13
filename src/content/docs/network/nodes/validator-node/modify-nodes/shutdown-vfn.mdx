@@ -1,0 +1,147 @@
+---
+title: "Deprecate VFNs"
+description: "Shut down your Validator Full Node (VFN) and configure your validator to accept direct PFN connections as part of the AIP-139 rollout on devnet and testnet."
+sidebar:
+  label: "Deprecate VFNs"
+  badge:
+    text: Beta
+    variant: caution
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+[AIP-139](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-139-deprecating-validator-full-nodes-vfns.md)
+deprecates Validator Full Nodes (VFNs) by allowing validators to accept direct connections from Public Full Nodes
+(PFNs). This removes the need for operators to run a separate VFN alongside their validator.
+
+<Aside type="caution">
+  **Devnet and Testnet**<br />
+  AIP-139 is only supported on Devnet and Testnet. It is **not yet available on Mainnet**. Do not follow
+  these instructions for Mainnet validators until the AIP is enabled!
+</Aside>
+
+## Overview
+
+This guide provides step-by-step instructions for validator operators to shut down their VFNs and configure their
+validators to accept PFN connections directly. To achieve this, you will need to perform the following tasks:
+
+1. Shut down your VFN.
+2. Configure the validator to accept inbound PFN connections.
+
+See the steps below for detailed instructions on how to complete each of these tasks.
+
+## Step 1: Shut down your VFN
+
+<Aside type="danger">
+  **Backup your VFN data**<br />
+  As a precaution, we recommend backing up the VFN keys, identity files, and configuration files before shutting down your VFN. These
+  will be useful in case you need to re-deploy the VFN in the future.
+</Aside>
+
+If you run a VFN in Devnet or Testnet, you can take the VFN offline safely. You do not need to leave the
+validator set to shut down the VFN. Only the validator needs to remain online.
+
+To stop the VFN, use the appropriate method for your deployment, for example:
+
+- **Source code:** Kill the `aptos-node` process running the VFN.
+- **Docker:** Run `docker compose down --volumes` in the VFN directory.
+- **Terraform:** Run `terraform destroy` targeting the VFN resources.
+
+## Step 2: Configure PFN connections
+
+After shutting down the VFN, decide how you want the validator to handle incoming PFN connections:
+
+There are three options:
+
+1. **(Recommended)** Use the default port (6182) to accept PFN connections.
+2. Use a custom port to accept PFN connections.
+3. Reject PFN connections.
+
+### Option 1: Use the default port
+
+By default, the validator binary will start listening for PFN connections on port **6182**
+(without any required config changes). If you are happy with this port, no additional steps are
+required. Simply ensure port 6182 is open in your firewall, and your validator will be able to
+accept inbound PFN connections.
+
+### Option 2: Use a custom port
+
+If you want to use a different port for PFN connections, you can configure the validator to listen on that port instead.
+To do this, add a `full_node_networks` section to your validator config with the desired port:
+
+```yaml title="validator.yaml"
+full_node_networks:
+  - network_id: "public"
+    discovery_method: "none" # Prevent unnecessary outbound connections to other PFNs.
+    max_outbound_connections: 0 # Prevent unnecessary outbound connections to other PFNs.
+    listen_address: "/ip4/0.0.0.0/tcp/<your-port>"
+```
+
+Replace `<your-port>` with the port you want to use (e.g., `7777`), and ensure the port is open in your firewall.
+
+After updating the config and restarting the validator, you must also update the on-chain
+`fullnode_network_addresses` to point to your validator's host and the new port. Use the public key from
+your validator's `validator-identity.yaml` file (i.e., the validator's own network public key,
+not a VFN key). Run the following command:
+
+```bash
+aptos node update-validator-network-addresses \
+  --pool-address <owner-address> \
+  --full-node-host <validator-host>:<your-port> \
+  --full-node-network-public-key <validator-network-public-key> \
+  --operator-config-file <operator-config-file>
+```
+
+Replace `<owner-address>` with your validator pool address, `<validator-host>` with your validator's
+public IP or hostname, `<your-port>` with the port configured above, and `<validator-network-public-key>`
+with the public key from your `validator-identity.yaml` file. The `--operator-config-file` flag points
+to your operator config and satisfies the CLI's requirement for validator host and key information.
+
+For more details on using `update-validator-network-addresses` (including how to locate your pool address
+and operator config), see [Connect to the Aptos Network](/network/nodes/validator-node/connect-nodes/connect-to-aptos-network).
+
+<Aside type="tip">
+  **Wait for the next epoch**<br />
+  On-chain network address updates take effect at the start of the next epoch. PFNs will not be able to
+  discover the new address until then.
+</Aside>
+
+#### Verify the on-chain registration
+
+After the next epoch begins, confirm that the correct addresses are registered on-chain by running:
+
+```bash
+aptos node show-validator-config \
+  --pool-address <owner-address> \
+  --profile <your-profile>
+```
+
+The output includes `fullnode_network_addresses`, which should reflect your validator's host and the custom port
+you configured. For example:
+
+```json
+{
+  "fullnode_network_addresses,": "/ip4/<validator-host>/tcp/<your-port>/noise-ik/<validator-network-public-key>/handshake/0"
+}
+```
+
+If the value has not updated yet, wait for the next epoch and run the command again.
+
+### Option 3: Reject PFN connections
+
+<Aside type="caution">
+  **Not Recommended**<br />
+  Rejecting PFN connections can be harmful to the wider network, and degrade ecosystem health. When validators
+  reject PFN connections, PFNs have fewer peers to connect to, which reduces their ability to sync and
+  serve data reliably. Only use this option if you have a strong operational reason to do so.
+</Aside>
+
+If you do not want the validator to accept any PFN connections, set `enable_validator_pfn_connections` to
+`false` in the `base` section of your validator node config:
+
+```yaml title="validator.yaml"
+base:
+  enable_validator_pfn_connections: false
+```
+
+When this configuration is used, the node will no longer listen for or accept connections from PFNs.

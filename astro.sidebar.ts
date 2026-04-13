@@ -637,6 +637,7 @@ export const sidebar = [
               "network/nodes/validator-node/modify-nodes/update-validator-node",
               "network/nodes/validator-node/modify-nodes/shutting-down-nodes",
               "network/nodes/validator-node/modify-nodes/rotate-consensus-key",
+              "network/nodes/validator-node/modify-nodes/shutdown-vfn",
             ],
           }),
           group("network.group.validatorNode.monitorValidators", {

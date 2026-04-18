@@ -53,3 +53,28 @@ npx skills add aptos-labs/aptos-agent-skills
 [`llms.txt`](/llms.txt) 路由还会列出机器可读的 **API** 链接——[`/aptos-spec.json`](/aptos-spec.json)（全节点 REST API 的 OpenAPI 3 JSON）以及 [`/zh/rest-api`](/zh/rest-api)（HTML 参考文档）——并在同一处汇总 **MCP**、Agent Skills、浏览器、GitHub、标准与 Indexer GraphQL 等 `.md` 链接。
 
 <LinkCard href="/zh/llms-txt" title="如何在 AI 工具中使用 LLMs.txt" description="Cursor、GitHub Copilot、Claude.ai、ChatGPT、Windsurf 等工具的使用说明" />
+
+## 面向智能体的发现端点
+
+为方便编程智能体一站式发现 Aptos 的机器可读资源，文档站点发布了一组标准化的发现文档。每个页面的响应也会带上 [`Link`](https://www.rfc-editor.org/rfc/rfc8288) 响应头与对应的 `<link rel="…">` 标签，指向相同的 URL。
+
+| 端点                                                                             | 作用                                                                                                                                                                                        |
+| ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`/.well-known/api-catalog`](/.well-known/api-catalog)                         | 符合 [RFC 9727](https://www.rfc-editor.org/rfc/rfc9727) 的 linkset，指向 REST API 规范、文档、Indexer GraphQL 以及 LLMs.txt 文档源。                                                                        |
+| [`/.well-known/mcp/server-card.json`](/.well-known/mcp/server-card.json)       | 描述 [`@aptos-labs/aptos-mcp`](https://www.npmjs.com/package/@aptos-labs/aptos-mcp) 的 [MCP Server Card (SEP-2127)](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2127)。 |
+| [`/.well-known/agent-skills/index.json`](/.well-known/agent-skills/index.json) | 基于 [Agent Skills Discovery](https://github.com/cloudflare/agent-skills-discovery-rfc) 的 [aptos-agent-skills](https://github.com/aptos-labs/aptos-agent-skills) 索引，包含每个技能的 SHA-256 摘要。     |
+| [`/robots.txt`](/robots.txt)                                                   | 包含 [Content Signals](https://contentsignals.org/)（`ai-train=yes, search=yes, ai-input=yes`），表明 Aptos 文档允许 AI 使用。                                                                          |
+
+### Markdown 内容协商
+
+任何拥有 `.md` 镜像的文档 URL（例如 [`/zh/build/sdks`](/zh/build/sdks) → [`/zh/build/sdks.md`](/zh/build/sdks.md)）都会响应 `Accept: text/markdown` 并返回 `Content-Type: text/markdown`：
+
+```bash
+curl -H "Accept: text/markdown" https://aptos.dev/zh/build/sdks
+```
+
+浏览器的默认 `Accept: text/html` 依旧得到 HTML 响应。
+
+### WebMCP
+
+在实现 [WebMCP 提案](https://webmachinelearning.github.io/webmcp/) 的浏览器（如 Chrome 早期预览）中，每个文档页面会通过 `navigator.modelContext` 暴露以下工具：`aptos-docs.search`、`aptos-docs.open-doc`、`aptos-docs.fetch-doc-markdown` 与 `aptos-docs.list-llms-feeds`。

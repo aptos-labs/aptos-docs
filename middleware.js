@@ -41,7 +41,7 @@ var __toESM = (mod, isNodeMode, target) => (
   )
 );
 var require_headers = __commonJS({
-  "../functions/headers.js"(exports, module) {
+  "../functions/headers.js"(exports$1, module) {
     var __defProp2 = Object.defineProperty;
     var __getOwnPropDesc2 = Object.getOwnPropertyDescriptor;
     var __getOwnPropNames2 = Object.getOwnPropertyNames;
@@ -136,7 +136,7 @@ var require_headers = __commonJS({
   },
 });
 var require_middleware = __commonJS({
-  "../functions/middleware.js"(exports, module) {
+  "../functions/middleware.js"(exports$1, module) {
     var __defProp2 = Object.defineProperty;
     var __getOwnPropDesc2 = Object.getOwnPropertyDescriptor;
     var __getOwnPropNames2 = Object.getOwnPropertyNames;
@@ -173,8 +173,7 @@ var require_middleware = __commonJS({
     });
     module.exports = __toCommonJS(middleware_exports);
     function handleMiddlewareField(init, headers) {
-      var _a;
-      if ((_a = init == null ? void 0 : init.request) == null ? void 0 : _a.headers) {
+      if (init?.request?.headers) {
         if (!(init.request.headers instanceof Headers)) {
           throw new Error("request.headers must be an instance of Headers");
         }
@@ -187,7 +186,7 @@ var require_middleware = __commonJS({
       }
     }
     function rewrite2(destination, init) {
-      const headers = new Headers((init == null ? void 0 : init.headers) ?? {});
+      const headers = new Headers(init?.headers ?? {});
       headers.set("x-middleware-rewrite", String(destination));
       handleMiddlewareField(init, headers);
       return new Response(null, {
@@ -196,7 +195,7 @@ var require_middleware = __commonJS({
       });
     }
     function next2(init) {
-      const headers = new Headers((init == null ? void 0 : init.headers) ?? {});
+      const headers = new Headers(init?.headers ?? {});
       headers.set("x-middleware-next", "1");
       handleMiddlewareField(init, headers);
       return new Response(null, {
@@ -220,7 +219,21 @@ import_headers.REQUEST_ID_HEADER_NAME;
 import_headers.geolocation;
 import_headers.ipAddress;
 var export_next = import_middleware.next;
-import_middleware.rewrite;
+var export_rewrite = import_middleware.rewrite;
+function middleware$3(request) {
+  const url = new URL(request.url);
+  const pathname = url.pathname;
+  if (pathname.endsWith(".md")) {
+    return void 0;
+  }
+  const enPathMatch = /^\/en(\/.*|$)/.exec(pathname);
+  if (enPathMatch) {
+    const restOfPath = enPathMatch[1] ?? "/";
+    url.pathname = restOfPath;
+    return Response.redirect(url);
+  }
+  return void 0;
+}
 const SUPPORTED_LANGUAGES = [
   {
     code: "en",
@@ -231,10 +244,6 @@ const SUPPORTED_LANGUAGES = [
     code: "zh",
     label: "简体中文",
   },
-  //{
-  //  code: "ja",
-  //  label: "日本語",
-  //},
 ];
 const LANGUAGE_CODES = SUPPORTED_LANGUAGES.map((lang) => lang.code);
 const DEFAULT_LANG = "en";
@@ -298,9 +307,11 @@ function isCrawler(userAgent) {
   return MOST_COMMON_CRAWLERS.some((regexp) => regexp.test(userAgent));
 }
 function middleware$2(request) {
-  var _a, _b;
   const url = new URL(request.url);
   const pathname = url.pathname;
+  if (pathname.endsWith(".md")) {
+    return void 0;
+  }
   const userAgent = request.headers.get("user-agent");
   if (isCrawler(userAgent)) {
     return void 0;
@@ -310,10 +321,7 @@ function middleware$2(request) {
   let preferredLocale = langCookieMatch ? langCookieMatch[1] : null;
   if (!preferredLocale) {
     const acceptLanguage = request.headers.get("accept-language") ?? "";
-    preferredLocale =
-      ((_b = (_a = acceptLanguage.split(",")[0]) == null ? void 0 : _a.split(";")[0]) == null
-        ? void 0
-        : _b.split("-")[0]) ?? DEFAULT_LANG;
+    preferredLocale = acceptLanguage.split(",")[0]?.split(";")[0]?.split("-")[0] ?? DEFAULT_LANG;
   }
   const langPathMatch = /^\/([a-z]{2})(\/.*|$)/.exec(pathname);
   const currentLang = langPathMatch ? langPathMatch[1] : DEFAULT_LANG;
@@ -333,16 +341,78 @@ function middleware$2(request) {
   }
   return void 0;
 }
+const SKIP_EXTENSIONS = new Set([
+  ".md",
+  ".txt",
+  ".json",
+  ".xml",
+  ".js",
+  ".css",
+  ".map",
+  ".svg",
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".gif",
+  ".webp",
+  ".avif",
+  ".ico",
+  ".woff",
+  ".woff2",
+  ".ttf",
+  ".otf",
+  ".mp4",
+  ".webm",
+  ".pdf",
+  ".zip",
+  ".wasm",
+]);
+const SKIP_PREFIXES = [
+  "/_",
+  "/api/",
+  "/.well-known/",
+  "/rest-api/",
+  "/move-reference",
+  "/gas-profiling",
+  "/scripts/",
+];
+function acceptsMarkdown(accept) {
+  if (!accept) return false;
+  return /(?:^|,\s*)text\/markdown\b/i.test(accept);
+}
+function hasSkippedExtension(pathname) {
+  const lastSlash = pathname.lastIndexOf("/");
+  const tail = lastSlash === -1 ? pathname : pathname.slice(lastSlash);
+  const dotIdx = tail.lastIndexOf(".");
+  if (dotIdx === -1) return false;
+  return SKIP_EXTENSIONS.has(tail.slice(dotIdx).toLowerCase());
+}
 function middleware$1(request) {
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return void 0;
+  }
+  const accept = request.headers.get("accept");
+  if (!acceptsMarkdown(accept)) {
+    return void 0;
+  }
   const url = new URL(request.url);
   const pathname = url.pathname;
-  const enPathMatch = /^\/en(\/.*|$)/.exec(pathname);
-  if (enPathMatch) {
-    const restOfPath = enPathMatch[1] ?? "/";
-    url.pathname = restOfPath;
-    return Response.redirect(url);
+  if (hasSkippedExtension(pathname)) {
+    return void 0;
   }
-  return void 0;
+  if (SKIP_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
+    return void 0;
+  }
+  const normalized =
+    pathname.length > 1 && pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
+  const targetPath = normalized === "/" ? "/index.md" : `${normalized}.md`;
+  const rewriteUrl = new URL(url);
+  rewriteUrl.pathname = targetPath;
+  return export_rewrite(rewriteUrl, {
+    headers: {
+      Vary: "Accept",
+    },
+  });
 }
 async function applyMiddleware(req, middlewares) {
   return middlewares.reduce(
@@ -359,16 +429,21 @@ export const config = {
     "/",
     "/build/:path*",
     "/contribute/:path*",
-    "/guides/:path*",
     "/network/:path*",
     "/move-reference",
     "/move-reference/:path*",
     "/en",
     "/en/:path*",
-    "/zh",
-    "/zh/:path*",
+    "/zh$",
+    "/zh/build/:path*",
+    "/zh/contribute/:path*",
+    "/zh/network/:path*",
+    "/zh/move-reference",
+    "/zh/move-reference/:path*",
+    "/zh/en",
+    "/zh/en/:path*",
   ],
 };
 export default async function middleware(req) {
-  return await applyMiddleware(req, [middleware$1, middleware$2, export_next]);
+  return await applyMiddleware(req, [middleware$1, middleware$3, middleware$2, export_next]);
 }

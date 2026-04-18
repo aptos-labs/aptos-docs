@@ -2,6 +2,7 @@ import { next } from "@vercel/edge";
 import enRedirect from "./middlewares/en-redirect";
 // Edge-compatible middleware that implements a middleware chain pattern
 import i18nRedirect from "./middlewares/i18n-redirect";
+import markdownNegotiation from "./middlewares/markdown-negotiation";
 import { matcher } from "./middlewares/matcher-routes-dynamic";
 
 // Create config object with the auto-generated matcher
@@ -27,6 +28,8 @@ async function applyMiddleware(
 // The main middleware function
 export default async function middleware(req: Request) {
   return await applyMiddleware(req, [
+    // Agents requesting text/markdown are served the rendered .md export.
+    markdownNegotiation,
     enRedirect,
     i18nRedirect,
     // Add more middleware functions here as needed

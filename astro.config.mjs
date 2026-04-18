@@ -144,10 +144,11 @@ export default defineConfig({
               return true;
             }
 
-            // Same-site absolute URL becomes `/.well-known/llms.txt`; after stripping `/` the path
-            // starts with `.` and is misclassified as a relative link. Production serves this via
-            // Vercel redirect to /llms.txt, not as a doc route.
-            if (link.includes("/.well-known/llms.txt")) {
+            // Same-site absolute URL becomes `/.well-known/…`; after stripping `/` the path
+            // starts with `.` and is misclassified as a relative link. These are served from
+            // `public/.well-known/*` (or, for llms.txt, via a Vercel redirect to /llms.txt),
+            // not as doc routes.
+            if (link.includes("/.well-known/")) {
               return true;
             }
 

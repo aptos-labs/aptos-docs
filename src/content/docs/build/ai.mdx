@@ -56,3 +56,28 @@ Some clients resolve `/.well-known/llms.txt`; production serves the same index v
 The [`llms.txt`](/llms.txt) router also surfaces machine-readable **API** links—[`/aptos-spec.json`](/aptos-spec.json) (OpenAPI 3 JSON for the node REST API) and [`/rest-api`](/rest-api) (HTML reference)—plus **MCP**, Agent Skills, Explorer, GitHub, standards, and Indexer GraphQL `.md` links in one place.
 
 <LinkCard href="/llms-txt" title="How to use LLMs.txt with AI tools" description="Instructions for Cursor, GitHub Copilot, Claude.ai, ChatGPT, Windsurf, and more" />
+
+## Agent discovery endpoints
+
+The docs site publishes a handful of standardized discovery documents so coding agents can bootstrap from a single root. Every page also returns a [`Link`](https://www.rfc-editor.org/rfc/rfc8288) response header and matching `<link rel="…">` tags that advertise the same URLs.
+
+| Endpoint                                                                       | Purpose                                                                                                                                                                                                    |
+| ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`/.well-known/api-catalog`](/.well-known/api-catalog)                         | [RFC 9727](https://www.rfc-editor.org/rfc/rfc9727) linkset pointing at the REST API spec, documentation, Indexer GraphQL, and the LLMs.txt feeds.                                                          |
+| [`/.well-known/mcp/server-card.json`](/.well-known/mcp/server-card.json)       | [MCP Server Card (SEP-2127)](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2127) describing the [`@aptos-labs/aptos-mcp`](https://www.npmjs.com/package/@aptos-labs/aptos-mcp) server. |
+| [`/.well-known/agent-skills/index.json`](/.well-known/agent-skills/index.json) | [Agent Skills Discovery](https://github.com/cloudflare/agent-skills-discovery-rfc) index for [aptos-agent-skills](https://github.com/aptos-labs/aptos-agent-skills) with per-skill SHA-256 digests.        |
+| [`/robots.txt`](/robots.txt)                                                   | Includes [Content Signals](https://contentsignals.org/) (`ai-train=yes, search=yes, ai-input=yes`) so agents know Aptos docs are opted in.                                                                 |
+
+### Markdown content negotiation
+
+Any docs URL that has a `.md` mirror (for example [`/build/sdks`](/build/sdks) → [`/build/sdks.md`](/build/sdks.md)) will also respond to `Accept: text/markdown` with `Content-Type: text/markdown`:
+
+```bash
+curl -H "Accept: text/markdown" https://aptos.dev/build/sdks
+```
+
+HTML stays the default for browsers that send the usual `Accept: text/html`.
+
+### WebMCP
+
+Chrome and other browsers that implement the [WebMCP proposal](https://webmachinelearning.github.io/webmcp/) can discover the following tools on every docs page via `navigator.modelContext`: `aptos-docs.search`, `aptos-docs.open-doc`, `aptos-docs.fetch-doc-markdown`, and `aptos-docs.list-llms-feeds`.

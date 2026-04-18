@@ -16,7 +16,8 @@ description: >-
 - **Index copy**: User-facing explanations live in `src/content/docs/llms-txt.mdx`, `src/content/docs/build/ai.mdx`, and the Chinese `zh/` counterparts—keep URLs and feed names aligned with `src/pages/llms-index.ts`.
 - **HTML → Markdown**: Shared logic is `src/lib/llms-html-sanitize.ts`. When minifying for `llms-small.txt`, collapse **spaces/tabs only**—never all `\s` (newlines must survive for fenced code and Markdown structure).
 - **Route wiring**: Custom handlers are swapped in via `src/integrations/llms-txt-index.ts`; endpoint implementations live under `src/pages/llms-index.ts`, `src/pages/llms-small.txt.ts`, `src/pages/llms-full.txt.ts`.
-- **Robots**: `public/robots.txt` should stay consistent with sitemap URL and, when feeds change, the commented LLMs.txt pointers at the bottom.
+- **Robots**: `public/robots.txt` should stay consistent with sitemap URL and, when feeds change, the commented LLMs.txt pointers at the bottom. Keep the `Content-Signal` line intact so AI crawlers see the same preferences the rest of the ecosystem uses.
+- **Agent discovery surface**: `.well-known/api-catalog`, `.well-known/mcp/server-card.json`, `.well-known/agent-skills/index.json`, the global `Link` header in `vercel.json`, and the Head override's `<link rel="…">` tags must advertise the same URLs. Re-run `pnpm test tests/agent-discovery.test.ts` after any change and see the **Agent discovery & readiness** section of `CLAUDE.md` for the full checklist.
 
 ## SEO
 
@@ -30,7 +31,7 @@ description: >-
 After substantive changes:
 
 ```bash
-pnpm test tests/llms-curated-ids.test.ts tests/llms-html-sanitize.test.ts
+pnpm test tests/llms-curated-ids.test.ts tests/llms-html-sanitize.test.ts tests/agent-discovery.test.ts
 pnpm lint && pnpm check
 ```
 
@@ -48,3 +49,7 @@ For full coverage: `pnpm test` and a production `pnpm build` when touching route
 | User docs | `src/content/docs/llms-txt.mdx`, `build/ai.mdx`, `zh/` |
 | SEO head | `src/starlight-overrides/Head.astro` |
 | Crawlers / sitemap hint | `public/robots.txt` |
+| Agent discovery — well-known | `public/.well-known/api-catalog`, `public/.well-known/mcp/server-card.json`, `public/.well-known/agent-skills/index.json` |
+| Agent discovery — Link header | `vercel.json` (global `/(.*)` entry) |
+| Markdown negotiation + WebMCP | `src/middlewares/markdown-negotiation.ts`, `src/scripts/webmcp-register.ts`, `src/types/webmcp.d.ts` |
+| Agent discovery regression tests | `tests/agent-discovery.test.ts` |

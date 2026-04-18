@@ -10,6 +10,37 @@ This repository contains the official Aptos Developer Documentation, built using
 
 Production docs are indexed for LLMs and coding agents at [https://aptos.dev/llms.txt](https://aptos.dev/llms.txt) (same content as [https://aptos.dev/.well-known/llms.txt](https://aptos.dev/.well-known/llms.txt)). For IDE access to Aptos APIs and on-chain data, use the Aptos MCP server (`npx @aptos-labs/aptos-mcp`); see the live [AI tools](https://aptos.dev/build/ai) page.
 
+## Agent discovery & readiness (keep fresh!)
+
+The site advertises a full set of agent-discovery endpoints. Treat these as a single surface — if you touch one, audit the rest, update the matching docs, and re-run `pnpm test tests/agent-discovery.test.ts`.
+
+| Concern                              | Source of truth                                        | Spec / reference                                                                 |
+| ------------------------------------ | ------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| Global `Link` response header        | `vercel.json` → `headers[source="/(.*)"]`              | [RFC 8288](https://www.rfc-editor.org/rfc/rfc8288)                               |
+| In-page discovery `<link rel="…">`   | `src/starlight-overrides/Head.astro`                   | RFC 8288                                                                         |
+| API catalog                          | `public/.well-known/api-catalog`                       | [RFC 9727](https://www.rfc-editor.org/rfc/rfc9727)                               |
+| MCP Server Card                      | `public/.well-known/mcp/server-card.json`              | [SEP-2127](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2127) |
+| Agent Skills index                   | `public/.well-known/agent-skills/index.json`           | [Agent Skills Discovery RFC v0.2.0](https://github.com/cloudflare/agent-skills-discovery-rfc) |
+| Agent Skills regeneration            | `scripts/generate-agent-skills-index.mjs`              | Pins `sha256:` digests from `aptos-labs/aptos-agent-skills@main`                 |
+| Content Signals                      | `public/robots.txt` → `Content-Signal:` line           | [contentsignals.org](https://contentsignals.org/)                                |
+| Markdown content negotiation         | `src/middlewares/markdown-negotiation.ts` + `src/vercel-middleware.ts` | Rewrites `Accept: text/markdown` requests to the `.md` export.      |
+| WebMCP tools                         | `src/scripts/webmcp-register.ts` (+ `src/types/webmcp.d.ts`, `src/components/WebMcpRegistration.astro`) | [WebMCP draft](https://webmachinelearning.github.io/webmcp/)        |
+| User-facing explainer                | `src/content/docs/build/ai.mdx` and `src/content/docs/zh/build/ai.mdx` | Keep the endpoint table and example `curl` in sync.                 |
+
+Keep-fresh checklist when editing any of the above:
+
+1. **Update the endpoint or config.** Changes to the Link header, MCP card, api-catalog, or Agent Skills index must go hand in hand — adding a new well-known endpoint means adding it to `vercel.json` (header + Content-Type) _and_ the Head override _and_ the `build/ai.mdx` tables (English + Chinese).
+2. **Regenerate skill digests.** After bumping a skill in `aptos-labs/aptos-agent-skills`, run `node scripts/generate-agent-skills-index.mjs` so `sha256:` digests match upstream. Don't hand-edit the JSON.
+3. **Run the guardrail tests.** `pnpm test tests/agent-discovery.test.ts` asserts the Link header, well-known payload shapes, Content Signals, and Content-Type routing still line up. The suite is also part of the default `pnpm test` run.
+4. **Update translations.** Anything added to `src/content/docs/build/ai.mdx` must appear in `src/content/docs/zh/build/ai.mdx` (Spanish is out of scope).
+5. **Verify in production.** Once deployed, re-scan with `curl -sI https://aptos.dev/ | rg '^link:'` and an "Is It Agent Ready?" scan. If a signal regressed, note the fix in the PR description.
+
+WebMCP specifics:
+
+- The tool definitions live in `src/scripts/webmcp-register.ts` and are type-checked via `src/types/webmcp.d.ts`. Use those types when adding new tools — don't reach for `is:inline` scripts or `any`.
+- The tool names (`aptos-docs.search`, `aptos-docs.open-doc`, `aptos-docs.fetch-doc-markdown`, `aptos-docs.list-llms-feeds`) are documented in `build/ai.mdx`; keep that list in sync when adding/removing tools.
+- Markdown negotiation relies on the per-page `.md` exports from `src/pages/[...slug].md.ts`. Route changes that break those exports will also break the `fetch-doc-markdown` WebMCP tool.
+
 ## Development Setup
 
 ### Prerequisites

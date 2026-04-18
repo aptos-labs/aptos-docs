@@ -1,0 +1,152 @@
+---
+/**
+ * Registers WebMCP tools for browsers that support
+ * `navigator.modelContext.registerTool()` (see
+ * https://webmachinelearning.github.io/webmcp/ and
+ * https://developer.chrome.com/blog/webmcp-epp).
+ *
+ * The tools expose the docs site's most useful actions to browser-side AI
+ * agents without requiring a round-trip to any remote MCP server:
+ *   - search-docs: open the site's search experience for a query.
+ *   - open-doc: navigate to a specific documentation path.
+ *   - fetch-doc-markdown: fetch the rendered Markdown mirror of the current page.
+ *   - list-llms-feeds: return the curated LLMs.txt feed URLs for this site.
+ *
+ * The script is a no-op on browsers that do not expose `navigator.modelContext`.
+ */
+---
+
+<script is:inline>
+  (function () {
+    if (typeof navigator === "undefined") return;
+    if (!("modelContext" in navigator)) return;
+    const ctx = navigator.modelContext;
+    if (!ctx || typeof ctx.registerTool !== "function") return;
+
+    const registered = new WeakSet();
+    if (registered.has(ctx)) return;
+    registered.add(ctx);
+
+    function register(tool) {
+      try {
+        ctx.registerTool(tool);
+      } catch (err) {
+        // Tool already registered or invalid — ignore so the page still loads.
+        if (typeof console !== "undefined") {
+          console.debug("WebMCP registerTool failed", tool && tool.name, err);
+        }
+      }
+    }
+
+    register({
+      name: "aptos-docs.search",
+      title: "Search Aptos developer docs",
+      description:
+        "Open the Aptos developer documentation search UI pre-populated with a query. Useful when the agent needs the user to browse results.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "Search query. Required, 1–200 characters.",
+            minLength: 1,
+            maxLength: 200,
+          },
+        },
+        required: ["query"],
+      },
+      annotations: { readOnlyHint: true },
+      execute: async (input) => {
+        const query = typeof input?.query === "string" ? input.query : "";
+        if (!query) return { ok: false, reason: "missing-query" };
+        const url = new URL("/", location.origin);
+        url.searchParams.set("q", query);
+        location.href = url.toString();
+        return { ok: true, url: url.toString() };
+      },
+    });
+
+    register({
+      name: "aptos-docs.open-doc",
+      title: "Open an Aptos docs page",
+      description:
+        "Navigate the current browser tab to a specific path on aptos.dev (e.g. `/build/sdks` or `/network/blockchain/accounts`).",
+      inputSchema: {
+        type: "object",
+        properties: {
+          path: {
+            type: "string",
+            description:
+              "Site-relative docs path starting with '/'. Example: /build/guides/first-transaction",
+            pattern: "^/.*",
+            maxLength: 512,
+          },
+        },
+        required: ["path"],
+      },
+      execute: async (input) => {
+        const path = typeof input?.path === "string" ? input.path : "";
+        if (!path.startsWith("/")) {
+          return { ok: false, reason: "invalid-path" };
+        }
+        const url = new URL(path, location.origin);
+        if (url.origin !== location.origin) {
+          return { ok: false, reason: "cross-origin" };
+        }
+        location.href = url.toString();
+        return { ok: true, url: url.toString() };
+      },
+    });
+
+    register({
+      name: "aptos-docs.fetch-doc-markdown",
+      title: "Fetch this doc as Markdown",
+      description:
+        "Return the rendered Markdown mirror of the current documentation page (the Markdown export at `<page>.md`). Useful for grounding an agent in the exact content the user is viewing.",
+      inputSchema: {
+        type: "object",
+        properties: {},
+      },
+      annotations: { readOnlyHint: true },
+      execute: async () => {
+        const url = new URL(location.pathname.replace(/\/$/, "") + ".md", location.origin);
+        try {
+          const res = await fetch(url.toString(), {
+            headers: { Accept: "text/markdown" },
+          });
+          if (!res.ok) {
+            return { ok: false, status: res.status, url: url.toString() };
+          }
+          const markdown = await res.text();
+          return { ok: true, url: url.toString(), markdown };
+        } catch (err) {
+          return {
+            ok: false,
+            url: url.toString(),
+            error: err && err.message ? String(err.message) : String(err),
+          };
+        }
+      },
+    });
+
+    register({
+      name: "aptos-docs.list-llms-feeds",
+      title: "List Aptos LLMs.txt feeds",
+      description:
+        "Return the URLs of the Aptos documentation LLMs.txt feeds (index, condensed, and full corpus) so an agent can ingest machine-readable documentation.",
+      inputSchema: { type: "object", properties: {} },
+      annotations: { readOnlyHint: true },
+      execute: async () => ({
+        ok: true,
+        feeds: {
+          index: new URL("/llms.txt", location.origin).toString(),
+          small: new URL("/llms-small.txt", location.origin).toString(),
+          full: new URL("/llms-full.txt", location.origin).toString(),
+        },
+        apiCatalog: new URL("/.well-known/api-catalog", location.origin).toString(),
+        mcpServerCard: new URL("/.well-known/mcp/server-card.json", location.origin).toString(),
+        agentSkills: new URL("/.well-known/agent-skills/index.json", location.origin).toString(),
+      }),
+    });
+  })();
+</script>

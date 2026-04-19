@@ -28,9 +28,13 @@ async function applyMiddleware(
 // The main middleware function
 export default async function middleware(req: Request) {
   return await applyMiddleware(req, [
+    // Canonicalize `/en/...` URLs first. The Markdown export routes are
+    // generated from doc ids (no `en/` prefix), so rewriting `/en/foo` to
+    // `/en/foo.md` would 404 — we need the redirect to strip `/en` before
+    // markdown negotiation runs.
+    enRedirect,
     // Agents requesting text/markdown are served the rendered .md export.
     markdownNegotiation,
-    enRedirect,
     i18nRedirect,
     // Add more middleware functions here as needed
     next,

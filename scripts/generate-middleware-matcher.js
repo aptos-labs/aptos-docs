@@ -140,8 +140,11 @@ async function generateMatcher() {
   // Generate language-specific paths
   const LANGUAGE_PATHS = [];
   NON_ENGLISH_LOCALES.forEach((code) => {
-    // Add the base language path with exact matching to avoid matching _astro paths
-    LANGUAGE_PATHS.push(`/${code}$`);
+    // Exact match for the locale root so we don't also match `/zh_foo` or asset
+    // paths. `generate-middleware-function.js` wraps every matcher in `^...$`,
+    // so `/zh` is already anchored — a trailing `$` used to be escaped into the
+    // regex literal `\$$`, which never matched `/zh` at all.
+    LANGUAGE_PATHS.push(`/${code}`);
 
     // Add localized versions of all content paths (except the root path)
     ALL_CONTENT_PATHS.forEach((contentPath) => {

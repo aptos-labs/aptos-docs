@@ -434,7 +434,7 @@ export const config = {
     "/move-reference/:path*",
     "/en",
     "/en/:path*",
-    "/zh$",
+    "/zh",
     "/zh/build/:path*",
     "/zh/contribute/:path*",
     "/zh/network/:path*",

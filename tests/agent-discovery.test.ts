@@ -125,6 +125,52 @@ describe("robots.txt content signals", () => {
   });
 });
 
+describe("Head.astro in-page discovery links", () => {
+  const head = readText("src/starlight-overrides/Head.astro");
+
+  it("mirrors every Link header target as a <link rel> tag", () => {
+    // Same URLs as the Link header in vercel.json — keep the two in sync.
+    const expectedHrefs = [
+      { href: "/.well-known/api-catalog", rel: "api-catalog" },
+      { href: "/aptos-spec.json", rel: "service-desc" },
+      { href: "/rest-api", rel: "service-doc" },
+      { href: "/llms.txt", rel: "describedby" },
+      { href: "/.well-known/mcp/server-card.json", rel: "alternate" },
+      { href: "/.well-known/agent-skills/index.json", rel: "alternate" },
+    ];
+    for (const { href, rel } of expectedHrefs) {
+      expect(head, `Head.astro missing ${href}`).toContain(`href="${href}"`);
+      expect(head, `Head.astro missing rel="${rel}" for ${href}`).toContain(`rel="${rel}"`);
+    }
+  });
+});
+
+describe("middleware matcher", () => {
+  const matcher = readText("src/middlewares/matcher-routes-dynamic.js");
+
+  it("uses an anchored path (not a `$`-terminated regex) for locale roots", () => {
+    // The generator wraps every matcher in `^...$`; a trailing `$` gets escaped
+    // to `\$$`, so `/zh$` would only match the literal path `/zh$`. See
+    // scripts/generate-middleware-matcher.js and PR #433 review feedback.
+    expect(matcher).toContain('"/zh"');
+    expect(matcher).not.toContain('"/zh$"');
+  });
+});
+
+describe("vercel-middleware chain ordering", () => {
+  const source = readText("src/vercel-middleware.ts");
+
+  it("runs enRedirect before markdownNegotiation", () => {
+    // /en/foo must have its prefix stripped before we try to rewrite to
+    // /en/foo.md — the .md export route has no `en/` prefix and would 404.
+    const enIdx = source.indexOf("enRedirect,");
+    const mdIdx = source.indexOf("markdownNegotiation,");
+    expect(enIdx, "enRedirect registration").toBeGreaterThan(-1);
+    expect(mdIdx, "markdownNegotiation registration").toBeGreaterThan(-1);
+    expect(enIdx).toBeLessThan(mdIdx);
+  });
+});
+
 describe("vercel.json Link response header", () => {
   const vercel = readJson<{
     headers?: { source: string; headers: { key: string; value: string }[] }[];

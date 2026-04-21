@@ -1,12 +1,15 @@
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { transform } from "@swc/core";
 
+import prettier from "prettier";
 import { build } from "vite";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const rootDir = path.resolve(__dirname, "..");
 const outDir = path.resolve(rootDir, ".vercel/output/middleware");
+const rootMiddleware = path.resolve(rootDir, "middleware.js");
 
 await build({
   root: rootDir,
@@ -46,6 +49,27 @@ await build({
           console.log("Middleware exports updated successfully.");
         } catch (error) {
           console.error("Error modifying middleware exports:", error);
+        }
+      },
+      async writeBundle() {
+        // scripts/generate-middleware-function.js copies the repo-root
+        // middleware.js into the Vercel deploy bundle, so keep it in sync
+        // with the freshly built .vercel/output/middleware/middleware.js —
+        // otherwise any change to src/vercel-middleware.ts (ordering, new
+        // middleware, etc.) silently fails to ship until someone copies it
+        // manually. Format with Prettier so the committed file matches what
+        // developers see locally.
+        try {
+          const source = await readFile(path.join(outDir, "middleware.js"), "utf8");
+          const prettierConfig = (await prettier.resolveConfig(rootMiddleware)) ?? {};
+          const formatted = await prettier.format(source, {
+            ...prettierConfig,
+            filepath: rootMiddleware,
+          });
+          await writeFile(rootMiddleware, formatted, "utf8");
+          console.log(`Middleware copied to ${path.relative(rootDir, rootMiddleware)}.`);
+        } catch (error) {
+          console.error("Error copying middleware to repo root:", error);
         }
       },
     },

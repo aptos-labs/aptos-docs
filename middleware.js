@@ -445,5 +445,5 @@ export const config = {
   ],
 };
 export default async function middleware(req) {
-  return await applyMiddleware(req, [middleware$1, middleware$3, middleware$2, export_next]);
+  return await applyMiddleware(req, [middleware$3, middleware$1, middleware$2, export_next]);
 }

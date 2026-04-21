@@ -23,9 +23,6 @@ import type {
 
 type ToolResult<T> = T | Promise<T>;
 
-/** Tracks which ModelContext objects already had tools registered by this page. */
-const REGISTERED = new WeakSet<ModelContext>();
-
 function getContext(): ModelContext | undefined {
   if (typeof navigator === "undefined") return undefined;
   const ctx = navigator.modelContext;
@@ -34,11 +31,13 @@ function getContext(): ModelContext | undefined {
 }
 
 function registerOnce(ctx: ModelContext, tool: ModelContextToolDefinition): void {
+  // Astro bundled scripts run once per full page load and persist across SPA
+  // view transitions, so duplicate registration shouldn't happen in practice.
+  // We still guard with try/catch because a throw from registerTool() would
+  // skip every tool registered after it.
   try {
     ctx.registerTool(tool);
   } catch (err) {
-    // Duplicate registration across SPA navigations is expected — log at debug
-    // level and keep going so other tools still register.
     console.debug("[webmcp] registerTool failed", tool.name, err);
   }
 }
@@ -67,12 +66,51 @@ interface FetchMarkdownResult {
   error?: string;
 }
 
-function searchTool(): ModelContextToolDefinition<SearchInput, ToolResult<unknown>> {
+/**
+ * Programmatically open the Algolia DocSearch modal and prefill the search box.
+ *
+ * DocSearch is rendered on every docs page by the starlight-docsearch plugin
+ * (see `src/components/DocSearchButtonAlt.astro`). Clicking the `.DocSearch-Button`
+ * mounts the modal; once mounted, DocSearch exposes an `input.DocSearch-Input`
+ * whose value we set and bubble up via an `input` event so its internal store
+ * updates and fetches results.
+ */
+async function openDocSearchWithQuery(query: string): Promise<boolean> {
+  const button = document.querySelector<HTMLElement>(
+    ".DocSearch-Button, .DocSearch-Button-Alt",
+  );
+  if (!button) return false;
+  button.click();
+
+  // The modal is portaled asynchronously; poll briefly for the input.
+  const deadline = Date.now() + 1500;
+  while (Date.now() < deadline) {
+    const input = document.querySelector<HTMLInputElement>(".DocSearch-Input");
+    if (input) {
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        "value",
+      )?.set;
+      if (setter) setter.call(input, query);
+      else input.value = query;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.focus();
+      return true;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  return false;
+}
+
+function searchTool(): ModelContextToolDefinition<
+  SearchInput,
+  Promise<{ ok: boolean; query: string; opened?: boolean; reason?: string }>
+> {
   return {
     name: "aptos-docs.search",
     title: "Search Aptos developer docs",
     description:
-      "Open the Aptos developer documentation search UI pre-populated with a query. Useful when the agent wants the user to browse results.",
+      "Open the Aptos developer documentation search modal pre-populated with a query so the user can browse results. Uses Algolia DocSearch when available; otherwise no-ops.",
     inputSchema: {
       type: "object",
       properties: {
@@ -85,14 +123,13 @@ function searchTool(): ModelContextToolDefinition<SearchInput, ToolResult<unknow
       },
       required: ["query"],
     },
-    annotations: { readOnlyHint: true },
-    execute: (input) => {
+    execute: async (input) => {
       const query = typeof input?.query === "string" ? input.query.trim() : "";
-      if (!query) return { ok: false, reason: "missing-query" as const };
-      const url = new URL("/", location.origin);
-      url.searchParams.set("q", query);
-      location.href = url.toString();
-      return { ok: true, url: url.toString() };
+      if (!query) return { ok: false, query: "", reason: "missing-query" };
+      const opened = await openDocSearchWithQuery(query);
+      return opened
+        ? { ok: true, query, opened: true }
+        : { ok: false, query, reason: "docsearch-unavailable" };
     },
   };
 }
@@ -102,7 +139,7 @@ function openDocTool(): ModelContextToolDefinition<OpenDocInput, ToolResult<unkn
     name: "aptos-docs.open-doc",
     title: "Open an Aptos docs page",
     description:
-      "Navigate the current browser tab to a specific path on aptos.dev (e.g. `/build/sdks` or `/network/blockchain/accounts`).",
+      "Navigate the current browser tab to a specific path on aptos.dev (e.g. `/build/sdks` or `/network/blockchain/accounts`). Side-effectful: replaces the user's tab.",
     inputSchema: {
       type: "object",
       properties: {
@@ -116,6 +153,11 @@ function openDocTool(): ModelContextToolDefinition<OpenDocInput, ToolResult<unkn
       },
       required: ["path"],
     },
+    // Explicit readOnlyHint:false so agents know this tool mutates browser
+    // state. Non-destructive (we only swap the current tab's URL), so no
+    // stronger hint is needed today. Watch the WebMCP spec for a navigation-
+    // specific annotation and upgrade when available.
+    annotations: { readOnlyHint: false },
     execute: (input) => {
       const path = typeof input?.path === "string" ? input.path : "";
       if (!path.startsWith("/")) {
@@ -194,9 +236,6 @@ function listFeedsTool(): ModelContextToolDefinition<
 }
 
 function registerAll(ctx: ModelContext): void {
-  if (REGISTERED.has(ctx)) return;
-  REGISTERED.add(ctx);
-
   // Order matters only for console/debugging: keep read-only tools first.
   registerOnce(ctx, listFeedsTool() as ModelContextToolDefinition);
   registerOnce(ctx, searchTool() as ModelContextToolDefinition);

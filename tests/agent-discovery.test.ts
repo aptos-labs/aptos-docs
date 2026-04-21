@@ -66,36 +66,58 @@ describe("well-known API catalog (RFC 9727)", () => {
 
 describe("MCP Server Card", () => {
   const card = readJson<{
-    serverInfo?: { name?: string; version?: string };
-    packages?: { identifier?: string; transport?: { type?: string } }[];
-    capabilities?: Record<string, unknown>;
+    name?: string;
+    version?: string;
+    description?: string;
+    packages?: {
+      identifier?: string;
+      version?: string;
+      transport?: { type?: string };
+    }[];
   }>("public/.well-known/mcp/server-card.json");
 
-  it("has serverInfo.name and version", () => {
-    expect(card.serverInfo?.name).toBeTruthy();
-    expect(card.serverInfo?.version).toBeTruthy();
+  it("has a reverse-DNS name and a real semver version (not 'latest')", () => {
+    expect(card.name, "name").toMatch(/^[a-z0-9-]+(?:\.[a-z0-9-]+)+\/[a-z0-9-]+/);
+    expect(card.version, "version").toBeTruthy();
+    expect(card.version, "version cannot be 'latest'").not.toBe("latest");
+    expect(card.version).toMatch(/^\d+\.\d+\.\d+(?:[-+].*)?$/);
   });
 
-  it("advertises the published Aptos MCP package", () => {
+  it("keeps description within the SEP-2127 schema maxLength of 100", () => {
+    // https://static.modelcontextprotocol.io/schemas/2025-10-17/server.schema.json
+    expect(card.description).toBeTruthy();
+    expect((card.description ?? "").length).toBeLessThanOrEqual(100);
+  });
+
+  it("advertises the published Aptos MCP package with a stdio transport", () => {
     const pkg = card.packages?.find((entry) => entry.identifier === "@aptos-labs/aptos-mcp");
     expect(pkg, "aptos-mcp package entry").toBeDefined();
     expect(pkg?.transport?.type).toBe("stdio");
-  });
-
-  it("declares at least one capability", () => {
-    expect(card.capabilities, "capabilities").toBeDefined();
-    expect(Object.keys(card.capabilities ?? {}).length).toBeGreaterThan(0);
+    expect(pkg?.version, "packages[].version cannot be 'latest'").not.toBe("latest");
+    expect(pkg?.version).toMatch(/^\d+\.\d+\.\d+(?:[-+].*)?$/);
   });
 });
 
 describe("Agent Skills discovery index", () => {
   const index = readJson<{
     $schema?: string;
+    name?: string;
+    publisher?: { name?: string; url?: string };
+    source?: { repository?: string };
     skills?: { name: string; type: string; url: string; digest: string }[];
   }>("public/.well-known/agent-skills/index.json");
 
   it("references the v0.2.0 schema", () => {
     expect(index.$schema).toBe("https://schemas.agentskills.io/discovery/0.2.0/schema.json");
+  });
+
+  it("identifies the publisher and the upstream source repository", () => {
+    expect(index.name, "index name").toBeTruthy();
+    expect(index.publisher?.name, "publisher.name").toBeTruthy();
+    expect(index.publisher?.url, "publisher.url").toMatch(/^https:\/\//);
+    expect(index.source?.repository, "source.repository").toMatch(
+      /^https:\/\/github\.com\/aptos-labs\/aptos-agent-skills$/,
+    );
   });
 
   it("every skill entry has a sha256 digest and an https url", () => {
@@ -116,31 +138,76 @@ describe("Agent Skills discovery index", () => {
 describe("robots.txt content signals", () => {
   const body = readText("public/robots.txt");
 
-  it("declares Content-Signal for ai-train, search, and ai-input", () => {
-    const line = body.split(/\r?\n/).find((candidate) => /^Content-Signal:/i.test(candidate));
-    expect(line, "Content-Signal directive").toBeDefined();
-    expect(line).toMatch(/ai-train=/);
-    expect(line).toMatch(/search=/);
-    expect(line).toMatch(/ai-input=/);
+  function extractUserAgentGroups(source: string): { userAgent: string; body: string }[] {
+    // Split by `User-agent:` lines, preserving the rest of the block that
+    // follows (up to the next User-agent or EOF). Skip any preamble.
+    const lines = source.split(/\r?\n/);
+    const groups: { userAgent: string; body: string }[] = [];
+    let current: { userAgent: string; body: string[] } | null = null;
+    for (const line of lines) {
+      const uaMatch = /^User-agent:\s*(.+)$/i.exec(line);
+      if (uaMatch) {
+        if (current) groups.push({ userAgent: current.userAgent, body: current.body.join("\n") });
+        const name = (uaMatch[1] ?? "").trim();
+        current = { userAgent: name, body: [] };
+        continue;
+      }
+      if (current) current.body.push(line);
+    }
+    if (current) groups.push({ userAgent: current.userAgent, body: current.body.join("\n") });
+    return groups;
+  }
+
+  it("declares Content-Signal inside every User-agent block", () => {
+    // `Content-Signal:` is scoped to the most recently declared `User-agent:`
+    // group (draft-romm-aipref-contentsignals), so a single directive under
+    // `User-agent: *` would be invisible to the named AI crawlers above it.
+    const groups = extractUserAgentGroups(body);
+    expect(groups.length, "at least one User-agent group").toBeGreaterThan(0);
+    for (const group of groups) {
+      expect(group.body, `Content-Signal missing from User-agent: ${group.userAgent}`).toMatch(
+        /Content-Signal:.*ai-train=.*search=.*ai-input=/,
+      );
+    }
   });
 });
 
 describe("Head.astro in-page discovery links", () => {
   const head = readText("src/starlight-overrides/Head.astro");
 
+  function hasLinkRel(href: string, rel: string): boolean {
+    // Match a single `<link ...>` element that carries both attributes,
+    // surviving Astro's auto-wrap formatting across attributes. We scan for
+    // *any* `<link>` with this href/rel combo — there can be multiple links
+    // to the same href with different rels (e.g. `rel="llms-txt"` and
+    // `rel="describedby"` both point at `/llms.txt`).
+    const hrefLiteral = href.replace(/[/.]/g, "\\$&");
+    const relLiteral = rel.replace(/[-/.]/g, "\\$&");
+    const hrefThenRel = new RegExp(
+      `<link\\b[^>]*?href="${hrefLiteral}"[^>]*?rel="${relLiteral}"`,
+      "s",
+    );
+    const relThenHref = new RegExp(
+      `<link\\b[^>]*?rel="${relLiteral}"[^>]*?href="${hrefLiteral}"`,
+      "s",
+    );
+    return hrefThenRel.test(head) || relThenHref.test(head);
+  }
+
   it("mirrors every Link header target as a <link rel> tag", () => {
     // Same URLs as the Link header in vercel.json — keep the two in sync.
-    const expectedHrefs = [
+    const expectedHrefs: { href: string; rel: string }[] = [
       { href: "/.well-known/api-catalog", rel: "api-catalog" },
       { href: "/aptos-spec.json", rel: "service-desc" },
       { href: "/rest-api", rel: "service-doc" },
       { href: "/llms.txt", rel: "describedby" },
-      { href: "/.well-known/mcp/server-card.json", rel: "alternate" },
-      { href: "/.well-known/agent-skills/index.json", rel: "alternate" },
+      { href: "/.well-known/mcp/server-card.json", rel: "describedby" },
+      { href: "/.well-known/agent-skills/index.json", rel: "describedby" },
     ];
     for (const { href, rel } of expectedHrefs) {
-      expect(head, `Head.astro missing ${href}`).toContain(`href="${href}"`);
-      expect(head, `Head.astro missing rel="${rel}" for ${href}`).toContain(`rel="${rel}"`);
+      expect(hasLinkRel(href, rel), `Head.astro missing <link rel="${rel}" href="${href}">`).toBe(
+        true,
+      );
     }
   });
 });
@@ -174,26 +241,23 @@ describe("vercel-middleware chain ordering", () => {
 describe("committed middleware.js bundle", () => {
   const bundle = readText("middleware.js");
 
-  it("is up to date with src/vercel-middleware.ts", () => {
-    // scripts/generate-middleware-function.js copies the repo-root
-    // middleware.js into the Vercel deploy bundle. If the committed file is
-    // stale, changes to src/vercel-middleware.ts (e.g. middleware ordering)
-    // silently fail to ship until someone manually re-runs
-    // `pnpm build:middleware`. Check that every middleware imported in the
-    // TS source survives into the bundle.
-    expect(bundle).toContain("function middleware(req)");
-    expect(bundle).toContain("applyMiddleware");
-    // The bundle uses SWC-mangled names, but every middleware body from
-    // the source should be inlined verbatim. Pick a stable fragment from
-    // each one that is unique to its implementation.
-    expect(bundle, "enRedirect body present").toContain("/^\\/en(\\/.*|$)/");
-    expect(bundle, "markdownNegotiation body present").toContain("text\\/markdown");
-    expect(bundle, "i18nRedirect body present").toContain("preferred_locale");
-  });
-
   it("uses the fixed /zh matcher (not the broken /zh$)", () => {
+    // scripts/generate-middleware-function.js copies the repo-root
+    // middleware.js into the Vercel deploy bundle, so the committed file
+    // must track src/vercel-middleware.ts. The full freshness check is
+    // performed in the companion bundle-hash test (runs the generator and
+    // compares SHA-256 sums). This assertion catches the most common drift
+    // — the `/zh$` matcher bug we shipped before — without depending on any
+    // particular middleware implementation detail.
     expect(bundle).toContain('"/zh"');
     expect(bundle).not.toContain('"/zh$"');
+  });
+
+  it("exports an Edge middleware default + matcher config", () => {
+    // Structural shape only — no coupling to individual middleware bodies.
+    expect(bundle).toMatch(/export default async function middleware/);
+    expect(bundle).toMatch(/export const config\s*=\s*\{/);
+    expect(bundle).toMatch(/matcher:\s*\[/);
   });
 });
 

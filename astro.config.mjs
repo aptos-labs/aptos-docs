@@ -144,11 +144,17 @@ export default defineConfig({
               return true;
             }
 
-            // Same-site absolute URL becomes `/.well-known/…`; after stripping `/` the path
-            // starts with `.` and is misclassified as a relative link. These are served from
-            // `public/.well-known/*` (or, for llms.txt, via a Vercel redirect to /llms.txt),
-            // not as doc routes.
-            if (link.includes("/.well-known/")) {
+            // Known `.well-known/` endpoints served from `public/` or via a Vercel
+            // redirect. They are not doc routes, so starlight-links-validator can't
+            // resolve them. List each one explicitly (rather than excluding the
+            // whole `.well-known/` prefix) so a typo in a docs page is still caught.
+            const knownWellKnown = [
+              "/.well-known/llms.txt",
+              "/.well-known/api-catalog",
+              "/.well-known/mcp/server-card.json",
+              "/.well-known/agent-skills/index.json",
+            ];
+            if (knownWellKnown.some((path) => link.endsWith(path))) {
               return true;
             }
 

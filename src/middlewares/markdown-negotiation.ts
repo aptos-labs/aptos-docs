@@ -50,10 +50,29 @@ const SKIP_EXTENSIONS = new Set([
 const SKIP_PREFIXES = ["/_", "/api/", "/.well-known/", "/scripts/"];
 const SKIP_EXACT_OR_SUBPATH = ["/rest-api", "/move-reference", "/gas-profiling"];
 
+/**
+ * Returns true when the `Accept` header explicitly lists `text/markdown` with
+ * a non-zero quality value. Per RFC 9110 §12.4.2, `q=0` means "not acceptable",
+ * so `Accept: text/markdown;q=0` must fall back to HTML instead of rewriting
+ * to `.md`. We don't try to handle wildcards (`* /*`, `text/*`) because HTML
+ * is the canonical representation and we only opt into Markdown on an
+ * explicit request.
+ */
 function acceptsMarkdown(accept: string | null): boolean {
   if (!accept) return false;
-  // Explicit match wins even when q=0 for other types.
-  return /(?:^|,\s*)text\/markdown\b/i.test(accept);
+  for (const part of accept.split(",")) {
+    const [rawMediaType, ...rawParams] = part.split(";");
+    const mediaType = (rawMediaType ?? "").trim().toLowerCase();
+    if (mediaType !== "text/markdown") continue;
+
+    const qParam = rawParams.map((param) => param.trim()).find((param) => /^q\s*=/i.test(param));
+    if (!qParam) return true;
+
+    const rawQ = qParam.slice(qParam.indexOf("=") + 1).trim();
+    const q = Number(rawQ);
+    if (Number.isFinite(q) && q > 0) return true;
+  }
+  return false;
 }
 
 function hasSkippedExtension(pathname: string): boolean {

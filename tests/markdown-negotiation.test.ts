@@ -123,4 +123,28 @@ describe("markdown-negotiation middleware", () => {
     );
     expect(getRewriteTarget(res)).toBe("https://aptos.dev/build/sdks.md");
   });
+
+  it("treats q=0 on text/markdown as 'not acceptable' (RFC 9110)", () => {
+    for (const header of [
+      "text/markdown;q=0",
+      "text/markdown; q=0.0",
+      "text/html, text/markdown;q=0",
+    ]) {
+      const res = markdownNegotiation(
+        makeRequest("https://aptos.dev/build/sdks", { accept: header }),
+      );
+      expect(res, `Accept: ${header}`).toBeUndefined();
+    }
+  });
+
+  it("ignores wildcard Accept headers (HTML stays the default)", () => {
+    // We only opt into Markdown on an explicit text/markdown listing; a bare
+    // `*/*` from a curl default or a `text/*` shouldn't flip the content type.
+    for (const header of ["*/*", "text/*", "text/html,*/*;q=0.8"]) {
+      const res = markdownNegotiation(
+        makeRequest("https://aptos.dev/build/sdks", { accept: header }),
+      );
+      expect(res, `Accept: ${header}`).toBeUndefined();
+    }
+  });
 });

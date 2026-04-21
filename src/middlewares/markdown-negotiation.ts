@@ -43,16 +43,12 @@ const SKIP_EXTENSIONS = new Set([
   ".wasm",
 ]);
 
-// Paths that are not doc routes (API routes, assets, etc.).
-const SKIP_PREFIXES = [
-  "/_",
-  "/api/",
-  "/.well-known/",
-  "/rest-api/",
-  "/move-reference",
-  "/gas-profiling",
-  "/scripts/",
-];
+// Paths that are not doc routes (API routes, assets, etc.). Skipped either
+// as a strict prefix (`/api/`) or as an exact path (`/rest-api`). Keeping the
+// two lists separate avoids accidentally rewriting sibling routes like a
+// future `/rest-apis` or `/move-references` page.
+const SKIP_PREFIXES = ["/_", "/api/", "/.well-known/", "/scripts/"];
+const SKIP_EXACT_OR_SUBPATH = ["/rest-api", "/move-reference", "/gas-profiling"];
 
 function acceptsMarkdown(accept: string | null): boolean {
   if (!accept) return false;
@@ -86,6 +82,10 @@ export default function middleware(request: Request): Response | undefined {
   }
 
   if (SKIP_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
+    return undefined;
+  }
+
+  if (SKIP_EXACT_OR_SUBPATH.some((base) => pathname === base || pathname.startsWith(`${base}/`))) {
     return undefined;
   }
 

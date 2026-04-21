@@ -367,15 +367,8 @@ const SKIP_EXTENSIONS = new Set([
   ".zip",
   ".wasm",
 ]);
-const SKIP_PREFIXES = [
-  "/_",
-  "/api/",
-  "/.well-known/",
-  "/rest-api/",
-  "/move-reference",
-  "/gas-profiling",
-  "/scripts/",
-];
+const SKIP_PREFIXES = ["/_", "/api/", "/.well-known/", "/scripts/"];
+const SKIP_EXACT_OR_SUBPATH = ["/rest-api", "/move-reference", "/gas-profiling"];
 function acceptsMarkdown(accept) {
   if (!accept) return false;
   return /(?:^|,\s*)text\/markdown\b/i.test(accept);
@@ -401,6 +394,9 @@ function middleware$1(request) {
     return void 0;
   }
   if (SKIP_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
+    return void 0;
+  }
+  if (SKIP_EXACT_OR_SUBPATH.some((base) => pathname === base || pathname.startsWith(`${base}/`))) {
     return void 0;
   }
   const normalized =

@@ -52,6 +52,31 @@ function getDirectories(sourcePath, excludeDirs = []) {
 }
 
 /**
+ * Return the slugs of top-level `.md` / `.mdx` docs (excluding index/404 and
+ * anything that would shadow a real route). Needed so middleware runs on
+ * pages that live at the docs root (e.g. `src/content/docs/llms-txt.mdx`
+ * → `/llms-txt`).
+ */
+function getTopLevelDocSlugs(docsPath) {
+  const EXCLUDE = new Set(["index", "404"]);
+  try {
+    return fs
+      .readdirSync(docsPath, { withFileTypes: true })
+      .filter((dirent) => dirent.isFile())
+      .map((dirent) => dirent.name)
+      .filter((name) => name.endsWith(".md") || name.endsWith(".mdx"))
+      .map((name) => name.replace(/\.mdx?$/, ""))
+      .filter((slug) => !EXCLUDE.has(slug));
+  } catch (error) {
+    console.warn(
+      `Could not read top-level docs from ${docsPath}:`,
+      error instanceof Error ? error.message : String(error),
+    );
+    return [];
+  }
+}
+
+/**
  * Main function to generate the middleware matcher
  */
 async function generateMatcher() {
@@ -68,6 +93,9 @@ async function generateMatcher() {
   const contentDocsPath = path.join(rootDir, "src/content/docs");
   const contentDirs = getDirectories(contentDocsPath, NON_ENGLISH_LOCALES);
   const contentPaths = contentDirs.map((dir) => `/${dir}/:path*`);
+  // Top-level `.mdx` docs (e.g. `llms-txt.mdx` → `/llms-txt`) aren't covered by
+  // the directory-based matchers above, so register them individually.
+  const topLevelDocPaths = getTopLevelDocSlugs(contentDocsPath).map((slug) => `/${slug}`);
 
   // Discover paths from src/pages/[...lang]
   const langPagesPath = path.join(rootDir, "src/pages/[...lang]");
@@ -132,6 +160,7 @@ async function generateMatcher() {
   const ALL_CONTENT_PATHS = [
     "/",
     ...contentPaths,
+    ...topLevelDocPaths,
     ...pagePaths,
     ...apiReferencePaths,
     ...manualRoutes,

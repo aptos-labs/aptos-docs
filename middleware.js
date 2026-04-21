@@ -371,7 +371,17 @@ const SKIP_PREFIXES = ["/_", "/api/", "/.well-known/", "/scripts/"];
 const SKIP_EXACT_OR_SUBPATH = ["/rest-api", "/move-reference", "/gas-profiling"];
 function acceptsMarkdown(accept) {
   if (!accept) return false;
-  return /(?:^|,\s*)text\/markdown\b/i.test(accept);
+  for (const part of accept.split(",")) {
+    const [rawMediaType, ...rawParams] = part.split(";");
+    const mediaType = (rawMediaType ?? "").trim().toLowerCase();
+    if (mediaType !== "text/markdown") continue;
+    const qParam = rawParams.map((param) => param.trim()).find((param) => /^q\s*=/i.test(param));
+    if (!qParam) return true;
+    const rawQ = qParam.slice(qParam.indexOf("=") + 1).trim();
+    const q = Number(rawQ);
+    if (Number.isFinite(q) && q > 0) return true;
+  }
+  return false;
 }
 function hasSkippedExtension(pathname) {
   const lastSlash = pathname.lastIndexOf("/");
@@ -426,6 +436,7 @@ export const config = {
     "/build/:path*",
     "/contribute/:path*",
     "/network/:path*",
+    "/llms-txt",
     "/move-reference",
     "/move-reference/:path*",
     "/en",
@@ -434,6 +445,7 @@ export const config = {
     "/zh/build/:path*",
     "/zh/contribute/:path*",
     "/zh/network/:path*",
+    "/zh/llms-txt",
     "/zh/move-reference",
     "/zh/move-reference/:path*",
     "/zh/en",

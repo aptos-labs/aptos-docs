@@ -48,7 +48,11 @@ await build({
 
           console.log("Middleware exports updated successfully.");
         } catch (error) {
+          // Fail loudly: swallowing this used to emit a bundle with the
+          // original (unmodified) export shape, which silently broke the
+          // Vercel deploy's `config.matcher` wiring.
           console.error("Error modifying middleware exports:", error);
+          throw error;
         }
       },
       async writeBundle() {

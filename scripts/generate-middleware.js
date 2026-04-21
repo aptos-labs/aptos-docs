@@ -58,19 +58,16 @@ await build({
         // otherwise any change to src/vercel-middleware.ts (ordering, new
         // middleware, etc.) silently fails to ship until someone copies it
         // manually. Format with Prettier so the committed file matches what
-        // developers see locally.
-        try {
-          const source = await readFile(path.join(outDir, "middleware.js"), "utf8");
-          const prettierConfig = (await prettier.resolveConfig(rootMiddleware)) ?? {};
-          const formatted = await prettier.format(source, {
-            ...prettierConfig,
-            filepath: rootMiddleware,
-          });
-          await writeFile(rootMiddleware, formatted, "utf8");
-          console.log(`Middleware copied to ${path.relative(rootDir, rootMiddleware)}.`);
-        } catch (error) {
-          console.error("Error copying middleware to repo root:", error);
-        }
+        // developers see locally. Any failure here is fatal: we'd rather
+        // fail the build than ship a stale bundle.
+        const source = await readFile(path.join(outDir, "middleware.js"), "utf8");
+        const prettierConfig = (await prettier.resolveConfig(rootMiddleware)) ?? {};
+        const formatted = await prettier.format(source, {
+          ...prettierConfig,
+          filepath: rootMiddleware,
+        });
+        await writeFile(rootMiddleware, formatted, "utf8");
+        console.log(`Middleware copied to ${path.relative(rootDir, rootMiddleware)}.`);
       },
     },
   ],

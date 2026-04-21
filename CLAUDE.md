@@ -12,7 +12,7 @@ Production docs are indexed for LLMs and coding agents at [https://aptos.dev/llm
 
 ## Agent discovery & readiness (keep fresh!)
 
-The site advertises a full set of agent-discovery endpoints. Treat these as a single surface — if you touch one, audit the rest, update the matching docs, and re-run `pnpm test tests/agent-discovery.test.ts`.
+The site advertises a full set of agent-discovery endpoints. Treat these as a single surface — if you touch one, audit the rest, update the matching docs, regenerate any required artifacts (`pnpm build:middleware-matcher` for matcher changes; `pnpm build:middleware` when the middleware bundle needs to ship), and then re-run `pnpm test tests/agent-discovery.test.ts tests/markdown-negotiation.test.ts`. The guardrail tests regenerate the matcher on demand, so a clean checkout still passes.
 
 | Concern                              | Source of truth                                        | Spec / reference                                                                 |
 | ------------------------------------ | ------------------------------------------------------ | -------------------------------------------------------------------------------- |

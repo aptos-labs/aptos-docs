@@ -23,7 +23,6 @@ ACCEPT_ALL=false
 VERSION=""
 GENERIC_LINUX=false
 FROM_SOURCE=false
-UNIVERSAL_INSTALLER_URL="https://raw.githubusercontent.com/gregnazario/universal-installer/main/scripts/install_pkg.sh"
 APTOS_REPO_URL="https://github.com/aptos-labs/aptos-core.git"
 
 # Print colored message
@@ -75,25 +74,202 @@ retry_command() {
     return $exit_code
 }
 
-# Install required packages using universal installer
-install_required_packages() {
-    # Download universal installer if not present
-    print_message "$YELLOW" "Downloading universal installer..."
-    if command_exists curl; then
-        retry_command curl -s "$UNIVERSAL_INSTALLER_URL" -o /tmp/install_pkg.sh || die "Failed to download universal installer"
-    elif command_exists wget; then
-        retry_command wget -q "$UNIVERSAL_INSTALLER_URL" -O /tmp/install_pkg.sh || die "Failed to download universal installer"
-    else
-        die "Neither curl nor wget is installed. Please install one of them manually."
-    fi
-    chmod +x /tmp/install_pkg.sh
+# --- Inline system package install (replaces external universal-installer) ---
+# Used only to install unzip when it is missing from PATH.
 
-    # Install unzip if not present
-    if ! command_exists unzip; then
-        print_message "$YELLOW" "Installing unzip..."
-        /tmp/install_pkg.sh unzip || die "Failed to install unzip"
-        rm /tmp/install_pkg.sh
+get_package_manager() {
+    case "$(uname -s)" in
+        Darwin)
+            if command_exists brew; then
+                echo brew
+            elif command_exists port; then
+                echo port
+            else
+                die "unzip is required. Install Homebrew (https://brew.sh/) or MacPorts (https://www.macports.org/), then run this script again."
+            fi
+            ;;
+        Linux)
+            if command_exists dnf; then
+                echo dnf
+            elif command_exists yum; then
+                echo yum
+            elif command_exists apt-get; then
+                echo apt-get
+            elif command_exists pacman; then
+                echo pacman
+            elif command_exists apk; then
+                echo apk
+            elif command_exists zypper; then
+                echo zypper
+            elif command_exists emerge; then
+                echo emerge
+            elif command_exists xbps-install; then
+                echo xbps
+            else
+                die "unzip is required. Install unzip with your distribution package manager, then run this script again."
+            fi
+            ;;
+        FreeBSD)
+            if command_exists pkg; then
+                echo pkg
+            else
+                die "unzip is required. Install pkg (https://docs.freebsd.org/en/books/handbook/ports/) and unzip, then run this script again."
+            fi
+            ;;
+        OpenBSD)
+            if command_exists doas; then
+                echo doas
+            else
+                die "unzip is required. Install unzip on OpenBSD (https://www.openbsd.org/faq/faq15.html), then run this script again."
+            fi
+            ;;
+        NetBSD)
+            if command_exists pkgin; then
+                echo pkgin
+            elif command_exists pkg_add; then
+                echo pkg_add
+            else
+                die "unzip is required. Install unzip with pkgin or pkg_add (https://www.netbsd.org/docs/pkgsrc/), then run this script again."
+            fi
+            ;;
+        *)
+            die "Unsupported OS for automatic unzip install: $(uname -s). Install unzip manually, then run this script again."
+            ;;
+    esac
+}
+
+is_system_package_installed() {
+    pkg=$1
+    pm=$2
+
+    case "$pm" in
+        yum|dnf)
+            rpm -q "$pkg" >/dev/null 2>&1
+            ;;
+        apt-get)
+            dpkg -l "$pkg" 2>/dev/null | grep -q '^ii'
+            ;;
+        pacman)
+            pacman -Q "$pkg" >/dev/null 2>&1
+            ;;
+        apk)
+            apk info -e "$pkg" >/dev/null 2>&1
+            ;;
+        brew)
+            brew list "$pkg" >/dev/null 2>&1
+            ;;
+        port)
+            port installed "$pkg" >/dev/null 2>&1
+            ;;
+        xbps)
+            xbps-query "$pkg" >/dev/null 2>&1
+            ;;
+        pkg)
+            pkg info "$pkg" >/dev/null 2>&1
+            ;;
+        emerge)
+            portageq best_version / "$pkg" >/dev/null 2>&1
+            ;;
+        zypper)
+            zypper se -i "$pkg" >/dev/null 2>&1
+            ;;
+        doas)
+            pkg_info -q "$pkg" >/dev/null 2>&1
+            ;;
+        pkgin)
+            pkgin -Q "$pkg" >/dev/null 2>&1
+            ;;
+        pkg_add)
+            pkg_info -q "$pkg" >/dev/null 2>&1
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+install_system_package() {
+    pkg=$1
+    pm=$(get_package_manager)
+
+    if is_system_package_installed "$pkg" "$pm"; then
+        return 0
     fi
+
+    pre_cmd=""
+    if [ "$(id -u)" -ne 0 ]; then
+        if command_exists sudo; then
+            pre_cmd="sudo"
+        elif command_exists doas; then
+            pre_cmd="doas"
+        fi
+    fi
+
+    print_message "$YELLOW" "Installing $pkg using $pm..."
+    case "$pm" in
+        yum)
+            $pre_cmd yum install "$pkg" -y || die "Failed to install package: $pkg"
+            ;;
+        dnf)
+            $pre_cmd dnf install "$pkg" -y || die "Failed to install package: $pkg"
+            ;;
+        apt-get)
+            if [ -n "$pre_cmd" ]; then
+                $pre_cmd apt-get update -qq || true
+            else
+                apt-get update -qq || true
+            fi
+            $pre_cmd apt-get install "$pkg" --no-install-recommends -y || die "Failed to install package: $pkg"
+            ;;
+        zypper)
+            $pre_cmd zypper install -y "$pkg" || die "Failed to install package: $pkg"
+            ;;
+        emerge)
+            $pre_cmd emerge "$pkg" || die "Failed to install package: $pkg"
+            ;;
+        port)
+            port install "$pkg" || die "Failed to install package: $pkg"
+            ;;
+        brew)
+            brew install "$pkg" || die "Failed to install package: $pkg"
+            ;;
+        pacman)
+            $pre_cmd pacman -S "$pkg" --noconfirm || die "Failed to install package: $pkg"
+            ;;
+        apk)
+            $pre_cmd apk --update add --no-cache "$pkg" || die "Failed to install package: $pkg"
+            ;;
+        xbps)
+            $pre_cmd xbps-install -y "$pkg" || die "Failed to install package: $pkg"
+            ;;
+        pkg)
+            $pre_cmd pkg install -y "$pkg" || die "Failed to install package: $pkg"
+            ;;
+        doas)
+            if [ "$(id -u)" -eq 0 ]; then
+                pkg_add -I "$pkg" || die "Failed to install package: $pkg"
+            else
+                doas pkg_add -I "$pkg" || die "Failed to install package: $pkg"
+            fi
+            ;;
+        pkgin)
+            $pre_cmd pkgin install "$pkg" || die "Failed to install package: $pkg"
+            ;;
+        pkg_add)
+            $pre_cmd pkg_add -I "$pkg" || die "Failed to install package: $pkg"
+            ;;
+        *)
+            die "Unsupported package manager: $pm"
+            ;;
+    esac
+}
+
+# Install unzip if not present (needed to extract CLI release zips)
+install_required_packages() {
+    if command_exists unzip; then
+        return 0
+    fi
+    install_system_package unzip
 }
 
 # Validate version string contains only safe characters

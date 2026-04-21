@@ -24,6 +24,8 @@ The site advertises a full set of agent-discovery endpoints. Treat these as a si
 | Agent Skills regeneration            | `scripts/generate-agent-skills-index.mjs`              | Pins `sha256:` digests from `aptos-labs/aptos-agent-skills@main`                 |
 | Content Signals                      | `public/robots.txt` → `Content-Signal:` line           | [contentsignals.org](https://contentsignals.org/)                                |
 | Markdown content negotiation         | `src/middlewares/markdown-negotiation.ts` + `src/vercel-middleware.ts` | Rewrites `Accept: text/markdown` requests to the `.md` export.      |
+| Middleware matcher + bundle          | `scripts/generate-middleware-matcher.js`, `scripts/generate-middleware.js`, committed `middleware.js` | Matcher covers the locales + route prefixes middleware should run on. `generate-middleware.js` also copies the bundled middleware to the repo root so `scripts/generate-middleware-function.js` ships it — never hand-edit `middleware.js`. |
+| MCP card regeneration                | Hand-maintained `public/.well-known/mcp/server-card.json` pinned to a real `@aptos-labs/aptos-mcp` version | Bump the `version` field and both `packages[0].version` + `packages[0].transport.args` whenever the npm package is released; never use `latest`. |
 | WebMCP tools                         | `src/scripts/webmcp-register.ts` (+ `src/types/webmcp.d.ts`, `src/components/WebMcpRegistration.astro`) | [WebMCP draft](https://webmachinelearning.github.io/webmcp/)        |
 | User-facing explainer                | `src/content/docs/build/ai.mdx` and `src/content/docs/zh/build/ai.mdx` | Keep the endpoint table and example `curl` in sync.                 |
 
@@ -31,9 +33,10 @@ Keep-fresh checklist when editing any of the above:
 
 1. **Update the endpoint or config.** Changes to the Link header, MCP card, api-catalog, or Agent Skills index must go hand in hand — adding a new well-known endpoint means adding it to `vercel.json` (header + Content-Type) _and_ the Head override _and_ the `build/ai.mdx` tables (English + Chinese).
 2. **Regenerate skill digests.** After bumping a skill in `aptos-labs/aptos-agent-skills`, run `node scripts/generate-agent-skills-index.mjs` so `sha256:` digests match upstream. Don't hand-edit the JSON.
-3. **Run the guardrail tests.** `pnpm test tests/agent-discovery.test.ts` asserts the Link header, well-known payload shapes, Content Signals, and Content-Type routing still line up. The suite is also part of the default `pnpm test` run.
-4. **Update translations.** Anything added to `src/content/docs/build/ai.mdx` must appear in `src/content/docs/zh/build/ai.mdx` (Spanish is out of scope).
-5. **Verify in production.** Once deployed, re-scan with `curl -sI https://aptos.dev/ | rg '^link:'` and an "Is It Agent Ready?" scan. If a signal regressed, note the fix in the PR description.
+3. **Rebuild the middleware bundle.** After any change to `src/vercel-middleware.ts`, the middleware order, the matcher, or any file under `src/middlewares/*`, run `pnpm build:middleware`. It regenerates both `.vercel/output/middleware/middleware.js` and the repo-root `middleware.js` (Prettier-formatted) that Vercel ships, so the committed bundle stays in sync with the TypeScript source.
+4. **Run the guardrail tests.** `pnpm test tests/agent-discovery.test.ts tests/markdown-negotiation.test.ts` asserts the Link header, well-known payload shapes, Content Signals, Content-Type routing, and the markdown-negotiation routing decisions still line up. Both suites run as part of the default `pnpm test`.
+5. **Update translations.** Anything added to `src/content/docs/build/ai.mdx` must appear in `src/content/docs/zh/build/ai.mdx` (Spanish is out of scope).
+6. **Verify in production.** Once deployed, re-scan with `curl -sI https://aptos.dev/ | rg '^link:'` and an "Is It Agent Ready?" scan. If a signal regressed, note the fix in the PR description.
 
 WebMCP specifics:
 

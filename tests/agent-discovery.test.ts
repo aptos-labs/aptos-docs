@@ -171,6 +171,32 @@ describe("vercel-middleware chain ordering", () => {
   });
 });
 
+describe("committed middleware.js bundle", () => {
+  const bundle = readText("middleware.js");
+
+  it("is up to date with src/vercel-middleware.ts", () => {
+    // scripts/generate-middleware-function.js copies the repo-root
+    // middleware.js into the Vercel deploy bundle. If the committed file is
+    // stale, changes to src/vercel-middleware.ts (e.g. middleware ordering)
+    // silently fail to ship until someone manually re-runs
+    // `pnpm build:middleware`. Check that every middleware imported in the
+    // TS source survives into the bundle.
+    expect(bundle).toContain("function middleware(req)");
+    expect(bundle).toContain("applyMiddleware");
+    // The bundle uses SWC-mangled names, but every middleware body from
+    // the source should be inlined verbatim. Pick a stable fragment from
+    // each one that is unique to its implementation.
+    expect(bundle, "enRedirect body present").toContain("/^\\/en(\\/.*|$)/");
+    expect(bundle, "markdownNegotiation body present").toContain("text\\/markdown");
+    expect(bundle, "i18nRedirect body present").toContain("preferred_locale");
+  });
+
+  it("uses the fixed /zh matcher (not the broken /zh$)", () => {
+    expect(bundle).toContain('"/zh"');
+    expect(bundle).not.toContain('"/zh$"');
+  });
+});
+
 describe("vercel.json Link response header", () => {
   const vercel = readJson<{
     headers?: { source: string; headers: { key: string; value: string }[] }[];

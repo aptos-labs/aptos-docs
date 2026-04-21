@@ -117,10 +117,10 @@ get_package_manager() {
             fi
             ;;
         OpenBSD)
-            if command_exists doas; then
-                echo doas
+            if command_exists pkg_add || command_exists pkg_info; then
+                echo pkg_add
             else
-                die "unzip is required. Install unzip on OpenBSD (https://www.openbsd.org/faq/faq15.html), then run this script again."
+                die "unzip is required. Install pkg_add/unzip on OpenBSD (https://www.openbsd.org/faq/faq15.html), then run this script again."
             fi
             ;;
         NetBSD)
@@ -173,9 +173,6 @@ is_system_package_installed() {
         zypper)
             zypper se -i "$pkg" >/dev/null 2>&1
             ;;
-        doas)
-            pkg_info -q "$pkg" >/dev/null 2>&1
-            ;;
         pkgin)
             pkgin -Q "$pkg" >/dev/null 2>&1
             ;;
@@ -205,6 +202,17 @@ install_system_package() {
         fi
     fi
 
+    # Package managers that typically need root when not already root
+    requires_privileges=false
+    case "$pm" in
+        yum|dnf|apt-get|zypper|emerge|pacman|apk|xbps|pkg|pkgin|pkg_add|port)
+            requires_privileges=true
+            ;;
+    esac
+    if [ "$(id -u)" -ne 0 ] && [ -z "$pre_cmd" ] && [ "$requires_privileges" = true ]; then
+        die "Installing system package '$pkg' with '$pm' requires root privileges. Re-run this script as root or install and configure sudo or doas."
+    fi
+
     print_message "$YELLOW" "Installing $pkg using $pm..."
     case "$pm" in
         yum)
@@ -228,7 +236,11 @@ install_system_package() {
             $pre_cmd emerge "$pkg" || die "Failed to install package: $pkg"
             ;;
         port)
-            port install "$pkg" || die "Failed to install package: $pkg"
+            if [ "$(id -u)" -eq 0 ]; then
+                port install "$pkg" || die "Failed to install package: $pkg"
+            else
+                $pre_cmd port install "$pkg" || die "Failed to install package: $pkg"
+            fi
             ;;
         brew)
             brew install "$pkg" || die "Failed to install package: $pkg"
@@ -245,18 +257,15 @@ install_system_package() {
         pkg)
             $pre_cmd pkg install -y "$pkg" || die "Failed to install package: $pkg"
             ;;
-        doas)
-            if [ "$(id -u)" -eq 0 ]; then
-                pkg_add -I "$pkg" || die "Failed to install package: $pkg"
-            else
-                doas pkg_add -I "$pkg" || die "Failed to install package: $pkg"
-            fi
-            ;;
         pkgin)
             $pre_cmd pkgin install "$pkg" || die "Failed to install package: $pkg"
             ;;
         pkg_add)
-            $pre_cmd pkg_add -I "$pkg" || die "Failed to install package: $pkg"
+            if [ "$(id -u)" -eq 0 ]; then
+                pkg_add -I "$pkg" || die "Failed to install package: $pkg"
+            else
+                $pre_cmd pkg_add -I "$pkg" || die "Failed to install package: $pkg"
+            fi
             ;;
         *)
             die "Unsupported package manager: $pm"

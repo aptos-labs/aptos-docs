@@ -58,10 +58,13 @@ function Get-LatestVersion {
 
 # Determine the target platform
 function Get-Target {
+    # Releases ship Windows-x86_64 only; use that zip on ARM64 Windows too (x64 emulation).
     $arch = (Get-WmiObject -Class Win32_Processor).Architecture
     switch ($arch) {
-        0 { return "Windows-x86_64" }  # x86
-        9 { return "Windows-x86_64" }  # x64
+        0 { return "Windows-x86_64" }   # x86
+        5 { return "Windows-x86_64" }   # ARM (32-bit)
+        9 { return "Windows-x86_64" }   # x64
+        12 { return "Windows-x86_64" }  # ARM64
         default { Die "Unsupported architecture: $arch" }
     }
 }

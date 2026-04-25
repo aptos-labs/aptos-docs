@@ -54,9 +54,13 @@ const SKIP_EXACT_OR_SUBPATH = ["/rest-api", "/move-reference", "/gas-profiling"]
  * Returns true when the `Accept` header explicitly lists `text/markdown` with
  * a non-zero quality value. Per RFC 9110 §12.4.2, `q=0` means "not acceptable",
  * so `Accept: text/markdown;q=0` must fall back to HTML instead of rewriting
- * to `.md`. We don't try to handle wildcards (`* /*`, `text/*`) because HTML
- * is the canonical representation and we only opt into Markdown on an
- * explicit request.
+ * to `.md`.
+ *
+ * Both the media type and the `q` parameter are matched case-insensitively
+ * (RFC 9110 §5.6.6 / §8.3.1: media types and parameter names are
+ * case-insensitive). Wildcards (`* /*`, `text/*`) are intentionally ignored —
+ * HTML is the canonical representation and we only opt into Markdown on an
+ * explicit listing of `text/markdown`.
  */
 function acceptsMarkdown(accept: string | null): boolean {
   if (!accept) return false;

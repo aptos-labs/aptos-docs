@@ -123,6 +123,9 @@ function searchTool(): ModelContextToolDefinition<
       },
       required: ["query"],
     },
+    // Mutates the DOM (opens the DocSearch modal and focuses its input), so
+    // it's not read-only. Matches the explicit annotation on `open-doc`.
+    annotations: { readOnlyHint: false },
     execute: async (input) => {
       const query = typeof input?.query === "string" ? input.query.trim() : "";
       if (!query) return { ok: false, query: "", reason: "missing-query" };
@@ -185,6 +188,13 @@ function fetchMarkdownTool(): ModelContextToolDefinition<
     inputSchema: { type: "object", properties: {} },
     annotations: { readOnlyHint: true },
     execute: async () => {
+      // Mirror the path → markdown export mapping used by
+      // src/middlewares/markdown-negotiation.ts. Astro's glob loader emits
+      // slugs as `rawSegments.join("/").replace(/\/index$/, "")`, so
+      // src/content/docs/zh/index.mdx maps to `/zh.md` (not `/zh/index.md`)
+      // and src/content/docs/index.mdx maps to `/index.md`. The trailing-
+      // slash strip handles `/build/sdks/` and `/zh/`; the empty-path
+      // fallback handles the root.
       const basePath = location.pathname.replace(/\/$/, "") || "/index";
       const url = new URL(`${basePath}.md`, location.origin);
       try {

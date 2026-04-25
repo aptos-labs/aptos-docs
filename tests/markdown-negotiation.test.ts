@@ -37,7 +37,21 @@ describe("markdown-negotiation middleware", () => {
     expect(getRewriteTarget(res)).toBe("https://aptos.dev/index.md");
   });
 
-  it("routes locale URLs to the locale .md export", () => {
+  it("rewrites a locale root to /<locale>.md (Starlight strips /index from non-root slugs)", () => {
+    // src/content/docs/zh/index.mdx → doc id = `zh` → static path /zh.md.
+    // Astro's glob loader generates slugs as
+    // `rawSegments.join("/").replace(/\/index$/, "")`, so `zh/index.mdx`
+    // becomes `zh`, not `zh/index`. Naively mapping `/zh` to `/zh/index.md`
+    // would 404 (verified live on the preview deploy). This test pins the
+    // mapping in case someone reads Copilot's locale-root suggestion and
+    // tries to "fix" it.
+    const res = markdownNegotiation(
+      makeRequest("https://aptos.dev/zh", { accept: "text/markdown" }),
+    );
+    expect(getRewriteTarget(res)).toBe("https://aptos.dev/zh.md");
+  });
+
+  it("routes locale subpath URLs to the locale .md export", () => {
     const res = markdownNegotiation(
       makeRequest("https://aptos.dev/zh/build/sdks", { accept: "text/markdown" }),
     );
@@ -107,12 +121,16 @@ describe("markdown-negotiation middleware", () => {
   });
 
   it("strips a trailing slash before appending .md", () => {
-    const res = markdownNegotiation(
-      makeRequest("https://aptos.dev/build/sdks/", {
-        accept: "text/markdown",
-      }),
-    );
-    expect(getRewriteTarget(res)).toBe("https://aptos.dev/build/sdks.md");
+    for (const [input, expected] of [
+      ["https://aptos.dev/build/sdks/", "https://aptos.dev/build/sdks.md"],
+      // Locale root with trailing slash should map to `/zh.md`, not `/zh/.md`.
+      // Vercel's `trailingSlash: false` handler usually 308-redirects /zh/ → /zh
+      // before middleware runs, but defend against direct invocations too.
+      ["https://aptos.dev/zh/", "https://aptos.dev/zh.md"],
+    ] as const) {
+      const res = markdownNegotiation(makeRequest(input, { accept: "text/markdown" }));
+      expect(getRewriteTarget(res), input).toBe(expected);
+    }
   });
 
   it("accepts Accept headers with quality values", () => {
@@ -134,6 +152,40 @@ describe("markdown-negotiation middleware", () => {
         makeRequest("https://aptos.dev/build/sdks", { accept: header }),
       );
       expect(res, `Accept: ${header}`).toBeUndefined();
+    }
+  });
+
+  it("rejects malformed q-values and accepts case-variant tokens", () => {
+    // Locks in the parser behaviour audited during self-review. A future
+    // "simplify the regex" attempt that swaps the token-by-token parse for a
+    // looser substring match would silently break these.
+    const rejected = [
+      "text/markdown;q=", // empty value -> Number("") === 0
+      "text/markdown;q=invalid", // NaN
+      "text/markdown; q = 0", // whitespace around '='
+      "text/markdown;Q=0", // uppercase Q with q=0
+    ];
+    for (const header of rejected) {
+      const res = markdownNegotiation(
+        makeRequest("https://aptos.dev/build/sdks", { accept: header }),
+      );
+      expect(res, `Accept (rejected): ${header}`).toBeUndefined();
+    }
+
+    const accepted = [
+      "text/MARKDOWN", // uppercase media type
+      "text/markdown;Q=0.5", // uppercase Q with non-zero value
+      "text/markdown; charset=utf-8", // unrelated parameters
+      "text/markdown ;q=0.7", // space before semicolon
+      "text/html, text/markdown ;q=0.9 ;version=2",
+    ];
+    for (const header of accepted) {
+      const res = markdownNegotiation(
+        makeRequest("https://aptos.dev/build/sdks", { accept: header }),
+      );
+      expect(getRewriteTarget(res), `Accept (accepted): ${header}`).toBe(
+        "https://aptos.dev/build/sdks.md",
+      );
     }
   });
 

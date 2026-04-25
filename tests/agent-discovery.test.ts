@@ -223,6 +223,28 @@ describe("Head.astro in-page discovery links", () => {
       );
     }
   });
+
+  it("carries the same titles as the server-side Link header", () => {
+    // The vercel.json Link entries set human-readable titles for the four
+    // non-llms.txt agent-discovery resources. Mirror them in the in-page
+    // <link> tags so HTML-only crawlers and browser DevTools see the same
+    // labels. Keep this list in sync with vercel.json.
+    const expectedTitles: { href: string; title: string }[] = [
+      { href: "/aptos-spec.json", title: "Aptos REST API OpenAPI spec" },
+      { href: "/rest-api", title: "Aptos REST API reference" },
+      { href: "/.well-known/mcp/server-card.json", title: "Aptos MCP Server Card" },
+      { href: "/.well-known/agent-skills/index.json", title: "Aptos Agent Skills index" },
+    ];
+    for (const { href, title } of expectedTitles) {
+      const hrefLiteral = href.replace(/[/.]/g, "\\$&");
+      const titleLiteral = title.replace(/[/.\s]/g, "\\$&");
+      const pattern = new RegExp(
+        `<link\\b[^>]*?(?:href="${hrefLiteral}"[^>]*?title="${titleLiteral}"|title="${titleLiteral}"[^>]*?href="${hrefLiteral}")`,
+        "s",
+      );
+      expect(pattern.test(head), `Head.astro missing title="${title}" for ${href}`).toBe(true);
+    }
+  });
 });
 
 describe("middleware matcher", () => {
@@ -244,12 +266,15 @@ describe("middleware matcher", () => {
     expect(matcher).not.toContain('"/zh$"');
   });
 
-  it("includes top-level doc pages (not just directory prefixes)", () => {
+  it("includes top-level doc pages and their localized variants", () => {
     // Top-level `.mdx` docs like `src/content/docs/llms-txt.mdx` map to
-    // `/llms-txt`; previously the matcher only listed `/${dir}/:path*` entries
-    // so middleware (i18n redirect, markdown negotiation) never ran on them.
-    // Catches that regression if the generator ever stops scanning files.
+    // `/llms-txt`; previously the matcher only listed `/${dir}/:path*`
+    // entries so middleware (i18n redirect, markdown negotiation) never ran
+    // on them. The generator must register both the English path and a
+    // `/${locale}${path}` variant for every non-default locale, otherwise
+    // /zh/llms-txt regresses to "no middleware".
     expect(matcher).toContain('"/llms-txt"');
+    expect(matcher).toContain('"/zh/llms-txt"');
   });
 });
 
@@ -273,11 +298,11 @@ describe("committed middleware.js bundle", () => {
   it("uses the fixed /zh matcher (not the broken /zh$)", () => {
     // scripts/generate-middleware-function.js copies the repo-root
     // middleware.js into the Vercel deploy bundle, so the committed file
-    // must track src/vercel-middleware.ts. The full freshness check is
-    // performed in the companion bundle-hash test (runs the generator and
-    // compares SHA-256 sums). This assertion catches the most common drift
-    // — the `/zh$` matcher bug we shipped before — without depending on any
-    // particular middleware implementation detail.
+    // must track src/vercel-middleware.ts. Bundle freshness is enforced at
+    // build time by the writeBundle hook in scripts/generate-middleware.js
+    // (Vite plugin auto-copies the bundled output to the repo root). This
+    // assertion catches the most common drift — the `/zh$` matcher bug we
+    // shipped before — without coupling to specific middleware bodies.
     expect(bundle).toContain('"/zh"');
     expect(bundle).not.toContain('"/zh$"');
   });

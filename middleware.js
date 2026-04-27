@@ -379,7 +379,7 @@ function acceptsMarkdown(accept) {
     if (!qParam) return true;
     const rawQ = qParam.slice(qParam.indexOf("=") + 1).trim();
     const q = Number(rawQ);
-    if (Number.isFinite(q) && q > 0) return true;
+    if (Number.isFinite(q) && q > 0 && q <= 1) return true;
   }
   return false;
 }

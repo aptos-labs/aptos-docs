@@ -6,6 +6,7 @@ import { Font } from "astro:assets";
 import globalCssUrl from "../styles/global.css?url";
 import { SUPPORTED_LANGUAGES } from "~/config/i18n";
 import { getImageUrl } from "~/lib/og-image/getImageUrl";
+import WebMcpRegistration from "~/components/WebMcpRegistration.astro";
 
 const entryData = Astro.locals.starlightRoute.entry.data || Astro.props.entry.data;
 const ogImageUrl = await getImageUrl(new URL("/api/og-image.png", Astro.site), {
@@ -148,6 +149,35 @@ const breadcrumbItems = [
 
 {/* LLMs.txt discovery: lets any LLM fetching any page find the machine-readable docs */}
 <link rel="llms-txt" href="/llms.txt" />
+
+{
+  /* Agent discovery links (RFC 8288 / RFC 9727 / SEP-2127) — mirror the server-side
+    `Link` response headers so crawlers that only parse HTML still find them. */
+}
+<link rel="api-catalog" href="/.well-known/api-catalog" type="application/linkset+json" />
+<link
+  rel="service-desc"
+  href="/aptos-spec.json"
+  type="application/json"
+  title="Aptos REST API OpenAPI spec"
+/>
+<link rel="service-doc" href="/rest-api" type="text/html" title="Aptos REST API reference" />
+<link rel="describedby" href="/llms.txt" type="text/plain" />
+<link
+  rel="describedby"
+  href="/.well-known/mcp/server-card.json"
+  type="application/json"
+  title="Aptos MCP Server Card"
+/>
+<link
+  rel="describedby"
+  href="/.well-known/agent-skills/index.json"
+  type="application/json"
+  title="Aptos Agent Skills index"
+/>
+
+{/* WebMCP tool registration (no-op on browsers without navigator.modelContext) */}
+<WebMcpRegistration />
 
 {/* hreflang x-default: tells search engines which URL to serve when no locale matches */}
 <link rel="alternate" hreflang="x-default" href={getLanguageUrl("en")} />

@@ -74,7 +74,9 @@ function acceptsMarkdown(accept: string | null): boolean {
 
     const rawQ = qParam.slice(qParam.indexOf("=") + 1).trim();
     const q = Number(rawQ);
-    if (Number.isFinite(q) && q > 0) return true;
+    // RFC 9110 §12.4.2 caps qvalues at 0.000–1.000; reject anything outside
+    // that range so a malformed `q=2` doesn't accidentally trigger a rewrite.
+    if (Number.isFinite(q) && q > 0 && q <= 1) return true;
   }
   return false;
 }

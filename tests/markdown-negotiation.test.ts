@@ -155,7 +155,7 @@ describe("markdown-negotiation middleware", () => {
     }
   });
 
-  it("rejects malformed q-values and accepts case-variant tokens", () => {
+  it("rejects malformed, out-of-range, and zero quality values", () => {
     // Locks in the parser behaviour audited during self-review. A future
     // "simplify the regex" attempt that swaps the token-by-token parse for a
     // looser substring match would silently break these.
@@ -164,6 +164,10 @@ describe("markdown-negotiation middleware", () => {
       "text/markdown;q=invalid", // NaN
       "text/markdown; q = 0", // whitespace around '='
       "text/markdown;Q=0", // uppercase Q with q=0
+      // RFC 9110 §12.4.2 caps qvalues at 0.000–1.000.
+      "text/markdown;q=2", // > 1 (out of range)
+      "text/markdown;q=1.5", // > 1 (out of range)
+      "text/markdown;q=-0.5", // negative
     ];
     for (const header of rejected) {
       const res = markdownNegotiation(
@@ -174,6 +178,8 @@ describe("markdown-negotiation middleware", () => {
 
     const accepted = [
       "text/MARKDOWN", // uppercase media type
+      "text/markdown;q=1", // boundary value
+      "text/markdown;q=1.0",
       "text/markdown;Q=0.5", // uppercase Q with non-zero value
       "text/markdown; charset=utf-8", // unrelated parameters
       "text/markdown ;q=0.7", // space before semicolon

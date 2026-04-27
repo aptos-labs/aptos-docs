@@ -33,7 +33,14 @@ export default async function middleware(req: Request) {
     // `/en/foo.md` would 404 — we need the redirect to strip `/en` before
     // markdown negotiation runs.
     enRedirect,
-    // Agents requesting text/markdown are served the rendered .md export.
+    // Markdown negotiation runs *before* i18nRedirect on purpose. Agents that
+    // ask for `Accept: text/markdown` get the path-as-requested rather than a
+    // 302 to the locale variant inferred from cookies/Accept-Language: agents
+    // typically don't carry a preferred-locale cookie, the WebMCP
+    // `fetch-doc-markdown` tool fetches from the *current* page's URL, and
+    // pinning markdown to the requested path makes it deterministic for
+    // ingestion (LLMs.txt feeds, agent grounding). Browsers hitting the page
+    // without an explicit Accept header still flow through i18nRedirect below.
     markdownNegotiation,
     i18nRedirect,
     // Add more middleware functions here as needed

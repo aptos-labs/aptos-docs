@@ -1,6 +1,8 @@
 # Smoke-test public CLI installers on common GitHub-hosted runners.
 # Note: aptos-core publishes Windows-x86_64 zips only; ARM64 Windows uses that build.
 # install_cli.py on macOS exits by design (directs users to Homebrew), so it is skipped there.
+# install_cli.sh targets Linux/macOS only: GitHub's Windows bash is Git Bash (MINGW*),
+# where uname is not supported by get_target() and the script would fail before curl.
 
 name: CLI install scripts
 
@@ -53,6 +55,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Test install_cli.sh
+        if: runner.os != 'Windows'
         shell: bash
         run: |
           set -euo pipefail

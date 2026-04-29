@@ -303,6 +303,7 @@ describe("Head.astro in-page discovery links", () => {
       { href: "/.well-known/agent-skills/index.json", rel: "describedby" },
       { href: "/.well-known/oauth-protected-resource", rel: "describedby" },
       { href: "/.well-known/openid-configuration", rel: "describedby" },
+      { href: "/.well-known/oauth-authorization-server", rel: "describedby" },
     ];
     for (const { href, rel } of expectedHrefs) {
       expect(hasLinkRel(href, rel), `Head.astro missing <link rel="${rel}" href="${href}">`).toBe(
@@ -328,6 +329,10 @@ describe("Head.astro in-page discovery links", () => {
       {
         href: "/.well-known/openid-configuration",
         title: "Aptos Faucet OpenID Connect Discovery",
+      },
+      {
+        href: "/.well-known/oauth-authorization-server",
+        title: "Aptos Faucet OAuth 2.0 Authorization Server Metadata",
       },
     ];
     for (const { href, title } of expectedTitles) {
@@ -430,6 +435,7 @@ describe("vercel.json Link response header", () => {
     expect(linkHeader).toContain("/.well-known/agent-skills/index.json");
     expect(linkHeader).toContain("/.well-known/oauth-protected-resource");
     expect(linkHeader).toContain("/.well-known/openid-configuration");
+    expect(linkHeader).toContain("/.well-known/oauth-authorization-server");
     expect(linkHeader).toMatch(/rel="api-catalog"/);
     expect(linkHeader).toMatch(/rel="service-desc"/);
     expect(linkHeader).toMatch(/rel="service-doc"/);

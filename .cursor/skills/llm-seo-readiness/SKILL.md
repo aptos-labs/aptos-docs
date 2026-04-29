@@ -49,7 +49,7 @@ For full coverage: `pnpm test` and a production `pnpm build` when touching route
 | User docs | `src/content/docs/llms-txt.mdx`, `build/ai.mdx`, `zh/` |
 | SEO head | `src/starlight-overrides/Head.astro` |
 | Crawlers / sitemap hint | `public/robots.txt` |
-| Agent discovery — well-known | `public/.well-known/api-catalog`, `public/.well-known/mcp/server-card.json`, `public/.well-known/agent-skills/index.json` |
+| Agent discovery — well-known | `public/.well-known/api-catalog`, `public/.well-known/mcp/server-card.json`, `public/.well-known/agent-skills/index.json`, `public/.well-known/oauth-protected-resource`, `public/.well-known/openid-configuration`, `public/.well-known/oauth-authorization-server` |
 | Agent discovery — Link header | `vercel.json` (global `/(.*)` entry) |
 | Markdown negotiation + WebMCP | `src/middlewares/markdown-negotiation.ts`, `src/scripts/webmcp-register.ts`, `src/types/webmcp.d.ts` |
 | Agent discovery regression tests | `tests/agent-discovery.test.ts` |

@@ -153,6 +153,9 @@ export default defineConfig({
               "/.well-known/api-catalog",
               "/.well-known/mcp/server-card.json",
               "/.well-known/agent-skills/index.json",
+              "/.well-known/oauth-protected-resource",
+              "/.well-known/openid-configuration",
+              "/.well-known/oauth-authorization-server",
             ];
             if (knownWellKnown.some((path) => link.endsWith(path))) {
               return true;

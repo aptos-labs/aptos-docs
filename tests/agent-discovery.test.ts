@@ -148,6 +148,91 @@ describe("Agent Skills discovery index", () => {
   });
 });
 
+describe("OAuth Protected Resource Metadata (RFC 9728)", () => {
+  const metadata = readJson<{
+    resource?: string;
+    authorization_servers?: string[];
+    scopes_supported?: string[];
+    bearer_methods_supported?: string[];
+    resource_name?: string;
+    resource_documentation?: string;
+  }>("public/.well-known/oauth-protected-resource");
+
+  it("declares the faucet's resource identifier and authorization servers", () => {
+    // Only the Aptos Testnet Faucet is OAuth-protected; the rest of aptos.dev
+    // is unauthenticated public docs. Keep the resource pinned to the faucet
+    // host so RFC 9728 validation (Section 3.3) succeeds.
+    expect(metadata.resource, "resource").toBe("https://faucet.testnet.aptoslabs.com");
+    expect(metadata.authorization_servers, "authorization_servers").toEqual(
+      expect.arrayContaining(["https://securetoken.google.com/aptos-api-gateway-prod"]),
+    );
+    for (const issuer of metadata.authorization_servers ?? []) {
+      expect(issuer, "authorization server issuer").toMatch(/^https:\/\//);
+    }
+  });
+
+  it("advertises bearer-token usage and recommended scopes", () => {
+    expect(metadata.bearer_methods_supported, "bearer_methods_supported").toEqual(
+      expect.arrayContaining(["header"]),
+    );
+    expect(metadata.scopes_supported, "scopes_supported").toEqual(
+      expect.arrayContaining(["openid"]),
+    );
+    expect(metadata.resource_name, "resource_name").toBeTruthy();
+    expect(metadata.resource_documentation, "resource_documentation").toMatch(/^https:\/\//);
+  });
+});
+
+describe("OpenID Connect Discovery 1.0 / OAuth Authorization Server Metadata (RFC 8414)", () => {
+  const oidc = readJson<{
+    issuer?: string;
+    authorization_endpoint?: string;
+    token_endpoint?: string;
+    jwks_uri?: string;
+    response_types_supported?: string[];
+    grant_types_supported?: string[];
+    id_token_signing_alg_values_supported?: string[];
+  }>("public/.well-known/openid-configuration");
+
+  const authServer = readJson<typeof oidc>("public/.well-known/oauth-authorization-server");
+
+  it("OIDC config exposes issuer, authorization_endpoint, token_endpoint, and jwks_uri", () => {
+    expect(oidc.issuer, "issuer").toMatch(/^https:\/\//);
+    expect(oidc.authorization_endpoint, "authorization_endpoint").toMatch(/^https:\/\//);
+    expect(oidc.token_endpoint, "token_endpoint").toMatch(/^https:\/\//);
+    expect(oidc.jwks_uri, "jwks_uri").toMatch(/^https:\/\//);
+  });
+
+  it("OIDC config lists at least one grant type and response type", () => {
+    expect((oidc.grant_types_supported ?? []).length).toBeGreaterThan(0);
+    expect((oidc.response_types_supported ?? []).length).toBeGreaterThan(0);
+    expect(
+      oidc.id_token_signing_alg_values_supported,
+      "id_token_signing_alg_values_supported",
+    ).toEqual(expect.arrayContaining(["RS256"]));
+  });
+
+  it("oauth-authorization-server mirrors the same issuer", () => {
+    // RFC 8414 and OIDC Discovery share the same metadata model — the issuer
+    // must match across both documents so clients converge on a single
+    // authorization server identity.
+    expect(authServer.issuer, "oauth-authorization-server issuer").toBe(oidc.issuer);
+    expect(authServer.token_endpoint, "oauth-authorization-server token_endpoint").toBe(
+      oidc.token_endpoint,
+    );
+    expect(authServer.jwks_uri, "oauth-authorization-server jwks_uri").toBe(oidc.jwks_uri);
+  });
+
+  it("OIDC issuer matches the faucet resource metadata authorization_servers", () => {
+    const protectedResource = readJson<{ authorization_servers?: string[] }>(
+      "public/.well-known/oauth-protected-resource",
+    );
+    expect(protectedResource.authorization_servers, "authorization_servers").toEqual(
+      expect.arrayContaining([oidc.issuer ?? ""]),
+    );
+  });
+});
+
 describe("robots.txt content signals", () => {
   const body = readText("public/robots.txt");
 
@@ -216,6 +301,8 @@ describe("Head.astro in-page discovery links", () => {
       { href: "/llms.txt", rel: "describedby" },
       { href: "/.well-known/mcp/server-card.json", rel: "describedby" },
       { href: "/.well-known/agent-skills/index.json", rel: "describedby" },
+      { href: "/.well-known/oauth-protected-resource", rel: "describedby" },
+      { href: "/.well-known/openid-configuration", rel: "describedby" },
     ];
     for (const { href, rel } of expectedHrefs) {
       expect(hasLinkRel(href, rel), `Head.astro missing <link rel="${rel}" href="${href}">`).toBe(
@@ -234,6 +321,14 @@ describe("Head.astro in-page discovery links", () => {
       { href: "/rest-api", title: "Aptos REST API reference" },
       { href: "/.well-known/mcp/server-card.json", title: "Aptos MCP Server Card" },
       { href: "/.well-known/agent-skills/index.json", title: "Aptos Agent Skills index" },
+      {
+        href: "/.well-known/oauth-protected-resource",
+        title: "Aptos Faucet OAuth Protected Resource Metadata",
+      },
+      {
+        href: "/.well-known/openid-configuration",
+        title: "Aptos Faucet OpenID Connect Discovery",
+      },
     ];
     for (const { href, title } of expectedTitles) {
       const hrefLiteral = href.replace(/[/.]/g, "\\$&");
@@ -333,6 +428,8 @@ describe("vercel.json Link response header", () => {
     expect(linkHeader).toContain("/.well-known/api-catalog");
     expect(linkHeader).toContain("/.well-known/mcp/server-card.json");
     expect(linkHeader).toContain("/.well-known/agent-skills/index.json");
+    expect(linkHeader).toContain("/.well-known/oauth-protected-resource");
+    expect(linkHeader).toContain("/.well-known/openid-configuration");
     expect(linkHeader).toMatch(/rel="api-catalog"/);
     expect(linkHeader).toMatch(/rel="service-desc"/);
     expect(linkHeader).toMatch(/rel="service-doc"/);
@@ -343,6 +440,9 @@ describe("vercel.json Link response header", () => {
       ["/.well-known/api-catalog", /^application\/linkset\+json/],
       ["/.well-known/mcp/server-card.json", /^application\/json/],
       ["/.well-known/agent-skills/index.json", /^application\/json/],
+      ["/.well-known/oauth-protected-resource", /^application\/json/],
+      ["/.well-known/openid-configuration", /^application\/json/],
+      ["/.well-known/oauth-authorization-server", /^application\/json/],
     ];
     for (const [source, expected] of pairs) {
       const entry = vercel.headers?.find((item) => item.source === source);

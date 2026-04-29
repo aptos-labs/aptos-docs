@@ -9,6 +9,7 @@ import ThemeSelect from "virtual:starlight/components/ThemeSelect";
 
 import ChatButton from "../components/chat-widget/ChatButton.astro";
 import ChatDialog from "../components/chat-widget/ChatDialog.astro";
+import TopNav from "../components/TopNav.astro";
 
 /**
  * Render the `Search` component if Pagefind is enabled or the default search component has been overridden.
@@ -17,7 +18,7 @@ const shouldRenderSearch =
   config.pagefind || config.components.Search !== "@astrojs/starlight/components/Search.astro";
 ---
 
-<div class="header">
+<div class="header-inner">
   <div class="title-wrapper sl-flex">
     <SiteTitle />
   </div>
@@ -34,21 +35,25 @@ const shouldRenderSearch =
   </div>
 </div>
 
+<div class="top-nav-row sl-hidden md:sl-block print:hidden">
+  <TopNav />
+</div>
+
 <ChatDialog />
+
 <style>
   @layer starlight.core {
-    .header {
+    .header-inner {
       display: flex;
       gap: var(--sl-nav-gap);
       justify-content: space-between;
       align-items: center;
-      height: 100%;
+      height: var(--sl-nav-height);
+      flex-shrink: 0;
     }
 
     .title-wrapper {
-      /* Prevent long titles overflowing and covering the search and menu buttons on narrow viewports. */
       overflow: clip;
-      /* Avoid clipping focus ring around link inside title wrapper. */
       padding: 0.25rem;
       margin: -0.25rem;
       min-width: 0;
@@ -65,6 +70,11 @@ const shouldRenderSearch =
       border-inline-end: 1px solid var(--sl-color-gray-5);
     }
 
+    .top-nav-row {
+      border-top: 1px solid var(--sl-color-hairline-shade);
+      margin: 0 calc(-1 * var(--sl-nav-pad-x));
+    }
+
     @media (min-width: 50rem) {
       :global(:root[data-has-sidebar]) {
         --__sidebar-pad: calc(2 * var(--sl-nav-pad-x));
@@ -72,7 +82,7 @@ const shouldRenderSearch =
       :global(:root:not([data-has-toc])) {
         --__toc-width: 0rem;
       }
-      .header {
+      .header-inner {
         --__sidebar-width: max(0rem, var(--sl-content-inline-start, 0rem) - var(--sl-nav-pad-x));
         --__main-column-fr: calc(
           (
@@ -84,14 +94,11 @@ const shouldRenderSearch =
         );
         display: grid;
         grid-template-columns:
-        /* 1 (site title): runs up until the main content column’s left edge or the width of the title, whichever is the largest  */
           minmax(
             calc(var(--__sidebar-width) + max(0rem, var(--__main-column-fr) - var(--sl-nav-gap))),
             auto
           )
-          /* 2 (search box): all free space that is available. */
           1fr
-          /* 3 (right items): use the space that these need. */
           auto;
         align-content: center;
       }

@@ -54,7 +54,8 @@ X86_64 = ["x86_64", "amd64"]
 SUPPORTED_ARCHITECTURES = {
     "macos": X86_64 + ["arm64", "aarch64"],
     "linux": X86_64 + ["arm64", "aarch64"],
-    "windows": X86_64,
+    # Pre-built CLI zips are Windows-x86_64 only; ARM64 hosts use that build under emulation.
+    "windows": X86_64 + ["arm64", "aarch64"],
 }
 
 FOREGROUND_COLORS = {
@@ -496,8 +497,7 @@ class Installer:
                     "Checking OS and architecture...",
                 )
             )
-        # We only look this up for validation, we only need the OS to figure out which
-        # binary to download right now since we only build for x86_64 right now.
+        # Map OS + CPU to the published release artifact name (see aptos-core releases).
         arch = (platform.machine() or platform.processor()).lower()
         os = "windows" if WINDOWS else "macos" if MACOS else "linux"
 
@@ -518,6 +518,13 @@ class Installer:
             return None
 
         if WINDOWS:
+            if arch in ["arm64", "aarch64"]:
+                self._write(
+                    colorize(
+                        "warning",
+                        "Using the Windows x86_64 build on ARM64 (only pre-built Windows zip published).",
+                    )
+                )
             return "Windows-x86_64"
 
         if MACOS:

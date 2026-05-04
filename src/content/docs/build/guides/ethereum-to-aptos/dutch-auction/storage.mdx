@@ -1,0 +1,46 @@
+---
+title: "Storage"
+description: "Model auction state with Objects instead of contract-owned mappings."
+sidebar:
+  label: "Storage"
+---
+
+In Solidity, a Dutch auction commonly stores auction data in a mapping owned by the contract.
+
+## Solidity
+
+```solidity
+struct Auction {
+  IERC20 buyToken;
+  uint256 maxPrice;
+  uint256 minPrice;
+  uint256 duration;
+  uint256 startedAt;
+}
+
+mapping(uint256 => Auction) private auctions;
+```
+
+## Move object-based design
+
+On Aptos, [Objects](/build/smart-contracts/objects) are the preferred container for app-owned state.
+
+For this example, think in terms of three entities:
+
+1. a collection object
+2. a token object for the asset being sold
+3. an auction object holding the auction resource and transfer configuration
+
+This gives you:
+
+- explicit addresses for auction instances
+- cleaner grouping of related resources
+- compatibility with [Digital Asset](/build/smart-contracts/digital-asset) and [Fungible Asset](/build/smart-contracts/fungible-asset) standards
+
+The migration habit to learn here is that many Solidity mappings become either:
+
+- user-owned resources
+- object-owned resources
+- framework-standard stores
+
+not custom contract slots.

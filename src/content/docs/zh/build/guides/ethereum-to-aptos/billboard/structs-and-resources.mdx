@@ -1,0 +1,42 @@
+---
+title: "Structs and Resources"
+description: "理解 Move struct 如何通过 key、store、drop、copy 等 ability 成为链上 resource。"
+sidebar:
+  label: "Structs and Resources"
+---
+
+Move struct 本质上只是强类型数据；当它具备合适的 ability 并被放入全局存储后，才会成为 **resource**。
+
+## 普通 struct
+
+```move
+module 0x2::example {
+    struct Foo { x: u64, y: bool }
+    struct Bar { foo: Foo }
+}
+```
+
+默认情况下，struct 只在当前模块内可见。如果别的模块需要访问，请暴露函数，而不是假设字段可以直接公开读取。
+
+## 四种 ability
+
+1. `key`：允许 struct 存在于全局存储顶层。
+2. `store`：允许 struct 被存进另一个已存储的 struct 中。
+3. `drop`：允许值在离开作用域时被丢弃。
+4. `copy`：允许值被隐式复制。
+
+```move
+struct Message has copy, drop {
+    text: String,
+}
+
+struct Billboard has key {
+    messages: vector<Message>,
+}
+```
+
+## 为什么 resource 重要
+
+只要一个 struct 拥有 `key`，它就可以存到账户或 object 地址下，成为持久化链上状态。这正是 Move 对 Solidity 开发者心中的“contract storage”的主要替代。
+
+迁移时应尽早形成一个习惯：谨慎判断哪些 struct **不应该** 具备 `copy`，哪些应该成为持久化 resource，哪些只是临时值。

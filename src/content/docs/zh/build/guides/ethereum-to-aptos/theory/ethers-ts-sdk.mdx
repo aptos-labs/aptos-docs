@@ -1,0 +1,70 @@
+---
+title: "Ethers.js 与 Aptos TS SDK"
+description: "把熟悉的 Ethers 交易流映射到当前 Aptos TypeScript SDK、Wallet Adapter 与 Forklift 工作流。"
+sidebar:
+  label: "Ethers.js vs TS SDK"
+---
+
+Ethereum 前端开发者通常从 Ethers.js、provider、signer 和 contract instance 开始。在 Aptos 上，对应的工具栈是：
+
+- [`@aptos-labs/ts-sdk`](/zh/build/sdks/ts-sdk)，负责读链、构建交易和提交交易
+- [Wallet Adapter](/zh/build/sdks/wallet-adapter)，用于基于当前 AIP-62 标准的浏览器钱包接入
+- [Forklift](https://aptos.dev/build/sdks/forklift)，用于更接近 Hardhat / Foundry 的合约开发工作流
+
+## Ethers 风格的心智模型
+
+```typescript
+const provider = new ethers.JsonRpcProvider(rpcUrl);
+const wallet = new ethers.Wallet(privateKey, provider);
+
+const tx = await wallet.sendTransaction({
+  to: recipient,
+  value: ethers.parseEther("1"),
+});
+
+await tx.wait();
+```
+
+## 当前 Aptos SDK 的标准流程
+
+```typescript
+import {
+  Account,
+  Aptos,
+  AptosConfig,
+  Network,
+} from "@aptos-labs/ts-sdk";
+
+const aptos = new Aptos(new AptosConfig({ network: Network.TESTNET }));
+const alice = Account.generate();
+const bob = Account.generate();
+
+await aptos.fundAccount({
+  accountAddress: alice.accountAddress,
+  amount: 100_000_000,
+});
+
+const transaction = await aptos.transaction.build.simple({
+  sender: alice.accountAddress,
+  data: {
+    function: "0x1::aptos_account::transfer",
+    functionArguments: [bob.accountAddress, 1_000],
+  },
+});
+
+const pending = await aptos.signAndSubmitTransaction({
+  signer: alice,
+  transaction,
+});
+
+await aptos.waitForTransaction({ transactionHash: pending.hash });
+```
+
+## 你需要更新的直觉
+
+- 先构建交易，再签名并提交。
+- 提交之后始终调用 `waitForTransaction()`。
+- 浏览器钱包必须通过 [Wallet Adapter](/zh/build/sdks/wallet-adapter) 接入，而不是依赖旧的 `window.aptos` 风格全局注入。
+- 如果你需要接近 Hardhat / Foundry 的合约开发体验，就用 [Forklift](https://aptos.dev/build/sdks/forklift)。
+
+更进一步可继续阅读 [building transactions](/zh/build/sdks/ts-sdk/building-transactions)、[sponsored transactions](/zh/build/guides/sponsored-transactions) 和 [wallet adapter](/zh/build/sdks/wallet-adapter)。

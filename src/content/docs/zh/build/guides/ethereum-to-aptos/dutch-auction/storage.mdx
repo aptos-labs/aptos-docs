@@ -1,0 +1,46 @@
+---
+title: "Storage"
+description: "使用 Object 而不是合约拥有的 mapping 来建模拍卖状态。"
+sidebar:
+  label: "Storage"
+---
+
+在 Solidity 中，Dutch auction 通常把拍卖数据放在合约拥有的 mapping 里。
+
+## Solidity
+
+```solidity
+struct Auction {
+  IERC20 buyToken;
+  uint256 maxPrice;
+  uint256 minPrice;
+  uint256 duration;
+  uint256 startedAt;
+}
+
+mapping(uint256 => Auction) private auctions;
+```
+
+## Move 的 object 化设计
+
+在 Aptos 上，[Objects](/zh/build/smart-contracts/objects) 是承载应用自有状态的首选容器。
+
+这个示例里，可以把系统理解为三个实体：
+
+1. 一个 collection object
+2. 一个代表待售资产的 token object
+3. 一个持有拍卖 resource 和 transfer 配置的 auction object
+
+这样设计的好处是：
+
+- 每个拍卖实例都有显式地址
+- 相关 resource 可以被更清晰地组织在一起
+- 能自然接入 [Digital Asset](/zh/build/smart-contracts/digital-asset) 与 [Fungible Asset](/zh/build/smart-contracts/fungible-asset) 标准
+
+迁移时要形成的习惯是：很多 Solidity mapping 最终会变成下面三类之一：
+
+- 用户拥有的 resource
+- object 拥有的 resource
+- 框架标准提供的 store
+
+而不是自定义的合约 slot。

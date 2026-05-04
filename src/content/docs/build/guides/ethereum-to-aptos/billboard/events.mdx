@@ -1,0 +1,41 @@
+---
+title: "Events"
+description: "Compare Solidity event declarations and emit calls with Move event structs and event::emit."
+sidebar:
+  label: "Events"
+---
+
+Move events serve the same product purpose as Solidity events: signal important on-chain state changes to off-chain readers.
+
+## Solidity event
+
+```solidity
+event MessageAdded(address sender, string message, uint256 addedAt);
+```
+
+## Move event
+
+```move
+#[event]
+struct MessageAdded has drop, store {
+    sender: address,
+    message: String,
+    added_at: u64,
+}
+```
+
+## Emitting the event
+
+```solidity
+emit MessageAdded(sender, message, block.timestamp);
+```
+
+```move
+event::emit(MessageAdded {
+    sender,
+    message,
+    added_at: timestamp::now_seconds(),
+});
+```
+
+Move events are first-class structs. That gives you a cleaner typed model, and they can be queried later through the [Indexer](/build/indexer) or transaction APIs depending on the use case.

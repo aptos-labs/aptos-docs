@@ -1,0 +1,45 @@
+---
+title: "Contract Definition"
+description: "把 Solidity 的继承与 import 映射为 Move 的 package、依赖和模块。"
+sidebar:
+  label: "Contract Definition"
+---
+
+Solidity 合约经常通过继承 `Ownable`、`ERC20`、`ERC721` 等基类来获得能力。Move 不使用继承，而是通过模块、导入和框架标准来组合能力。
+
+## Solidity
+
+```solidity
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+
+contract DutchAuction is Ownable, ERC721 {
+    // ...
+}
+```
+
+## Move
+
+```toml
+[package]
+name = "dutch_auction"
+version = "1.0.0"
+
+[addresses]
+dutch_auction_address = "_"
+
+[dependencies.AptosFramework]
+git = "https://github.com/aptos-labs/aptos-framework"
+rev = "mainnet"
+subdir = "aptos-move/framework/aptos-framework"
+```
+
+迁移时的对应关系是：
+
+- 继承变成对框架模块的组合使用
+- ERC-20 变成 [Fungible Asset](/zh/build/smart-contracts/fungible-asset)
+- ERC-721 变成 [Digital Asset](/zh/build/smart-contracts/digital-asset)
+- ownership 规则变成显式的 signer 检查和链上配置
+
+这是 Move 最典型的差异之一：不再“继承合约”，而是“组装能力”。

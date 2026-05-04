@@ -1,0 +1,58 @@
+---
+title: "Introduction"
+description: "The conceptual starting point for Ethereum developers moving to Aptos and Move."
+sidebar:
+  label: "Introduction"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+This guide assumes you already know how to read Solidity code and reason about EVM contracts. The goal is not to re-teach blockchain basics. The goal is to remap your instincts to Aptos.
+
+## What changes first
+
+- **Authorization** moves from implicit `msg.sender` checks to explicit `&signer` parameters.
+- **Storage** moves from contract-owned slots and mappings to resources and objects in global storage.
+- **Tokens** move from contract-per-asset standards to framework-backed asset standards like [Fungible Asset](/build/smart-contracts/fungible-asset) and [Digital Asset](/build/smart-contracts/digital-asset).
+- **Frontend flows** move from Ethers contract instances to the [`@aptos-labs/ts-sdk`](/build/sdks/ts-sdk) plus [Wallet Adapter](/build/sdks/wallet-adapter).
+
+## Events in Move
+
+Solidity declares events directly in the contract:
+
+```solidity
+event MessageAdded(address sender, string message, uint256 addedAt);
+```
+
+Move treats events as structs annotated with `#[event]`, then emits them with `event::emit`:
+
+```move
+use 0x1::event;
+use std::string::String;
+
+#[event]
+struct MessageAdded has drop, store {
+    sender: address,
+    message: String,
+    added_at: u64,
+}
+
+event::emit(MessageAdded {
+    sender,
+    message,
+    added_at: timestamp::now_seconds(),
+});
+```
+
+<Aside type="note">
+  Event structs need `drop` and `store`. They are plain Move structs, so you get strong typing instead of ABI-encoded event payloads.
+</Aside>
+
+## What to read next
+
+1. [Accounts](/build/guides/ethereum-to-aptos/theory/accounts)
+2. [Data Storage Models](/build/guides/ethereum-to-aptos/theory/data-storage-models)
+3. [Contract vs Container](/build/guides/ethereum-to-aptos/theory/contract-vs-container)
+4. [Ethers.js vs the Aptos TS SDK](/build/guides/ethereum-to-aptos/theory/ethers-ts-sdk)
+
+If you want the short version first, jump to the [cheatsheet](/build/guides/ethereum-to-aptos/theory/cheat-sheet).

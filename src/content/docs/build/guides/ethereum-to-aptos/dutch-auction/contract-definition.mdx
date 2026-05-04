@@ -1,0 +1,45 @@
+---
+title: "Contract Definition"
+description: "Translate Solidity inheritance and imports into Move packages, dependencies, and modules."
+sidebar:
+  label: "Contract Definition"
+---
+
+Solidity contracts often inherit behavior from base contracts such as `Ownable`, `ERC20`, and `ERC721`. Move does not use inheritance. Instead, it uses modules, imports, and framework standards.
+
+## Solidity
+
+```solidity
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+
+contract DutchAuction is Ownable, ERC721 {
+    // ...
+}
+```
+
+## Move
+
+```toml
+[package]
+name = "dutch_auction"
+version = "1.0.0"
+
+[addresses]
+dutch_auction_address = "_"
+
+[dependencies.AptosFramework]
+git = "https://github.com/aptos-labs/aptos-framework"
+rev = "mainnet"
+subdir = "aptos-move/framework/aptos-framework"
+```
+
+The migration pattern is:
+
+- inheritance becomes composition over framework modules
+- ERC-20 becomes [Fungible Asset](/build/smart-contracts/fungible-asset)
+- ERC-721 becomes [Digital Asset](/build/smart-contracts/digital-asset)
+- ownership rules become explicit signer checks and stored configuration
+
+This is one of the clearest places where Move asks you to stop extending contracts and start assembling capabilities.

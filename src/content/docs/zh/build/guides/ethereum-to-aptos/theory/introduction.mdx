@@ -1,0 +1,58 @@
+---
+title: "Introduction"
+description: "面向以太坊开发者的 Aptos 与 Move 概念起点。"
+sidebar:
+  label: "Introduction"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+本指南默认你已经会读 Solidity，也能理解 EVM 合约的基本行为。这里不重复讲区块链入门，而是把你已有的开发直觉重新映射到 Aptos。
+
+## 最先发生变化的地方
+
+- **授权模型**：从隐式的 `msg.sender` 检查，变成显式的 `&signer` 参数。
+- **存储模型**：从合约拥有的 slot 和 mapping，变成全局存储中的 resource 与 object。
+- **代币模型**：从“每个资产一份合约”的 ERC 模式，转向框架支持的 [Fungible Asset](/zh/build/smart-contracts/fungible-asset) 与 [Digital Asset](/zh/build/smart-contracts/digital-asset)。
+- **前端交互**：从 Ethers contract instance，转向 [`@aptos-labs/ts-sdk`](/zh/build/sdks/ts-sdk) 加上 [Wallet Adapter](/zh/build/sdks/wallet-adapter)。
+
+## Move 中的事件
+
+Solidity 直接在合约里声明事件：
+
+```solidity
+event MessageAdded(address sender, string message, uint256 addedAt);
+```
+
+Move 把事件当作带 `#[event]` 注解的 struct，并通过 `event::emit` 发出：
+
+```move
+use 0x1::event;
+use std::string::String;
+
+#[event]
+struct MessageAdded has drop, store {
+    sender: address,
+    message: String,
+    added_at: u64,
+}
+
+event::emit(MessageAdded {
+    sender,
+    message,
+    added_at: timestamp::now_seconds(),
+});
+```
+
+<Aside type="note">
+  事件 struct 必须具备 `drop` 和 `store` 能力。它本质上仍然是普通的 Move struct，因此比 ABI 编码后的事件载荷更强类型化。
+</Aside>
+
+## 下一步建议
+
+1. [Accounts](/zh/build/guides/ethereum-to-aptos/theory/accounts)
+2. [Data Storage Models](/zh/build/guides/ethereum-to-aptos/theory/data-storage-models)
+3. [Contract vs Container](/zh/build/guides/ethereum-to-aptos/theory/contract-vs-container)
+4. [Ethers.js 与 Aptos TS SDK](/zh/build/guides/ethereum-to-aptos/theory/ethers-ts-sdk)
+
+如果你想先看短版，直接跳到 [cheatsheet](/zh/build/guides/ethereum-to-aptos/theory/cheat-sheet)。

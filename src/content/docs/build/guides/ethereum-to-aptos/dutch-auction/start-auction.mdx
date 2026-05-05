@@ -1,0 +1,43 @@
+---
+title: "Start Auction"
+description: "Replace Solidity modifiers and contract-owned mint flows with explicit signer checks and object creation."
+sidebar:
+  label: "Start Auction"
+---
+
+In Solidity, `startAuction` usually relies on `onlyOwner`, mints an NFT into contract custody, then records auction metadata.
+
+## Solidity
+
+```solidity
+function startAuction(...) external onlyOwner {
+    require(maxPrice_ >= minPrice_, "invalid prices");
+    require(duration_ > 0, "zero duration");
+    _mint(address(this), nftId_);
+    _auctions[nftId_] = Auction(...);
+    emit AuctionCreated(nftId_);
+}
+```
+
+## Move
+
+Move replaces the modifier with an explicit helper:
+
+```move
+inline fun only_owner(owner: &signer) {
+    assert!(
+        signer::address_of(owner) == @dutch_auction_address,
+        error::permission_denied(ENOT_OWNER)
+    );
+}
+```
+
+The main `start_auction` flow then:
+
+1. checks ownership and arguments
+2. creates the token object
+3. creates the auction object
+4. stores auction resources under that object
+5. emits `AuctionCreated`
+
+The important migration idea is that authorization, asset creation, and state-container creation are three explicit steps instead of one inherited contract action.

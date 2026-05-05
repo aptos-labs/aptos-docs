@@ -1,0 +1,47 @@
+---
+title: "Modules and Initialization"
+description: "Compare Solidity contracts and constructors with Move modules, Move.toml, and init_module."
+sidebar:
+  label: "Modules and Initialization"
+---
+
+In Move, the closest code-level equivalent of a Solidity contract is a **module**.
+
+## Solidity contract
+
+```solidity
+pragma solidity ^0.8.20;
+
+contract Billboard {
+    constructor(address owner_) {
+        // initialization
+    }
+}
+```
+
+## Move module
+
+```move
+module billboard_address::billboard {
+    fun init_module(owner: &signer) {
+        // initialization
+    }
+}
+```
+
+## Key differences
+
+- Solidity declares contracts with the `contract` keyword. Move declares modules as `address::module_name`.
+- Solidity constructors run once at deployment. Move initialization logic typically lives in `init_module`.
+- Package metadata and named addresses live in `Move.toml`, not inline in the module.
+
+```toml
+[package]
+name = "billboard"
+version = "1.0.0"
+
+[addresses]
+billboard_address = "_"
+```
+
+For production deployments, also evaluate [deploying code as an object](/build/cli/start-from-template) and [package upgrade policy](/build/smart-contracts/book/package-upgrades). The core migration point is that initialization is still explicit, but the packaging and address model are different.

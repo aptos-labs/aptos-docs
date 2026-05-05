@@ -80,6 +80,10 @@ const labels = {
   "guides.group.aptos-keyless": "Aptos Keyless",
   "guides.group.aptos-keyless.federated-keyless": "Federated Keyless",
   "guides.group.integration": "Integration",
+  "guides.group.ethereum-to-aptos": "Ethereum to Aptos",
+  "guides.group.ethereum-to-aptos.theory": "Theory",
+  "guides.group.ethereum-to-aptos.billboard": "Billboard",
+  "guides.group.ethereum-to-aptos.dutch-auction": "Dutch Auction",
 
   // Network Sub-Groups
   "network.group.validatorNode": "Validator Nodes",

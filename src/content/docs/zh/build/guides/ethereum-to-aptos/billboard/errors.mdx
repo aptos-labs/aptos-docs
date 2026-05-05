@@ -1,0 +1,34 @@
+---
+title: "Errors"
+description: "对比 Solidity 的 revert 字符串与 Move 的 assert 宏和数字错误码。"
+sidebar:
+  label: "Errors"
+---
+
+Solidity 常用 `require`、`revert` 和字符串错误信息。Move 更常用 `assert!` 加数字错误码，并通过 `error` 模块补充上下文。
+
+## Solidity
+
+```solidity
+function onlyOwner() external {
+    require(msg.sender == address(1), "Contract: not owner");
+}
+```
+
+## Move
+
+```move
+use std::error;
+use std::signer;
+
+const ENOT_OWNER: u64 = 1;
+
+entry public fun only_owner(owner: &signer) {
+    assert!(
+        signer::address_of(owner) == @0x1,
+        error::permission_denied(ENOT_OWNER)
+    );
+}
+```
+
+迁移时最重要的区别在于：Move 错误设计优先追求可机器稳定识别，人类可读性则由文档、常量命名和上下文补足。

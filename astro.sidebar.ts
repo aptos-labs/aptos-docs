@@ -53,6 +53,50 @@ export const sidebar = [
           }),
         ],
       }),
+      group("guides.group.ethereum-to-aptos", {
+        collapsed: true,
+        items: [
+          "build/guides/ethereum-to-aptos",
+          group("guides.group.ethereum-to-aptos.theory", {
+            collapsed: true,
+            items: [
+              "build/guides/ethereum-to-aptos/theory/introduction",
+              "build/guides/ethereum-to-aptos/theory/accounts",
+              "build/guides/ethereum-to-aptos/theory/data-storage-models",
+              "build/guides/ethereum-to-aptos/theory/contract-vs-container",
+              "build/guides/ethereum-to-aptos/theory/ethers-ts-sdk",
+              "build/guides/ethereum-to-aptos/theory/cheat-sheet",
+            ],
+          }),
+          group("guides.group.ethereum-to-aptos.billboard", {
+            collapsed: true,
+            items: [
+              "build/guides/ethereum-to-aptos/billboard/demo",
+              "build/guides/ethereum-to-aptos/billboard/module-initialization",
+              "build/guides/ethereum-to-aptos/billboard/functions",
+              "build/guides/ethereum-to-aptos/billboard/basic-types",
+              "build/guides/ethereum-to-aptos/billboard/structs-and-resources",
+              "build/guides/ethereum-to-aptos/billboard/events",
+              "build/guides/ethereum-to-aptos/billboard/errors",
+              "build/guides/ethereum-to-aptos/billboard/testing",
+            ],
+          }),
+          group("guides.group.ethereum-to-aptos.dutch-auction", {
+            collapsed: true,
+            items: [
+              "build/guides/ethereum-to-aptos/dutch-auction/demo",
+              "build/guides/ethereum-to-aptos/dutch-auction/contract-definition",
+              "build/guides/ethereum-to-aptos/dutch-auction/constants",
+              "build/guides/ethereum-to-aptos/dutch-auction/storage",
+              "build/guides/ethereum-to-aptos/dutch-auction/events",
+              "build/guides/ethereum-to-aptos/dutch-auction/initialization",
+              "build/guides/ethereum-to-aptos/dutch-auction/start-auction",
+              "build/guides/ethereum-to-aptos/dutch-auction/bidding",
+              "build/guides/ethereum-to-aptos/dutch-auction/view-functions",
+            ],
+          }),
+        ],
+      }),
       group("guides.group.advanced", {
         collapsed: true,
         items: [

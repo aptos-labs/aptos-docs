@@ -1,0 +1,41 @@
+---
+title: "Events"
+description: "对比 Solidity 的事件声明与 emit 调用，以及 Move 的事件 struct 与 event::emit。"
+sidebar:
+  label: "Events"
+---
+
+Move 事件与 Solidity 事件承担同样的产品职责：把重要的链上状态变化通知给链下读取方。
+
+## Solidity 事件
+
+```solidity
+event MessageAdded(address sender, string message, uint256 addedAt);
+```
+
+## Move 事件
+
+```move
+#[event]
+struct MessageAdded has drop, store {
+    sender: address,
+    message: String,
+    added_at: u64,
+}
+```
+
+## 发出事件
+
+```solidity
+emit MessageAdded(sender, message, block.timestamp);
+```
+
+```move
+event::emit(MessageAdded {
+    sender,
+    message,
+    added_at: timestamp::now_seconds(),
+});
+```
+
+Move 事件本质上是强类型 struct。这样做的好处是模型更清晰，后续也可以通过 [Indexer](/zh/build/indexer) 或交易 API 查询事件数据。

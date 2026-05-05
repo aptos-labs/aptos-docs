@@ -83,6 +83,10 @@ export default navDictionary({
   "guides.group.aptos-keyless": "Aptos 无密钥", // Aptos Keyless
   "guides.group.aptos-keyless.federated-keyless": "联邦无密钥", // Federated Keyless
   "guides.group.integration": "集成", // Integration
+  "guides.group.ethereum-to-aptos": "Ethereum to Aptos", // Ethereum to Aptos
+  "guides.group.ethereum-to-aptos.theory": "基础概念", // Theory
+  "guides.group.ethereum-to-aptos.billboard": "Billboard", // Billboard
+  "guides.group.ethereum-to-aptos.dutch-auction": "Dutch Auction", // Dutch Auction
 
   // Network Sub-Groups
   "network.group.validatorNode": "验证者节点", // Validator Nodes

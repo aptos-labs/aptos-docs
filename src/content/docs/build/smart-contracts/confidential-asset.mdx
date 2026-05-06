@@ -7,8 +7,6 @@ sidebar:
   label: "Confidential Asset"
 ---
 
-import { ThemedImage } from '~/components/ThemedImage';
-
 import { Aside } from '@astrojs/starlight/components';
 
 The Confidential Asset Standard (also known as "Confidential Asset" or "CA") is a privacy-focused protocol for managing Fungible Assets (FA).
@@ -62,12 +60,17 @@ enum ConfidentialStore has key {
         pause_incoming: bool,
         normalized: bool,
         transfers_received: u64,
-        pending_balance: CompressedPendingBalance,
-        available_balance: CompressedAvailableBalance,
+        pending_balance: CompressedBalance<Pending>,
+        available_balance: CompressedBalance<Available>,
         ek: CompressedRistretto,
+        auditor_hint: Option<EffectiveAuditorHint>,
     }
 }
 ```
+
+The `auditor_hint` field tracks which [auditor](#auditors) (global vs. asset-specific, plus its epoch)
+the `available_balance`'s auditor R component is currently encrypted under.
+Auditors use this to detect when their copy of a balance ciphertext is stale.
 
 ## Confidential Balance
 
@@ -84,26 +87,26 @@ During this accumulation, the pending balance chunks can grow up to 32 bits each
 The available balance consists of eight chunks, supporting 128-bit values.
 After any operation the available balance should be [normalized](#normalization) back to 16-bit chunks to maintain efficient decryption.
 
-The `CompressedPendingBalance` and `CompressedAvailableBalance` structs represent these two balance types:
+Both balance types share a single `CompressedBalance<T>` struct, parameterized by a phantom marker (`Pending` or `Available`):
 
-```move filename="confidential_pending_balance.move"
-struct CompressedPendingBalance has store, drop, copy {
-    P: vector<CompressedRistretto>,
-    R: vector<CompressedRistretto>,
-}
-```
+```move filename="confidential_balance.move"
+struct Pending has drop {}
+struct Available has drop {}
 
-```move filename="confidential_available_balance.move"
-struct CompressedAvailableBalance has store, drop, copy {
-    P: vector<CompressedRistretto>,
-    R: vector<CompressedRistretto>,
-    R_aud: vector<CompressedRistretto>,
+enum CompressedBalance<phantom T> has store, drop, copy {
+    V1 {
+        P: vector<CompressedRistretto>,
+        R: vector<CompressedRistretto>,
+        R_aud: vector<CompressedRistretto>,
+    }
 }
 ```
 
 <Aside type="note">
-  The `R_aud` field in the available balance stores the auditor's R components, enabling the effective auditor
-  (if one is configured) to decrypt the user's available balance.
+  The `R_aud` field stores the [effective auditor](#auditors)'s R components, enabling the auditor
+  (if one is configured) to decrypt the encrypted balance. It is left empty when no effective auditor is set.
+  Pending balances do not require auditor access (only the recipient sees incoming transfer ciphertexts), so
+  pending `R_aud` is empty.
 </Aside>
 
 ### Encryption and Decryption
@@ -137,19 +140,45 @@ where the user's pending balance is added to the available one.
 
 The diagram below shows the relationship between Confidential Asset modules:
 
-<ThemedImage
-  alt="CA Modules Relationship"
-  sources={{
-light: '~/images/ca-diagram-light.png',
-dark: '~/images/ca-diagram-dark.png',
-}}
-/>
+```mermaid
+graph TD
+    user["User / dapp"] -->|"register, deposit,<br/>transfer, withdraw,<br/>rollover, normalize,<br/>rotate key"| ca["aptos_framework::<br/>confidential_asset"]
 
-Users interact with the `confidential_asset` module to perform operations on their confidential balances.
-The `confidential_asset` module uses separate modules for each type of balance (`confidential_pending_balance`,
-`confidential_available_balance`, `confidential_amount`), along with sigma protocol modules for ZKP verification
-and `confidential_range_proofs` for range proof verification.
-Under the hood, the `ristretto255_twisted_elgamal` module provides Twisted ElGamal encryption primitives.
+    ca -->|"encrypted<br/>balances"| cb["aptos_framework::<br/>confidential_balance<br/>(Pending / Available)"]
+    ca -->|"encrypted transfer<br/>amounts"| amt["aptos_framework::<br/>confidential_amount"]
+    ca -->|"verifies range proofs"| rp["aptos_framework::<br/>confidential_range_proofs"]
+    ca -->|"verifies Σ-protocol<br/>proofs"| sp["aptos_framework::<br/>sigma_protocol_*<br/>(registration, withdraw,<br/>transfer, key_rotation)"]
+
+    cb --> rist
+    amt --> rist
+    rp --> bp["aptos_std::<br/>ristretto255_bulletproofs"]
+    sp --> rist["aptos_std::<br/>ristretto255"]
+    bp --> rist
+
+    classDef framework fill:#fff7e6,stroke:#d99a00,color:#000;
+    classDef stdlib fill:#e8f4ff,stroke:#1f6feb,color:#000;
+    classDef user fill:#f0fff4,stroke:#2da44e,color:#000;
+    class ca,cb,amt,rp,sp framework
+    class rist,bp stdlib
+    class user user
+```
+
+Users interact with the `confidential_asset` module to perform every protocol operation. That module
+delegates to:
+
+- `confidential_balance` — a single module that represents both `Pending` and `Available` encrypted
+  balances via phantom-typed `CompressedBalance<T>` / `Balance<T>`.
+- `confidential_amount` — encrypted transfer-amount ciphertexts (sender, recipient, effective auditor,
+  and any voluntary auditors).
+- `confidential_range_proofs` — batched Bulletproofs verification for the new-balance and amount
+  range proofs.
+- `sigma_protocol_*` — a family of $\Sigma$-protocol modules (`sigma_protocol_proof`,
+  `sigma_protocol_registration`, `sigma_protocol_withdraw`, `sigma_protocol_transfer`,
+  `sigma_protocol_key_rotation`, plus shared helpers in `sigma_protocol_utils`) that verify
+  knowledge / consistency proofs accompanying each entry function.
+
+Under the hood, all curve operations route through `aptos_std::ristretto255` (Ristretto255 group ops)
+and `aptos_std::ristretto255_bulletproofs` (range-proof verification natives).
 
 ## Entry Functions
 
@@ -187,6 +216,12 @@ represented as zero ciphertexts for both the `pending_balance` and `available_ba
   However, users call it only once per asset type.
 </Aside>
 
+<Aside type="caution">
+  The encryption key may not be the identity (zero) point.
+  On mainnet and testnet, the asset type must be [allow-listed](#allow-list--asset-config) for confidential transfers,
+  and registration is rejected during an [emergency pause](#emergency-pause).
+</Aside>
+
 ### Deposit
 
 ```move filename="confidential_asset.move"
@@ -205,6 +240,12 @@ However, tokens within the protocol become obfuscated through confidential trans
 
 <Aside type="note">
   If you want to have a hidden amount from the beginning, use the `confidential_transfer_raw` function instead.
+</Aside>
+
+<Aside type="caution">
+  Zero-value deposits are rejected (they would pointlessly increment the recipient's `transfers_received` counter).
+  "Dispatchable" fungible asset types — those with custom `withdraw`/`deposit`/`balance`/`supply` hooks — are also
+  rejected, since their dynamic behavior cannot be safely composed with encrypted balances.
 </Aside>
 
 ### Rollover Pending Balance
@@ -261,7 +302,8 @@ public entry fun confidential_transfer_raw(
     zkrp_new_balance: vector<u8>,
     zkrp_amount: vector<u8>,
     sigma_proto_comm: vector<vector<u8>>,
-    sigma_proto_resp: vector<vector<u8>>
+    sigma_proto_resp: vector<vector<u8>>,
+    memo: vector<u8>,
 )
 ```
 
@@ -278,10 +320,16 @@ The function requires:
 - **Voluntary auditor keys and ciphertexts** (`ek_volun_auds`, `amount_R_volun_auds`): optional additional auditor encryption keys and amount ciphertexts.
 - **Range proofs** (`zkrp_new_balance`, `zkrp_amount`): proving the new balance and transfer amount are non-negative and within range.
 - **Sigma protocol proof** (`sigma_proto_comm`, `sigma_proto_resp`): proving the correctness of the transfer.
+- **Memo** (`memo`): an opaque byte string emitted in the `Transferred` event. Limited to `get_max_memo_bytes()` (256 bytes); pass an empty vector for no memo. The memo is stored on-chain in plaintext, so encrypt it client-side if it is sensitive.
 
 <Aside type="note">
   Once a user has participated in at least one transfer, their balance becomes "hidden".
   This means that neither the transferred amount nor the updated balances of the sender and recipient are visible to external observers.
+</Aside>
+
+<Aside type="caution">
+  Self-transfers (sender == recipient) are rejected. To rebalance your own pending and available balances,
+  use [`rollover_pending_balance`](#rollover-pending-balance) instead.
 </Aside>
 
 ### Withdraw
@@ -389,33 +437,101 @@ Auditors hold their own Twisted ElGamal keypair and receive encrypted copies of 
 
 There are three types of auditors:
 
-- **Global auditor** — set by governance, applies to all asset types.
-- **Asset-specific auditor** — set per asset type by the asset creator.
-- **Effective auditor** — the asset-specific auditor if set, otherwise the global auditor. This auditor is mandatory: if an effective auditor exists, all transfers must include ciphertexts for it.
+- **Global auditor** — set by governance, applies to all asset types unless overridden.
+- **Asset-specific auditor** — set by governance per asset type. Takes precedence over the global auditor.
+- **Effective auditor** — the asset-specific auditor if its EK is set, otherwise the global auditor.
+  This auditor is mandatory: if an effective auditor exists, all transfers, withdrawals, and normalizations must include ciphertexts for it.
 - **Voluntary auditors** — additional auditors specified by the sender at transfer time.
+
+Auditor configuration is wrapped in `AuditorConfig`, which bundles the EK with an `epoch` counter that
+increments every time the auditor is installed or rotated (it does not increment when the auditor is removed):
+
+```move filename="confidential_asset.move"
+enum AuditorConfig has store, drop, copy {
+    V1 {
+        ek: Option<CompressedRistretto>,
+        epoch: u64,
+    }
+}
+
+enum EffectiveAuditorConfig has store, drop, copy {
+    V1 { is_global: bool, config: AuditorConfig }
+}
+
+enum EffectiveAuditorHint has store, drop, copy {
+    V1 { is_global: bool, epoch: u64 }
+}
+```
+
+Each `ConfidentialStore` records an `EffectiveAuditorHint` alongside its `available_balance`, so an auditor
+can compare `(is_global, epoch)` against the current effective auditor config and tell whether their copy
+of a balance ciphertext is stale.
 
 <Aside type="note">
   The effective auditor can decrypt both the transfer amount and the sender's new available balance.
   Voluntary auditors can only decrypt the transfer amount.
 </Aside>
 
+<Aside type="note">
+  Asset-specific and global auditors are managed via the governance functions
+  `set_asset_specific_auditor` and `set_global_auditor`.
+</Aside>
+
+## Allow list & asset config
+
+On mainnet and testnet, the protocol enforces an asset-type allow list: only asset types explicitly
+allow-listed by governance can be registered, deposited, transferred, or rolled over confidentially.
+Withdrawals are always permitted — even when an asset is removed from the allow list — so users can
+recover funds.
+
+Allow-listing and per-asset configuration are managed by governance via these (non-`entry`) functions:
+
+- `set_allow_listing(aptos_framework, enabled)` — enables or disables the allow list globally.
+- `set_confidentiality_for_asset_type(aptos_framework, asset_type, allowed)` — enables or disables
+  a specific asset type. Only meaningful when the allow list is enabled.
+- `set_confidentiality_for_apt(aptos_framework, allowed)` — convenience wrapper for the APT token.
+
+## Emergency pause
+
+Governance can pause **all** user-facing operations (`register`, `deposit`, `withdraw`, `confidential_transfer`,
+`rollover_pending_balance`, `rotate_encryption_key`, `set_incoming_transfers_paused`) via:
+
+```move filename="confidential_asset.move"
+public fun set_emergency_paused(aptos_framework: &signer, paused: bool)
+```
+
+While paused, every user operation aborts with `E_EMERGENCY_PAUSED`. Use the
+[`is_emergency_paused`](#view-functions) view function to check the current state before
+constructing transactions.
+
 ## View Functions
 
 ```move filename="confidential_asset.move"
+#[view]
+public fun is_emergency_paused(): bool
+
 #[view]
 public fun has_confidential_store(
     user: address, asset_type: Object<Metadata>
 ): bool
 
 #[view]
+public fun is_allow_listing_required(): bool
+
+#[view]
+public fun is_confidentiality_enabled_for_asset_type(
+    asset_type: Object<Metadata>
+): bool
+
+#[view]
 public fun get_pending_balance(
     owner: address, asset_type: Object<Metadata>
-): CompressedPendingBalance
+): CompressedBalance<Pending>
 
 #[view]
 public fun get_available_balance(
     owner: address, asset_type: Object<Metadata>
-): CompressedAvailableBalance
+): CompressedBalance<Available>
 
 #[view]
 public fun get_encryption_key(
@@ -433,17 +549,30 @@ public fun incoming_transfers_paused(
 ): bool
 
 #[view]
-public fun get_effective_auditor(
-    asset_type: Object<Metadata>
-): Option<CompressedRistretto>
+public fun get_effective_auditor_hint(
+    user: address, asset_type: Object<Metadata>
+): Option<EffectiveAuditorHint>
 
 #[view]
-public fun get_auditor_for_asset_type(
+public fun get_effective_auditor_config(
     asset_type: Object<Metadata>
-): Option<CompressedRistretto>
+): EffectiveAuditorConfig
 
 #[view]
-public fun get_global_auditor(): Option<CompressedRistretto>
+public fun get_total_confidential_supply(
+    asset_type: Object<Metadata>
+): u64
+
+#[view]
+public fun get_num_transfers_received(
+    user: address, asset_type: Object<Metadata>
+): u64
+
+#[view]
+public fun get_max_transfers_before_rollover(): u64
+
+#[view]
+public fun get_max_memo_bytes(): u64
 ```
 
 ## Useful Resources

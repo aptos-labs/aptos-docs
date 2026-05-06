@@ -1,6 +1,6 @@
 ---
 title: "Deprecate VFNs"
-description: "Shut down your Validator Full Node (VFN) and configure your validator to accept direct PFN connections as part of the AIP-139 rollout on devnet and testnet."
+description: "Shut down your Validator Full Node (VFN) and configure your validator to accept direct PFN connections as part of the AIP-139 rollout."
 sidebar:
   label: "Deprecate VFNs"
   badge:
@@ -12,50 +12,55 @@ import { Aside } from '@astrojs/starlight/components';
 
 [AIP-139](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-139-deprecating-validator-full-nodes-vfns.md)
 deprecates Validator Full Nodes (VFNs) by allowing validators to accept direct connections from Public Full Nodes
-(PFNs). This removes the need for operators to run a separate VFN alongside their validator.
+(PFNs). This removes the need for operators to run a separate VFN alongside the validator.
 
-<Aside type="caution">
-  **Devnet and Testnet**<br />
-  AIP-139 is only supported on Devnet and Testnet. It is **not yet available on Mainnet**. Do not follow
-  these instructions for Mainnet validators until the AIP is enabled!
+<Aside type="tip">
+  **Complete: Devnet and Testnet**<br />
+  VFN removal has already occurred on Devnet and Testnet. The instructions in this document apply only to Mainnet.
 </Aside>
 
-## Overview
+## Summary
 
 This guide provides step-by-step instructions for validator operators to shut down their VFNs and configure their
 validators to accept PFN connections directly. To achieve this, you will need to perform the following tasks:
 
-1. Shut down your VFN.
+1. Ensure you are running **aptos-node v1.45.x** or later.
 2. Configure the validator to accept inbound PFN connections.
+3. Wait for **explicit confirmation** from Aptos Labs before shutting down your VFN.
+4. Shut down your VFN.
 
-See the steps below for detailed instructions on how to complete each of these tasks.
+Follow the steps below for detailed instructions.
 
-## Step 1: Shut down your VFN
+## Prerequisites
 
-<Aside type="danger">
-  **Backup your VFN data**<br />
-  As a precaution, we recommend backing up the VFN keys, identity files, and configuration files before shutting down your VFN. These
-  will be useful in case you need to re-deploy the VFN in the future.
-</Aside>
+Before proceeding, verify that you are running **aptos-node v1.45.x** or later. Older releases do not
+support direct validator-to-PFN connections and must be upgraded first.
 
-If you run a VFN in Devnet or Testnet, you can take the VFN offline safely. You do not need to leave the
-validator set to shut down the VFN. Only the validator needs to remain online.
+You can check your node version by running:
 
-To stop the VFN, use the appropriate method for your deployment, for example:
+```bash
+aptos-node --version
+```
 
-- **Source code:** Kill the `aptos-node` process running the VFN.
-- **Docker:** Run `docker compose down --volumes` in the VFN directory.
-- **Terraform:** Run `terraform destroy` targeting the VFN resources.
+If you are on an older release, upgrade before continuing.
 
-## Step 2: Configure PFN connections
+## Step 1: Configure PFN connections
 
-After shutting down the VFN, decide how you want the validator to handle incoming PFN connections:
+Configure your validator to accept inbound PFN connections directly. This requires ensuring your validator is listening
+for PFN connections on an open port.
 
 There are three options:
 
 1. **(Recommended)** Use the default port (6182) to accept PFN connections.
 2. Use a custom port to accept PFN connections.
-3. Reject PFN connections.
+3. Reject PFN connections (not recommended).
+
+<Aside type="tip">
+  **Accept PFN connections**<br />
+  We strongly encourage operators to accept PFN connections (Option 1 or 2 above). Accepting PFN connections is
+  good for network health and ecosystem connectivity. If validators reject PFN connections, PFNs have fewer peers
+  to connect to, which reduces their ability to sync and serve data reliably.
+</Aside>
 
 ### Option 1: Use the default port
 
@@ -94,8 +99,8 @@ aptos node update-validator-network-addresses \
 
 Replace `<owner-address>` with your validator pool address, `<validator-host>` with your validator's
 public IP or hostname, `<your-port>` with the port configured above, and `<validator-network-public-key>`
-with the public key from your `validator-identity.yaml` file. The `--operator-config-file` flag points
-to your operator config and satisfies the CLI's requirement for validator host and key information.
+with the public key from your `validator-identity.yaml` file. The `--operator-config-file` flag should point
+to your operator config.
 
 For more details on using `update-validator-network-addresses` (including how to locate your pool address
 and operator config), see [Connect to the Aptos Network](/network/nodes/validator-node/connect-nodes/connect-to-aptos-network).
@@ -145,3 +150,26 @@ base:
 ```
 
 When this configuration is used, the node will no longer listen for or accept connections from PFNs.
+
+## Step 2: Shut down your VFN
+
+<Aside type="danger">
+  **Do not proceed until confirmed by Aptos Labs**<br />
+  VFN removal is being rolled out in release-groups. Only shut down your VFN after Aptos Labs
+  explicitly confirms it is safe for your group. If you have any doubt, contact the team before proceeding.
+</Aside>
+
+Once you have received confirmation, you can take the VFN offline safely. You do not need to leave the validator
+set to shut down the VFN. Only the validator needs to remain online.
+
+<Aside type="tip">
+  **Backup your VFN data**<br />
+  As a precaution, we recommend backing up the VFN keys, identity files, and configuration files before shutting
+  down your VFN.
+</Aside>
+
+To stop the VFN, use the appropriate method for your deployment, for example:
+
+- **Source code:** Kill the `aptos-node` process running the VFN.
+- **Docker:** Run `docker compose down --volumes` in the VFN directory.
+- **Terraform:** Run `terraform destroy` targeting the VFN resources.

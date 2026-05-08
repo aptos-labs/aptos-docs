@@ -162,10 +162,7 @@ export default defineConfig({
             }
 
             // Exclude specific problematic links from external move-reference content
-            const excludeLinks = [
-              "https://aptos.dev/move/book/SUMMARY",
-              "https://aptos.dev/standards",
-            ];
+            const excludeLinks = ["https://aptos.dev/standards"];
 
             return (
               excludePaths.some((path) => link.includes(path)) ||

@@ -434,41 +434,11 @@ export const sidebar = [
       "build/smart-contracts", // Overview page
       "build/smart-contracts/why-move",
 
-      // Move Book - Individual entries
-      group("smartContracts.group.moveBook", {
-        collapsed: true,
-        items: [
-          "build/smart-contracts/book/modules-and-scripts",
-          "build/smart-contracts/book/structs-and-resources",
-          "build/smart-contracts/book/integers",
-          "build/smart-contracts/book/bool",
-          "build/smart-contracts/book/address",
-          "build/smart-contracts/book/vector",
-          "build/smart-contracts/book/signer",
-          "build/smart-contracts/book/references",
-          "build/smart-contracts/book/tuples",
-          "build/smart-contracts/book/abilities",
-          "build/smart-contracts/book/equality",
-          "build/smart-contracts/book/comparison",
-          "build/smart-contracts/book/abort-and-assert",
-          "build/smart-contracts/book/conditionals",
-          "build/smart-contracts/book/loops",
-          "build/smart-contracts/book/functions",
-          "build/smart-contracts/book/enums",
-          "build/smart-contracts/book/struct-and-enum-visibility",
-          "build/smart-contracts/book/constants",
-          "build/smart-contracts/book/generics",
-          "build/smart-contracts/book/uses",
-          "build/smart-contracts/book/friends",
-          "build/smart-contracts/book/global-storage-structure",
-          "build/smart-contracts/book/global-storage-operators",
-          "build/smart-contracts/book/variables",
-          "build/smart-contracts/book/unit-testing",
-          "build/smart-contracts/book/coding-conventions",
-          "build/smart-contracts/book/move-tutorial",
-          "build/smart-contracts/book/standard-library",
-        ],
-      }),
+      {
+        label: "Move Book",
+        link: "https://aptos-labs.github.io/move-book/",
+        attrs: { target: "_blank", rel: "noopener" },
+      },
 
       // Development
       group("smartContracts.group.development", {
@@ -477,8 +447,6 @@ export const sidebar = [
           "build/smart-contracts/create-package",
           "build/smart-contracts/compiling",
           "build/smart-contracts/deployment",
-          "build/smart-contracts/book/packages",
-          "build/smart-contracts/book/package-upgrades",
           "build/smart-contracts/debugging",
           "build/smart-contracts/scripts",
           "build/smart-contracts/scripts/compiling-scripts",
@@ -561,8 +529,16 @@ export const sidebar = [
             collapsed: true,
             items: [
               "build/smart-contracts/prover",
-              "build/smart-contracts/prover/prover-guide",
-              "build/smart-contracts/prover/spec-lang",
+              {
+                label: "Move Prover User Guide",
+                link: "https://aptos-labs.github.io/move-book/prover-guide.html",
+                attrs: { target: "_blank", rel: "noopener" },
+              },
+              {
+                label: "Move Specification Language",
+                link: "https://aptos-labs.github.io/move-book/spec-lang.html",
+                attrs: { target: "_blank", rel: "noopener" },
+              },
               "build/smart-contracts/prover/supporting-resources",
             ],
           }),
@@ -573,17 +549,34 @@ export const sidebar = [
       group("smartContracts.group.reference", {
         collapsed: true,
         items: [
-          { label: "Framework Reference", link: "move-reference" },
-          { label: "Aptos Framework", link: "move-reference/mainnet/aptos-framework" },
-          { label: "Aptos Standard Library", link: "move-reference/mainnet/aptos-stdlib" },
-          { label: "Move Standard Library", link: "move-reference/mainnet/move-stdlib" },
-          { label: "Aptos Token Objects", link: "move-reference/mainnet/aptos-token-objects" },
-          { label: "Aptos Token (Legacy)", link: "move-reference/mainnet/aptos-token" },
+          {
+            label: "Framework Reference",
+            link: "https://aptos-labs.github.io/framework-book/",
+            attrs: { target: "_blank", rel: "noopener" },
+          },
+          {
+            label: "Aptos Framework",
+            link: "https://aptos-labs.github.io/framework-book/aptos-framework/overview.html",
+            attrs: { target: "_blank", rel: "noopener" },
+          },
+          {
+            label: "Aptos Standard Library",
+            link: "https://aptos-labs.github.io/framework-book/aptos-stdlib/overview.html",
+            attrs: { target: "_blank", rel: "noopener" },
+          },
+          {
+            label: "Move Standard Library",
+            link: "https://aptos-labs.github.io/framework-book/move-stdlib/overview.html",
+            attrs: { target: "_blank", rel: "noopener" },
+          },
+          {
+            label: "Aptos Token Objects",
+            link: "https://aptos-labs.github.io/framework-book/aptos-token-objects/overview.html",
+            attrs: { target: "_blank", rel: "noopener" },
+          },
           "build/smart-contracts/error-codes",
         ],
       }),
-
-      "build/smart-contracts/book/move-2", // Release Notes
     ],
   }),
 

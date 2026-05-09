@@ -1,10 +1,12 @@
 ---
 import StarlightPage from "@astrojs/starlight/components/StarlightPage.astro";
 import FallbackContentNotice from "@astrojs/starlight/components/FallbackContentNotice.astro";
-import { dereference } from "@readme/openapi-parser";
-import type { InferGetStaticPropsType } from "astro";
 
-import { getSchemaStaticPaths } from "starlight-openapi/libs/route";
+import { ensureSchemaDereference } from "starlight-openapi/libs/dereference";
+import {
+  getSchemaStaticPaths,
+  type StarlightOpenAPIRouteProps,
+} from "starlight-openapi/libs/route";
 import { getPageProps } from "starlight-openapi/libs/starlight";
 
 import Operation from "./operation/Operation.astro";
@@ -18,14 +20,14 @@ export function getStaticPaths() {
   return getSchemaStaticPaths();
 }
 
-type Props = InferGetStaticPropsType<typeof getStaticPaths>;
+type Props = StarlightOpenAPIRouteProps;
 
 const { schema, type } = Astro.props;
 
-schema.document = await dereference(schema.document);
+await ensureSchemaDereference(schema);
 
-const isOverview = type === "overview";
-const isOperationTag = type === "operation-tag";
+const isOverview = type === "schema-overview";
+const isOperationTag = type === "operation-tag-overview";
 
 const title = isOverview || isOperationTag ? "Overview" : Astro.props.operation.title;
 ---

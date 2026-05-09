@@ -22,7 +22,8 @@ import "@scalar/api-client/style.css";
 </style>
 
 <script>
-  import { createApiClientModal } from "@scalar/api-client/layouts/Modal";
+  import { createApiClientModal } from "@scalar/api-client/modal";
+  import { createWorkspaceStore } from "@scalar/workspace-store/client";
   import type { ScalarModalOpenEvent } from "./types";
   import { observeThemeChange } from "~/lib/theme";
 
@@ -53,11 +54,14 @@ import "@scalar/api-client/style.css";
   });
 
   // ClientRouter replaces <body>; this module runs once, so the host node is recreated per navigation.
-  let modalClient: ReturnType<typeof createApiClientModal>["client"] | null = null;
+  let modalClient: ReturnType<typeof createApiClientModal> | null = null;
   let specLoaded = false;
   let specLoadAttempts = 0;
   const MAX_SPEC_LOAD_ATTEMPTS = 3;
   let hostElement: HTMLElement | null = null;
+
+  // Workspace store is long-lived across navigations
+  const workspaceStore = createWorkspaceStore();
 
   function unbindScalarClient() {
     modalClient?.app?.unmount();
@@ -94,34 +98,29 @@ import "@scalar/api-client/style.css";
     }
 
     if (!modalClient) {
-      const { client } = createApiClientModal({
+      modalClient = createApiClientModal({
         el: host,
-        configuration: {
+        workspaceStore,
+        options: {
           servers,
-          showSidebar: false,
           hideClientButton: true,
         },
       });
-      modalClient = client;
     }
 
-    // The new sync API doesn't load the spec automatically, we need to call updateConfig
     if (!specLoaded) {
-      // Prevent repeated failures - allow retry up to MAX_SPEC_LOAD_ATTEMPTS
       if (specLoadAttempts >= MAX_SPEC_LOAD_ATTEMPTS) {
         throw new Error("Max spec load attempts exceeded. Please reload the page.");
       }
 
       try {
         specLoadAttempts++;
-        await modalClient.updateConfig({
+        await workspaceStore.addDocument({
           url: "/aptos-spec.json",
-          servers,
-          showSidebar: false,
-          hideClientButton: true,
+          name: "aptos",
         });
         specLoaded = true;
-        specLoadAttempts = 0; // Reset on success
+        specLoadAttempts = 0;
       } catch (error) {
         console.error(
           `Failed to load Scalar API spec (attempt ${specLoadAttempts}/${MAX_SPEC_LOAD_ATTEMPTS}):`,
@@ -144,13 +143,11 @@ import "@scalar/api-client/style.css";
         client.open({ path: e.detail.operationPath, method: e.detail.method });
       } catch (error) {
         console.error("Failed to open Scalar API modal:", error);
-        // Show a non-blocking notification to the user
         const message =
           specLoadAttempts >= MAX_SPEC_LOAD_ATTEMPTS
             ? "Failed to load API reference. Please reload the page and try again."
             : "Failed to open API reference. Please try again.";
 
-        // Use a toast-style notification if available, otherwise fall back to console
         if (
           typeof window !== "undefined" &&
           "Notification" in window &&

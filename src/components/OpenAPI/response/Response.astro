@@ -1,20 +1,20 @@
 ---
 import { isOpenAPIV2ResponseWithExamples } from "starlight-openapi/libs/example";
+import { isExamples } from "starlight-openapi/libs/example";
 import { isResponseWithHeaders } from "starlight-openapi/libs/header";
 import type { Operation } from "starlight-openapi/libs/operation";
-import { getOpenAPIV2OperationProduces } from "starlight-openapi/libs/requestBody";
 import {
-  getOpenAPIV2ResponseSchema,
-  getOpenAPIV3ResponseContent,
+  getResponseMediaEntries,
   type Response,
   type Responses,
 } from "starlight-openapi/libs/response";
-import type { Schema } from "starlight-openapi/libs/schema";
-import Content from "../Content.astro";
+import type { Schema } from "starlight-openapi/libs/schemas/schema";
+import { isSchemaObject } from "starlight-openapi/libs/schemaObject";
+import ContentPicker from "../ContentPicker.astro";
 import Md from "../Md.astro";
+import SchemaComponent from "../schema/Schema.astro";
 import SchemaObject from "../schema/SchemaObject.astro";
 import Section from "../Section.astro";
-import Select from "../Select.astro";
 
 import ResponseExamples from "./ResponseExamples.astro";
 import ResponseHeaders from "./ResponseHeaders.astro";
@@ -28,24 +28,33 @@ interface Props {
 
 const { name, operation, response, schema } = Astro.props;
 
-const openAPIV2ResponseSchema = getOpenAPIV2ResponseSchema(response);
-const openAPIV3ResponseContent = getOpenAPIV3ResponseContent(response);
-
-const produces = getOpenAPIV2OperationProduces(schema, operation);
-
-const isEmpty = !openAPIV2ResponseSchema && !openAPIV3ResponseContent;
+const mediaEntries = getResponseMediaEntries(schema, operation, response);
+const isEmpty = mediaEntries.length === 0;
+const hasMediaTypes = mediaEntries.some((e) => e.mediaType);
+const singleEntry = !hasMediaTypes ? mediaEntries[0] : undefined;
 ---
 
 <Section empty={isEmpty} title={name}>
   <Md text={response.description} slot="pre-panel" />
   {
-    openAPIV2ResponseSchema ? (
-      <>
-        <Select label="The list of MIME types the operation can produce" options={produces} />
-        <SchemaObject schemaObject={openAPIV2ResponseSchema} />
-      </>
-    ) : openAPIV3ResponseContent ? (
-      <Content content={openAPIV3ResponseContent} />
+    hasMediaTypes ? (
+      <ContentPicker
+        label="Select media type"
+        labelSingle="Media type"
+        types={mediaEntries.map((e) => e.mediaType).filter((t): t is string => t !== undefined)}
+      >
+        {mediaEntries.map((entry, index) => (
+          <div data-openapi-content-type={entry.mediaType} hidden={index > 0} role="tabpanel">
+            <SchemaComponent
+              example={entry.example}
+              examples={isExamples(entry.examples) ? entry.examples : undefined}
+              schema={isSchemaObject(entry.schema) ? entry.schema : undefined}
+            />
+          </div>
+        ))}
+      </ContentPicker>
+    ) : singleEntry?.schema ? (
+      <SchemaObject schemaObject={singleEntry.schema} />
     ) : null
   }
   {

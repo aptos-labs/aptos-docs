@@ -1,0 +1,42 @@
+---
+title: "Structs and Resources"
+description: "Learn how Move structs become on-chain resources through abilities like key, store, drop, and copy."
+sidebar:
+  label: "Structs and Resources"
+---
+
+Move structs are plain typed data. Structs become **resources** when they carry the right abilities and are stored in global storage.
+
+## Simple structs
+
+```move
+module 0x2::example {
+    struct Foo { x: u64, y: bool }
+    struct Bar { foo: Foo }
+}
+```
+
+By default, structs are module-private. If another module needs access, expose functions instead of assuming public field access.
+
+## The four abilities
+
+1. `key`: lets the struct live at the top level of global storage.
+2. `store`: lets the struct live inside another stored struct.
+3. `drop`: lets values be discarded when they go out of scope.
+4. `copy`: lets values be copied implicitly.
+
+```move
+struct Message has copy, drop {
+    text: String,
+}
+
+struct Billboard has key {
+    messages: vector<Message>,
+}
+```
+
+## Why resources matter
+
+If a struct has `key`, it can be stored under an account or object address and becomes persistent on-chain state. That is the Move replacement for much of what Solidity developers mentally file under "contract storage".
+
+The migration habit to build early is: decide carefully which structs should _not_ have `copy`, and which ones should be durable resources versus temporary values.

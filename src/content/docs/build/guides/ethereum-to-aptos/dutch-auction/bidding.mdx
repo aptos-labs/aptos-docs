@@ -1,0 +1,52 @@
+---
+title: "Bidding"
+description: "Compare Solidity bid flows with Move object access and primary_fungible_store transfers."
+sidebar:
+  label: "Bidding"
+---
+
+The Solidity bid flow reads the auction struct, calculates the current price, transfers the NFT, and transfers payment.
+
+## Solidity
+
+```solidity
+function bid(uint256 nftId_) external {
+    Auction memory auction_ = _auctions[nftId_];
+    uint256 price_ = _mustHavePrice(auction_);
+    transferFrom(address(this), msg.sender, nftId_);
+    auction_.buyToken.transferFrom(msg.sender, address(this), price_);
+}
+```
+
+## Move
+
+The Move flow operates on an explicit auction object:
+
+```move
+entry public fun bid(
+    customer: &signer,
+    auction: Object<Auction>
+) acquires Auction, TokenConfig {
+    let auction_address = object::object_address(&auction);
+    let auction = borrow_global_mut<Auction>(auction_address);
+
+    let current_price = must_have_price(auction);
+
+    primary_fungible_store::transfer(
+        customer,
+        auction.buy_token,
+        @dutch_auction_address,
+        current_price
+    );
+
+    let transfer_ref = &borrow_global_mut<TokenConfig>(auction_address).transfer_ref;
+    let linear_transfer_ref = object::generate_linear_transfer_ref(transfer_ref);
+    object::transfer_with_ref(linear_transfer_ref, signer::address_of(customer));
+}
+```
+
+The major migration ideas are:
+
+- bidding targets an object address, not a mapping slot
+- payment uses the [primary fungible store](https://aptos.dev/build/guides/exchanges#fungible-assets)
+- NFT transfer uses object capabilities instead of ERC approval / transfer hooks

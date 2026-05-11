@@ -1,0 +1,60 @@
+---
+title: "Contract vs Container"
+description: "如何把 Solidity 中“合约拥有状态”的模式迁移为 Move 中的 resource 与 Object。"
+sidebar:
+  label: "Contract vs Container"
+---
+
+在 Solidity 中，一个合约通常同时承担执行单元和主要状态容器两种职责。在 Aptos 上，这两件事往往会被拆开。
+
+## Solidity 的默认直觉
+
+典型 NFT 合约会同时拥有代码和状态：
+
+```solidity
+contract MyNFT is ERC721 {
+    mapping(uint256 => address) private owners;
+
+    function mint(address recipient, uint256 tokenId) external {
+        owners[tokenId] = recipient;
+    }
+}
+```
+
+合约地址天然就成了你查代码和查数据的地方。
+
+## Move 的思路
+
+Move 会把下面几件事区分开：
+
+- **module** 负责代码
+- **resource** 负责强类型状态
+- **object** 负责带有显式能力控制的可复用状态容器
+
+因此，更准确的对比往往不是“contract vs module”，而是“合约拥有的状态 vs resource / object 拥有的状态”。
+
+```move
+module example::nft_like {
+    use std::signer;
+
+    struct TokenRecord has key {
+        owner: address,
+    }
+
+    public entry fun mint(account: &signer, token_id: u64) {
+        let recipient = signer::address_of(account);
+        // 根据应用设计，把状态存到账户或 object 下。
+    }
+}
+```
+
+## 什么时候该用 Object
+
+当你需要下面这些特性时，优先考虑 [Object](/zh/build/smart-contracts/objects)：
+
+- 一个拥有独立地址的共享容器
+- 显式的可转移 / 不可转移规则
+- 在一个逻辑实体下挂载多个 resource
+- 比“把所有状态都放在部署者账户下”更清晰的应用建模
+
+对很多迁移场景来说，Object 才是“有状态合约实例”最接近的替代物，而 module 继续作为代码层存在。

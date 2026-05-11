@@ -1,0 +1,34 @@
+---
+title: "Errors"
+description: "Compare Solidity revert strings with Move assert macros and numeric error codes."
+sidebar:
+  label: "Errors"
+---
+
+Solidity typically uses `require`, `revert`, and string messages. Move typically uses `assert!` with numeric codes, often wrapped by the `error` module for better context.
+
+## Solidity
+
+```solidity
+function onlyOwner() external {
+    require(msg.sender == address(1), "Contract: not owner");
+}
+```
+
+## Move
+
+```move
+use std::error;
+use std::signer;
+
+const ENOT_OWNER: u64 = 1;
+
+entry public fun only_owner(owner: &signer) {
+    assert!(
+        signer::address_of(owner) == @0x1,
+        error::permission_denied(ENOT_OWNER)
+    );
+}
+```
+
+The practical migration difference is that Move errors are designed to be machine-stable first and human-readable through docs, constants, and surrounding context.

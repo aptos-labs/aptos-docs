@@ -1,0 +1,51 @@
+---
+title: "Functions"
+description: "把 Solidity 的 public / external / view 函数映射为 Move 的 fun、entry 与 #[view]。"
+sidebar:
+  label: "Functions"
+---
+
+Move 函数和 Solidity 函数的核心思想接近，但默认可见性和交易入口的定义方式不同。
+
+## 函数类别
+
+1. `fun` 默认是私有的。
+2. `public entry fun` 对应“可通过交易调用”的外部方法。
+3. `#[view] public fun` 对应“无需交易即可调用”的只读方法。
+
+## Entry function
+
+```solidity
+function addMessage(string memory messageText_) external {
+    // ...
+}
+```
+
+```move
+public entry fun add_message(sender: &signer, message: String) {
+    // ...
+}
+```
+
+- `public entry` 表示该函数可通过交易调用。
+- `&signer` 提供已认证的发送者，代替 `msg.sender`。
+- 按当前 Move 写法，这种模式不需要再写 `acquires` 注解。
+
+## View function
+
+```solidity
+function getMessages() external view returns (Message[] memory) {
+    // ...
+}
+```
+
+```move
+#[view]
+public fun get_messages(): vector<Message> {
+    // ...
+}
+```
+
+## 一个很容易踩的差异
+
+在 Solidity 中，你常常从 `public` 开始，只有需要时才收紧。在 Move 中，更好的习惯是从私有 `fun` 开始，只暴露模块真正需要暴露的函数。

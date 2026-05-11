@@ -1,0 +1,36 @@
+---
+title: "View Functions"
+description: "使用 view function 在不发送交易的前提下解析 object 地址并读取拍卖状态。"
+sidebar:
+  label: "View Functions"
+---
+
+Solidity 常通过 view method 返回拍卖状态或派生元数据。
+
+## Solidity
+
+```solidity
+function getAuction(uint256 nftId_) external view returns (Auction memory) {
+    return _auctions[nftId_];
+}
+```
+
+## Move
+
+Move 的 view function 常常用于通过确定性规则恢复 object 句柄：
+
+```move
+#[view]
+public fun get_auction_object(token_name: String): Object<Auction> {
+    let auction_seed = get_auction_seed(token_name);
+    let auction_address = object::create_object_address(
+        &@dutch_auction_address,
+        auction_seed
+    );
+    object::address_to_object(auction_address)
+}
+```
+
+由于 Object 地址可以由 seed 稳定推导，客户端往往先通过 view function 解析出正确 object，再借助 SDK 或 API 读取其中的状态。
+
+这些 view function 可以直接通过 [TypeScript SDK](/zh/build/sdks/ts-sdk/fetch-data-via-sdk) 调用，无需提交交易。

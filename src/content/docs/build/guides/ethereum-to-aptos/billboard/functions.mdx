@@ -1,0 +1,51 @@
+---
+title: "Functions"
+description: "Translate Solidity public, external, and view functions into Move fun, entry, and #[view] patterns."
+sidebar:
+  label: "Functions"
+---
+
+Move functions are similar to Solidity functions, but default visibility and transaction entry points work differently.
+
+## Function categories
+
+1. `fun` is private by default.
+2. `public entry fun` is the equivalent of a transaction-callable external method.
+3. `#[view] public fun` is the equivalent of a read-only public method callable without a transaction.
+
+## Entry functions
+
+```solidity
+function addMessage(string memory messageText_) external {
+    // ...
+}
+```
+
+```move
+public entry fun add_message(sender: &signer, message: String) {
+    // ...
+}
+```
+
+- `public entry` makes the function transaction-callable.
+- `&signer` gives you the authenticated sender instead of `msg.sender`.
+- In current Move, you do not need an `acquires` annotation for this pattern.
+
+## View functions
+
+```solidity
+function getMessages() external view returns (Message[] memory) {
+    // ...
+}
+```
+
+```move
+#[view]
+public fun get_messages(): vector<Message> {
+    // ...
+}
+```
+
+## Visibility difference that trips people up
+
+In Solidity you often start from `public` and restrict only when needed. In Move, start from private `fun` and expose only what the module truly needs to expose.

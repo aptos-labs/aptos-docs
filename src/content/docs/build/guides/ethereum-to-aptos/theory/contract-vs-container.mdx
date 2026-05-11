@@ -1,0 +1,60 @@
+---
+title: "Contract vs Container"
+description: "How to translate Solidity contract-owned state into Move resources and Objects."
+sidebar:
+  label: "Contract vs Container"
+---
+
+In Solidity, the contract is usually both the execution unit and the main storage container. On Aptos, those responsibilities are often split.
+
+## Solidity instinct
+
+A typical NFT-style contract owns both code and state:
+
+```solidity
+contract MyNFT is ERC721 {
+    mapping(uint256 => address) private owners;
+
+    function mint(address recipient, uint256 tokenId) external {
+        owners[tokenId] = recipient;
+    }
+}
+```
+
+The contract address becomes the natural place to look for code and data.
+
+## Move mindset
+
+Move separates:
+
+- **modules** for code
+- **resources** for typed state
+- **objects** for reusable storage containers with explicit capabilities
+
+That means the right comparison is often not "contract vs module", but "contract-owned state vs resource/object-owned state".
+
+```move
+module example::nft_like {
+    use std::signer;
+
+    struct TokenRecord has key {
+        owner: address,
+    }
+
+    public entry fun mint(account: &signer, token_id: u64) {
+        let recipient = signer::address_of(account);
+        // Store state under an account or object depending on the app design.
+    }
+}
+```
+
+## When to use an Object
+
+Choose an [Object](/build/smart-contracts/objects) when you want:
+
+- a shared container with its own address
+- explicit transferability or non-transferability rules
+- multiple resources grouped under one logical entity
+- cleaner modeling for app-owned state than "store everything under the deployer account"
+
+For many migrations, Objects are the closest replacement for "stateful contract instance", while the module remains the code layer.

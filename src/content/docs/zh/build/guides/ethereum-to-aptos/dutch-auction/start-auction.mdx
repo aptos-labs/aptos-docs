@@ -1,0 +1,43 @@
+---
+title: "Start Auction"
+description: "用显式 signer 检查和 object 创建，替代 Solidity 的 modifier 和合约托管 mint 流程。"
+sidebar:
+  label: "Start Auction"
+---
+
+在 Solidity 中，`startAuction` 通常依赖 `onlyOwner`，先把 NFT mint 到合约名下，再记录拍卖元数据。
+
+## Solidity
+
+```solidity
+function startAuction(...) external onlyOwner {
+    require(maxPrice_ >= minPrice_, "invalid prices");
+    require(duration_ > 0, "zero duration");
+    _mint(address(this), nftId_);
+    _auctions[nftId_] = Auction(...);
+    emit AuctionCreated(nftId_);
+}
+```
+
+## Move
+
+Move 用显式辅助函数替代 modifier：
+
+```move
+inline fun only_owner(owner: &signer) {
+    assert!(
+        signer::address_of(owner) == @dutch_auction_address,
+        error::permission_denied(ENOT_OWNER)
+    );
+}
+```
+
+之后 `start_auction` 主流程会显式地完成：
+
+1. 检查 owner 身份和参数合法性
+2. 创建 token object
+3. 创建 auction object
+4. 把拍卖资源存到该 object 下
+5. 发出 `AuctionCreated`
+
+这里真正重要的迁移点是：授权、资产创建、状态容器创建，在 Move 里是三个分开的显式步骤，而不是 Solidity 里一个继承自合约体系的动作。

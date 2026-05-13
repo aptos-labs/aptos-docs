@@ -1,92 +1,35 @@
 ---
 title: "Encrypted Mempool"
-description: "Build and submit encrypted-mempool transactions using the Aptos TypeScript SDK 7.0+, covering authenticationKey, gas-floor, simulation, multi-agent, sponsored, and orderless flows."
+description: "Build, sign, and submit encrypted-mempool transactions with the Aptos TypeScript SDK."
 sidebar:
   label: "Encrypted Mempool"
 ---
 
-import { Aside, Steps } from '@astrojs/starlight/components';
+import { Aside, Steps } from "@astrojs/starlight/components";
 
-Encrypted-mempool transactions wrap your executable payload so it is **encrypted at build time** using the fullnode's current **per-epoch encryption key** (batch threshold encryption on BLS12-381, with AES-GCM for the plaintext). The signing flow is the same as for plaintext transactions: **build → (optional) simulate on a plaintext twin → sign → submit → wait**. The difference is the `options` you pass to `aptos.transaction.build.simple` (or `build.multiAgent` / sponsored builds).
-
-<Aside type="note">
-  **Encrypted mempool** is the protocol-level name for this feature ([AIP-144](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-144-encrypted-mempool.md)); some product-level docs and announcements call it **encrypted pending transactions** — same feature.
-</Aside>
-
-Encrypted-mempool support shipped in **`@aptos-labs/ts-sdk` 7.0.0**. For background on what is protected and what may still be visible on the network, see the **[Encrypted Pending Transactions](/build/guides/encrypted-pending-transactions)** guide.
+Encrypted-mempool transactions wrap your Move payload in a ciphertext at build time, so it stays encrypted while pending and is decrypted by validators only at execution. The flow is the same as a plaintext transaction — **build → (optional) simulate on a plaintext twin → sign → submit → wait** — with a few extra `options` passed to `aptos.transaction.build.*`.
 
 <Aside type="note">
-  In these examples, `aptos` is an instance of the [`Aptos`](https://aptos-labs.github.io/aptos-ts-sdk/) client and `sender` is an `Account` that will sign the transaction.
+  **Encrypted mempool** is the protocol name ([AIP-144](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-144-encrypted-mempool.md)); some product material calls it **encrypted pending transactions** — same feature. See the [Encrypted Pending Transactions](/build/guides/encrypted-pending-transactions) guide for background on visibility.
 </Aside>
-
-## Requirements
-
-Encrypted-mempool support requires **`@aptos-labs/ts-sdk` ≥ 7.0.0**, which is **ESM-only** and targets **Node.js 22+**. Install with:
-
-```bash
-pnpm add @aptos-labs/ts-sdk@^7.0.0
-# or: npm install @aptos-labs/ts-sdk@^7.0.0
-```
-
-Consumers must use `"type": "module"` / `import` syntax — CommonJS `require` is no longer supported. The SDK ships `nodenext` module resolution and exposes **per-feature sub-path exports** (for example `@aptos-labs/ts-sdk/transaction`, `@aptos-labs/ts-sdk/keyless`) for bundlers that benefit from tree-shaking.
-
-## Two ways to call the SDK
-
-The SDK supports both the familiar `Aptos` namespace class and a tree-shakeable namespace class loaded from a sub-path. Both expose the same encrypted-mempool surface; pick the style that matches your bundle goals.
-
-```typescript
-// Option A — Aptos namespace class (familiar, not tree-shakeable):
-import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
-const aptos = new Aptos(new AptosConfig({ network: Network.DEVNET }));
-
-// Option B — Transaction sub-path (tree-shakeable, v7.0.0+):
-import { Transaction, AptosConfig } from "@aptos-labs/ts-sdk/transaction";
-import { Network } from "@aptos-labs/ts-sdk";
-const transaction = new Transaction(new AptosConfig({ network: Network.DEVNET }));
-```
-
-All subsequent examples on this page use **Option A** for parity with the rest of the TS-SDK docs. To switch to Option B, substitute `transaction.build.simple(...)` for `aptos.transaction.build.simple(...)` and the equivalent for `sign`, `submit`, and `signAndSubmitTransaction`.
 
 ## Prerequisites
 
-When you set `encrypted: true`, the SDK **requires** `authenticationKey` for the sender. It accepts either:
-
-- an **`AccountPublicKey`** — the SDK derives the on-chain authentication key automatically via `.authKey()`, or
-- a raw **32-byte hex string** (`HexInput`) — useful when you already have the auth key materialized.
-
-For a standard `Account`, passing the signing public key directly is the simplest form:
-
-```typescript
-const transaction = await aptos.transaction.build.simple({
-  sender: sender.accountAddress,
-  data: {
-    function: "0x1::aptos_account::transfer",
-    functionArguments: [receiver.accountAddress, amount],
-  },
-  options: {
-    encrypted: true,
-    authenticationKey: sender.publicKey, // SDK derives the auth key via .authKey()
-  },
-});
-```
-
-The fullnode must return a non-empty **`encryption_key`** on ledger info. If the key is missing, building with `encrypted: true` throws and tells you the node does not support encrypted submission.
-
-## Check whether the network supports encryption
-
-Call **`aptos.getLedgerInfo()`** and inspect **`encryption_key`**. If it is missing or empty, do not offer encrypted submission against that endpoint.
+When you set `encrypted: true`, you must also pass `authenticationKey` for the sender — either an `AccountPublicKey` (the SDK derives the auth key for you) or a raw 32-byte hex string. The network you submit to must support the feature; check the ledger info first:
 
 ```typescript
 const ledgerInfo = await aptos.getLedgerInfo();
 const supportsEncrypted = Boolean(ledgerInfo.encryption_key);
 ```
 
-## Build, sign, and submit (single signer)
+If the node doesn't expose `encryption_key`, building with `encrypted: true` throws.
+
+## Build, sign, and submit
 
 <Steps>
-  1. **Build** with `encrypted: true` and `authenticationKey`.
+  1. Build with `encrypted: true` and `authenticationKey`.
 
-     ```typescript
+     ```typescript filename="encrypted-transfer.ts"
      const transaction = await aptos.transaction.build.simple({
        sender: sender.accountAddress,
        data: {
@@ -100,11 +43,9 @@ const supportsEncrypted = Boolean(ledgerInfo.encryption_key);
      });
      ```
 
-  2. **Simulate (optional)** using a plaintext build with the same `data` and gas-related `options`, but **without** `encrypted` or `authenticationKey`. Apply any gas adjustments, then **rebuild with `encrypted: true`** for submission. See [Simulation](#simulation-and-encrypted-payloads) below.
+  2. Sign and submit as usual.
 
-  3. **Sign and submit** as usual.
-
-     ```typescript
+     ```typescript filename="encrypted-transfer.ts"
      const pending = await aptos.signAndSubmitTransaction({
        signer: sender,
        transaction,
@@ -114,42 +55,25 @@ const supportsEncrypted = Boolean(ledgerInfo.encryption_key);
      ```
 </Steps>
 
-## Gas-unit price floor
+<Aside type="note">
+  Encrypted transactions pay a minimum gas-unit price of **200 Octas/gas-unit** (twice the network base minimum). The SDK enforces this floor at build time: prices below it are bumped automatically, and the SDK warns when a caller explicitly set a lower value.
+</Aside>
 
-Encrypted submissions pay a minimum gas-unit price of **200 Octas/gas-unit** — twice the network base minimum — to cover validator decryption cost. The constant is exported by the SDK:
+## Simulating an encrypted transaction
 
-```typescript
-// Re-exported from the main entry (works on any v7.0.x):
-import { MIN_ENCRYPTED_TXN_GAS_UNIT_PRICE } from "@aptos-labs/ts-sdk";
-```
-
-How the floor is applied during `build.simple`:
-
-- If `options.gasUnitPrice` is **unset** and the network estimate falls below 200, the SDK silently bumps the effective price to 200.
-- If `options.gasUnitPrice` is **explicitly set below 200**, the SDK emits a `console.warn` and bumps the price to 200.
-- Prices at or above 200 are unaffected.
-
-Servers reject encrypted transactions priced below this floor, so the SDK never submits one. Account funding must cover `maxGasAmount × gasUnitPrice` (at least 200) at submit time.
-
-## Simulation and encrypted payloads
-
-`aptos.transaction.simulate.*` **rejects** transactions whose payload is already encrypted. The SDK throws before contacting the node with `ENCRYPTED_TRANSACTION_SIMULATION_NOT_SUPPORTED_MESSAGE`:
-
-> Transaction simulation is not supported for encrypted payloads. Build a plaintext transaction with the same entry function and simulate it, then build with `options.encrypted` true for submission.
-
-Workflow:
+`aptos.transaction.simulate.*` rejects encrypted payloads — simulation is not supported. Build a **plaintext twin** with the same `data`, simulate that, then build again with `encrypted: true` for submission:
 
 1. `build.simple({ ..., options: { /* no encrypted */ } })` — same function, arguments, gas hints.
 2. `aptos.transaction.simulate.simple({ ... })` — tune `maxGasAmount` / `gasUnitPrice` from the result.
 3. `build.simple({ ..., options: { encrypted: true, authenticationKey, ...gas from step 2 } })` — submit this build.
 
-See [Simulating Transactions](/build/sdks/ts-sdk/building-transactions/simulating-transactions) for general simulation behavior.
+See [Simulating Transactions](/build/sdks/ts-sdk/building-transactions/simulating-transactions) for the general simulation flow.
 
-## Multi-agent (encrypted)
+## Multi-agent
 
-Pass **`secondarySignerAuthenticationKeys`** with one entry per `secondarySignerAddresses` entry, in the **same order**. Each entry accepts an `AccountPublicKey` or a raw 32-byte hex string.
+Pass `secondarySignerAuthenticationKeys` in the same order as `secondarySignerAddresses`. Each entry accepts `AccountPublicKey` or raw hex.
 
-```typescript
+```typescript filename="encrypted-multi-agent.ts"
 const transaction = await aptos.transaction.build.multiAgent({
   sender: sender.accountAddress,
   secondarySignerAddresses: [secondary.accountAddress],
@@ -165,13 +89,11 @@ const transaction = await aptos.transaction.build.multiAgent({
 });
 ```
 
-The SDK rejects the build at validation time if the array length does not match `secondarySignerAddresses`. See [Multi-Agent Transactions](/build/sdks/ts-sdk/building-transactions/multi-agent-transactions).
+## Fee payer (sponsored)
 
-## Fee payer (sponsored, encrypted)
+When `feePayerAddress` is non-zero, also pass `feePayerAuthenticationKey`.
 
-When the fee payer address is **non-zero**, the SDK requires **`feePayerAuthenticationKey`**. AAD ordering is **sender → secondaries → fee payer** (matching `TransactionAuthenticator::all_signer_auth_keys` in `aptos-core`).
-
-```typescript
+```typescript filename="encrypted-sponsored.ts"
 const transaction = await aptos.transaction.build.simple({
   sender: sender.accountAddress,
   withFeePayer: true,
@@ -187,13 +109,11 @@ const transaction = await aptos.transaction.build.simple({
 });
 ```
 
-Setting `feePayerAuthenticationKey` without a non-zero fee payer address (or vice versa) is a build-time error. See [Sponsoring Transactions](/build/sdks/ts-sdk/building-transactions/sponsoring-transactions).
+## Orderless
 
-## Orderless and encrypted
+Pass `replayProtectionNonce` together with `encrypted: true`. The transaction uses orderless replay protection while the payload stays encrypted. See [Orderless Transactions](/build/sdks/ts-sdk/building-transactions/orderless-transactions).
 
-Pass **`replayProtectionNonce`** together with `encrypted: true`. The raw transaction uses orderless replay protection (`sequence_number = u64::MAX`) while the payload remains encrypted. See [Orderless Transactions](/build/sdks/ts-sdk/building-transactions/orderless-transactions).
-
-```typescript
+```typescript filename="encrypted-orderless.ts"
 const transaction = await aptos.transaction.build.simple({
   sender: sender.accountAddress,
   data: {
@@ -208,27 +128,15 @@ const transaction = await aptos.transaction.build.simple({
 });
 ```
 
-## `claimedEntryFunction`
+## `claimedEntryFunction` (optional)
 
-`claimed_entry_fun` is an **optional** field on the encrypted payload (aptos-core `EncryptedInner`). When present, it lets pre-decryption observers — sponsors, multisig owners, transaction filters — see the entry function's module (and optionally function name) before validators decrypt the payload. Validators verify the claim against the decrypted entry function and fail the transaction with `ClaimedEntryFunctionMismatch` if it doesn't match. The protocol never requires the field to be `Some`.
-
-The SDK auto-populates it (with the real entry function being encrypted) when **either** of these is true:
-
-- the transaction has a **non-zero fee payer** (sponsored), **or**
-- the payload is **multisig** (`build.simple` with `multisigAddress`, or any inner payload carrying a multisig address).
-
-For plain single-signer encrypted transactions, the SDK leaves the field `None` and `options.claimedEntryFunction` is ignored. **You typically never need to set this option** — it acts as an override on top of the SDK's auto-derived value, and is only respected in the fee-payer / multisig cases above.
-
-### When the override is useful
-
-The main reason to override is to **omit `functionName`**, exposing only the module to pre-decryption observers while keeping the called function private:
+The SDK handles this automatically for **sponsored or multisig** builds — you typically never set it. The one reason to override is when you want to expose only the module name to pre-decryption observers (sponsor, multisig owner, transaction filters) and keep the function name hidden until decryption:
 
 ```typescript
 options: {
   encrypted: true,
   authenticationKey: sender.publicKey,
   feePayerAuthenticationKey: sponsor.publicKey,
-  // Reveal only the module; function name stays encrypted until decryption.
   claimedEntryFunction: {
     module: "0x1::aptos_account",
     // functionName intentionally omitted
@@ -236,99 +144,14 @@ options: {
 };
 ```
 
-`ClaimedEntryFunction.fromEntryFunction(entryFunction)` is the default behavior and includes both module and function name; constructing the option manually (plain-object or SDK class form) lets you drop `functionName`.
+When you do set `functionName`, it must match the real entry function exactly.
 
-```typescript
-// Alternative class form (equivalent to the plain-object above):
-claimedEntryFunction: new ClaimedEntryFunction(
-  ModuleId.fromStr("0x1::aptos_account"),
-  /* function */ undefined,
-);
-```
+## Caveats
 
-When the override **does** set a `functionName`, it must match the real entry function name exactly — the build throws (`assertClaimMatchesExecutable`) otherwise. The module field must always match. Setting `claimedEntryFunction` for a payload whose executable is not an entry function (e.g. a script) also throws.
-
-## Keyless restriction
-
-Encrypted transactions cannot be signed by **keyless** or **federated keyless** accounts. Signature malleability in those schemes would break payload binding (server-enforced in `aptos-core`). `signAndSubmitTransaction` throws **before submission** if the signer or the fee payer is a keyless account.
-
-<Aside type="caution">
-  A `MultiKeyAccount` wrapping a keyless inner signer is **not** caught by this client-side guard (detection is duck-typed via `isKeylessSigner`). Such a build still fails at the server, but the error surfaces later in the round-trip.
-</Aside>
-
-In v7.0.0 the keyless types — `KeylessAccount`, `FederatedKeylessAccount`, `EphemeralKeyPair`, and the poseidon utilities — moved out of the main entry into the **`@aptos-labs/ts-sdk/keyless`** sub-path. If you're migrating from \< 7.0.0, update those imports even though keyless accounts can't sign encrypted transactions:
-
-```typescript
-import { KeylessAccount, EphemeralKeyPair } from "@aptos-labs/ts-sdk/keyless";
-```
-
-## Multisig (encrypted)
-
-Encrypted multisig **payloads** build correctly with this SDK (`build.simple` with `multisigAddress` in `data`), but server-side support is still rolling out. Submission may fail with:
-
-- `FEATURE_UNDER_GATING` — encrypted submission gated off on the target network, or
-- `"Encrypted transactions do not support multisig"` — server explicitly rejects the combination.
-
-Treat both as rollout limitations; SDK behavior will not change when the gate flips.
-
-## Reading encrypted transactions from the API
-
-`TransactionPayloadResponse` gains an `EncryptedTransactionPayloadResponse` variant, discriminated on `encrypted_state`:
-
-- `"encrypted"` — payload bytes only; no decrypted contents available.
-- `"failed_decryption"` — validators could not decrypt this payload.
-- `"decrypted"` — `decrypted_payload` contains the original entry function / script after on-chain execution.
-
-```typescript
-if (payload.type === "encrypted_payload") {
-  switch (payload.encrypted_state) {
-    case "encrypted":
-    case "failed_decryption":
-      // No plaintext; surface metadata (sender, gas, claimed_entry_fun).
-      break;
-    case "decrypted":
-      // payload.decrypted_payload is available.
-      break;
-  }
-}
-```
-
-`decryption_failure_reason` is reserved on the type but **not yet surfaced** by the REST API — treat it as optional.
-
-## New exports (`@aptos-labs/ts-sdk` 7.0.0)
-
-| Export                               | Purpose                                                                                                              | Import from                                                                   |
-| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `TransactionPayloadEncryptedPayload` | Runtime class on `RawTransaction.payload` for encrypted builds (use with `instanceof`).                              | `@aptos-labs/ts-sdk`                                                          |
-| `MIN_ENCRYPTED_TXN_GAS_UNIT_PRICE`   | The 200-Octa gas-unit floor constant.                                                                                | `@aptos-labs/ts-sdk`                                                          |
-| `EncryptionKey`                      | Per-epoch BLS12-381 batch encryption key.                                                                            | `@aptos-labs/ts-sdk`                                                          |
-| `DecryptedPlaintext`                 | Plaintext executable + decryption nonce wrapper.                                                                     | `@aptos-labs/ts-sdk`                                                          |
-| `PayloadAssociatedData`              | AAD bound into each encrypted payload (sender + auth-key pairs).                                                     | `@aptos-labs/ts-sdk`                                                          |
-| `ClaimedEntryFunction`               | Class form of `claimedEntryFunction` (alternative to the plain-object form).                                         | `@aptos-labs/ts-sdk`                                                          |
-| `Transaction` / `AptosConfig`        | Tree-shakeable namespace class (alternative to `Aptos`) — see [Two ways to call the SDK](#two-ways-to-call-the-sdk). | `@aptos-labs/ts-sdk/transaction` (also re-exported from `@aptos-labs/ts-sdk`) |
-
-`fetchAndCacheEncryptionKey({ aptosConfig })` is internal but useful in tests; it returns `{ key, epoch } | null`.
-
-## Reference tests
-
-The TypeScript SDK exercises encrypted builds and submission in **`tests/e2e/transaction/encryptedTransaction.test.ts`**. The repo ships a script that runs only that suite against a devnet-capable network:
-
-```bash
-APTOS_NETWORK=devnet pnpm e2e-encrypted
-```
-
-Useful environment variables:
-
-| Variable                         | Purpose                                                                                   |
-| -------------------------------- | ----------------------------------------------------------------------------------------- |
-| `APTOS_NETWORK`                  | Required; any value except `local` opts into the suite.                                   |
-| `APTOS_NODE_API_URL`             | Point at a fullnode whose ledger exposes `encryption_key` (public devnet often does not). |
-| `REQUIRE_ENCRYPTION_E2E=1`       | Fail (don't skip) if `encryption_key` is absent — useful in CI.                           |
-| `RUN_ENCRYPTED_NON_LEGACY_E2E=1` | Opt into SingleSender (unified Ed25519) and encrypted-multisig execution cases.           |
-
-Source: [`aptos-ts-sdk` on GitHub](https://github.com/aptos-labs/aptos-ts-sdk/blob/main/tests/e2e/transaction/encryptedTransaction.test.ts).
+- **Keyless signers are not supported.** Encrypted transactions cannot be signed by keyless or federated keyless accounts — the build/submit will throw before contacting the node.
+- **Encrypted multisig is feature-gated** on some networks; submission may be rejected even when the SDK build succeeds. Watch your network's release notes.
 
 ## Further reading
 
-- **[Encrypted Pending Transactions guide](/build/guides/encrypted-pending-transactions)** — product-level overview and visibility, using the consumer-facing term for this feature.
-- **[Aptos batch encryption (cryptography)](https://github.com/aptos-labs/aptos-core/tree/main/crates/aptos-batch-encryption)** — scheme variants and implementation detail in `aptos-core` (optional for app developers).
+- **[Encrypted Pending Transactions guide](/build/guides/encrypted-pending-transactions)** — product overview, visibility, AIP-144 spec, and cryptography paper.
+- **[Aptos batch encryption (cryptography)](https://github.com/aptos-labs/aptos-core/tree/main/crates/aptos-batch-encryption)** — `aptos-core` implementation detail (optional reading).

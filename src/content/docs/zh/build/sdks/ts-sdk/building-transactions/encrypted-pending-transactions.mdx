@@ -1,0 +1,334 @@
+---
+title: "加密内存池"
+description: "使用 Aptos TypeScript SDK 7.0+ 构建和提交加密内存池交易,涵盖 authenticationKey、gas 单价下限、模拟、多代理、赞助及无序流程."
+sidebar:
+  label: "加密内存池"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+加密内存池交易会在 **构建时** 使用全节点当前的 **每纪元加密密钥**(基于 BLS12-381 的批量门限加密,明文使用 AES-GCM)对可执行负载进行加密.签名流程与明文交易相同:**构建 → (可选)在明文副本上模拟 → 签名 → 提交 → 等待**.区别在于传入 `aptos.transaction.build.simple`(或 `build.multiAgent` / 赞助构建)的 `options`.
+
+<Aside type="note">
+  **加密内存池** 是该功能的协议层名称([AIP-144](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-144-encrypted-mempool.md));部分产品层文档与对外宣发称其为 **加密待处理交易**——指代同一特性.
+</Aside>
+
+加密内存池支持随 **`@aptos-labs/ts-sdk` 7.0.0** 一同发布.关于此功能保护的内容以及网络上仍可能可见的信息,请参见 **[加密待处理交易](/zh/build/guides/encrypted-pending-transactions)** 指南.
+
+<Aside type="note">
+  示例中,`aptos` 是 [`Aptos`](https://aptos-labs.github.io/aptos-ts-sdk/) 客户端的实例,`sender` 是即将签署该交易的 `Account`.
+</Aside>
+
+## 环境要求
+
+加密内存池需要 **`@aptos-labs/ts-sdk` ≥ 7.0.0**,该版本仅支持 **ESM**,运行环境需 **Node.js 22+**.安装方式:
+
+```bash
+pnpm add @aptos-labs/ts-sdk@^7.0.0
+# 或:npm install @aptos-labs/ts-sdk@^7.0.0
+```
+
+消费者代码必须使用 `"type": "module"` / `import` 语法——不再支持 CommonJS `require`.SDK 采用 `nodenext` 模块解析,并通过 **按功能划分的子路径导出**(例如 `@aptos-labs/ts-sdk/transaction`、`@aptos-labs/ts-sdk/keyless`)为支持 tree-shaking 的打包器提供更精细的入口.
+
+## 两种 SDK 调用方式
+
+SDK 同时支持熟悉的 `Aptos` 命名空间类和可 tree-shake 的子路径命名空间类.两者暴露完全相同的加密内存池接口;根据你的打包目标选择即可.
+
+```typescript
+// 方式 A —— Aptos 命名空间类(熟悉,但不可 tree-shake):
+import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
+const aptos = new Aptos(new AptosConfig({ network: Network.DEVNET }));
+
+// 方式 B —— Transaction 子路径(可 tree-shake,v7.0.0+):
+import { Transaction, AptosConfig } from "@aptos-labs/ts-sdk/transaction";
+import { Network } from "@aptos-labs/ts-sdk";
+const transaction = new Transaction(new AptosConfig({ network: Network.DEVNET }));
+```
+
+本页后续示例统一使用 **方式 A**,以与 TS-SDK 其它文档保持一致.如需切换到方式 B,只需将 `aptos.transaction.build.simple(...)` 替换为 `transaction.build.simple(...)`,`sign`、`submit`、`signAndSubmitTransaction` 同理.
+
+## 前置条件
+
+当你设置 `encrypted: true` 时,SDK **必须** 收到发送者的 `authenticationKey`.它接受以下两种形式:
+
+- **`AccountPublicKey`** —— SDK 会通过 `.authKey()` 自动派生链上认证密钥,或者
+- 原始 **32 字节十六进制字符串**(`HexInput`)—— 当你已有现成的认证密钥字节时适用.
+
+对于标准 `Account`,直接传入签名公钥是最简洁的形式:
+
+```typescript
+const transaction = await aptos.transaction.build.simple({
+  sender: sender.accountAddress,
+  data: {
+    function: "0x1::aptos_account::transfer",
+    functionArguments: [receiver.accountAddress, amount],
+  },
+  options: {
+    encrypted: true,
+    authenticationKey: sender.publicKey, // SDK 通过 .authKey() 派生认证密钥
+  },
+});
+```
+
+全节点必须在账本信息中返回非空的 **`encryption_key`**.如果该密钥缺失,使用 `encrypted: true` 构建会抛出错误,提示节点不支持加密提交.
+
+## 检查网络是否支持加密
+
+调用 **`aptos.getLedgerInfo()`** 并检查 **`encryption_key`**.如果该字段缺失或为空,请勿对该端点提供加密提交功能.
+
+```typescript
+const ledgerInfo = await aptos.getLedgerInfo();
+const supportsEncrypted = Boolean(ledgerInfo.encryption_key);
+```
+
+## 构建、签名与提交(单签名者)
+
+<Steps>
+  1. 使用 `encrypted: true` 和 `authenticationKey` **构建**.
+
+     ```typescript
+     const transaction = await aptos.transaction.build.simple({
+       sender: sender.accountAddress,
+       data: {
+         function: "0x1::aptos_account::transfer",
+         functionArguments: [receiver.accountAddress, amount],
+       },
+       options: {
+         encrypted: true,
+         authenticationKey: sender.publicKey,
+       },
+     });
+     ```
+
+  2. **模拟(可选)**:用相同的 `data` 和 gas 相关的 `options` 构建明文版本,但 **不要** 包含 `encrypted` 或 `authenticationKey`.根据需要调整 gas 后,**使用 `encrypted: true` 重新构建** 用于提交.详见下方 [模拟](#模拟与加密负载).
+
+  3. 与平常一样 **签名并提交**.
+
+     ```typescript
+     const pending = await aptos.signAndSubmitTransaction({
+       signer: sender,
+       transaction,
+     });
+
+     await aptos.waitForTransaction({ transactionHash: pending.hash });
+     ```
+</Steps>
+
+## Gas 单价下限
+
+加密提交的最低 gas 单价为 **每 gas 单位 200 Octas**——为网络基础最低值的两倍——用于补偿验证者的解密成本.该常量由 SDK 导出:
+
+```typescript
+// 从主入口再导出(任意 v7.0.x 均可用):
+import { MIN_ENCRYPTED_TXN_GAS_UNIT_PRICE } from "@aptos-labs/ts-sdk";
+```
+
+`build.simple` 应用该下限的方式如下:
+
+- 若 `options.gasUnitPrice` **未设置** 且网络估算值低于 200,SDK 会静默将其调升到 200.
+- 若 `options.gasUnitPrice` **被显式设置为低于 200** 的值,SDK 会发出 `console.warn` 并将价格调升到 200.
+- 价格在 200 及以上则不受影响.
+
+服务器会拒绝低于该下限的加密交易,因此 SDK 永远不会提交此类交易.账户余额需在提交时覆盖 `maxGasAmount × gasUnitPrice`(至少 200).
+
+## 模拟与加密负载
+
+`aptos.transaction.simulate.*` 会 **拒绝** 负载已加密的交易.SDK 在联系节点之前就会抛出 `ENCRYPTED_TRANSACTION_SIMULATION_NOT_SUPPORTED_MESSAGE`:
+
+> Transaction simulation is not supported for encrypted payloads. Build a plaintext transaction with the same entry function and simulate it, then build with `options.encrypted` true for submission.
+
+工作流:
+
+1. `build.simple({ ..., options: { /* 不要 encrypted */ } })` —— 相同的函数、参数和 gas 提示.
+2. `aptos.transaction.simulate.simple({ ... })` —— 根据结果调整 `maxGasAmount` / `gasUnitPrice`.
+3. `build.simple({ ..., options: { encrypted: true, authenticationKey, ...来自第 2 步的 gas } })` —— 提交该构建.
+
+通用模拟行为请参见 [模拟交易](/zh/build/sdks/ts-sdk/building-transactions/simulating-transactions).
+
+## 多代理(加密)
+
+传入 **`secondarySignerAuthenticationKeys`**,每一项对应一个 `secondarySignerAddresses` 条目,**顺序必须一致**.每项接受 `AccountPublicKey` 或原始 32 字节十六进制字符串.
+
+```typescript
+const transaction = await aptos.transaction.build.multiAgent({
+  sender: sender.accountAddress,
+  secondarySignerAddresses: [secondary.accountAddress],
+  data: {
+    function: "0x<module>::<contract>::<multi_agent_entry>",
+    functionArguments: [/* ... */],
+  },
+  options: {
+    encrypted: true,
+    authenticationKey: sender.publicKey,
+    secondarySignerAuthenticationKeys: [secondary.publicKey],
+  },
+});
+```
+
+若数组长度与 `secondarySignerAddresses` 不一致,SDK 在校验阶段会拒绝该构建.参见 [多代理交易](/zh/build/sdks/ts-sdk/building-transactions/multi-agent-transactions).
+
+## 费用支付者(赞助,加密)
+
+当费用支付者地址 **非零** 时,SDK 要求提供 **`feePayerAuthenticationKey`**.AAD 顺序为 **发送者 → 次签名者 → 费用支付者**(与 `aptos-core` 中 `TransactionAuthenticator::all_signer_auth_keys` 一致).
+
+```typescript
+const transaction = await aptos.transaction.build.simple({
+  sender: sender.accountAddress,
+  withFeePayer: true,
+  data: {
+    function: "0x1::aptos_account::transfer",
+    functionArguments: [receiver.accountAddress, amount],
+  },
+  options: {
+    encrypted: true,
+    authenticationKey: sender.publicKey,
+    feePayerAuthenticationKey: sponsor.publicKey,
+  },
+});
+```
+
+设置 `feePayerAuthenticationKey` 但没有非零费用支付者地址(或相反)都会在构建时报错.参见 [赞助交易](/zh/build/sdks/ts-sdk/building-transactions/sponsoring-transactions).
+
+## 无序与加密
+
+将 **`replayProtectionNonce`** 与 `encrypted: true` 一同传入.原始交易使用无序重放保护(`sequence_number = u64::MAX`),同时负载仍保持加密.参见 [无序交易](/zh/build/sdks/ts-sdk/building-transactions/orderless-transactions).
+
+```typescript
+const transaction = await aptos.transaction.build.simple({
+  sender: sender.accountAddress,
+  data: {
+    function: "0x1::aptos_account::transfer",
+    functionArguments: [receiver.accountAddress, amount],
+  },
+  options: {
+    encrypted: true,
+    authenticationKey: sender.publicKey,
+    replayProtectionNonce: 12345n,
+  },
+});
+```
+
+## `claimedEntryFunction`
+
+`claimed_entry_fun` 是加密负载上的 **可选** 字段(aptos-core 中的 `EncryptedInner`).当它存在时,可以让在解密之前能看到交易的观察者——赞助方、多签 owner、交易过滤器——在验证者解密负载之前知道入口函数的模块名(以及可选的函数名).验证者会将该声明与解密后的入口函数核对,若不一致则以 `ClaimedEntryFunctionMismatch` 失败.协议本身从不强制该字段必须为 `Some`.
+
+SDK 会在以下任一情况下自动用真实的入口函数填充该字段:
+
+- 交易设置了 **非零费用支付者**(赞助交易),或
+- 负载为 **多签**(在 `build.simple` 的 `data` 中带上 `multisigAddress`,或任何携带多签地址的内部负载).
+
+对于普通单签名者加密交易,SDK 会将该字段保留为 `None`,此时 `options.claimedEntryFunction` 会被忽略.**通常你完全不需要设置该选项**——它仅作为 SDK 自动派生值的覆盖,且只在上述费用支付者 / 多签场景下被采纳.
+
+### 何时使用该覆盖
+
+最实用的覆盖方式是 **省略 `functionName`**,从而只对解密前的观察者暴露模块名,把被调用的函数名继续隐藏起来:
+
+```typescript
+options: {
+  encrypted: true,
+  authenticationKey: sender.publicKey,
+  feePayerAuthenticationKey: sponsor.publicKey,
+  // 只暴露模块名;函数名在解密前仍保持加密.
+  claimedEntryFunction: {
+    module: "0x1::aptos_account",
+    // 故意省略 functionName
+  },
+};
+```
+
+`ClaimedEntryFunction.fromEntryFunction(entryFunction)` 是默认行为,会同时包含模块名和函数名;手动构造该选项(无论普通对象形式还是 SDK 类形式)可让你省略 `functionName`.
+
+```typescript
+// 等价的类形式:
+claimedEntryFunction: new ClaimedEntryFunction(
+  ModuleId.fromStr("0x1::aptos_account"),
+  /* function */ undefined,
+);
+```
+
+当覆盖 **确实** 设置了 `functionName` 时,它必须与真实的入口函数名严格一致——否则构建会通过 `assertClaimMatchesExecutable` 抛出错误.模块字段必须始终一致.对于可执行内容不是入口函数(例如脚本)的负载设置 `claimedEntryFunction` 同样会抛出错误.
+
+## Keyless 限制
+
+加密交易不能由 **Keyless** 或 **联邦 Keyless** 账户签署.这些方案中的签名可塑性会破坏负载绑定(由 `aptos-core` 在服务端强制执行).如果签名者或费用支付者是 Keyless 账户,`signAndSubmitTransaction` 会在 **提交之前** 抛出错误.
+
+<Aside type="caution">
+  包裹了 Keyless 内部签名者的 `MultiKeyAccount` **不会** 被该客户端守卫捕获(检测通过 `isKeylessSigner` 鸭式类型判断).此类构建仍会在服务端失败,但错误会在更晚的往返过程中浮现.
+</Aside>
+
+在 v7.0.0 中,Keyless 相关类型——`KeylessAccount`、`FederatedKeylessAccount`、`EphemeralKeyPair` 及 poseidon 工具——已从主入口迁移到 **`@aptos-labs/ts-sdk/keyless`** 子路径.从 \< 7.0.0 升级时,即便 Keyless 账户无法签署加密交易,也需要更新这些导入路径:
+
+```typescript
+import { KeylessAccount, EphemeralKeyPair } from "@aptos-labs/ts-sdk/keyless";
+```
+
+## 多签(加密)
+
+加密多签 **负载** 在此 SDK 中可以正确构建(`build.simple` 在 `data` 中带上 `multisigAddress`),但服务端支持仍在分批推出.提交可能因以下原因失败:
+
+- `FEATURE_UNDER_GATING` —— 目标网络上的加密提交功能尚未开启,或
+- `"Encrypted transactions do not support multisig"` —— 服务端显式拒绝该组合.
+
+请将上述情况视为推出阶段的限制;当特性开关切换后,SDK 行为不会变化.
+
+## 从 API 读取加密交易
+
+`TransactionPayloadResponse` 新增了 `EncryptedTransactionPayloadResponse` 变体,通过 `encrypted_state` 区分:
+
+- `"encrypted"` —— 仅含负载字节;不提供解密后的内容.
+- `"failed_decryption"` —— 验证者未能解密该负载.
+- `"decrypted"` —— `decrypted_payload` 包含链上执行后的原始入口函数 / 脚本.
+
+```typescript
+if (payload.type === "encrypted_payload") {
+  switch (payload.encrypted_state) {
+    case "encrypted":
+    case "failed_decryption":
+      // 无明文;展示元数据(发送者、gas、claimed_entry_fun 等).
+      break;
+    case "decrypted":
+      // 可使用 payload.decrypted_payload.
+      break;
+  }
+}
+```
+
+`decryption_failure_reason` 在类型上保留,但 REST API **尚未返回** —— 将其视为可选字段即可.
+
+## 新增导出(`@aptos-labs/ts-sdk` 7.0.0)
+
+| 导出                                   | 用途                                                                 | 导入自                                                            |
+| ------------------------------------ | ------------------------------------------------------------------ | -------------------------------------------------------------- |
+| `TransactionPayloadEncryptedPayload` | 加密构建中 `RawTransaction.payload` 的运行时类(配合 `instanceof` 使用).          | `@aptos-labs/ts-sdk`                                           |
+| `MIN_ENCRYPTED_TXN_GAS_UNIT_PRICE`   | 200 Octa 的 gas 单价下限常量.                                             | `@aptos-labs/ts-sdk`                                           |
+| `EncryptionKey`                      | 每纪元 BLS12-381 批量加密密钥.                                              | `@aptos-labs/ts-sdk`                                           |
+| `DecryptedPlaintext`                 | 明文可执行内容 + 解密 nonce 的包装类型.                                          | `@aptos-labs/ts-sdk`                                           |
+| `PayloadAssociatedData`              | 绑定到每个加密负载的 AAD(发送者 + 认证密钥对).                                       | `@aptos-labs/ts-sdk`                                           |
+| `ClaimedEntryFunction`               | `claimedEntryFunction` 的类形式(普通对象形式的替代).                            | `@aptos-labs/ts-sdk`                                           |
+| `Transaction` / `AptosConfig`        | 可 tree-shake 的命名空间类(`Aptos` 的替代)—— 参见 [两种 SDK 调用方式](#两种-sdk-调用方式). | `@aptos-labs/ts-sdk/transaction`(也通过 `@aptos-labs/ts-sdk` 再导出) |
+
+`fetchAndCacheEncryptionKey({ aptosConfig })` 是内部函数,但对测试很有用;返回 `{ key, epoch } | null`.
+
+## 参考测试
+
+TypeScript SDK 在 **`tests/e2e/transaction/encryptedTransaction.test.ts`** 中演练了加密的构建与提交.仓库提供了一个针对支持 devnet 的网络仅运行该套件的脚本:
+
+```bash
+APTOS_NETWORK=devnet pnpm e2e-encrypted
+```
+
+常用的环境变量:
+
+| 变量                               | 用途                                              |
+| -------------------------------- | ----------------------------------------------- |
+| `APTOS_NETWORK`                  | 必需;除 `local` 之外的任何值都会启用该套件.                     |
+| `APTOS_NODE_API_URL`             | 指向账本暴露 `encryption_key` 的全节点(公共 devnet 通常不暴露).  |
+| `REQUIRE_ENCRYPTION_E2E=1`       | 当 `encryption_key` 缺失时让套件失败(而非跳过)—— 适合在 CI 中使用. |
+| `RUN_ENCRYPTED_NON_LEGACY_E2E=1` | 启用 SingleSender(统一 Ed25519)与加密多签执行用例.           |
+
+源码:[GitHub 上的 `aptos-ts-sdk`](https://github.com/aptos-labs/aptos-ts-sdk/blob/main/tests/e2e/transaction/encryptedTransaction.test.ts).
+
+## 延伸阅读
+
+- **[加密待处理交易(指南)](/zh/build/guides/encrypted-pending-transactions)** —— 使用消费者友好名称的产品层概览与可见性说明.
+- **[Aptos 批量加密(密码学)](https://github.com/aptos-labs/aptos-core/tree/main/crates/aptos-batch-encryption)** —— `aptos-core` 中的算法变体与实现细节(对应用开发者可选).

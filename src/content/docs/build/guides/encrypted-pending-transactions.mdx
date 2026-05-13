@@ -1,0 +1,39 @@
+---
+title: "Encrypted Pending Transactions"
+description: "Encrypt transaction payloads before they reach consensus so pending execution details stay confidential on supported networks."
+sidebar:
+  label: "Encrypted Pending Transactions"
+---
+
+Encrypted pending transactions let you submit a transaction whose **Move payload** (entry function, arguments, and related executable data) is **encrypted while the transaction is pending**—for example while it is held in mempool and propagated between nodes. Validators decrypt the payload only when preparing execution as part of consensus. This reduces what observers can learn from the public pending transaction stream compared to a fully plaintext payload.
+
+This feature is **network and node dependent**: the fullnode you use must expose a ledger **`encryption_key`** when encrypted submission is enabled. On networks or nodes where the key is absent, the client cannot build encrypted transactions.
+
+## What clients can still observe
+
+Encryption protects the **payload bytes** in transit and at rest in the pending phase, but a transaction is still a signed request to the chain. Depending on configuration and payload type, clients may still see metadata such as sender, gas parameters, expiration, signatures, and—where the protocol requires it—**metadata derived from the payload** (for example a **claimed entry function** for certain multisig or sponsored flows). Treat “encrypted pending” as **payload confidentiality**, not anonymity of the whole transaction. For the precise security model, see **[AIP-144: Encrypted Mempool](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-144-encrypted-mempool.md)** and the underlying cryptography in [eprint 2025/2032](https://eprint.iacr.org/2025/2032). At the protocol level this feature is called **encrypted mempool** (AIP-144); the names are interchangeable.
+
+## Cost
+
+Encrypted transactions pay a **minimum gas-unit price of 200 Octas/gas-unit**, twice the network base minimum, to cover validator decryption work. SDKs enforce this floor at build time; servers reject encrypted submissions priced below it.
+
+## Signer restrictions
+
+**Keyless** and **federated keyless** accounts cannot sign encrypted transactions. Signature malleability in those schemes would break the binding between the signed authenticator and the encrypted payload; the rule is enforced both client-side (where supported) and server-side.
+
+## Relationship to orderless transactions
+
+You can combine encrypted payloads with **[orderless transactions](/build/guides/orderless-transactions)** so parallel submitters use replay-protection nonces while still encrypting the executable. See the TypeScript SDK page below for build options.
+
+## Not the same as confidential assets
+
+**Encrypted pending transactions** protect the **transaction payload** on the way to execution. They are unrelated to **[confidential assets](/build/sdks/ts-sdk/confidential-asset)** balances, which use on-chain **encrypted amounts** and a separate “pending balance” notion for privacy-preserving fungible operations.
+
+## SDK support
+
+**[TypeScript SDK](/build/sdks/ts-sdk/building-transactions/encrypted-pending-transactions)** — build with `options.encrypted` and `options.authenticationKey`, simulate using a plaintext twin, submit encrypted builds.
+
+## Further reading
+
+- [AIP-144: Encrypted Mempool](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-144-encrypted-mempool.md) — protocol-level specification and rationale.
+- [Aptos Encrypted Mempool (eprint 2025/2032)](https://eprint.iacr.org/2025/2032) — formal cryptographic treatment.

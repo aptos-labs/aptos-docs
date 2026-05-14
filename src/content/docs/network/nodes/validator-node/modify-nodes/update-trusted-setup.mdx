@@ -21,15 +21,16 @@ verify their integrity, and roll the change out to their node.
   against the values published below before restarting your node.
 </Aside>
 
-<Aside type="note">
-  These files are currently published for **testnet** only. Mainnet instructions will be added once the blobs are
-  published upstream.
-</Aside>
-
 ## 1. Download the blobs
 
 Both files are stored via Git LFS, so the download URL uses `github.com/.../raw/main/...` (which follows the LFS
 redirect) rather than `raw.githubusercontent.com`.
+
+Adjust the destination paths to wherever your deployment stores `genesis.blob` and `waypoint.txt`. The path you
+choose must match the `consensus.digest_key_blob_path` and `consensus.public_parameters_blob_path` entries in
+`validator.yaml` (see step 3).
+
+### Testnet
 
 ```shellscript filename="Terminal"
 wget -O /opt/aptos/genesis/digest_key.bin \
@@ -38,9 +39,19 @@ wget -O /opt/aptos/genesis/pp.bin \
   https://github.com/aptos-labs/aptos-networks/raw/main/testnet/pp.bin
 ```
 
-Adjust the destination paths to wherever your deployment stores `genesis.blob` and `waypoint.txt`. The path you
-choose must match the `consensus.digest_key_blob_path` and `consensus.public_parameters_blob_path` entries in
-`validator.yaml` (see step 3).
+### Mainnet
+
+<Aside type="note">
+  Mainnet trusted-setup blobs are not yet published. The commands below are the expected form; this page will
+  be updated with working URLs and checksums once Aptos Labs publishes the files.
+</Aside>
+
+```shellscript filename="Terminal"
+wget -O /opt/aptos/genesis/digest_key.bin \
+  https://github.com/aptos-labs/aptos-networks/raw/main/mainnet/digest_key.bin
+wget -O /opt/aptos/genesis/pp.bin \
+  https://github.com/aptos-labs/aptos-networks/raw/main/mainnet/pp.bin
+```
 
 ## 2. Verify with the Aptos CLI
 
@@ -60,22 +71,24 @@ Each command prints JSON of the following shape:
 }
 ```
 
-Compare the `size` and `blake3` fields against the values below.
+Compare the `size` and `blake3` fields against the values below for the network you are operating on.
 
-### Expected testnet checksums
+### Expected checksums
 
-The following checksums correspond to the blobs at
+Testnet checksums correspond to the blobs at
 [`aptos-networks@92b13bf`](https://github.com/aptos-labs/aptos-networks/tree/92b13bf7844a0630cf5688ce8d309c46f712bbf2/testnet)
-(current as of 2026-05-14). This page is updated whenever Aptos Labs publishes a new revision.
+(current as of 2026-05-14). This table is updated whenever Aptos Labs publishes a new revision.
 
-| File             | Size (bytes) | blake3                                                             |
-| ---------------- | ------------ | ------------------------------------------------------------------ |
-| `digest_key.bin` | `4002048590` | `ffff6ab738c58c1c7eeb697eecbc369205e111c9ef271ab2cbe524869671b441` |
-| `pp.bin`         | `201655505`  | `a01c219766c4190f7d1b77836c0efd41b96486f7d46902f93e9b15260ea05cbc` |
+| Network | File             | Size (bytes)              | blake3                                                             |
+| ------- | ---------------- | ------------------------- | ------------------------------------------------------------------ |
+| testnet | `digest_key.bin` | `4002048590`              | `ffff6ab738c58c1c7eeb697eecbc369205e111c9ef271ab2cbe524869671b441` |
+| testnet | `pp.bin`         | `201655505`               | `a01c219766c4190f7d1b77836c0efd41b96486f7d46902f93e9b15260ea05cbc` |
+| mainnet | `digest_key.bin` | _TBD — not yet published_ | _TBD — not yet published_                                          |
+| mainnet | `pp.bin`         | _TBD — not yet published_ | _TBD — not yet published_                                          |
 
-If either value differs, **do not restart the validator** — re-download the file (the most common cause is a
-truncated transfer or fetching the LFS pointer text via `raw.githubusercontent.com` instead of the LFS-redirected
-`github.com/.../raw/...` URL).
+If either value differs from the row for your network, **do not restart the validator** — re-download the file
+(the most common cause is a truncated transfer or fetching the LFS pointer text via `raw.githubusercontent.com`
+instead of the LFS-redirected `github.com/.../raw/...` URL).
 
 ## 3. Configure validator.yaml
 

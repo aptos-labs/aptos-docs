@@ -672,6 +672,7 @@ export const sidebar = [
             items: [
               "network/nodes/validator-node/modify-nodes",
               "network/nodes/validator-node/modify-nodes/update-validator-node",
+              "network/nodes/validator-node/modify-nodes/update-trusted-setup",
               "network/nodes/validator-node/modify-nodes/shutting-down-nodes",
               "network/nodes/validator-node/modify-nodes/rotate-consensus-key",
               "network/nodes/validator-node/modify-nodes/shutdown-vfn",

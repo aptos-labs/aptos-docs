@@ -1,0 +1,98 @@
+---
+title: "更新可信设置"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Aptos 验证器在启动时会加载两个可信设置 blob:`digest_key.bin` 和 `pp.bin`(公共参数).这两个 blob 由
+Aptos Labs 在 [`aptos-labs/aptos-networks`](https://github.com/aptos-labs/aptos-networks) 仓库中发布,
+并在节点参与 DKG 之前由共识加载.VFN 和 PFN **不需要** 这些文件.
+
+本页面介绍现有验证器运维人员下载新版本 blob,验证其完整性,并将更改部署到节点的步骤.
+
+<Aside type="caution">
+  验证器集群中的每个节点都必须加载**相同**的字节.在部分验证器上加载过时或不匹配的 blob 将阻止受影响的节点参与
+  共识.在重启节点之前,请始终对照下方发布的值验证 `blake3` 校验和.
+</Aside>
+
+<Aside type="note">
+  这些文件目前仅在**测试网**上发布.主网说明将在上游发布 blob 后添加.
+</Aside>
+
+## 1. 下载 blob
+
+这两个文件通过 Git LFS 存储,因此下载 URL 使用 `github.com/.../raw/main/...`(它会跟随 LFS 重定向),
+而非 `raw.githubusercontent.com`.
+
+```shellscript filename="Terminal"
+wget -O /opt/aptos/genesis/digest_key.bin \
+  https://github.com/aptos-labs/aptos-networks/raw/main/testnet/digest_key.bin
+wget -O /opt/aptos/genesis/pp.bin \
+  https://github.com/aptos-labs/aptos-networks/raw/main/testnet/pp.bin
+```
+
+将目标路径调整为您的部署存储 `genesis.blob` 和 `waypoint.txt` 的位置.您选择的路径必须与 `validator.yaml`
+中的 `consensus.digest_key_blob_path` 和 `consensus.public_parameters_blob_path` 条目匹配(参见步骤 3).
+
+## 2. 使用 Aptos CLI 验证
+
+使用 `aptos` CLI 确认每个文件能够正确反序列化,并计算其 `blake3` 校验和:
+
+```shellscript filename="Terminal"
+aptos node validate-digest-key --file /opt/aptos/genesis/digest_key.bin
+aptos node validate-public-parameters --file /opt/aptos/genesis/pp.bin
+```
+
+每个命令都会输出以下形状的 JSON:
+
+```json
+{
+  "size": 4002048590,
+  "blake3": "ffff6ab738c58c1c7eeb697eecbc369205e111c9ef271ab2cbe524869671b441"
+}
+```
+
+将 `size` 和 `blake3` 字段与下面的值进行比较.
+
+### 预期的测试网校验和
+
+以下校验和对应于
+[`aptos-networks@92b13bf`](https://github.com/aptos-labs/aptos-networks/tree/92b13bf7844a0630cf5688ce8d309c46f712bbf2/testnet)
+中的 blob(截至 2026-05-14).每当 Aptos Labs 发布新版本时,本页面都会更新.
+
+| 文件               | 大小(字节)       | blake3                                                             |
+| ---------------- | ------------ | ------------------------------------------------------------------ |
+| `digest_key.bin` | `4002048590` | `ffff6ab738c58c1c7eeb697eecbc369205e111c9ef271ab2cbe524869671b441` |
+| `pp.bin`         | `201655505`  | `a01c219766c4190f7d1b77836c0efd41b96486f7d46902f93e9b15260ea05cbc` |
+
+如果任一值不同,**请不要重启验证器** — 重新下载文件(最常见的原因是传输被截断,或者通过
+`raw.githubusercontent.com` 获取 LFS 指针文本,而不是通过 LFS 重定向的 `github.com/.../raw/...` URL).
+
+## 3. 配置 validator.yaml
+
+确认您的 `validator.yaml` 中的 `consensus` 块引用了这两个文件.路径必须与您在步骤 1 中写入的位置匹配.
+
+```yaml
+consensus:
+  digest_key_blob_path: /opt/aptos/genesis/digest_key.bin
+  public_parameters_blob_path: /opt/aptos/genesis/pp.bin
+```
+
+如果您的部署由 Helm 使用官方 `aptos-node` chart 管理,当在 chart values 中设置了 `digest_key_blob_url` 和
+`public_parameters_blob_url` 时,init 容器会为您将这些 blob 下载到 `/opt/aptos/genesis/` 中.在这种情况下,
+运维人员唯一需要做的就是更新 URL 并触发 pod 重启.
+
+## 4. 确认集群一致性(可选)
+
+节点重启后,有两个 Prometheus 指标将每个已加载 blob 的 `blake3` 作为标签暴露出来:
+
+- `aptos_dkg_digest_key_blake3{blake3="<hex>"} 1`
+- `aptos_dkg_public_params_blake3{blake3="<hex>"} 1`
+
+在 Grafana 中跨整个验证器集群按 `blake3` 标签分组.健康的发布显示每个指标只有一个标签值,且与上表匹配.
+多个值表示至少有一个验证器正在运行过时的 blob.
+
+## 5. 重启验证器
+
+按照您正常的重启流程操作(请参阅 [升级节点](/zh/network/nodes/validator-node/modify-nodes/update-validator-node)
+了解特定部署的步骤).节点在启动时只加载一次 blob;后续的轮换需要再次重启.

@@ -1,0 +1,110 @@
+---
+title: "Update Trusted Setup"
+description: "Download, verify, and rotate the DKG trusted-setup blobs (digest_key.bin and pp.bin) used by Aptos validator consensus."
+sidebar:
+  label: "Update Trusted Setup"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Aptos validators consume two trusted-setup blobs at startup: `digest_key.bin` and `pp.bin` (public parameters).
+The blobs are published by Aptos Labs in the [`aptos-labs/aptos-networks`](https://github.com/aptos-labs/aptos-networks)
+repository and are loaded by consensus before the node begins participating in DKG. VFNs and PFNs do **not** need
+these files.
+
+This page covers the steps an existing validator operator should take to download a new revision of the blobs,
+verify their integrity, and roll the change out to their node.
+
+<Aside type="caution">
+  Every validator in the fleet must load the **same** bytes. Loading a stale or mismatched blob on a subset of
+  validators will prevent the affected nodes from participating in consensus. Always verify the `blake3` checksum
+  against the values published below before restarting your node.
+</Aside>
+
+<Aside type="note">
+  These files are currently published for **testnet** only. Mainnet instructions will be added once the blobs are
+  published upstream.
+</Aside>
+
+## 1. Download the blobs
+
+Both files are stored via Git LFS, so the download URL uses `github.com/.../raw/main/...` (which follows the LFS
+redirect) rather than `raw.githubusercontent.com`.
+
+```shellscript filename="Terminal"
+wget -O /opt/aptos/genesis/digest_key.bin \
+  https://github.com/aptos-labs/aptos-networks/raw/main/testnet/digest_key.bin
+wget -O /opt/aptos/genesis/pp.bin \
+  https://github.com/aptos-labs/aptos-networks/raw/main/testnet/pp.bin
+```
+
+Adjust the destination paths to wherever your deployment stores `genesis.blob` and `waypoint.txt`. The path you
+choose must match the `consensus.digest_key_blob_path` and `consensus.public_parameters_blob_path` entries in
+`validator.yaml` (see step 3).
+
+## 2. Verify with the Aptos CLI
+
+Use the `aptos` CLI to confirm each file deserializes correctly and to compute its `blake3` checksum:
+
+```shellscript filename="Terminal"
+aptos node validate-digest-key --file /opt/aptos/genesis/digest_key.bin
+aptos node validate-public-parameters --file /opt/aptos/genesis/pp.bin
+```
+
+Each command prints JSON of the following shape:
+
+```json
+{
+  "size": 4002048590,
+  "blake3": "ffff6ab738c58c1c7eeb697eecbc369205e111c9ef271ab2cbe524869671b441"
+}
+```
+
+Compare the `size` and `blake3` fields against the values below.
+
+### Expected testnet checksums
+
+The following checksums correspond to the blobs at
+[`aptos-networks@92b13bf`](https://github.com/aptos-labs/aptos-networks/tree/92b13bf7844a0630cf5688ce8d309c46f712bbf2/testnet)
+(current as of 2026-05-14). This page is updated whenever Aptos Labs publishes a new revision.
+
+| File             | Size (bytes) | blake3                                                             |
+| ---------------- | ------------ | ------------------------------------------------------------------ |
+| `digest_key.bin` | `4002048590` | `ffff6ab738c58c1c7eeb697eecbc369205e111c9ef271ab2cbe524869671b441` |
+| `pp.bin`         | `201655505`  | `a01c219766c4190f7d1b77836c0efd41b96486f7d46902f93e9b15260ea05cbc` |
+
+If either value differs, **do not restart the validator** — re-download the file (the most common cause is a
+truncated transfer or fetching the LFS pointer text via `raw.githubusercontent.com` instead of the LFS-redirected
+`github.com/.../raw/...` URL).
+
+## 3. Configure validator.yaml
+
+Confirm that the `consensus` block in your `validator.yaml` references both files. The paths must match the
+locations you wrote to in step 1.
+
+```yaml
+consensus:
+  digest_key_blob_path: /opt/aptos/genesis/digest_key.bin
+  public_parameters_blob_path: /opt/aptos/genesis/pp.bin
+```
+
+If your deployment is managed by Helm using the official `aptos-node` chart, the init container will curl these
+blobs into `/opt/aptos/genesis/` for you when `digest_key_blob_url` and `public_parameters_blob_url` are set on
+the chart values. In that case the only operator action required is bumping the URLs and triggering a pod
+restart.
+
+## 4. Confirm fleet consistency (optional)
+
+Once the node restarts, two Prometheus metrics expose the `blake3` of each loaded blob as a label:
+
+- `aptos_dkg_digest_key_blake3{blake3="<hex>"} 1`
+- `aptos_dkg_public_params_blake3{blake3="<hex>"} 1`
+
+Group by the `blake3` label in Grafana across your validator fleet. A healthy rollout shows a single label value
+per metric matching the table above. Multiple values indicate at least one validator is running a stale blob.
+
+## 5. Restart the validator
+
+Follow your normal restart procedure (see [Upgrade Nodes](/network/nodes/validator-node/modify-nodes/update-validator-node)
+for deployment-specific steps). The node loads the blobs once during startup; subsequent rotations require
+another restart.

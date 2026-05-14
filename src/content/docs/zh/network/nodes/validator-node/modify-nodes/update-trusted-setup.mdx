@@ -96,17 +96,17 @@ consensus:
 `public_parameters_blob_url` 时,init 容器会为您将这些 blob 下载到 `/opt/aptos/genesis/` 中.在这种情况下,
 运维人员唯一需要做的就是更新 URL 并触发 pod 重启.
 
-## 4. 确认集群一致性(可选)
+## 4. 重启验证器
 
-节点重启后,有两个 Prometheus 指标将每个已加载 blob 的 `blake3` 作为标签暴露出来:
+按照您正常的重启流程操作(请参阅 [升级节点](/zh/network/nodes/validator-node/modify-nodes/update-validator-node)
+了解特定部署的步骤).节点在启动时只加载一次 blob;后续的轮换需要再次重启.
+
+## 5. 确认集群一致性(可选)
+
+重启后,有两个 Prometheus 指标将每个已加载 blob 的 `blake3` 作为标签暴露出来:
 
 - `aptos_dkg_digest_key_blake3{blake3="<hex>"} 1`
 - `aptos_dkg_public_params_blake3{blake3="<hex>"} 1`
 
 在 Grafana 中跨整个验证器集群按 `blake3` 标签分组.健康的发布显示每个指标只有一个标签值,且与上表匹配.
 多个值表示至少有一个验证器正在运行过时的 blob.
-
-## 5. 重启验证器
-
-按照您正常的重启流程操作(请参阅 [升级节点](/zh/network/nodes/validator-node/modify-nodes/update-validator-node)
-了解特定部署的步骤).节点在启动时只加载一次 blob;后续的轮换需要再次重启.

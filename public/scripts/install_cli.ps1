@@ -183,5 +183,5 @@ function Main {
     }
 }
 
-# Run the main function
-Main $args 
+# Run the main function (splat so each CLI token is a separate argument inside Main)
+Main @args

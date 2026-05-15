@@ -8,8 +8,11 @@ Aptos 验证器在启动时会加载两个可信设置 blob:`digest_key.bin` 和
 Aptos Labs 在 [`aptos-labs/aptos-networks`](https://github.com/aptos-labs/aptos-networks) 仓库中发布,
 并在节点参与 DKG 之前由共识加载.VFN 和 PFN **不需要** 这些文件.
 
-本页面介绍现有验证器运维人员将新版本 blob 部署到节点的步骤.具体流程取决于您的部署方式:自托管(源代码或
-Docker),或通过官方 `aptos-node` Helm chart 部署(AWS / GCP / Azure k8s 部署).
+本页面介绍现有验证器运维人员将新版本 blob 部署到节点的步骤.具体流程取决于您的部署方式:
+
+- **源代码** — 您直接运行验证器二进制文件.
+- **Docker(compose)** — 您运行上游的 `aptos-node` docker-compose 堆栈.
+- **Kubernetes(Helm chart)** — 您在 AWS / GCP / Azure 上运行官方 `aptos-node` Helm chart.
 
 <Aside type="caution">
   验证器集群中的每个节点都必须加载**相同**的字节.在部分验证器上加载过时或不匹配的 blob 将阻止受影响的节点参与
@@ -35,15 +38,15 @@ Docker),或通过官方 `aptos-node` Helm chart 部署(AWS / GCP / Azure k8s 部
   破坏共识.
 </Aside>
 
-## 自托管部署(源代码或 Docker)
+## 源代码部署
 
-如果您直接从源代码构建的二进制文件或 Docker compose 文件运行验证器,请使用此流程.您将 blob 下载到磁盘,并在
-`validator.yaml` 中告诉验证器在哪里找到它们.
+如果您直接从 `aptos-core` 构建的二进制文件运行验证器,请使用此流程.您选择 blob 在磁盘上的位置,并让
+`validator.yaml` 指向它们.
 
 ### 1. 下载 blob
 
-在验证器所在机器上选择一个目录.下面的示例使用 `/opt/aptos/genesis/`(与 `genesis.blob` 和 `waypoint.txt`
-放在一起);本地持久存储上的任何路径都可以.
+在验证器所在主机上选择一个目录 — 本地持久存储上的任何位置都可以.下面的示例使用 `/opt/aptos/genesis/`,
+与 `genesis.blob` 和 `waypoint.txt` 放在一起.
 
 #### 测试网
 
@@ -106,6 +109,75 @@ consensus:
 [升级节点](/zh/network/nodes/validator-node/modify-nodes/update-validator-node)了解特定部署的步骤).
 节点在启动时只加载一次 blob;后续的轮换需要再次重启.
 
+## Docker(compose)部署
+
+如果您运行
+[`aptos-core/docker/compose/aptos-node`](https://github.com/aptos-labs/aptos-core/tree/testnet/docker/compose/aptos-node)
+中的上游 `docker-compose.yaml`,请使用此流程.上游 compose 文件会将可信设置文件从您的工作目录绑定挂载到容器
+内的 `/opt/aptos/genesis/`,并且上游 `validator.yaml` 已经设置了相应的 `consensus` 路径 — 因此您只需将
+文件放在 `genesis.blob` / `waypoint.txt` 旁边即可.
+
+### 1. 将 blob 下载到您的工作目录
+
+```shellscript filename="Terminal"
+cd ~/$WORKSPACE   # 存放 genesis.blob 和 waypoint.txt 的目录
+wget -O digest_key.bin https://github.com/aptos-labs/aptos-networks/raw/main/testnet/digest_key.bin
+wget -O pp.bin https://github.com/aptos-labs/aptos-networks/raw/main/testnet/pp.bin
+```
+
+将 `testnet` 替换为您所运营的网络(主网 blob 尚未发布;参见 [已发布的校验和](#已发布的校验和) 备注).
+
+### 2. 使用 Aptos CLI 验证
+
+```shellscript filename="Terminal"
+aptos node validate-digest-key --file digest_key.bin
+aptos node validate-public-parameters --file pp.bin
+```
+
+将 `size` 和 `blake3` 与 [已发布的校验和](#已发布的校验和) 表中您所在网络的值进行比较.如果不匹配,
+请重新下载 — **请不要**用错误的文件重启验证器.
+
+### 3. 确认 docker-compose.yaml 和 validator.yaml 是最新的
+
+上游文件既包含绑定挂载,也包含 `consensus` 块.如果您是在添加这些之前设置的验证器,请从 `aptos-core` 的
+`testnet` 分支刷新这两个文件(参见
+[测试网文件](/zh/network/nodes/configure/node-files-all-networks/node-files-testnet)),并调和任何本地修改.
+需要确认的相关部分:
+
+`docker-compose.yaml`(validator 服务):
+
+```yaml
+volumes:
+  # …已有的挂载(genesis.blob、waypoint.txt、validator.yaml、身份文件)…
+  - type: bind
+    source: ./digest_key.bin
+    target: /opt/aptos/genesis/digest_key.bin
+  - type: bind
+    source: ./pp.bin
+    target: /opt/aptos/genesis/pp.bin
+```
+
+`validator.yaml`:
+
+```yaml
+consensus:
+  digest_key_blob_path: /opt/aptos/genesis/digest_key.bin
+  public_parameters_blob_path: /opt/aptos/genesis/pp.bin
+  # …safety_rules 等其他共识设置…
+```
+
+### 4. 重启验证器
+
+```shellscript filename="Terminal"
+docker compose restart validator
+```
+
+或重新创建堆栈以拾取 `docker-compose.yaml` 的任何更改:
+
+```shellscript filename="Terminal"
+docker compose up -d
+```
+
 ## Kubernetes 部署(Helm chart)
 
 如果您通过官方 `aptos-node` Helm chart 部署验证器(AWS,GCP 和 Azure 上的典型设置),请使用此流程.您**不需要**
@@ -135,7 +207,7 @@ trustedSetup:
 ### 2.(可选)在工作站上预先验证校验和
 
 chart 在集群内部获取字节,因此集群内的下载过程不会经过 `aptos` CLI.在部署前对 URL 进行健全性检查:在本地下载
-一份副本,并对其运行 [自托管验证步骤](#2-使用-aptos-cli-验证):
+一份副本,并对其运行 [源代码验证步骤](#2-使用-aptos-cli-验证):
 
 ```shellscript filename="Terminal"
 wget -O /tmp/digest_key.bin \
@@ -152,7 +224,7 @@ aptos node validate-digest-key --file /tmp/digest_key.bin
 新获取的文件.
 
 <Aside type="note">
-  \*\*首次重启需要支付一次性下载成本.\*\*在测试网上,这两个 blob 总计约 4 GiB,一次性获取到持久数据 PVC.
+  **首次重启需要支付一次性下载成本.** 在测试网上,这两个 blob 总计约 4 GiB,一次性获取到持久数据 PVC.
   后续重启通过标记检查跳过下载,并在几秒钟内启动.
 </Aside>
 

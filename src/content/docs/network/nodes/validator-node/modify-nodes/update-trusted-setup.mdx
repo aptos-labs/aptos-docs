@@ -13,8 +13,11 @@ repository and are loaded by consensus before the node begins participating in D
 these files.
 
 This page covers the steps an existing validator operator should take to roll a new revision of the blobs onto
-their node. The flow depends on how you deploy: self-managed (source code or Docker) or via the official
-`aptos-node` Helm chart (AWS / GCP / Azure k8s deployments).
+their node. The flow depends on how you deploy:
+
+- **Source code** — you run the validator binary directly.
+- **Docker (compose)** — you run the upstream `aptos-node` docker-compose stack.
+- **Kubernetes (Helm chart)** — you run the official `aptos-node` Helm chart on AWS / GCP / Azure.
 
 <Aside type="caution">
   Every validator in the fleet must load the **same** bytes. Loading a stale or mismatched blob on a subset of
@@ -41,15 +44,15 @@ Testnet checksums correspond to the blobs at
   wrong URL will silently break consensus.
 </Aside>
 
-## Self-managed deployment (source code or Docker)
+## Source code deployment
 
-Use this flow if you run the validator directly from a binary built from source or from a Docker compose file.
-You download the blobs to disk and tell `validator.yaml` where to find them.
+Use this flow if you run the validator directly from a binary built from `aptos-core`. You pick where the blobs
+live on disk and point `validator.yaml` at them.
 
 ### 1. Download the blobs
 
-Pick a directory on the same machine as the validator. The example below uses `/opt/aptos/genesis/` (alongside
-`genesis.blob` and `waypoint.txt`); any path on persistent local storage works.
+Pick a directory on the validator host — anywhere on persistent local storage works. The example below uses
+`/opt/aptos/genesis/` alongside `genesis.blob` and `waypoint.txt`.
 
 #### Testnet
 
@@ -113,6 +116,76 @@ Follow your normal restart procedure (see
 [Upgrade Nodes](/network/nodes/validator-node/modify-nodes/update-validator-node) for deployment-specific steps).
 The node loads the blobs once during startup; subsequent rotations require another restart.
 
+## Docker (compose) deployment
+
+Use this flow if you run the upstream `docker-compose.yaml` from
+[`aptos-core/docker/compose/aptos-node`](https://github.com/aptos-labs/aptos-core/tree/testnet/docker/compose/aptos-node).
+The upstream compose file bind-mounts the trusted-setup files from your working directory into the container at
+`/opt/aptos/genesis/`, and the upstream `validator.yaml` already has the matching `consensus` paths — so you only
+need to drop the files alongside `genesis.blob` / `waypoint.txt`.
+
+### 1. Download the blobs into your working directory
+
+```shellscript filename="Terminal"
+cd ~/$WORKSPACE   # the directory holding genesis.blob and waypoint.txt
+wget -O digest_key.bin https://github.com/aptos-labs/aptos-networks/raw/main/testnet/digest_key.bin
+wget -O pp.bin https://github.com/aptos-labs/aptos-networks/raw/main/testnet/pp.bin
+```
+
+Replace `testnet` with the network you operate on (mainnet blobs are not yet published; see the
+[Published checksums](#published-checksums) note).
+
+### 2. Verify with the Aptos CLI
+
+```shellscript filename="Terminal"
+aptos node validate-digest-key --file digest_key.bin
+aptos node validate-public-parameters --file pp.bin
+```
+
+Compare `size` and `blake3` against the [Published checksums](#published-checksums) table for your network. If
+they don't match, re-download — **do not restart the validator** with a bad file.
+
+### 3. Confirm docker-compose.yaml and validator.yaml are current
+
+The upstream files include both bind mounts and the `consensus` block. If you set up the validator before these
+were added, refresh both files from the `testnet` branch of `aptos-core` (see
+[Testnet Files](/network/nodes/configure/node-files-all-networks/node-files-testnet)) and reconcile any local
+modifications. The relevant pieces to confirm:
+
+`docker-compose.yaml` (validator service):
+
+```yaml
+volumes:
+  # …existing mounts (genesis.blob, waypoint.txt, validator.yaml, identity files)…
+  - type: bind
+    source: ./digest_key.bin
+    target: /opt/aptos/genesis/digest_key.bin
+  - type: bind
+    source: ./pp.bin
+    target: /opt/aptos/genesis/pp.bin
+```
+
+`validator.yaml`:
+
+```yaml
+consensus:
+  digest_key_blob_path: /opt/aptos/genesis/digest_key.bin
+  public_parameters_blob_path: /opt/aptos/genesis/pp.bin
+  # …safety_rules and other consensus settings…
+```
+
+### 4. Restart the validator
+
+```shellscript filename="Terminal"
+docker compose restart validator
+```
+
+Or recreate the stack to pick up any `docker-compose.yaml` changes:
+
+```shellscript filename="Terminal"
+docker compose up -d
+```
+
 ## Kubernetes deployment (Helm chart)
 
 Use this flow if you deploy the validator via the official `aptos-node` Helm chart (the typical setup on AWS,
@@ -144,8 +217,8 @@ trustedSetup:
 ### 2. (Optional) Pre-verify the checksum on a workstation
 
 The chart fetches the bytes inside the cluster, so the in-cluster download never sees the `aptos` CLI. To
-sanity-check the URL before rollout, download a copy locally and run the [self-managed verify
-step](#2-verify-with-the-aptos-cli) on it:
+sanity-check the URL before rollout, download a copy locally and run the
+[source-code verify step](#2-verify-with-the-aptos-cli) on it:
 
 ```shellscript filename="Terminal"
 wget -O /tmp/digest_key.bin \
@@ -180,8 +253,8 @@ trustedSetup:
 
 ## Confirm fleet consistency
 
-After your validators have restarted (either flow), two Prometheus metrics expose the `blake3` of each loaded
-blob as a label:
+After your validators have restarted (any flow), two Prometheus metrics expose the `blake3` of each loaded blob
+as a label:
 
 - `aptos_dkg_digest_key_blake3{blake3="<hex>"} 1`
 - `aptos_dkg_public_params_blake3{blake3="<hex>"} 1`

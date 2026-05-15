@@ -31,7 +31,7 @@ without revealing hidden amounts and other sensitive data.
 
 ## Confidential Store
 
-For every confidential asset a user registers, they generate a unique keypair:
+For every asset type a user registers for, they generate a unique keypair:
 
 - An encryption key (EK) stored on-chain.
 - A decryption key (DK) kept securely by the user.
@@ -52,7 +52,7 @@ Both balances are encrypted with the same user's EK, ensuring underlying amounts
 </Aside>
 
 The confidential balance, encryption key, and related state are stored in the `ConfidentialStore` resource.
-The `ConfidentialStore` is instantiated for each confidential asset the user has and managed by the `confidential_asset` module:
+The `ConfidentialStore` is instantiated for each asset type the user has registered for and is managed by the `confidential_asset` module:
 
 ```move filename="confidential_asset.move"
 enum ConfidentialStore has key {
@@ -126,9 +126,10 @@ Decryption involves:
 
 Normalization ensures chunks are always reduced to manageable sizes (16 bits).
 Without normalization, chunks can grow too large, making the decryption process (solving DL) significantly slower or even impractical.
-This mechanism is automatically applied to the available balance after each transfer or withdrawal,
-ensuring that users can always decrypt their balances, even as balances grow through multiple transactions.
-Only after a rollover, users are required to normalize the available balance [manually](#normalize).
+Transfers and withdrawals update the available balance in a way that leaves it normalized automatically.
+Users need to normalize the available balance [manually](#normalize) only when it is not already normalized and they want to call
+[`rollover_pending_balance`](#rollover-pending-balance) (including `rollover_pending_balance_and_pause`), which requires a normalized available balance first.
+The [TypeScript SDK](/build/sdks/ts-sdk/confidential-asset) can submit a normalization transaction automatically when a decryption key is provided.
 
 ### Homomorphic Encryption
 
@@ -192,7 +193,7 @@ and `aptos_std::ristretto255_bulletproofs` (range-proof verification natives).
 ```move filename="confidential_asset.move"
 public entry fun register_raw(
     sender: &signer,
-    asset_type: Object<Metadata>,
+    asset_type: Object<fungible_asset::Metadata>,
     ek: vector<u8>,
     sigma_proto_comm: vector<vector<u8>>,
     sigma_proto_resp: vector<vector<u8>>
@@ -208,7 +209,7 @@ represented as zero ciphertexts for both the `pending_balance` and `available_ba
 
 <Aside type="note">
   Although it is recommended to generate a unique keypair for each asset type to enhance security,
-  it's not restricted to reuse the same encryption key across multiple assets if preferred.
+  users are not restricted from reusing the same encryption key across multiple asset types if they prefer.
 </Aside>
 
 <Aside type="caution">
@@ -227,7 +228,7 @@ represented as zero ciphertexts for both the `pending_balance` and `available_ba
 ```move filename="confidential_asset.move"
 public entry fun deposit(
     depositor: &signer,
-    asset_type: Object<Metadata>,
+    asset_type: Object<fungible_asset::Metadata>,
     amount: u64
 )
 ```
@@ -253,14 +254,14 @@ However, tokens within the protocol become obfuscated through confidential trans
 ```move filename="confidential_asset.move"
 public entry fun rollover_pending_balance(
     sender: &signer,
-    asset_type: Object<Metadata>
+    asset_type: Object<fungible_asset::Metadata>
 )
 ```
 
 ```move filename="confidential_asset.move"
 public entry fun rollover_pending_balance_and_pause(
     sender: &signer,
-    asset_type: Object<Metadata>
+    asset_type: Object<fungible_asset::Metadata>
 )
 ```
 
@@ -288,7 +289,7 @@ which is useful when preparing for a [key rotation](#rotate-encryption-key).
 ```move filename="confidential_asset.move"
 public entry fun confidential_transfer_raw(
     sender: &signer,
-    asset_type: Object<Metadata>,
+    asset_type: Object<fungible_asset::Metadata>,
     to: address,
     new_balance_P: vector<vector<u8>>,
     new_balance_R: vector<vector<u8>>,
@@ -303,7 +304,7 @@ public entry fun confidential_transfer_raw(
     zkrp_amount: vector<u8>,
     sigma_proto_comm: vector<vector<u8>>,
     sigma_proto_resp: vector<vector<u8>>,
-    memo: vector<u8>,
+    memo: vector<u8>
 )
 ```
 
@@ -337,7 +338,7 @@ The function requires:
 ```move filename="confidential_asset.move"
 public entry fun withdraw_to_raw(
     sender: &signer,
-    asset_type: Object<Metadata>,
+    asset_type: Object<fungible_asset::Metadata>,
     to: address,
     amount: u64,
     new_balance_P: vector<vector<u8>>,
@@ -364,7 +365,7 @@ The withdrawn amount itself is publicly visible (as a `u64`), but the sender's r
 ```move filename="confidential_asset.move"
 public entry fun rotate_encryption_key_raw(
     sender: &signer,
-    asset_type: Object<Metadata>,
+    asset_type: Object<fungible_asset::Metadata>,
     new_ek: vector<u8>,
     resume_incoming_transfers: bool,
     new_R: vector<vector<u8>>,
@@ -391,7 +392,7 @@ To facilitate the rotation process:
 ```move filename="confidential_asset.move"
 public entry fun normalize_raw(
     sender: &signer,
-    asset_type: Object<Metadata>,
+    asset_type: Object<fungible_asset::Metadata>,
     new_balance_P: vector<vector<u8>>,
     new_balance_R: vector<vector<u8>>,
     new_balance_R_aud: vector<vector<u8>>,
@@ -419,7 +420,7 @@ All other functions, such as `withdraw_to_raw` or `confidential_transfer_raw`, h
 ```move filename="confidential_asset.move"
 public entry fun set_incoming_transfers_paused(
     owner: &signer,
-    asset_type: Object<Metadata>,
+    asset_type: Object<fungible_asset::Metadata>,
     paused: bool
 )
 ```
@@ -435,13 +436,16 @@ the pending balance remains empty while the rotation is in progress.
 The protocol supports auditors who can decrypt transfer amounts for compliance purposes.
 Auditors hold their own Twisted ElGamal keypair and receive encrypted copies of transfer amounts under their EK.
 
-There are three types of auditors:
+Governance configures two auditor roles on-chain:
 
-- **Global auditor** — set by governance, applies to all asset types unless overridden.
-- **Asset-specific auditor** — set by governance per asset type. Takes precedence over the global auditor.
-- **Effective auditor** — the asset-specific auditor if its EK is set, otherwise the global auditor.
-  This auditor is mandatory: if an effective auditor exists, all transfers, withdrawals, and normalizations must include ciphertexts for it.
-- **Voluntary auditors** — additional auditors specified by the sender at transfer time.
+- **Global auditor** — set by governance; applies to every asset type unless an asset-specific auditor overrides it.
+- **Asset-specific auditor** — set by governance per asset type and takes precedence over the global auditor.
+
+The **effective auditor** is derived from those roles: the asset-specific auditor if its encryption key (`EK`) is set, otherwise the global auditor.
+If an effective auditor exists, all transfers, withdrawals, and normalizations must include ciphertext components for it.
+
+**Voluntary auditors** are optional additional auditors whose encryption keys the sender supplies at transfer time.
+They receive ciphertext for the transfer amount only (not the sender's new available balance).
 
 Auditor configuration is wrapped in `AuditorConfig`, which bundles the EK with an `epoch` counter that
 increments every time the auditor is installed or rotated (it does not increment when the auditor is removed):
@@ -494,7 +498,7 @@ Allow-listing and per-asset configuration are managed by governance via these (n
 ## Emergency pause
 
 Governance can pause **all** user-facing operations (`register`, `deposit`, `withdraw`, `confidential_transfer`,
-`rollover_pending_balance`, `rotate_encryption_key`, `set_incoming_transfers_paused`) via:
+`normalize`, `rollover_pending_balance`, `rotate_encryption_key`, `set_incoming_transfers_paused`) via:
 
 ```move filename="confidential_asset.move"
 public fun set_emergency_paused(aptos_framework: &signer, paused: bool)
@@ -512,7 +516,7 @@ public fun is_emergency_paused(): bool
 
 #[view]
 public fun has_confidential_store(
-    user: address, asset_type: Object<Metadata>
+    user: address, asset_type: Object<fungible_asset::Metadata>
 ): bool
 
 #[view]
@@ -520,52 +524,52 @@ public fun is_allow_listing_required(): bool
 
 #[view]
 public fun is_confidentiality_enabled_for_asset_type(
-    asset_type: Object<Metadata>
+    asset_type: Object<fungible_asset::Metadata>
 ): bool
 
 #[view]
 public fun get_pending_balance(
-    owner: address, asset_type: Object<Metadata>
+    owner: address, asset_type: Object<fungible_asset::Metadata>
 ): CompressedBalance<Pending>
 
 #[view]
 public fun get_available_balance(
-    owner: address, asset_type: Object<Metadata>
+    owner: address, asset_type: Object<fungible_asset::Metadata>
 ): CompressedBalance<Available>
 
 #[view]
 public fun get_encryption_key(
-    user: address, asset_type: Object<Metadata>
+    user: address, asset_type: Object<fungible_asset::Metadata>
 ): CompressedRistretto
 
 #[view]
 public fun is_normalized(
-    user: address, asset_type: Object<Metadata>
+    user: address, asset_type: Object<fungible_asset::Metadata>
 ): bool
 
 #[view]
 public fun incoming_transfers_paused(
-    user: address, asset_type: Object<Metadata>
+    user: address, asset_type: Object<fungible_asset::Metadata>
 ): bool
 
 #[view]
 public fun get_effective_auditor_hint(
-    user: address, asset_type: Object<Metadata>
+    user: address, asset_type: Object<fungible_asset::Metadata>
 ): Option<EffectiveAuditorHint>
 
 #[view]
 public fun get_effective_auditor_config(
-    asset_type: Object<Metadata>
+    asset_type: Object<fungible_asset::Metadata>
 ): EffectiveAuditorConfig
 
 #[view]
 public fun get_total_confidential_supply(
-    asset_type: Object<Metadata>
+    asset_type: Object<fungible_asset::Metadata>
 ): u64
 
 #[view]
 public fun get_num_transfers_received(
-    user: address, asset_type: Object<Metadata>
+    user: address, asset_type: Object<fungible_asset::Metadata>
 ): u64
 
 #[view]

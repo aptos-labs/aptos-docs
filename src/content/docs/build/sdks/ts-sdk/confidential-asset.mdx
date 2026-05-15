@@ -9,10 +9,12 @@ import { Aside } from '@astrojs/starlight/components';
 
 The `@aptos-labs/confidential-asset` package provides a high-level TypeScript API for interacting with the Confidential Asset protocol on Aptos.
 
+This guide matches the **1.1.x** SDK line (for example `1.1.1`), which targets the current `aptos_framework::confidential_asset` entry functions such as `register_raw`, `confidential_transfer_raw`, and `rotate_encryption_key_raw`.
+
 ### Installation
 
 ```bash
-npm install @aptos-labs/confidential-asset @aptos-labs/ts-sdk
+npm install @aptos-labs/confidential-asset@^1.1.1 @aptos-labs/ts-sdk
 ```
 
 `@aptos-labs/confidential-asset-bindings` is a transitive dependency that ships the WebAssembly glue used
@@ -39,6 +41,8 @@ import { ConfidentialAsset } from "@aptos-labs/confidential-asset";
 const config = new AptosConfig({ network: Network.TESTNET });
 const confidentialAsset = new ConfidentialAsset({ config });
 ```
+
+Use `confidentialAsset.<operation>(…)` for submit-and-wait flows. The nested `confidentialAsset.transaction` builder returns **unsigned** `SimpleTransaction` payloads only; it does not chain helper steps (for example it will not insert a [`normalize_raw`](/build/smart-contracts/confidential-asset#normalize) transaction before [`rollover_pending_balance`](/build/smart-contracts/confidential-asset#rollover-pending-balance) the way `rolloverPendingBalance` does when you pass `senderDecryptionKey`).
 
 The constructor also accepts:
 
@@ -290,6 +294,8 @@ const rotationTxResponses = await confidentialAsset.rotateEncryptionKey({
 // Save the new decryption key — the old one is no longer valid
 console.log("New DK:", newDk.toString());
 ```
+
+When building the low-level rotation transaction yourself via `confidentialAsset.transaction.rotateEncryptionKey`, optional flags mirror the on-chain entry function: `unpause` defaults to `true` (same as `resume_incoming_transfers` in [`rotate_encryption_key_raw`](/build/smart-contracts/confidential-asset#rotate-encryption-key)), and `checkPendingBalanceEmpty` defaults to `true`.
 
 <Aside type="caution">
   After key rotation, you must use the new decryption key for all subsequent operations.

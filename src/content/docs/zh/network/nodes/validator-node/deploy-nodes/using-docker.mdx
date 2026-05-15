@@ -106,11 +106,21 @@ import { Aside } from '@astrojs/starlight/components';
    - `blocked.ips`
    - `genesis.blob`
    - `waypoint.txt`
-   - `digest_key.bin` 和 `pp.bin`(仅验证器;将其放在工作目录中 `genesis.blob` 和 `waypoint.txt`
-     旁边 — 上游 `docker-compose.yaml` 会从那里绑定挂载它们.有关验证步骤,请参阅
-     [更新可信设置 → Docker(compose)部署](/zh/network/nodes/validator-node/modify-nodes/update-trusted-setup#dockercompose部署))
 
-5. 总之,您的工作目录(`~/$WORKSPACE`)中应该有以下文件列表:
+5. \*\*仅验证器:\*\*将可信设置 blob 下载到您的工作目录中,与 `genesis.blob` 和 `waypoint.txt` 放在一起.
+   上游 `docker-compose.yaml` 会从那里将它们绑定挂载到容器中:
+
+   ```shellscript filename="Terminal"
+   cd ~/$WORKSPACE
+   wget -O digest_key.bin https://github.com/aptos-labs/aptos-networks/raw/main/testnet/digest_key.bin
+   wget -O pp.bin https://github.com/aptos-labs/aptos-networks/raw/main/testnet/pp.bin
+   ```
+
+   将 `testnet` 替换为您所运营的网络.有关验证步骤(`aptos node validate-digest-key` /
+   `validate-public-parameters`),请参阅
+   [更新可信设置 → Docker(compose)部署](/zh/network/nodes/validator-node/modify-nodes/update-trusted-setup#dockercompose部署).
+
+6. 总之,您的工作目录(`~/$WORKSPACE`)中应该有以下文件列表:
 
    - `docker-compose.yaml`:运行验证器的 docker compose 文件.
    - `docker-compose-fullnode.yaml`:运行 VFN 的 docker compose 文件.
@@ -125,7 +135,7 @@ import { Aside } from '@astrojs/starlight/components';
    - `waypoint.txt`:您正在连接的网络上创世交易的路标文件.
    - `genesis.blob`:您正在连接的网络的创世区块(genesis blob).
 
-6. 要启动验证器节点,在您的工作目录中运行以下命令:
+7. 要启动验证器节点,在您的工作目录中运行以下命令:
 
    ```shellscript filename="Terminal"
    docker-compose up （或根据您的版本使用 `docker compose up`）
@@ -133,7 +143,7 @@ import { Aside } from '@astrojs/starlight/components';
 
    这将使用 `docker-compose.yaml` 文件中指定的 docker compose 文件和镜像启动验证器节点.如果您希望更改要连接的网络,您需要修改文件以按网络名称使用正确的 docker 镜像.
 
-7. 在启动 VFN 之前,你需先调整 `fullnode.yaml` 配置文件,以便更新验证器节点的主机地址.比如,如果您使用的是 IP 地址,就需要按照以下方式,修改 vfn 网络的 `full_node_networks` 的地址信息:
+8. 在启动 VFN 之前,你需先调整 `fullnode.yaml` 配置文件,以便更新验证器节点的主机地址.比如,如果您使用的是 IP 地址,就需要按照以下方式,修改 vfn 网络的 `full_node_networks` 的地址信息:
 
    ```yaml filename="fullnode.yaml"
    ---
@@ -149,7 +159,7 @@ import { Aside } from '@astrojs/starlight/components';
      - "/dns/example.com/tcp/6181/noise-ik/..." # 设置验证器的 DNS 地址
    ```
 
-8. 为了启动你的 VFN,请在一台独立的,专为 VFN 设置的计算机上执行以下命令.你需要从验证节点的计算机那里复制密钥,配置文件和 docker compose 文件过来.
+9. 为了启动你的 VFN,请在一台独立的,专为 VFN 设置的计算机上执行以下命令.你需要从验证节点的计算机那里复制密钥,配置文件和 docker compose 文件过来.
 
    <Aside type="caution">
      **VFN 身份**<br />

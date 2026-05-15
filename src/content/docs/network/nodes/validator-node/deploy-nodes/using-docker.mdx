@@ -122,12 +122,21 @@ and VFN will be deployed on separate machines.
    - `blocked.ips`
    - `genesis.blob`
    - `waypoint.txt`
-   - `digest_key.bin` and `pp.bin` (validators only; place these alongside `genesis.blob` and `waypoint.txt`
-     in your working directory — the upstream `docker-compose.yaml` bind-mounts them from there. See
-     [Update Trusted Setup → Docker (compose) deployment](/network/nodes/validator-node/modify-nodes/update-trusted-setup#docker-compose-deployment)
-     for verification steps)
 
-5. To recap, in your working directory (`~/$WORKSPACE`), you should have a list of files:
+5. **Validators only:** download the trusted-setup blobs into your working directory, alongside `genesis.blob`
+   and `waypoint.txt`. The upstream `docker-compose.yaml` bind-mounts them from there into the container:
+
+   ```shellscript filename="Terminal"
+   cd ~/$WORKSPACE
+   wget -O digest_key.bin https://github.com/aptos-labs/aptos-networks/raw/main/testnet/digest_key.bin
+   wget -O pp.bin https://github.com/aptos-labs/aptos-networks/raw/main/testnet/pp.bin
+   ```
+
+   Replace `testnet` with the network you operate on. See
+   [Update Trusted Setup → Docker (compose) deployment](/network/nodes/validator-node/modify-nodes/update-trusted-setup#docker-compose-deployment)
+   for the verification step (`aptos node validate-digest-key` / `validate-public-parameters`).
+
+6. To recap, in your working directory (`~/$WORKSPACE`), you should have a list of files:
 
    - `docker-compose.yaml`: The docker compose file to run the validator.
    - `docker-compose-fullnode.yaml`: The docker compose file to run the VFN.
@@ -142,7 +151,7 @@ and VFN will be deployed on separate machines.
    - `waypoint.txt`: The waypoint for the genesis transaction on the network you are connecting to.
    - `genesis.blob` The genesis blob for the network you are connecting to.
 
-6. To start the validator node, run the following command in your working directory:
+7. To start the validator node, run the following command in your working directory:
 
    ```shellscript filename="Terminal"
    docker-compose up (or `docker compose up` depends on your version)
@@ -152,7 +161,7 @@ and VFN will be deployed on separate machines.
    `docker-compose.yaml` file. If you wish to change the network you are connecting to, you will need to modify
    the file to use the correct docker images by network name.
 
-7. Before you can start the VFN, you will need to modify the `fullnode.yaml` file to update the host address for the
+8. Before you can start the VFN, you will need to modify the `fullnode.yaml` file to update the host address for the
    validator node. For example, if you are using IP addresses, you will need to update the `full_node_networks`
    `addresses` for the `vfn` network as follows:
 
@@ -170,7 +179,7 @@ and VFN will be deployed on separate machines.
      - "/dns/example.com/tcp/6181/noise-ik/..." # Set the DNS Address of the validator
    ```
 
-8. To start your VFN, run the following commands on a separate, dedicated VFN machine. You will need to copy across
+9. To start your VFN, run the following commands on a separate, dedicated VFN machine. You will need to copy across
    the keys, configuration and docker compose files from the validator machine.
 
    <Aside type="caution">

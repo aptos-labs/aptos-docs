@@ -114,11 +114,24 @@ and VFN will be deployed on separate machines.
    - `fullnode.yaml`
    - `genesis.blob`
    - `waypoint.txt`
-   - `digest_key.bin` and `pp.bin` (validators only; see
-     [Update Trusted Setup → Source code deployment](/network/nodes/validator-node/modify-nodes/update-trusted-setup#source-code-deployment)
-     for verification and the `validator.yaml` paths these files must match)
 
-7. Next, copy the `validator.yaml` and `fullnode.yaml` template files (that were just downloaded) into the
+7. **Validators only:** download the trusted-setup blobs to a path on persistent local storage. The example
+   below uses `/opt/aptos/genesis/`, alongside `genesis.blob` and `waypoint.txt`. Use the same paths when you
+   set `consensus.digest_key_blob_path` and `consensus.public_parameters_blob_path` in `validator.yaml`
+   (step 9).
+
+   ```shellscript filename="Terminal"
+   wget -O /opt/aptos/genesis/digest_key.bin \
+     https://github.com/aptos-labs/aptos-networks/raw/main/testnet/digest_key.bin
+   wget -O /opt/aptos/genesis/pp.bin \
+     https://github.com/aptos-labs/aptos-networks/raw/main/testnet/pp.bin
+   ```
+
+   Replace `testnet` with the network you operate on. See
+   [Update Trusted Setup → Source code deployment](/network/nodes/validator-node/modify-nodes/update-trusted-setup#source-code-deployment)
+   for the verification step (`aptos node validate-digest-key` / `validate-public-parameters`).
+
+8. Next, copy the `validator.yaml` and `fullnode.yaml` template files (that were just downloaded) into the
    `~/$WORKSPACE/config/` directory. This can be done by running the following commands:
 
    ```shellscript filename="Terminal"
@@ -129,7 +142,7 @@ and VFN will be deployed on separate machines.
 
    These will be the primary configuration files for your validator and VFN, respectively.
 
-8. Now, modify the `validator.yaml` and `fullnode.yaml` template files to contain the appropriate information
+9. Now, modify the `validator.yaml` and `fullnode.yaml` template files to contain the appropriate information
    and working directories for your validator and VFN.
 
    For the `validator.yaml` file, you will need to modify the following fields:
@@ -166,23 +179,23 @@ and VFN will be deployed on separate machines.
        - "/dns/example.com/tcp/6181/noise-ik/..." # Set the DNS Address of the validator
      ```
 
-9. To recap, in your working directory (`~/$WORKSPACE`), you should have a list of files:
+10. To recap, in your working directory (`~/$WORKSPACE`), you should have a list of files:
 
-   - `config` folder containing:
-     - `validator.yaml`: The validator config file.
-     - `fullnode.yaml`: The VFN config file.
-   - `keys` folder containing:
-     - `public-keys.yaml`: Public keys for both nodes.
-     - `private-keys.yaml`: Private keys for both nodes.
-     - `validator-identity.yaml`: Key and account information for the validator.
-     - `validator-full-node-identity.yaml`: Key and account information for the VFN.
-   - `$username` folder containing:
-     - `owner.yaml`: The owner, operator and voter mappings.
-     - `operator.yaml`: Validator and VFN operator information.
-   - `waypoint.txt`: The waypoint for the genesis transaction on the network you are connecting to.
-   - `genesis.blob` The genesis blob for the network you are connecting to.
+- `config` folder containing:
+  - `validator.yaml`: The validator config file.
+  - `fullnode.yaml`: The VFN config file.
+- `keys` folder containing:
+  - `public-keys.yaml`: Public keys for both nodes.
+  - `private-keys.yaml`: Private keys for both nodes.
+  - `validator-identity.yaml`: Key and account information for the validator.
+  - `validator-full-node-identity.yaml`: Key and account information for the VFN.
+- `$username` folder containing:
+  - `owner.yaml`: The owner, operator and voter mappings.
+  - `operator.yaml`: Validator and VFN operator information.
+- `waypoint.txt`: The waypoint for the genesis transaction on the network you are connecting to.
+- `genesis.blob` The genesis blob for the network you are connecting to.
 
-10. Now that you have set up your configuration files, you can start your validator and VFN.
+11. Now that you have set up your configuration files, you can start your validator and VFN.
     To start your validator, run the following commands, with the paths assuming you are in the root of the `aptos-core` directory:
 
     ```shellscript filename="Terminal"

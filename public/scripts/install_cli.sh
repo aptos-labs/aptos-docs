@@ -382,20 +382,44 @@ install_from_source() {
 # Get the latest version from GitHub API
 get_latest_version() {
     local tmp_file="/tmp/releases.json"
-    
+    local api_url="https://api.github.com/repos/aptos-labs/aptos-core/releases?per_page=100"
+    local version=""
+
     if command_exists curl; then
-        retry_command curl -s "https://api.github.com/repos/aptos-labs/aptos-core/releases?per_page=100" -o "$tmp_file" || die "Failed to get latest version"
+        if [ -n "${GITHUB_TOKEN:-}" ]; then
+            retry_command curl -sS \
+                -H "Authorization: Bearer $GITHUB_TOKEN" \
+                -H "Accept: application/vnd.github+json" \
+                -H "X-GitHub-Api-Version: 2022-11-28" \
+                "$api_url" -o "$tmp_file" || die "Failed to get latest version"
+        else
+            retry_command curl -sS "$api_url" -o "$tmp_file" || die "Failed to get latest version"
+        fi
     elif command_exists wget; then
-        retry_command wget -qO "$tmp_file" "https://api.github.com/repos/aptos-labs/aptos-core/releases?per_page=100" || die "Failed to get latest version"
+        if [ -n "${GITHUB_TOKEN:-}" ]; then
+            retry_command wget -qO "$tmp_file" \
+                --header="Authorization: Bearer $GITHUB_TOKEN" \
+                --header="Accept: application/vnd.github+json" \
+                --header="X-GitHub-Api-Version: 2022-11-28" \
+                "$api_url" || die "Failed to get latest version"
+        else
+            retry_command wget -qO "$tmp_file" "$api_url" || die "Failed to get latest version"
+        fi
     else
         die "Neither curl nor wget is installed. Please install one of them."
     fi
-    
-    grep -m 1 '"tag_name": "aptos-cli-v' "$tmp_file" | \
-    cut -d'"' -f4 | \
-    sed 's/aptos-cli-v//'
-    
+
+    version=$(
+        grep -m 1 '"tag_name": "aptos-cli-v' "$tmp_file" | \
+        cut -d'"' -f4 | \
+        sed 's/aptos-cli-v//'
+    )
     rm -f "$tmp_file"
+
+    if [ -z "$version" ]; then
+        die "Could not determine latest Aptos CLI version from GitHub (empty result). If you are on a shared runner, set GITHUB_TOKEN for authenticated API access or pass --cli-version explicitly."
+    fi
+    echo "$version"
 }
 
 # Determine the target platform

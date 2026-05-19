@@ -23,5 +23,12 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/prepare-runner
       - run: cp .env.example .env
-      - run: pnpm build
+      - name: Build (captures log for link check)
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm build 2>&1 | tee build.log
+      - name: Report broken links (warn-only)
+        if: always()
+        run: node scripts/report-broken-links.mjs build.log
       - run: pnpm test

@@ -55,6 +55,7 @@ export const LLMS_INDEX_SECTIONS: LlmsSection[] = [
     ids: [
       "build/guides/sponsored-transactions",
       "build/guides/orderless-transactions",
+      "build/guides/encrypted-pending-transactions",
       "build/guides/aptos-keyless",
       "build/guides/transaction-management",
     ],

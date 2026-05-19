@@ -251,6 +251,20 @@ nodes, [validators](#validator) and [fullnodes](#fullnodes).
 - More specifically, the Aptos network uses the PureEdDSA scheme over the
   Ed25519 curve, as defined in RFC 8032.
 
+### Encrypted Mempool
+
+- **Encrypted mempool** is the protocol feature (AIP-144) in which a transaction's **Move executable payload** is encrypted while the transaction is **pending** (for example in mempool and during dissemination), then decrypted by validators for execution right after the block is confirmed.
+- Also known as **encrypted pending transactions** in consumer-facing material.
+- The submitting client uses the fullnode’s current **ledger `encryption_key`** (per-epoch batch threshold encryption on BLS12-381). Gas limits, signatures, sender metadata, and sometimes a **claimed entry function** may still be visible depending on payload type—this is **payload confidentiality**, not full transaction anonymity.
+- Encrypted submissions pay a minimum gas-unit price of **200 Octas/gas-unit** (twice the base minimum) to cover validator decryption cost. **Keyless**, **federated keyless**, and **account abstraction** signers are not supported.
+- Example: an app builds `aptos.transaction.build.simple` with `options.encrypted` and `options.authenticationKey` on the TypeScript SDK so a transfer’s arguments are not sent as plaintext before commit.
+
+See [Encrypted Pending Transactions](/build/guides/encrypted-pending-transactions) for more information.
+
+### Encrypted Pending Transactions
+
+- **Encrypted pending transactions** is the consumer-facing name for the protocol feature defined in AIP-144. See [Encrypted Mempool](#encrypted-mempool) for the full definition, and the [Encrypted Pending Transactions](/build/guides/encrypted-pending-transactions) guide for the product-level overview.
+
 ### Epoch
 
 - An **epoch** is the period of time between reconfigurations of the validator

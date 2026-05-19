@@ -103,6 +103,7 @@ export const sidebar = [
           "build/guides/sponsored-transactions",
           "build/guides/transaction-management",
           "build/guides/orderless-transactions",
+          "build/guides/encrypted-pending-transactions",
           "build/guides/multisig-managed-fungible-asset",
           "build/guides/key-rotation",
           group("guides.group.aptos-keyless", {
@@ -189,6 +190,7 @@ export const sidebar = [
                   "build/sdks/ts-sdk/building-transactions/bcs-format",
                   "build/sdks/ts-sdk/building-transactions/multi-agent-transactions",
                   "build/sdks/ts-sdk/building-transactions/orderless-transactions",
+                  "build/sdks/ts-sdk/building-transactions/encrypted-pending-transactions",
                   "build/sdks/ts-sdk/building-transactions/script-composer",
                   "build/sdks/ts-sdk/building-transactions/simulating-transactions",
                   "build/sdks/ts-sdk/building-transactions/sponsoring-transactions",

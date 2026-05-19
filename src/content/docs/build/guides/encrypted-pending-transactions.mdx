@@ -5,13 +5,13 @@ sidebar:
   label: "Encrypted Pending Transactions"
 ---
 
-Encrypted pending transactions let you submit a transaction whose **Move payload** (entry function, arguments, and related executable data) is **encrypted while the transaction is pending**—for example while it is held in mempool and propagated between nodes. Validators decrypt the payload only when preparing execution as part of consensus. This reduces what observers can learn from the public pending transaction stream compared to a fully plaintext payload.
+Encrypted pending transactions let you submit a transaction whose **Move payload** (entry function, arguments, and related executable data) is **encrypted while the transaction is pending**—for example while it is held in mempool and propagated between nodes. Validators decrypt the payload only when preparing execution after the block is confirmed. This reduces what observers can learn from the public pending transaction stream compared to a fully plaintext payload.
 
-This feature is **network and node dependent**: the fullnode you use must expose a ledger **`encryption_key`** when encrypted submission is enabled. On networks or nodes where the key is absent, the client cannot build encrypted transactions.
+This feature is currently live on **devnet**, with **testnet** support coming soon and **mainnet** to follow. The fullnode you use must expose a ledger **`encryption_key`** when encrypted submission is enabled. On networks or nodes where the key is absent, the client cannot build encrypted transactions.
 
 ## What clients can still observe
 
-Encryption protects the **payload bytes** in transit and at rest in the pending phase, but a transaction is still a signed request to the chain. Depending on configuration and payload type, clients may still see metadata such as sender, gas parameters, expiration, signatures, and—where the protocol requires it—**metadata derived from the payload** (for example a **claimed entry function** for certain multisig or sponsored flows). Treat “encrypted pending” as **payload confidentiality**, not anonymity of the whole transaction. For the precise security model, see **[AIP-144: Encrypted Mempool](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-144-encrypted-mempool.md)** and the underlying cryptography in [eprint 2025/2032](https://eprint.iacr.org/2025/2032). At the protocol level this feature is called **encrypted mempool** (AIP-144); the names are interchangeable.
+Encryption protects the **payload bytes** in transit and at rest in the pending phase, but a transaction is still a signed request to the chain. Depending on configuration and payload type, clients may still see metadata such as sender, gas parameters, expiration, signatures, and—where the protocol requires it—**metadata derived from the payload** (for example a **claimed entry function** for certain multisig or sponsored flows). Treat “encrypted pending” as **payload privacy**, not anonymity of the whole transaction. For the precise security model, see **[AIP-144: Encrypted Mempool](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-144-encrypted-mempool.md)** and the underlying cryptography in [eprint 2025/2032](https://eprint.iacr.org/2025/2032). At the protocol level this feature is called **encrypted mempool** (AIP-144); the names are interchangeable.
 
 ## Cost
 
@@ -19,7 +19,7 @@ Encrypted transactions pay a **minimum gas-unit price of 200 Octas/gas-unit**, t
 
 ## Signer restrictions
 
-**Keyless** and **federated keyless** accounts cannot sign encrypted transactions. Signature malleability in those schemes would break the binding between the signed authenticator and the encrypted payload; the rule is enforced both client-side (where supported) and server-side.
+**Keyless**, **federated keyless**, and **account abstraction** accounts cannot sign encrypted transactions. The rule is enforced both client-side (where supported) and server-side.
 
 ## Relationship to orderless transactions
 
@@ -27,11 +27,11 @@ You can combine encrypted payloads with **[orderless transactions](/build/guides
 
 ## Not the same as confidential assets
 
-**Encrypted pending transactions** protect the **transaction payload** on the way to execution. They are unrelated to **[confidential assets](/build/sdks/ts-sdk/confidential-asset)** balances, which use on-chain **encrypted amounts** and a separate “pending balance” notion for privacy-preserving fungible operations.
+**Encrypted pending transactions** protect the transaction payload for _pending transactions_ on the way to execution. They are unrelated to **[confidential assets](/build/sdks/ts-sdk/confidential-asset)** transactions, which allow for privacy of balances and amounts _even after transactions are confirmed._
 
 ## SDK support
 
-**[TypeScript SDK](/build/sdks/ts-sdk/building-transactions/encrypted-pending-transactions)** — build with `options.encrypted` and `options.authenticationKey`, simulate using a plaintext twin, submit encrypted builds.
+**[TypeScript SDK](/build/sdks/ts-sdk/building-transactions/encrypted-pending-transactions)** — build with `options.encrypted` (`senderAuthenticationKey` is optional; SDK auto-fetches), submit encrypted builds.
 
 ## Further reading
 

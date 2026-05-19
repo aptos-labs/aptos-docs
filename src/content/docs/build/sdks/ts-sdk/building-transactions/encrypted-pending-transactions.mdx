@@ -7,7 +7,7 @@ sidebar:
 
 import { Aside, Steps } from "@astrojs/starlight/components";
 
-Encrypted-mempool transactions wrap your Move payload in a ciphertext at build time, so it stays encrypted while pending and is decrypted by validators only at execution. The flow is the same as a plaintext transaction — **build → (optional) simulate on a plaintext twin → sign → submit → wait** — with a few extra `options` passed to `aptos.transaction.build.*`.
+Encrypted-mempool transactions wrap your Move payload in a ciphertext at build time, so it stays encrypted while pending and is decrypted by validators just before execution. The flow is the same as a plaintext transaction — **build → sign → submit → wait** — with a few extra `options` passed to `aptos.transaction.build.*`.
 
 <Aside type="note">
   **Encrypted mempool** is the protocol name ([AIP-144](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-144-encrypted-mempool.md)); some product material calls it **encrypted pending transactions** — same feature. See the [Encrypted Pending Transactions](/build/guides/encrypted-pending-transactions) guide for background on visibility.
@@ -15,7 +15,7 @@ Encrypted-mempool transactions wrap your Move payload in a ciphertext at build t
 
 ## Prerequisites
 
-When you set `encrypted: true`, you must also pass `authenticationKey` for the sender — either an `AccountPublicKey` (the SDK derives the auth key for you) or a raw 32-byte hex string. The network you submit to must support the feature; check the ledger info first:
+Encrypted mempool is currently live on **devnet**, with **testnet** support coming soon and **mainnet** to follow. The network you submit to must support the feature; check the ledger info first:
 
 ```typescript
 const ledgerInfo = await aptos.getLedgerInfo();
@@ -24,10 +24,12 @@ const supportsEncrypted = Boolean(ledgerInfo.encryption_key);
 
 If the node doesn't expose `encryption_key`, building with `encrypted: true` throws.
 
+The `senderAuthenticationKey` option is **optional** — the SDK fetches it from chain and caches it for ~1 hour per address. Pass it explicitly to bypass the lookup, which is useful immediately after a key rotation. It accepts an `AuthenticationKey` instance, an `AccountPublicKey` (the SDK derives the auth key automatically), or a raw 32-byte hex string. For accounts that have never rotated their key, the account address bytes are identical to the authentication key bytes, so you can pass the address hex directly.
+
 ## Build, sign, and submit
 
 <Steps>
-  1. Build with `encrypted: true` and `authenticationKey`.
+  1. Build with `encrypted: true`.
 
      ```typescript filename="encrypted-transfer.ts"
      const transaction = await aptos.transaction.build.simple({
@@ -38,7 +40,7 @@ If the node doesn't expose `encryption_key`, building with `encrypted: true` thr
        },
        options: {
          encrypted: true,
-         authenticationKey: sender.publicKey,
+         // senderAuthenticationKey is optional — SDK fetches from chain automatically
        },
      });
      ```
@@ -61,17 +63,17 @@ If the node doesn't expose `encryption_key`, building with `encrypted: true` thr
 
 ## Simulating an encrypted transaction
 
-`aptos.transaction.simulate.*` rejects encrypted payloads — simulation is not supported. Build a **plaintext twin** with the same `data`, simulate that, then build again with `encrypted: true` for submission:
+`aptos.transaction.simulate.*` rejects encrypted payloads — simulation is not supported directly. It is possible to simulate indirectly using a plaintext build, but this is **strongly discouraged**: simulation is unencrypted, and submitting a simulation closely followed by an encrypted transaction with the same payload allows observers to correlate the two and infer the encrypted transaction's contents.
+
+If you must simulate to estimate gas, build a **plaintext twin** with the same `data`, simulate that, then build again with `encrypted: true` for submission:
 
 1. `build.simple({ ..., options: { /* no encrypted */ } })` — same function, arguments, gas hints.
 2. `aptos.transaction.simulate.simple({ ... })` — tune `maxGasAmount` / `gasUnitPrice` from the result.
-3. `build.simple({ ..., options: { encrypted: true, authenticationKey, ...gas from step 2 } })` — submit this build.
-
-See [Simulating Transactions](/build/sdks/ts-sdk/building-transactions/simulating-transactions) for the general simulation flow.
+3. `build.simple({ ..., options: { encrypted: true, ...gas from step 2 } })` — submit this build.
 
 ## Multi-agent
 
-Pass `secondarySignerAuthenticationKeys` in the same order as `secondarySignerAddresses`. Each entry accepts `AccountPublicKey` or raw hex.
+`senderAuthenticationKey` and `secondarySignerAuthenticationKeys` are both optional — any omitted or `undefined` entry is fetched from chain. Pass them explicitly to skip the lookup (e.g. right after key rotation). Entries must be in the same order as `secondarySignerAddresses`.
 
 ```typescript filename="encrypted-multi-agent.ts"
 const transaction = await aptos.transaction.build.multiAgent({
@@ -83,15 +85,15 @@ const transaction = await aptos.transaction.build.multiAgent({
   },
   options: {
     encrypted: true,
-    authenticationKey: sender.publicKey,
-    secondarySignerAuthenticationKeys: [secondary.publicKey],
+    senderAuthenticationKey: sender.publicKey,           // optional
+    secondarySignerAuthenticationKeys: [secondary.publicKey], // optional; entries can be undefined
   },
 });
 ```
 
 ## Fee payer (sponsored)
 
-When `feePayerAddress` is non-zero, also pass `feePayerAuthenticationKey`.
+`feePayerAuthenticationKey` is optional when `feePayerAddress` is a non-zero sponsor — omit it and the SDK fetches it from chain automatically.
 
 ```typescript filename="encrypted-sponsored.ts"
 const transaction = await aptos.transaction.build.simple({
@@ -103,8 +105,8 @@ const transaction = await aptos.transaction.build.simple({
   },
   options: {
     encrypted: true,
-    authenticationKey: sender.publicKey,
-    feePayerAuthenticationKey: sponsor.publicKey,
+    senderAuthenticationKey: sender.publicKey,   // optional
+    feePayerAuthenticationKey: sponsor.publicKey, // optional
   },
 });
 ```
@@ -122,20 +124,19 @@ const transaction = await aptos.transaction.build.simple({
   },
   options: {
     encrypted: true,
-    authenticationKey: sender.publicKey,
     replayProtectionNonce: 12345n,
+    // senderAuthenticationKey is optional — SDK fetches from chain automatically
   },
 });
 ```
 
 ## `claimedEntryFunction` (optional)
 
-The SDK handles this automatically for **sponsored or multisig** builds — you typically never set it. The one reason to override is when you want to expose only the module name to pre-decryption observers (sponsor, multisig owner, transaction filters) and keep the function name hidden until decryption:
+You can set `claimedEntryFunction` to _intentionally expose_ the entry function that the transaction is targeting to pre-decryption observers — required e.g. for Gas Station. The SDK sets this automatically for **sponsored or multisig** builds — you typically never set it manually. The one reason to override is when you want to expose only the module name and keep the function name hidden until decryption:
 
 ```typescript
 options: {
   encrypted: true,
-  authenticationKey: sender.publicKey,
   feePayerAuthenticationKey: sponsor.publicKey,
   claimedEntryFunction: {
     module: "0x1::aptos_account",
@@ -148,7 +149,7 @@ When you do set `functionName`, it must match the real entry function exactly.
 
 ## Caveats
 
-- **Keyless signers are not supported.** Encrypted transactions cannot be signed by keyless or federated keyless accounts — the build/submit will throw before contacting the node.
+- **Keyless, federated keyless, and account abstraction signers are not supported.** Encrypted transactions cannot be signed by these account types — the build/submit will throw before contacting the node.
 - **Encrypted multisig is feature-gated** on some networks; submission may be rejected even when the SDK build succeeds. Watch your network's release notes.
 
 ## Further reading

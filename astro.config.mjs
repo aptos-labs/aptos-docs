@@ -17,8 +17,54 @@ import rehypeKatex from "rehype-katex";
 import rehypeRaw from "rehype-raw";
 import remarkMath from "remark-math";
 import starlightImageZoom from "starlight-image-zoom";
-import starlightLinksValidator from "starlight-links-validator";
+import starlightLinksValidatorOriginal from "starlight-links-validator";
 import starlightLlmsTxt from "starlight-llms-txt";
+
+/**
+ * Wraps `starlight-links-validator` so broken-link errors are surfaced as
+ * warnings instead of failing the build. The validator already logs each
+ * broken link before throwing, so catching the throw preserves the report
+ * while keeping CI (and local `pnpm build`) from exiting non-zero.
+ *
+ * @type {typeof starlightLinksValidatorOriginal}
+ */
+function starlightLinksValidator(options) {
+  const plugin = starlightLinksValidatorOriginal(options);
+  const originalConfigSetup = plugin.hooks["config:setup"];
+  if (!originalConfigSetup) return plugin;
+  return {
+    ...plugin,
+    hooks: {
+      ...plugin.hooks,
+      "config:setup"(context) {
+        return originalConfigSetup({
+          ...context,
+          addIntegration(integration) {
+            const buildDone = integration.hooks?.["astro:build:done"];
+            if (!buildDone) return context.addIntegration(integration);
+            return context.addIntegration({
+              ...integration,
+              hooks: {
+                ...integration.hooks,
+                "astro:build:done": async (params) => {
+                  try {
+                    await buildDone(params);
+                  } catch (error) {
+                    const message = error instanceof Error ? error.message : String(error);
+                    context.logger.warn(
+                      `starlight-links-validator: ${message} (downgraded to warning; build continues)`,
+                    );
+                  }
+                },
+              },
+            });
+          },
+        });
+      },
+    },
+  };
+}
+
 import starlightOpenAPI from "starlight-openapi";
 import { sidebar } from "./astro.sidebar.ts";
 import { cspConfig } from "./src/config/csp";

@@ -103,7 +103,22 @@ import { Aside } from '@astrojs/starlight/components';
    - `genesis.blob`
    - `waypoint.txt`
 
-7. 接下来,将刚刚下载的 `validator.yaml` 和 `fullnode.yaml` 模板文件复制到
+7. **仅验证器:** 将可信设置 blob 下载到本地持久存储上的某个路径.下面的示例使用 `/opt/aptos/genesis/`,
+   与 `genesis.blob` 和 `waypoint.txt` 放在一起.在步骤 9 中设置 `validator.yaml` 的
+   `consensus.digest_key_blob_path` 和 `consensus.public_parameters_blob_path` 时,请使用相同的路径.
+
+   ```shellscript filename="Terminal"
+   wget -O /opt/aptos/genesis/digest_key.bin \
+     https://github.com/aptos-labs/aptos-networks/raw/main/<network>/digest_key.bin
+   wget -O /opt/aptos/genesis/pp.bin \
+     https://github.com/aptos-labs/aptos-networks/raw/main/<network>/pp.bin
+   ```
+
+   将 `<network>` 替换为相应的网络(`testnet` 或 `mainnet`).有关验证步骤
+   (`aptos node validate-digest-key` / `validate-public-parameters`),请参阅
+   [更新可信设置 → 源代码部署](/zh/network/nodes/validator-node/modify-nodes/update-trusted-setup#源代码部署).
+
+8. 接下来,将刚刚下载的 `validator.yaml` 和 `fullnode.yaml` 模板文件复制到
    `~/$WORKSPACE/config/` 目录中.这可以通过运行以下命令完成:
 
    ```shellscript filename="Terminal"
@@ -114,7 +129,7 @@ import { Aside } from '@astrojs/starlight/components';
 
    这些将分别是您的验证器和 VFN 的主要配置文件.
 
-8. 现在,修改 `validator.yaml` 和 `fullnode.yaml` 模板文件以包含适用于您的验证器和 VFN 的信息和工作目录.
+9. 现在,修改 `validator.yaml` 和 `fullnode.yaml` 模板文件以包含适用于您的验证器和 VFN 的信息和工作目录.
 
    对于 `validator.yaml` 文件,您需要修改以下字段:
 
@@ -145,23 +160,24 @@ import { Aside } from '@astrojs/starlight/components';
        - "/dns/example.com/tcp/6181/noise-ik/..." # 设置验证器的 DNS 地址
      ```
 
-9. 总之,在您的工作目录(`~/$WORKSPACE`)中,您应该有以下文件列表:
+10. 总之,在您的工作目录(`~/$WORKSPACE`)中,您应该有以下文件列表:
 
-   - `config` 文件夹包含:
-     - `validator.yaml`:验证器配置文件.
-     - `fullnode.yaml`:VFN 配置文件.
-   - `keys` 文件夹包含:
-     - `public-keys.yaml`:两个节点的公钥.
-     - `private-keys.yaml`:两个节点的私钥.
-     - `validator-identity.yaml`:验证器的密钥和账户信息.
-     - `validator-full-node-identity.yaml`:VFN 的密钥和账户信息.
-   - `$username` 文件夹包含:
-     - `owner.yaml`:所有者,运营者和投票者映射关系.
-     - `operator.yaml`:验证器和 VFN 运营者信息.
-   - `waypoint.txt`:您连接的网络上创世交易的路标文件.
-   - `genesis.blob`:您连接的网络的创世区块(genesis blob).
+    - `config` 文件夹包含:
+      - `validator.yaml`:验证器配置文件.
+      - `fullnode.yaml`:VFN 配置文件.
+    - `keys` 文件夹包含:
+      - `public-keys.yaml`:两个节点的公钥.
+      - `private-keys.yaml`:两个节点的私钥.
+      - `validator-identity.yaml`:验证器的密钥和账户信息.
+      - `validator-full-node-identity.yaml`:VFN 的密钥和账户信息.
+    - `$username` 文件夹包含:
+      - `owner.yaml`:所有者,运营者和投票者映射关系.
+      - `operator.yaml`:验证器和 VFN 运营者信息.
+    - `waypoint.txt`:您连接的网络上创世交易的路标文件.
+    - `genesis.blob`:您连接的网络的创世区块(genesis blob).
+    - `digest_key.bin` 和 `pp.bin`(仅验证器):位于您在步骤 7 中选择的路径(可能在工作目录之外)的 DKG 可信设置 blob.
 
-10. 现在您已经设置好了配置文件,可以启动您的验证器和 VFN 了.要启动您的验证器,请在 `aptos-core` 目录根目录下运行以下命令:
+11. 现在您已经设置好了配置文件,可以启动您的验证器和 VFN 了.要启动您的验证器,请在 `aptos-core` 目录根目录下运行以下命令:
 
     ```shellscript filename="Terminal"
     cargo clean

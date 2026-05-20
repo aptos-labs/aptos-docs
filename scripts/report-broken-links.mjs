@@ -42,14 +42,14 @@ if (!failureMatch) {
 }
 
 // Extract from the `✗ Found ...` header through the rest of the validator block.
-// The block ends when Astro's logger moves on to another plugin/phase — easiest
-// heuristic is to slice up to either the wrapper's "downgraded to warning" line
-// or a blank-line-followed-by-non-indented-non-validator line.
+// The preferred terminator is the wrapper's "downgraded to warning" line; if it
+// is not present, fall back to taking a generous fixed-size chunk.
 const startIdx = log.search(failureHeader);
 let endIdx = log.indexOf("downgraded to warning", startIdx);
 if (endIdx === -1) {
-  // Fallback: take a generous chunk.
-  endIdx = Math.min(log.length, startIdx + 8000);
+  const remainingLog = log.slice(startIdx);
+  const boundaryMatch = remainingLog.match(/\n\s*\n(?=[^\s✗✓])/);
+  endIdx = boundaryMatch ? startIdx + boundaryMatch.index : log.length;
 } else {
   // Include the wrapper warning line itself.
   endIdx = log.indexOf("\n", endIdx);

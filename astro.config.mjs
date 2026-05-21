@@ -8,6 +8,7 @@ import sitemap from "@astrojs/sitemap";
 import starlight from "@astrojs/starlight";
 import starlightDocSearch from "@astrojs/starlight-docsearch";
 import vercel from "@astrojs/vercel";
+import { codecovVitePlugin } from "@codecov/vite-plugin";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig, envField, fontProviders } from "astro/config";
 import favicons from "astro-favicons";
@@ -334,7 +335,14 @@ export default defineConfig({
         staticHeaders: true,
       }),
   vite: {
-    plugins: [tailwindcss()],
+    plugins: [
+      tailwindcss(),
+      codecovVitePlugin({
+        enableBundleAnalysis: process.env.CODECOV_TOKEN !== undefined,
+        bundleName: "aptos-docs",
+        uploadToken: process.env.CODECOV_TOKEN,
+      }),
+    ],
     optimizeDeps: {
       exclude: ["@rollup/browser"],
     },

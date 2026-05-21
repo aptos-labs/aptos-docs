@@ -337,11 +337,16 @@ export default defineConfig({
   vite: {
     plugins: [
       tailwindcss(),
-      codecovVitePlugin({
+      ...codecovVitePlugin({
         enableBundleAnalysis: Boolean(process.env.CODECOV_TOKEN),
-        bundleName: "aptos-docs",
+        bundleName: "aptos-docs-client",
         uploadToken: process.env.CODECOV_TOKEN || undefined,
-      }),
+      }).map((p) => ({ ...p, apply: (config) => !config.build?.ssr })),
+      ...codecovVitePlugin({
+        enableBundleAnalysis: Boolean(process.env.CODECOV_TOKEN),
+        bundleName: "aptos-docs-server",
+        uploadToken: process.env.CODECOV_TOKEN || undefined,
+      }).map((p) => ({ ...p, apply: (config) => Boolean(config.build?.ssr) })),
     ],
     optimizeDeps: {
       exclude: ["@rollup/browser"],

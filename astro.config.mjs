@@ -86,6 +86,11 @@ const ALGOLIA_INDEX_NAME = ENV.ALGOLIA_INDEX_NAME;
 const hasAlgoliaConfig = ALGOLIA_APP_ID && ALGOLIA_SEARCH_API_KEY && ALGOLIA_INDEX_NAME;
 const enableApiReference = true;
 
+/** @type {(config: import("vite").UserConfig) => boolean} */
+const isClientViteBuild = (config) => !config.build?.ssr;
+/** @type {(config: import("vite").UserConfig) => boolean} */
+const isServerViteBuild = (config) => Boolean(config.build?.ssr);
+
 // https://astro.build/config
 export default defineConfig({
   build: {
@@ -341,12 +346,12 @@ export default defineConfig({
         enableBundleAnalysis: Boolean(process.env.CODECOV_TOKEN),
         bundleName: "aptos-docs-client",
         uploadToken: process.env.CODECOV_TOKEN || undefined,
-      }).map((p) => ({ ...p, apply: (config) => !config.build?.ssr })),
+      }).map((p) => ({ ...p, apply: isClientViteBuild })),
       ...codecovVitePlugin({
         enableBundleAnalysis: Boolean(process.env.CODECOV_TOKEN),
         bundleName: "aptos-docs-server",
         uploadToken: process.env.CODECOV_TOKEN || undefined,
-      }).map((p) => ({ ...p, apply: (config) => Boolean(config.build?.ssr) })),
+      }).map((p) => ({ ...p, apply: isServerViteBuild })),
     ],
     optimizeDeps: {
       exclude: ["@rollup/browser"],

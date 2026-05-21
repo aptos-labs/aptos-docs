@@ -7,7 +7,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -25,9 +24,16 @@ jobs:
       - uses: ./.github/actions/prepare-runner
       - run: cp .env.example .env
       - name: Build (captures log for link check)
+        if: ${{ secrets.CODECOV_TOKEN != '' }}
         shell: bash
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        run: |
+          set -o pipefail
+          pnpm build 2>&1 | tee build.log
+      - name: Build (captures log for link check)
+        if: ${{ secrets.CODECOV_TOKEN == '' }}
+        shell: bash
         run: |
           set -o pipefail
           pnpm build 2>&1 | tee build.log

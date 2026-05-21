@@ -338,9 +338,9 @@ export default defineConfig({
     plugins: [
       tailwindcss(),
       codecovVitePlugin({
-        enableBundleAnalysis: process.env.CODECOV_TOKEN !== undefined,
+        enableBundleAnalysis: Boolean(process.env.CODECOV_TOKEN),
         bundleName: "aptos-docs",
-        uploadToken: process.env.CODECOV_TOKEN,
+        uploadToken: process.env.CODECOV_TOKEN || undefined,
       }),
     ],
     optimizeDeps: {

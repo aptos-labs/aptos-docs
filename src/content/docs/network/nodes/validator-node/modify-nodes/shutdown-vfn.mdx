@@ -27,8 +27,9 @@ validators to accept PFN connections. To achieve this, you will need to perform 
 
 1. **Prerequisite**: Ensure you are running **aptos-node v1.45.x** or later.
 2. Configure the validator to accept inbound PFN connections.
-3. **Important**: Wait for confirmation from Aptos Labs before shutting down your VFN. Announcements will be made across release groups.
-4. Shut down your VFN.
+3. Verify the PFN port is accessible from the public internet.
+4. **Important**: Wait for confirmation from Aptos Labs before shutting down your VFN. Announcements will be made across release groups.
+5. Shut down your VFN.
 
 Follow the instructions in each step carefully, and reach out to the Aptos Labs team if you have any questions or need
 assistance.
@@ -160,7 +161,47 @@ base:
 
 When this configuration is used, the node will no longer listen for or accept connections from PFNs.
 
-## Step 2: Shut down your VFN
+## Step 2: Verify the PFN port is accessible
+
+After opening the port in your firewall and (re)starting your validator, confirm that the port is reachable
+from the public internet.
+
+<Aside type="tip">
+  **Docker deployments**<br />
+  If your validator runs in Docker, also publish the port in `docker-compose.yaml` (e.g., `"6182:6182"` under
+  `ports:`), then restart. Opening the port in the OS firewall alone is not sufficient.
+</Aside>
+
+From a machine **outside your data center or cloud VPC**, run:
+
+```bash
+nc -zv <Validator-IP-or-DNS> <PFN-Port>
+```
+
+Replace `<Validator-IP-or-DNS>` with your validator's public IP address or hostname, and `<PFN-Port>` with the
+port you configured (default `6182`). A successful connection outputs:
+
+```
+nc -zv validator.aptoslabs.com 6182
+Connection to validator.aptoslabs.com port 6182 [tcp/*] succeeded!
+```
+
+If the port is blocked, you will see a `Connection refused` or no output after a timeout instead.
+Double-check your firewall rules and try again.
+
+<Aside type="tip">
+  **Prefer telnet?**<br />
+  `telnet` is an equivalent alternative. Use the same host and port as above:
+
+  ```bash
+  telnet <Validator-IP-or-DNS> <PFN-Port>
+  ```
+
+  The terminal will hang open on success (press `Ctrl+]` then `quit` to exit). `Connection refused` or
+  `timed out` means the port is blocked.
+</Aside>
+
+## Step 3: Shut down your VFN
 
 <Aside type="danger">
   **Do not proceed until confirmed by Aptos Labs**<br />

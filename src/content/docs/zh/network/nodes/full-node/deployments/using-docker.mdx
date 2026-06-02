@@ -60,13 +60,18 @@ api:
 
 ```shellscript filename="Terminal"
 docker run --pull=always \
-  --rm -p 8080:8080 \
-  -p 9101:9101 -p 6180:6180 \
+  --rm -p 127.0.0.1:8080:8080 \
+  -p 127.0.0.1:9101:9101 -p 6182:6182 \
   -v $(pwd):/opt/aptos/etc -v $(pwd)/data:/opt/aptos/data \
   --workdir /opt/aptos/etc \
   --name=aptos-fullnode aptoslabs/validator:mainnet aptos-node \
   -f /opt/aptos/etc/fullnode.yaml
 ```
+
+<Aside type="caution">
+  **已发布端口与主机防火墙**<br />
+  Docker 可能会为已发布端口安装自己的网络规则.如果您不希望某个服务能从主机外部访问,就不要将它公开发布.在上面的示例中,REST API(`8080`)和检查服务(`9101`)绑定到 `127.0.0.1`,因此它们只在主机本地可访问,而只有 PFN 公共网络端口(`6182`)对外暴露.启动容器后,请从主机或 VPC 外部的机器验证这些应关闭的端口确实无法访问.
+</Aside>
 
 <Aside type="caution">
   **需要 sudo 访问**<br />

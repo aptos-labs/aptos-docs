@@ -68,13 +68,21 @@ api:
 
 ```shellscript filename="Terminal"
 docker run --pull=always \
-  --rm -p 8080:8080 \
-  -p 9101:9101 -p 6180:6180 \
+  --rm -p 127.0.0.1:8080:8080 \
+  -p 127.0.0.1:9101:9101 -p 6182:6182 \
   -v $(pwd):/opt/aptos/etc -v $(pwd)/data:/opt/aptos/data \
   --workdir /opt/aptos/etc \
   --name=aptos-fullnode aptoslabs/validator:mainnet aptos-node \
   -f /opt/aptos/etc/fullnode.yaml
 ```
+
+<Aside type="caution">
+  **Published ports and host firewalls**<br />
+  Docker can install its own networking rules for published ports. If you do not want a service reachable from outside
+  the host, do not publish it publicly. In the example above, the REST API (`8080`) and inspection service (`9101`) are
+  bound to `127.0.0.1` so they stay host-local, while only the PFN public network port (`6182`) is exposed. After
+  starting the container, verify from a machine outside your host or VPC that the closed ports are not reachable.
+</Aside>
 
 <Aside type="caution">
   **Sudo access**<br />

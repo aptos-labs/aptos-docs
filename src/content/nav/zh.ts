@@ -50,8 +50,6 @@ export default navDictionary({
   "build.group.indexer.indexer-sdk.documentation": "文档", // Documentation
   "build.group.indexer.indexer-sdk.quickstart": "快速开始", // Quickstart
   "build.group.indexer.indexer-sdk.advanced-tutorials": "高级教程", // Advanced Tutorials
-  "build.group.indexer.nft-aggregator": "NFT 聚合器", // NFT Aggregator
-  "build.group.indexer.nft-aggregator.marketplaces": "市场", // Marketplaces
   "build.group.indexer.txn-stream": "交易流", // Transaction Stream
   "build.group.indexer.legacy": "旧版索引器", // Legacy Indexer
   "build.group.cli": "命令行工具", // CLI

@@ -50,7 +50,7 @@ WebMCP specifics:
 
 ### Prerequisites
 
-- **Node.js:** Version 22.x (use [nvm](https://github.com/nvm-sh/nvm))
+- **Node.js:** Version 22.23.0 (use [nvm](https://github.com/nvm-sh/nvm))
 - **pnpm:** Version 10.2.0 or higher (`npm install -g pnpm`)
 
 ### Quick Start
@@ -255,7 +255,7 @@ This is a single-service Astro/Starlight documentation site. No databases, Docke
 - The VM snapshot provides Node 24+ (via nvm) and pnpm 10.30.3. The update script runs `pnpm install` automatically, so Biome, TypeScript, and Vitest are ready without manual setup.
 - Ensure `.env` exists (copy from `.env.example` if missing). Default values are sufficient for local dev; optional services (Firebase, Algolia, OG images) degrade gracefully when their env vars are empty.
 - pnpm may warn about ignored build scripts for native packages (`@swc/core`, `esbuild`, `sharp`, etc.) — these warnings are safe to ignore as the packages ship pre-built binaries.
-- The repo's `.nvmrc` says `v22` and `engines` says `>=22`, but Node 24 is fully compatible and is what this environment uses.
+- The repo's `.nvmrc` pins `v22.23.0` and `engines` says `>=22`, but Node 24 is fully compatible and is what this environment uses.
 
 ### Running the dev server
 

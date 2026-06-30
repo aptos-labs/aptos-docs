@@ -1,0 +1,158 @@
+---
+title: "加密内存池"
+description: "使用 Aptos TypeScript SDK 构建、签名并提交加密内存池交易."
+sidebar:
+  label: "加密内存池"
+---
+
+import { Aside, Steps } from "@astrojs/starlight/components";
+
+加密内存池交易会在构建时将 Move 负载包装为密文,使其在待处理阶段保持加密,由验证者在执行前解密.整体流程与明文交易一致——**构建 → 签名 → 提交 → 等待**——只是需要向 `aptos.transaction.build.*` 传入若干额外 `options`.
+
+<Aside type="note">
+  **加密内存池** 是该功能的协议名称([AIP-144](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-144-encrypted-mempool.md));部分产品文档将其称为 **加密待处理交易**——两者指代同一特性.关于可见性的背景信息,请参见 [加密待处理交易](/zh/build/guides/encrypted-pending-transactions) 指南.
+</Aside>
+
+## 前置条件
+
+加密内存池目前已在 **开发网(devnet)** 上线,**测试网(testnet)** 支持即将推出,**主网(mainnet)** 随后跟进.提交所用网络必须支持该特性;请先检查账本信息:
+
+```typescript
+const ledgerInfo = await aptos.getLedgerInfo();
+const supportsEncrypted = Boolean(ledgerInfo.encryption_key);
+```
+
+若节点未暴露 `encryption_key`,以 `encrypted: true` 构建会抛出错误.
+
+`senderAuthenticationKey` 选项为 **可选项**——SDK 会自动从链上获取并按地址缓存约 1 小时.若需跳过该查询(例如刚完成密钥轮换后),可显式传入.接受 `AuthenticationKey` 实例、`AccountPublicKey`(SDK 自动派生认证密钥),或原始 32 字节十六进制字符串.对于从未轮换密钥的账户,账户地址字节与认证密钥字节完全相同,因此可直接传入地址的十六进制字符串.
+
+## 构建、签名与提交
+
+<Steps>
+  1. 使用 `encrypted: true` 构建.
+
+     ```typescript filename="encrypted-transfer.ts"
+     const transaction = await aptos.transaction.build.simple({
+       sender: sender.accountAddress,
+       data: {
+         function: "0x1::aptos_account::transfer",
+         functionArguments: [receiver.accountAddress, amount],
+       },
+       options: {
+         encrypted: true,
+         // senderAuthenticationKey 为可选项——SDK 自动从链上获取
+       },
+     });
+     ```
+
+  2. 与平常一样签名并提交.
+
+     ```typescript filename="encrypted-transfer.ts"
+     const pending = await aptos.signAndSubmitTransaction({
+       signer: sender,
+       transaction,
+     });
+
+     await aptos.waitForTransaction({ transactionHash: pending.hash });
+     ```
+</Steps>
+
+<Aside type="note">
+  加密交易的最低 gas 单价为 **每 gas 单位 200 Octas**(为网络基础最低值的两倍).SDK 在构建时强制该下限:低于该值的价格会被自动调升;若调用方显式设置了更低的值,SDK 会发出警告.
+</Aside>
+
+## 模拟加密交易
+
+`aptos.transaction.simulate.*` 会拒绝加密负载——加密交易不支持直接模拟.虽然可以通过明文构建间接模拟,但这是 **强烈不推荐** 的做法:模拟是未加密的,在提交模拟后紧接着提交包含相同负载的加密交易,会使观察者能够将两者关联,从而推断出加密交易的内容.
+
+若必须通过模拟来估算 gas,请用相同的 `data` 构建一个 **明文副本** 进行模拟,然后再用 `encrypted: true` 重新构建用于提交:
+
+1. `build.simple({ ..., options: { /* 不要 encrypted */ } })` —— 相同的函数、参数和 gas 提示.
+2. `aptos.transaction.simulate.simple({ ... })` —— 根据结果调整 `maxGasAmount` / `gasUnitPrice`.
+3. `build.simple({ ..., options: { encrypted: true, ...来自第 2 步的 gas } })` —— 提交该构建.
+
+## 多代理
+
+`senderAuthenticationKey` 和 `secondarySignerAuthenticationKeys` 均为可选项——任何缺省或 `undefined` 的项都会自动从链上获取.若需跳过查询(例如刚完成密钥轮换后),可显式传入.各项顺序必须与 `secondarySignerAddresses` 一致.
+
+```typescript filename="encrypted-multi-agent.ts"
+const transaction = await aptos.transaction.build.multiAgent({
+  sender: sender.accountAddress,
+  secondarySignerAddresses: [secondary.accountAddress],
+  data: {
+    function: "0x<module>::<contract>::<multi_agent_entry>",
+    functionArguments: [/* ... */],
+  },
+  options: {
+    encrypted: true,
+    senderAuthenticationKey: sender.publicKey,           // 可选
+    secondarySignerAuthenticationKeys: [secondary.publicKey], // 可选;项可为 undefined
+  },
+});
+```
+
+## 费用支付者(赞助交易)
+
+当 `feePayerAddress` 为非零赞助者时,`feePayerAuthenticationKey` 为可选项——省略时 SDK 会自动从链上获取.
+
+```typescript filename="encrypted-sponsored.ts"
+const transaction = await aptos.transaction.build.simple({
+  sender: sender.accountAddress,
+  withFeePayer: true,
+  data: {
+    function: "0x1::aptos_account::transfer",
+    functionArguments: [receiver.accountAddress, amount],
+  },
+  options: {
+    encrypted: true,
+    senderAuthenticationKey: sender.publicKey,    // 可选
+    feePayerAuthenticationKey: sponsor.publicKey,  // 可选
+  },
+});
+```
+
+## 无序交易
+
+将 `replayProtectionNonce` 与 `encrypted: true` 一同传入.交易使用无序重放保护,负载仍保持加密.参见 [无序交易](/zh/build/sdks/ts-sdk/building-transactions/orderless-transactions).
+
+```typescript filename="encrypted-orderless.ts"
+const transaction = await aptos.transaction.build.simple({
+  sender: sender.accountAddress,
+  data: {
+    function: "0x1::aptos_account::transfer",
+    functionArguments: [receiver.accountAddress, amount],
+  },
+  options: {
+    encrypted: true,
+    replayProtectionNonce: 12345n,
+    // senderAuthenticationKey 为可选项——SDK 自动从链上获取
+  },
+});
+```
+
+## `claimedEntryFunction`(可选)
+
+可以设置 `claimedEntryFunction` 以 _主动向_ 解密前的观察者暴露交易目标入口函数——例如使用 Gas Station 时需要此设置.对于 **赞助交易或多签** 构建,SDK 会自动处理该字段——你通常无需手动设置.唯一需要覆盖它的场景是:只暴露模块名,而将函数名继续保持加密直至解密:
+
+```typescript
+options: {
+  encrypted: true,
+  feePayerAuthenticationKey: sponsor.publicKey,
+  claimedEntryFunction: {
+    module: "0x1::aptos_account",
+    // 故意省略 functionName
+  },
+};
+```
+
+如果你确实设置了 `functionName`,它必须与真实的入口函数名完全一致.
+
+## 注意事项
+
+- **不支持 Keyless、联邦 Keyless 和账户抽象签名者.** 加密交易不能由这些账户类型签署——构建/提交会在联系节点之前抛出错误.
+- **加密多签** 在部分网络上仍属于特性门控范畴;即便 SDK 构建成功,服务端也可能拒绝提交.请关注目标网络的发布说明.
+
+## 延伸阅读
+
+- **[加密待处理交易指南](/zh/build/guides/encrypted-pending-transactions)** —— 产品概览、可见性、AIP-144 规范及密码学论文.
+- **[Aptos 批量加密(密码学)](https://github.com/aptos-labs/aptos-core/tree/main/crates/aptos-batch-encryption)** —— `aptos-core` 中的实现细节(可选阅读).

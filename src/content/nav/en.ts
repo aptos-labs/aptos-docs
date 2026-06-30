@@ -47,8 +47,6 @@ const labels = {
   "build.group.indexer.indexer-sdk.documentation": "Documentation",
   "build.group.indexer.indexer-sdk.quickstart": "Quickstart",
   "build.group.indexer.indexer-sdk.advanced-tutorials": "Advanced Tutorials",
-  "build.group.indexer.nft-aggregator": "NFT Aggregator",
-  "build.group.indexer.nft-aggregator.marketplaces": "Marketplaces",
   "build.group.indexer.txn-stream": "Transaction Stream",
   "build.group.indexer.legacy": "Legacy",
   "build.group.cli": "CLI",
@@ -80,6 +78,10 @@ const labels = {
   "guides.group.aptos-keyless": "Aptos Keyless",
   "guides.group.aptos-keyless.federated-keyless": "Federated Keyless",
   "guides.group.integration": "Integration",
+  "guides.group.ethereum-to-aptos": "Ethereum to Aptos",
+  "guides.group.ethereum-to-aptos.theory": "Theory",
+  "guides.group.ethereum-to-aptos.billboard": "Billboard",
+  "guides.group.ethereum-to-aptos.dutch-auction": "Dutch Auction",
 
   // Network Sub-Groups
   "network.group.validatorNode": "Validator Nodes",

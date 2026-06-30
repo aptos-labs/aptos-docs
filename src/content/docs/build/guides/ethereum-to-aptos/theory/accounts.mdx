@@ -1,0 +1,46 @@
+---
+title: "Accounts"
+description: "Compare Ethereum EOAs and contract accounts with Aptos accounts, resources, and stateless account semantics."
+sidebar:
+  label: "Accounts"
+---
+
+Ethereum separates **externally owned accounts** from **contract accounts**. Aptos uses one account model that can hold code, data, or both.
+
+## At a glance
+
+| Topic              | Ethereum                        | Aptos                                                              |
+| ------------------ | ------------------------------- | ------------------------------------------------------------------ |
+| Address size       | 160-bit                         | 256-bit                                                            |
+| Nonce model        | `nonce` on the account          | `sequence_number` on the account                                   |
+| Code location      | Contract accounts only          | Modules can be published under an account or object address        |
+| Data model         | Contract-owned storage          | Resources and objects in global storage                            |
+| First-use behavior | Accounts are created explicitly | Every address is valid by default ([AIP-115](/build/aips/aip-115)) |
+
+## What an Aptos account contains
+
+- **Modules**: published Move bytecode.
+- **Resources**: typed on-chain state such as balances, configuration, and custom structs.
+- **Authentication state**: the account can use Ed25519, secp256k1, passkeys, multisig, and more depending on the account configuration.
+
+APT and other assets are not stored as a single balance field on the account. Instead, balances are represented through asset-specific resources or stores.
+
+## Stateless accounts by default
+
+One of the biggest migration surprises is [AIP-115](/build/aips/aip-115): every 32-byte address is a valid Aptos account even before any on-chain resource is created for it.
+
+That means:
+
+- You can transfer to a fresh address without pre-creating the account.
+- `GET /accounts/{address}` does not behave like an EVM "account not found" check.
+- The first transaction may create on-chain account state as needed, but the address itself is already usable.
+
+## Practical migration takeaway
+
+On Ethereum, you often think in terms of "which contract owns this state?" On Aptos, start by asking:
+
+1. Should this state live under a user account?
+2. Should it live in a dedicated [Object](/build/smart-contracts/objects)?
+3. Does it need a module published under an account, or a code object for transferability?
+
+Those choices matter more than the old EOA vs contract distinction.

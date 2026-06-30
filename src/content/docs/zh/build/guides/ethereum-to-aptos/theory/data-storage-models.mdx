@@ -1,0 +1,47 @@
+---
+title: "Data Storage Models"
+description: "对比 EVM 合约存储与 Aptos 全局存储、resource 和 object 模型。"
+sidebar:
+  label: "Data Storage Models"
+---
+
+Ethereum 和 Aptos 都使用可验证状态，但应用开发者理解存储的方式完全不同。
+
+## Ethereum 的存储
+
+Ethereum 以账户和合约存储 trie 为核心组织状态。对开发者而言，合约数据通常天然地“属于该合约本身”。
+
+![Ethereum storage model](~/assets/images/ethereum-to-aptos/ethereum_data_storage.png)
+
+典型的 Solidity 直觉是：
+
+- 部署一个合约
+- 把 mapping、array 等状态存在这个合约里
+- 把合约同时视为代码容器和主要状态容器
+
+## Aptos 的存储
+
+Move 程序读写的是全局存储。从概念上看：
+
+```text
+resources: (address, ResourceType) -> value
+modules:   (address, ModuleName)   -> bytecode
+```
+
+这会直接改变你的建模方式：
+
+- 状态是强类型且全局可寻址的
+- 只要权限允许，同一个模块可以读写多个地址下的资源
+- 可复用的共享状态容器通常用 [Objects](/zh/build/smart-contracts/objects) 搭建
+
+![Aptos global storage model](~/assets/images/ethereum-to-aptos/aptos_global_storage.png)
+
+## 迁移结论
+
+如果你在迁移一个 Solidity `mapping(address => T)`，不要先机械地复刻 mapping。应该先判断：
+
+- 是否应该让每个用户把自己的 `T` 存在自己的账户下
+- 是否应该由一个共享 object 持有状态
+- 是否已经有框架标准替你提供了所需的存储模式
+
+对大多数现代 Aptos 应用来说，Object 是更合适的共享容器抽象。

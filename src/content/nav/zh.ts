@@ -50,8 +50,6 @@ export default navDictionary({
   "build.group.indexer.indexer-sdk.documentation": "文档", // Documentation
   "build.group.indexer.indexer-sdk.quickstart": "快速开始", // Quickstart
   "build.group.indexer.indexer-sdk.advanced-tutorials": "高级教程", // Advanced Tutorials
-  "build.group.indexer.nft-aggregator": "NFT 聚合器", // NFT Aggregator
-  "build.group.indexer.nft-aggregator.marketplaces": "市场", // Marketplaces
   "build.group.indexer.txn-stream": "交易流", // Transaction Stream
   "build.group.indexer.legacy": "旧版索引器", // Legacy Indexer
   "build.group.cli": "命令行工具", // CLI
@@ -83,6 +81,10 @@ export default navDictionary({
   "guides.group.aptos-keyless": "Aptos 无密钥", // Aptos Keyless
   "guides.group.aptos-keyless.federated-keyless": "联邦无密钥", // Federated Keyless
   "guides.group.integration": "集成", // Integration
+  "guides.group.ethereum-to-aptos": "Ethereum to Aptos", // Ethereum to Aptos
+  "guides.group.ethereum-to-aptos.theory": "基础概念", // Theory
+  "guides.group.ethereum-to-aptos.billboard": "Billboard", // Billboard
+  "guides.group.ethereum-to-aptos.dutch-auction": "Dutch Auction", // Dutch Auction
 
   // Network Sub-Groups
   "network.group.validatorNode": "验证者节点", // Validator Nodes

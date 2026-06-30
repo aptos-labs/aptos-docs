@@ -18,8 +18,26 @@ jobs:
     env:
       CI_RUN: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/prepare-runner
       - run: cp .env.example .env
-      - run: pnpm build
+      - name: Build (captures log for link check)
+        if: ${{ secrets.CODECOV_TOKEN != '' }}
+        shell: bash
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        run: |
+          set -o pipefail
+          pnpm build 2>&1 | tee build.log
+      - name: Build (captures log for link check)
+        if: ${{ secrets.CODECOV_TOKEN == '' }}
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm build 2>&1 | tee build.log
+      - name: Report broken links (warn-only)
+        if: always()
+        run: node scripts/report-broken-links.mjs build.log
       - run: pnpm test

@@ -1,0 +1,47 @@
+---
+title: "Data Storage Models"
+description: "Compare EVM contract storage with Aptos global storage, resources, and objects."
+sidebar:
+  label: "Data Storage Models"
+---
+
+Ethereum and Aptos both use authenticated state, but the way application developers think about storage is different.
+
+## Ethereum storage
+
+Ethereum organizes state around accounts and contract storage tries. Contract data usually feels local to the contract that owns it.
+
+![Ethereum storage model](~/assets/images/ethereum-to-aptos/ethereum_data_storage.png)
+
+The usual Solidity instinct is:
+
+- deploy a contract
+- store mappings and arrays inside that contract
+- treat the contract as both the code container and the primary state container
+
+## Aptos storage
+
+Move programs read from and write to global storage. Conceptually:
+
+```text
+resources: (address, ResourceType) -> value
+modules:   (address, ModuleName)   -> bytecode
+```
+
+That changes the mental model:
+
+- state is typed and globally addressable
+- the same module can read or mutate resources across many addresses if it has permission
+- reusable state containers are often built with [Objects](/build/smart-contracts/objects)
+
+![Aptos global storage model](~/assets/images/ethereum-to-aptos/aptos_global_storage.png)
+
+## Migration takeaway
+
+If you are porting a Solidity `mapping(address => T)`, do not start by reproducing the mapping mechanically. First decide whether:
+
+- each user should store their own `T` under their account
+- a shared object should own the state
+- a framework standard already provides the storage pattern you need
+
+For most modern Aptos applications, Objects are the preferred shared container abstraction.

@@ -1,0 +1,46 @@
+---
+title: "Accounts"
+description: "对比 Ethereum 的 EOA / contract account 与 Aptos 的账户、resource 和默认有效账户模型。"
+sidebar:
+  label: "Accounts"
+---
+
+Ethereum 把 **externally owned account** 和 **contract account** 分开建模。Aptos 则使用一种统一账户模型，既可以承载代码，也可以承载数据，或者同时承载二者。
+
+## 快速对比
+
+| 主题   | Ethereum                  | Aptos                                        |
+| ---- | ------------------------- | -------------------------------------------- |
+| 地址长度 | 160-bit                   | 256-bit                                      |
+| 计数模型 | 账户上的 `nonce`              | 账户上的 `sequence_number`                       |
+| 代码位置 | 只有 contract account 能持有代码 | 模块可以发布到账户地址或 object 地址下                      |
+| 数据模型 | 合约拥有的 storage             | 全局存储中的 resource 和 object                     |
+| 首次使用 | 账户需显式创建                   | 每个地址默认都有效（[AIP-115](/zh/build/aips/aip-115)） |
+
+## Aptos 账户里有什么
+
+- **Modules**：已发布的 Move 字节码。
+- **Resources**：类型化的链上状态，例如余额、配置、自定义 struct。
+- **认证状态**：账户可根据配置使用 Ed25519、secp256k1、passkey、多签等认证方式。
+
+APT 和其他资产不会像以太坊那样挂在账户的单一余额字段下，而是通过特定资产的 resource 或 store 来表达。
+
+## 默认有效的账户
+
+[AIP-115](/zh/build/aips/aip-115) 是迁移时最容易让人意外的点之一：任何 32 字节地址在 Aptos 上默认就是一个有效账户，即使链上还没为它创建任何资源。
+
+这意味着：
+
+- 你可以直接转账到一个全新的地址，无需预先建户。
+- `GET /accounts/{address}` 不能再按 EVM 的“账户不存在”思路处理。
+- 首笔交易可能会按需创建链上账户状态，但地址本身早已可用。
+
+## 迁移时真正该问的问题
+
+在 Ethereum 上，你常常先想“这份状态属于哪个合约”。在 Aptos 上，更应该先判断：
+
+1. 这份状态应不应该放在用户账户下？
+2. 它是否更适合放进独立的 [Object](/zh/build/smart-contracts/objects)？
+3. 它需要发布在账户地址下，还是应该作为可转移代码对象存在？
+
+这些设计选择，比旧世界里的 EOA / contract 区分更关键。

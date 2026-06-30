@@ -171,6 +171,20 @@ sidebar:
 - **Ed25519** 是我们支持的数字签名方案。
 - 更具体地说，Aptos 网络使用 Ed25519 曲线上的 PureEdDSA 方案，如 RFC 8032 中定义的那样。
 
+### 加密内存池
+
+- **加密内存池** 是 AIP-144 定义的协议特性:交易的 **Move 可执行负载** 在交易处于 **待处理** 状态(例如在内存池中以及在节点间传播时)时被加密，随后由验证者在区块确认后立即为执行而解密。
+- 在面向用户的材料中亦称 **加密待处理交易**。
+- 提交客户端使用全节点当前的 **账本 `encryption_key`**(基于 BLS12-381 的每纪元批量门限加密)。Gas 限制、签名、发送者元数据以及在某些情形下的 **声明的入口函数** 仍可能可见——这是 **负载机密性**，而非完整交易的匿名性。
+- 加密提交需支付 **每 gas 单位至少 200 Octas**(为基础最低值的两倍)的 gas 单价以补偿验证者解密成本。**Keyless**、**联邦 Keyless** 和 **账户抽象** 签名者不受支持。
+- 示例:应用在 TypeScript SDK 上使用 `options.encrypted` 调用 `aptos.transaction.build.simple`，使转账参数在提交前不会以明文形式传输。
+
+更多信息请参见 [加密待处理交易](/zh/build/guides/encrypted-pending-transactions)。
+
+### 加密待处理交易
+
+- **加密待处理交易** 是 AIP-144 协议特性的面向用户名称。完整定义请参见 [加密内存池](#加密内存池);产品层概览请参见 [加密待处理交易](/zh/build/guides/encrypted-pending-transactions) 指南。
+
 ### 纪元
 
 - **纪元** 是验证者集合重新配置和区块链其他管理操作之间的时间段。在 Aptos 主网上，目前是每 2 小时。
@@ -482,6 +496,17 @@ sidebar:
 ### 交易脚本
 
 - 参见 [Move 脚本](#move-脚本)
+
+### 可信设置
+
+- **可信设置**是 Aptos 验证者共识在参与分布式密钥生成(DKG)之前所消耗的一对二进制 blob
+  (`digest_key.bin` 和 `pp.bin`).
+- Aptos Labs 在 [`aptos-labs/aptos-networks`](https://github.com/aptos-labs/aptos-networks) 仓库中发布
+  这些 blob 并定期轮换它们.网络中的所有验证者必须加载相同的字节.
+- VFN 和 PFN 不需要这些文件.
+
+有关下载,CLI 验证和轮换的运维手册,请参阅
+[更新可信设置](/zh/network/nodes/validator-node/modify-nodes/update-trusted-setup).
 
 ## V
 

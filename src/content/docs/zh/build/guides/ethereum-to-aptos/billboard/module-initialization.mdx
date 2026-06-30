@@ -1,0 +1,47 @@
+---
+title: "Modules and Initialization"
+description: "对比 Solidity 的 contract / constructor 与 Move 的 module、Move.toml 和 init_module。"
+sidebar:
+  label: "Modules and Initialization"
+---
+
+在 Move 里，最接近 Solidity 合约这一代码单元的是 **module**。
+
+## Solidity contract
+
+```solidity
+pragma solidity ^0.8.20;
+
+contract Billboard {
+    constructor(address owner_) {
+        // initialization
+    }
+}
+```
+
+## Move module
+
+```move
+module billboard_address::billboard {
+    fun init_module(owner: &signer) {
+        // initialization
+    }
+}
+```
+
+## 关键差异
+
+- Solidity 用 `contract` 关键字声明合约；Move 用 `address::module_name` 声明模块。
+- Solidity 的 constructor 在部署时执行一次；Move 的初始化逻辑通常写在 `init_module`。
+- 包元数据和 named address 放在 `Move.toml`，而不是直接写在模块里。
+
+```toml
+[package]
+name = "billboard"
+version = "1.0.0"
+
+[addresses]
+billboard_address = "_"
+```
+
+生产部署时，也应考虑 [把代码作为 object 部署](/zh/build/cli/start-from-template) 以及 [package upgrade policy](/zh/build/smart-contracts/book/package-upgrades)。迁移时最关键的是：初始化依然需要显式编写，只是打包方式和地址模型不同了。

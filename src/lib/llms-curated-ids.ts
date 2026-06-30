@@ -31,7 +31,6 @@ export const LLMS_INDEX_SECTIONS: LlmsSection[] = [
     title: "Smart Contracts",
     ids: [
       "build/smart-contracts",
-      "build/smart-contracts/book",
       "build/smart-contracts/objects",
       "build/smart-contracts/randomness",
     ],
@@ -56,6 +55,7 @@ export const LLMS_INDEX_SECTIONS: LlmsSection[] = [
     ids: [
       "build/guides/sponsored-transactions",
       "build/guides/orderless-transactions",
+      "build/guides/encrypted-pending-transactions",
       "build/guides/aptos-keyless",
       "build/guides/transaction-management",
     ],

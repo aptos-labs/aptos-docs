@@ -1,0 +1,34 @@
+---
+title: "Initialization"
+description: "Compare Solidity constructor-based collection setup with Move init_module and object-backed collection creation."
+sidebar:
+  label: "Initialization"
+---
+
+## Solidity
+
+```solidity
+constructor()
+    ERC721(DUTCH_AUCTION_COLLECTION_NAME, DUTCH_AUCTION_COLLECTION_SYMBOL)
+{}
+```
+
+## Move
+
+```move
+fun init_module(creator: &signer) {
+    let description = string::utf8(DUTCH_AUCTION_COLLECTION_DESCRIPTION);
+    let name = string::utf8(DUTCH_AUCTION_COLLECTION_NAME);
+    let uri = string::utf8(DUTCH_AUCTION_COLLECTION_URI);
+
+    collection::create_unlimited_collection(
+        creator,
+        description,
+        name,
+        option::none(),
+        uri,
+    );
+}
+```
+
+The `init_module` function creates the collection object that later token objects will belong to. Compared with Solidity, initialization is still a one-time setup step, but the output is an on-chain object structure rather than an inherited ERC-721 contract state machine.

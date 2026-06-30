@@ -1,0 +1,51 @@
+---
+title: "Basic Types"
+description: "回顾 Solidity 与 Move 之间最重要的基础类型差异。"
+sidebar:
+  label: "Basic Types"
+---
+
+大多数基础类型看起来都很熟悉，但迁移代码时有几个细节会立刻影响实现。
+
+## 整数
+
+- Solidity 同时支持有符号和无符号整数，比如 `int256`、`uint256`。
+- Move 同时支持无符号与有符号整数，例如 `u8`、`u16`、`u32`、`u64`、`u128`、`u256`，以及 `i8`、`i16`、`i32`、`i64`、`i128`、`i256`。
+
+```move
+let a: u8 = 255;
+let b: u64 = 1_000_000;
+let c: u128 = 340282366920938463463374607431768211455;
+let d: i64 = -42;
+```
+
+## 地址
+
+- Solidity 使用 `address`。
+- Move 同样使用 `address`，但地址字面量写法带 `@`。
+
+```move
+let framework: address = @0x1;
+let custom: address = @0x42;
+```
+
+## 字符串与向量
+
+- Solidity 的字符串本质上是 ABI 管理的动态字节数组。
+- Move 通常使用 `std::string` 中的 `String`，集合则常用 `vector<T>`。
+
+```move
+use std::string::String;
+
+let message: String = string::utf8(b"hello");
+let values: vector<u64> = vector[1, 2, 3];
+```
+
+## 迁移时的判断点
+
+就算一个 Solidity 示例看起来类型差不多，也请额外确认：
+
+- 整数位宽
+- 是否用到了有符号整数
+- 地址字面量语法
+- 某个值到底该是 `vector<T>`、`String`，还是自定义 resource struct

@@ -53,12 +53,57 @@ export const sidebar = [
           }),
         ],
       }),
+      group("guides.group.ethereum-to-aptos", {
+        collapsed: true,
+        items: [
+          "build/guides/ethereum-to-aptos",
+          group("guides.group.ethereum-to-aptos.theory", {
+            collapsed: true,
+            items: [
+              "build/guides/ethereum-to-aptos/theory/introduction",
+              "build/guides/ethereum-to-aptos/theory/accounts",
+              "build/guides/ethereum-to-aptos/theory/data-storage-models",
+              "build/guides/ethereum-to-aptos/theory/contract-vs-container",
+              "build/guides/ethereum-to-aptos/theory/ethers-ts-sdk",
+              "build/guides/ethereum-to-aptos/theory/cheat-sheet",
+            ],
+          }),
+          group("guides.group.ethereum-to-aptos.billboard", {
+            collapsed: true,
+            items: [
+              "build/guides/ethereum-to-aptos/billboard/demo",
+              "build/guides/ethereum-to-aptos/billboard/module-initialization",
+              "build/guides/ethereum-to-aptos/billboard/functions",
+              "build/guides/ethereum-to-aptos/billboard/basic-types",
+              "build/guides/ethereum-to-aptos/billboard/structs-and-resources",
+              "build/guides/ethereum-to-aptos/billboard/events",
+              "build/guides/ethereum-to-aptos/billboard/errors",
+              "build/guides/ethereum-to-aptos/billboard/testing",
+            ],
+          }),
+          group("guides.group.ethereum-to-aptos.dutch-auction", {
+            collapsed: true,
+            items: [
+              "build/guides/ethereum-to-aptos/dutch-auction/demo",
+              "build/guides/ethereum-to-aptos/dutch-auction/contract-definition",
+              "build/guides/ethereum-to-aptos/dutch-auction/constants",
+              "build/guides/ethereum-to-aptos/dutch-auction/storage",
+              "build/guides/ethereum-to-aptos/dutch-auction/events",
+              "build/guides/ethereum-to-aptos/dutch-auction/initialization",
+              "build/guides/ethereum-to-aptos/dutch-auction/start-auction",
+              "build/guides/ethereum-to-aptos/dutch-auction/bidding",
+              "build/guides/ethereum-to-aptos/dutch-auction/view-functions",
+            ],
+          }),
+        ],
+      }),
       group("guides.group.advanced", {
         collapsed: true,
         items: [
           "build/guides/sponsored-transactions",
           "build/guides/transaction-management",
           "build/guides/orderless-transactions",
+          "build/guides/encrypted-pending-transactions",
           "build/guides/multisig-managed-fungible-asset",
           "build/guides/key-rotation",
           group("guides.group.aptos-keyless", {
@@ -145,6 +190,7 @@ export const sidebar = [
                   "build/sdks/ts-sdk/building-transactions/bcs-format",
                   "build/sdks/ts-sdk/building-transactions/multi-agent-transactions",
                   "build/sdks/ts-sdk/building-transactions/orderless-transactions",
+                  "build/sdks/ts-sdk/building-transactions/encrypted-pending-transactions",
                   "build/sdks/ts-sdk/building-transactions/script-composer",
                   "build/sdks/ts-sdk/building-transactions/simulating-transactions",
                   "build/sdks/ts-sdk/building-transactions/sponsoring-transactions",
@@ -325,26 +371,6 @@ export const sidebar = [
               }),
             ],
           }),
-          group("build.group.indexer.nft-aggregator", {
-            collapsed: true,
-            items: [
-              "build/indexer/nft-aggregator",
-              "build/indexer/nft-aggregator/analytics-api",
-              "build/indexer/nft-aggregator/graphql-api",
-              "build/indexer/nft-aggregator/marketplaces",
-              "build/indexer/nft-aggregator/nft-aggregator-table",
-              group("build.group.indexer.nft-aggregator.marketplaces", {
-                collapsed: true,
-                items: [
-                  "build/indexer/nft-aggregator/marketplaces/bluemove",
-                  "build/indexer/nft-aggregator/marketplaces/rarible",
-                  "build/indexer/nft-aggregator/marketplaces/topaz",
-                  "build/indexer/nft-aggregator/marketplaces/tradeport",
-                  "build/indexer/nft-aggregator/marketplaces/wapal",
-                ],
-              }),
-            ],
-          }),
           group("build.group.indexer.txn-stream", {
             collapsed: true,
             items: [
@@ -434,41 +460,11 @@ export const sidebar = [
       "build/smart-contracts", // Overview page
       "build/smart-contracts/why-move",
 
-      // Move Book - Individual entries
-      group("smartContracts.group.moveBook", {
-        collapsed: true,
-        items: [
-          "build/smart-contracts/book/modules-and-scripts",
-          "build/smart-contracts/book/structs-and-resources",
-          "build/smart-contracts/book/integers",
-          "build/smart-contracts/book/bool",
-          "build/smart-contracts/book/address",
-          "build/smart-contracts/book/vector",
-          "build/smart-contracts/book/signer",
-          "build/smart-contracts/book/references",
-          "build/smart-contracts/book/tuples",
-          "build/smart-contracts/book/abilities",
-          "build/smart-contracts/book/equality",
-          "build/smart-contracts/book/comparison",
-          "build/smart-contracts/book/abort-and-assert",
-          "build/smart-contracts/book/conditionals",
-          "build/smart-contracts/book/loops",
-          "build/smart-contracts/book/functions",
-          "build/smart-contracts/book/enums",
-          "build/smart-contracts/book/struct-and-enum-visibility",
-          "build/smart-contracts/book/constants",
-          "build/smart-contracts/book/generics",
-          "build/smart-contracts/book/uses",
-          "build/smart-contracts/book/friends",
-          "build/smart-contracts/book/global-storage-structure",
-          "build/smart-contracts/book/global-storage-operators",
-          "build/smart-contracts/book/variables",
-          "build/smart-contracts/book/unit-testing",
-          "build/smart-contracts/book/coding-conventions",
-          "build/smart-contracts/book/move-tutorial",
-          "build/smart-contracts/book/standard-library",
-        ],
-      }),
+      {
+        label: "Move Book",
+        link: "https://aptos-labs.github.io/move-book/",
+        attrs: { target: "_blank", rel: "noopener" },
+      },
 
       // Development
       group("smartContracts.group.development", {
@@ -477,8 +473,6 @@ export const sidebar = [
           "build/smart-contracts/create-package",
           "build/smart-contracts/compiling",
           "build/smart-contracts/deployment",
-          "build/smart-contracts/book/packages",
-          "build/smart-contracts/book/package-upgrades",
           "build/smart-contracts/debugging",
           "build/smart-contracts/scripts",
           "build/smart-contracts/scripts/compiling-scripts",
@@ -561,8 +555,16 @@ export const sidebar = [
             collapsed: true,
             items: [
               "build/smart-contracts/prover",
-              "build/smart-contracts/prover/prover-guide",
-              "build/smart-contracts/prover/spec-lang",
+              {
+                label: "Move Prover User Guide",
+                link: "https://aptos-labs.github.io/move-book/prover-guide.html",
+                attrs: { target: "_blank", rel: "noopener" },
+              },
+              {
+                label: "Move Specification Language",
+                link: "https://aptos-labs.github.io/move-book/spec-lang.html",
+                attrs: { target: "_blank", rel: "noopener" },
+              },
               "build/smart-contracts/prover/supporting-resources",
             ],
           }),
@@ -573,17 +575,34 @@ export const sidebar = [
       group("smartContracts.group.reference", {
         collapsed: true,
         items: [
-          { label: "Framework Reference", link: "move-reference" },
-          { label: "Aptos Framework", link: "move-reference/mainnet/aptos-framework" },
-          { label: "Aptos Standard Library", link: "move-reference/mainnet/aptos-stdlib" },
-          { label: "Move Standard Library", link: "move-reference/mainnet/move-stdlib" },
-          { label: "Aptos Token Objects", link: "move-reference/mainnet/aptos-token-objects" },
-          { label: "Aptos Token (Legacy)", link: "move-reference/mainnet/aptos-token" },
+          {
+            label: "Framework Reference",
+            link: "https://aptos-labs.github.io/framework-book/",
+            attrs: { target: "_blank", rel: "noopener" },
+          },
+          {
+            label: "Aptos Framework",
+            link: "https://aptos-labs.github.io/framework-book/aptos-framework/overview.html",
+            attrs: { target: "_blank", rel: "noopener" },
+          },
+          {
+            label: "Aptos Standard Library",
+            link: "https://aptos-labs.github.io/framework-book/aptos-stdlib/overview.html",
+            attrs: { target: "_blank", rel: "noopener" },
+          },
+          {
+            label: "Move Standard Library",
+            link: "https://aptos-labs.github.io/framework-book/move-stdlib/overview.html",
+            attrs: { target: "_blank", rel: "noopener" },
+          },
+          {
+            label: "Aptos Token Objects",
+            link: "https://aptos-labs.github.io/framework-book/aptos-token-objects/overview.html",
+            attrs: { target: "_blank", rel: "noopener" },
+          },
           "build/smart-contracts/error-codes",
         ],
       }),
-
-      "build/smart-contracts/book/move-2", // Release Notes
     ],
   }),
 
@@ -635,6 +654,7 @@ export const sidebar = [
             items: [
               "network/nodes/validator-node/modify-nodes",
               "network/nodes/validator-node/modify-nodes/update-validator-node",
+              "network/nodes/validator-node/modify-nodes/update-trusted-setup",
               "network/nodes/validator-node/modify-nodes/shutting-down-nodes",
               "network/nodes/validator-node/modify-nodes/rotate-consensus-key",
               "network/nodes/validator-node/modify-nodes/shutdown-vfn",

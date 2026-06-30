@@ -1,0 +1,70 @@
+---
+title: "Ethers.js vs the Aptos TS SDK"
+description: "Map familiar Ethers-style flows to the current Aptos TypeScript SDK, Wallet Adapter, and Forklift workflow."
+sidebar:
+  label: "Ethers.js vs TS SDK"
+---
+
+Ethereum frontend developers usually start with Ethers.js, a provider, a signer, and a contract instance. On Aptos, the equivalent stack is:
+
+- [`@aptos-labs/ts-sdk`](/build/sdks/ts-sdk) for reading data, building transactions, and submitting them
+- [Wallet Adapter](/build/sdks/wallet-adapter) for browser wallet integration using the current AIP-62 standard
+- [Forklift](/build/sdks/forklift) for a Hardhat/Foundry-like contract development workflow
+
+## Ethers-style mental model
+
+```typescript
+const provider = new ethers.JsonRpcProvider(rpcUrl);
+const wallet = new ethers.Wallet(privateKey, provider);
+
+const tx = await wallet.sendTransaction({
+  to: recipient,
+  value: ethers.parseEther("1"),
+});
+
+await tx.wait();
+```
+
+## Current Aptos SDK flow
+
+```typescript
+import {
+  Account,
+  Aptos,
+  AptosConfig,
+  Network,
+} from "@aptos-labs/ts-sdk";
+
+const aptos = new Aptos(new AptosConfig({ network: Network.TESTNET }));
+const alice = Account.generate();
+const bob = Account.generate();
+
+await aptos.fundAccount({
+  accountAddress: alice.accountAddress,
+  amount: 100_000_000,
+});
+
+const transaction = await aptos.transaction.build.simple({
+  sender: alice.accountAddress,
+  data: {
+    function: "0x1::aptos_account::transfer",
+    functionArguments: [bob.accountAddress, 1_000],
+  },
+});
+
+const pending = await aptos.signAndSubmitTransaction({
+  signer: alice,
+  transaction,
+});
+
+await aptos.waitForTransaction({ transactionHash: pending.hash });
+```
+
+## What to update in your instincts
+
+- Build the transaction first, then sign and submit it.
+- Always call `waitForTransaction()` after submission.
+- Use the [Wallet Adapter](/build/sdks/wallet-adapter) for browser wallets instead of old `window.aptos` style globals.
+- Use [Forklift](/build/sdks/forklift) when you want a contract-development workflow closer to Hardhat or Foundry.
+
+For more advanced flows, continue with [building transactions](/build/sdks/ts-sdk/building-transactions), [sponsored transactions](/build/guides/sponsored-transactions), and [wallet adapter dapp integration](/build/sdks/wallet-adapter/dapp).

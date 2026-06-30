@@ -1,0 +1,52 @@
+---
+title: "Bidding"
+description: "对比 Solidity 的 bid 流程，以及 Move 中基于 object 访问和 primary_fungible_store 的支付转移。"
+sidebar:
+  label: "Bidding"
+---
+
+Solidity 的竞拍流程通常是：读取拍卖 struct、计算当前价格、转移 NFT、再转移支付资产。
+
+## Solidity
+
+```solidity
+function bid(uint256 nftId_) external {
+    Auction memory auction_ = _auctions[nftId_];
+    uint256 price_ = _mustHavePrice(auction_);
+    transferFrom(address(this), msg.sender, nftId_);
+    auction_.buyToken.transferFrom(msg.sender, address(this), price_);
+}
+```
+
+## Move
+
+Move 的流程则直接围绕显式 auction object 展开：
+
+```move
+entry public fun bid(
+    customer: &signer,
+    auction: Object<Auction>
+) acquires Auction, TokenConfig {
+    let auction_address = object::object_address(&auction);
+    let auction = borrow_global_mut<Auction>(auction_address);
+
+    let current_price = must_have_price(auction);
+
+    primary_fungible_store::transfer(
+        customer,
+        auction.buy_token,
+        @dutch_auction_address,
+        current_price
+    );
+
+    let transfer_ref = &borrow_global_mut<TokenConfig>(auction_address).transfer_ref;
+    let linear_transfer_ref = object::generate_linear_transfer_ref(transfer_ref);
+    object::transfer_with_ref(linear_transfer_ref, signer::address_of(customer));
+}
+```
+
+这里最核心的迁移点有三个：
+
+- 竞拍目标是一个 object 地址，而不是 mapping slot
+- 支付走的是 [primary fungible store](https://aptos.dev/build/guides/exchanges#fungible-assets)
+- NFT 转移依赖 object capability，而不是 ERC 的 approval / transfer hook 体系

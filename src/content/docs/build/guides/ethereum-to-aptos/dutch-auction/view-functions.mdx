@@ -1,0 +1,36 @@
+---
+title: "View Functions"
+description: "Use view functions to resolve object addresses and inspect auction state without sending a transaction."
+sidebar:
+  label: "View Functions"
+---
+
+Solidity commonly exposes view methods that return auction state or derived metadata.
+
+## Solidity
+
+```solidity
+function getAuction(uint256 nftId_) external view returns (Auction memory) {
+    return _auctions[nftId_];
+}
+```
+
+## Move
+
+Move view functions are often used to recover object handles deterministically:
+
+```move
+#[view]
+public fun get_auction_object(token_name: String): Object<Auction> {
+    let auction_seed = get_auction_seed(token_name);
+    let auction_address = object::create_object_address(
+        &@dutch_auction_address,
+        auction_seed
+    );
+    object::address_to_object(auction_address)
+}
+```
+
+Because Objects have stable addresses derived from seeds, view functions often help clients resolve the right object first, then read its state through the SDK or APIs.
+
+You can call these view functions from the [TypeScript SDK](/build/sdks/ts-sdk/fetch-data-via-sdk) without submitting a transaction.

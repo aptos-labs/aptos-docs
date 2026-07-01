@@ -287,7 +287,7 @@ export default defineConfig({
     }),
     react({
       experimentalReactChildren: true,
-      include: ["**/GraphQLEditor.tsx", "**/chat-widget/**/*.tsx"],
+      include: ["**/GraphQLEditor.tsx"],
     }),
     favicons({
       name: "Aptos Docs",

@@ -7,7 +7,6 @@ declare global {
   interface Window {
     // View Transitions initialization flags
     __starlightLanguageSelectPageLoadInit?: boolean;
-    __askAptosChatButtonPageLoadListenerAdded?: boolean;
     __searchFallbackPageLoadListenerAdded?: boolean;
     __docSearchAltPageLoadListenerAdded?: boolean;
     __sidebarAutoScrollPageLoadInit?: boolean;

@@ -1,33 +1,21 @@
 ---
-// Handle Starlight sidebar integration
-import { Icon } from "astro-icon/components";
 import SidebarPersister from "@astrojs/starlight/components/SidebarPersister.astro";
 import SidebarSublist from "@astrojs/starlight/components/SidebarSublist.astro";
 import MobileMenuFooter from "@astrojs/starlight/components/MobileMenuFooter.astro";
 import { stripLeadingAndTrailingSlashes } from "node_modules/@astrojs/starlight/utils/path";
-import { sidebarGroupIcons } from "../../astro.sidebar.ts";
-import labels from "../../src/content/nav/en";
-import TabbedContent from "~/components/tabs/TabbedContent.astro";
-import TabListItem from "~/components/tabs/TabListItem.astro";
-import TabPanel from "~/components/tabs/TabPanel.astro";
 import { stripLangFromSlug } from "~/utils/path-utils";
 import { isSubPage } from "~/utils/isSubPage";
 import SidebarAutoScroll from "~/components/SidebarAutoScroll.astro";
 import ChatButton from "~/components/chat-widget/ChatButton.astro";
+import TopNav from "~/components/TopNav.astro";
 
-// Constants
 const MOVE_REFERENCE_PATH = "move-reference";
 
-// Get sidebar data
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sidebarData = Astro.locals.starlightRoute ? Astro.locals.starlightRoute.sidebar : [];
 const { id } = Astro.props;
 const currentPath = Astro.url.pathname;
-
-// Simple and direct check for Move Reference pages in any URL format
 const isMoveReference = currentPath.includes(`/${MOVE_REFERENCE_PATH}`);
 
-// Interface for sidebar entries
 interface SidebarEntryType {
   type: string;
   label: string;
@@ -38,7 +26,6 @@ interface SidebarEntryType {
   [key: string]: unknown;
 }
 
-// Process sidebar entries to mark current pages
 function markEntries(i: SidebarEntryType): void {
   if (i.type === "group" && i.entries) {
     i.entries.forEach(markEntries);
@@ -46,27 +33,23 @@ function markEntries(i: SidebarEntryType): void {
     const itemSlug = stripLeadingAndTrailingSlashes(i.href);
     const itemSlugWithoutLang = stripLangFromSlug(itemSlug);
 
-    // Only highlight the specific move-reference page that's currently being visited
     if (
       isMoveReference &&
       (itemSlug.includes(MOVE_REFERENCE_PATH) || itemSlugWithoutLang.includes(MOVE_REFERENCE_PATH))
     ) {
-      // Check if the current path matches or is a subpath of this specific item
       const currentPathWithoutLang = stripLangFromSlug(stripLeadingAndTrailingSlashes(currentPath));
       i.isCurrent =
         currentPathWithoutLang === itemSlugWithoutLang ||
         currentPathWithoutLang.startsWith(itemSlugWithoutLang + "/");
-      if (i.isCurrent) return; // Exit early only if we've found a match
+      if (i.isCurrent) return;
     }
 
     if (i.isCurrent !== undefined) {
-      // Regular check for other pages
       i.isCurrent = i.isCurrent || isSubPage(id, itemSlugWithoutLang);
     }
   }
 }
 
-// Apply markEntries to all sidebar items if they exist
 if (Array.isArray(sidebarData)) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (sidebarData as any[]).forEach((item) => {
@@ -74,49 +57,23 @@ if (Array.isArray(sidebarData)) {
   });
 }
 
-// Validate sidebar structure
-function assertGroups(sidebarItems: SidebarEntryType[]): SidebarEntryType[] {
-  for (const entry of sidebarItems) {
-    if (entry.type !== "group") {
-      throw new Error("Top-level links are not permitted in the docs sidebar.");
-    }
-  }
-  return sidebarItems;
-}
-
-// Create sidebar groups with validation
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const sidebarGroups = Array.isArray(sidebarData) ? assertGroups(sidebarData as any) : [];
-
-// Generate id for tab panel from label
-const makeId = (label: string): string => {
-  if (!label) return "__tab-unknown";
-  return "__tab-" + label.toLowerCase().replaceAll(/\s+/g, "-");
-};
-
-// Check if a sidebar section contains the current page
-function isCurrent(sidebarItems: SidebarEntryType[]): boolean {
-  if (!Array.isArray(sidebarItems) || sidebarItems.length === 0) return false;
-
-  return sidebarItems.some((entry) => {
-    if (!entry) return false;
-
-    if (entry.type === "link") {
-      return !!entry.isCurrent;
-    } else if (entry.type === "group" && Array.isArray(entry.entries) && entry.entries.length > 0) {
-      return isCurrent(entry.entries);
-    }
+function hasCurrentPage(entries: SidebarEntryType[]): boolean {
+  return entries.some((entry) => {
+    if (entry.type === "link") return !!entry.isCurrent;
+    if (entry.type === "group" && entry.entries) return hasCurrentPage(entry.entries);
     return false;
   });
 }
 
-// Create a reverse mapping from label to key
-const labelToKey: Record<string, string> = {};
-Object.entries(labels).forEach(([key, val]) => {
-  if (typeof val === "string") {
-    labelToKey[val] = key;
-  }
-});
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const sidebarGroups = (Array.isArray(sidebarData) ? sidebarData : []) as any as SidebarEntryType[];
+
+const activeGroup = sidebarGroups.find(
+  (group) => group.type === "group" && group.entries && hasCurrentPage(group.entries),
+);
+const activeEntries = activeGroup?.entries ?? sidebarGroups[0]?.entries ?? [];
+const activeSectionLabel = activeGroup?.label ?? "";
 ---
 
 <SidebarPersister {...Astro.props}>
@@ -124,61 +81,30 @@ Object.entries(labels).forEach(([key, val]) => {
   <div class="md:sl-hidden mobile-chat-container">
     <ChatButton isMobile={true} />
   </div>
-  <TabbedContent class="tabbed-sidebar">
-    <Fragment slot="tab-list">
-      {
-        sidebarGroups.map(({ label, entries }, index) => {
-          // Try to find the key by looking at the translations object
-          let sidebarKey = "";
 
-          // First try to look up the key directly from English labels
-          if (label in labelToKey) {
-            sidebarKey = labelToKey[label] as string;
-          }
+  {/* Mobile: show TopNav inside the sidebar drawer */}
+  <div class="md:sl-hidden mobile-top-nav">
+    <TopNav />
+  </div>
 
-          // If that fails, try to find the key by index in the sidebar groups
-          // This assumes the sidebar groups are in the same order as the keys in sidebarGroupIcons
-          if (!sidebarKey) {
-            // Get the keys of sidebarGroupIcons in order
-            const iconKeys = Object.keys(sidebarGroupIcons);
-            // Use the index to get the corresponding key
-            if (index < iconKeys.length) {
-              sidebarKey = iconKeys[index] as string;
-            }
-          }
+  {/* Section title */}
+  {
+    activeSectionLabel && (
+      <div class="sidebar-section-title">
+        <span>{activeSectionLabel}</span>
+      </div>
+    )
+  }
 
-          // If all else fails, fall back to a simple transformation of the label
-          if (!sidebarKey) {
-            sidebarKey = label.toLowerCase().replace(/\s+/g, "");
-          }
-
-          // Look up the icon from the mapping, or use a default
-          const iconName = sidebarGroupIcons[sidebarKey] || "ph:rocket-launch";
-
-          return (
-            <TabListItem
-              id={makeId(label)}
-              initial={entries && isCurrent(entries)}
-              class="tab-item"
-            >
-              <Icon size="24" class="icon" name={iconName} /> {label}
-            </TabListItem>
-          );
-        })
-      }
-    </Fragment>
+  {/* Sub-navigation entries */}
+  <div class="sidebar-entries">
     {
-      sidebarGroups.map(({ label, entries }) => (
-        <TabPanel id={makeId(label)} initial={entries && isCurrent(entries)}>
-          {/* The entries are compatible with what SidebarSublist expects */}
-          {entries && (
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            <SidebarSublist sublist={entries as any} />
-          )}
-        </TabPanel>
-      ))
+      activeEntries && (
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        <SidebarSublist sublist={activeEntries as any} />
+      )
     }
-  </TabbedContent>
+  </div>
 </SidebarPersister>
 
 <div class="md:sl-hidden">
@@ -186,7 +112,6 @@ Object.entries(labels).forEach(([key, val]) => {
 </div>
 
 <style>
-  /** Add "EN" to the end of sidebar items with the `fallback` class. */
   :global(.fallback)::after {
     content: "EN";
     vertical-align: super;
@@ -194,101 +119,27 @@ Object.entries(labels).forEach(([key, val]) => {
     font-weight: 700;
   }
 
-  /** Align sponsors at sidebar bottom when there is room. */
-  .desktop-footer {
-    margin-top: auto;
-  }
-
-  /** Always show the scrollbar gutter. */
   :global(.sidebar-pane) {
     overflow-y: scroll;
   }
 
-  /* Styles for the custom tab switcher. */
-  .tabbed-sidebar {
-    /* Layout variables */
-    --tab-switcher-border-width: 1px;
-    --tab-switcher-padding: calc(0.25rem - var(--tab-switcher-border-width));
-    --tab-item-border-radius: var(--global-radius);
-    --tab-switcher-border-radius: var(--global-radius);
-
-    /* Color variables */
-    --tab-switcher-border-color: var(--sl-color-hairline-light);
-    --tab-switcher-background-color: var(--sl-color-gray-7, var(--sl-color-gray-6));
-    --tab-switcher-text-color: var(--sl-color-gray-3);
-    --tab-switcher-text-color--active: var(--sl-color-white);
-    --tab-switcher-icon-color: var(--sl-color-gray-4);
-    --tab-switcher-icon-color--active: var(--sl-color-text-accent);
-    --tab-item-background-color--hover: var(--sl-color-gray-6);
-    --tab-item-background-color--active: var(--sl-color-black);
-    padding: 1rem var(--sl-sidebar-pad-x) 0;
-  }
-  /* Dark theme variations */
-  :global([data-theme="dark"]) .tabbed-sidebar {
-    --tab-switcher-text-color: var(--sl-color-gray-2);
-    --tab-switcher-icon-color: var(--sl-color-gray-3);
-    --tab-item-background-color--hover: var(--sl-color-gray-5);
-  }
-
-  @media (min-width: 50rem) {
-    /* Dark theme variations with the desktop sidebar visible */
-    :global([data-theme="dark"]) .tabbed-sidebar {
-      --tab-switcher-background-color: color-mix(in srgb, var(--sl-color-white) 1%, transparent);
-      --tab-item-background-color--hover: var(--sl-color-gray-6);
-      --tab-item-background-color--active: var(--sl-color-gray-6);
-    }
-  }
-
-  .tabbed-sidebar.tab-list {
-    /* border: var(--tab-switcher-border-width) solid var(--tab-switcher-border-color); */
-    border-radius: var(--tab-switcher-border-radius);
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-    padding: var(--tab-switcher-padding);
-    background-color: transparent;
-    /* margin-bottom: 1.5rem; */
-    padding: 1rem var(--sl-sidebar-pad-x);
-    border-bottom: 1px solid var(--sl-color-hairline);
-  }
-
-  .tab-item :global(a) {
-    border: var(--tab-switcher-border-width) solid transparent;
-    border-radius: var(--tab-item-border-radius);
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: calc(0.5rem - var(--tab-switcher-border-width));
-    background-clip: padding-box;
-    line-height: var(--sl-line-height-headings);
-    text-decoration: none;
-    color: var(--tab-switcher-text-color);
-    font-weight: 600;
-    font-size: large;
-  }
-
-  .tab-item :global(a:hover) {
-    color: var(--tab-switcher-text-color--active);
-    background-color: var(--tab-item-background-color--hover);
-  }
-  .tab-item :global(a[aria-selected="true"]) {
-    border-color: var(--tab-switcher-border-color);
-    color: var(--tab-switcher-text-color--active);
-    background-color: var(--tab-item-background-color--active);
-  }
-
-  .icon {
-    margin: 0.25rem;
-    color: var(--tab-switcher-icon-color);
-  }
-  .tab-item :global(a:hover) .icon {
-    color: inherit;
-  }
-  .tab-item :global(a[aria-selected="true"]) .icon {
-    color: var(--tab-switcher-icon-color--active);
-  }
-
   .mobile-chat-container {
     border-bottom: 1px solid var(--sl-color-hairline);
+  }
+
+  .mobile-top-nav {
+    border-bottom: 1px solid var(--sl-color-hairline);
+  }
+
+  .sidebar-section-title {
+    padding: 1rem var(--sl-sidebar-pad-x) 0.5rem;
+    font-size: var(--sl-text-lg);
+    font-weight: 600;
+    color: var(--sl-color-white);
+    line-height: var(--sl-line-height-headings);
+  }
+
+  .sidebar-entries {
+    padding: 0.5rem var(--sl-sidebar-pad-x) 1rem;
   }
 </style>

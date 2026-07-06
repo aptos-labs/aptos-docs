@@ -1,6 +1,6 @@
 ---
 title: "Initialization"
-description: "Compare Solidity constructor-based collection setup with Move init_module and object-backed collection creation."
+description: "Compare Solidity constructor-based collection setup with Move's explicit initialize function and object-backed collection creation."
 sidebar:
   label: "Initialization"
 ---
@@ -16,7 +16,9 @@ constructor()
 ## Move
 
 ```move
-fun init_module(creator: &signer) {
+public entry fun initialize(creator: &signer) {
+    assert!(signer::address_of(creator) == @dutch_auction_address, ENOT_AUTHORIZED);
+
     let description = string::utf8(DUTCH_AUCTION_COLLECTION_DESCRIPTION);
     let name = string::utf8(DUTCH_AUCTION_COLLECTION_NAME);
     let uri = string::utf8(DUTCH_AUCTION_COLLECTION_URI);
@@ -31,4 +33,4 @@ fun init_module(creator: &signer) {
 }
 ```
 
-The `init_module` function creates the collection object that later token objects will belong to. Compared with Solidity, initialization is still a one-time setup step, but the output is an on-chain object structure rather than an inherited ERC-721 contract state machine.
+The `initialize` function creates the collection object that later token objects will belong to. The publisher calls it in a separate transaction after publishing the package; add a once-guard for production modules (see [Modules on Aptos](/build/smart-contracts/modules-on-aptos#recommended-explicit-initialize-entry-function)). Compared with Solidity, initialization is still a one-time setup step, but the output is an on-chain object structure rather than an inherited ERC-721 contract state machine.

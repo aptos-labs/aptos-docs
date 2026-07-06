@@ -17,24 +17,52 @@ A module contains several structs and functions, much like Rust.
 During package publishing time, a few constraints are maintained:
 
 - Both Structs and public function signatures are published as immutable.
-- The `init_module` function plays a crucial role in module initialization:
-  - When a module is published for the first time (i.e., the module does not exist on-chain), the VM will search for and execute the `init_module(account: &signer)` function.
-  - When upgrading an existing module that is already on-chain, the `init_module` function will NOT be called.
-  - The signer of the account that is publishing the module is passed into the `init_module` function.
-  - **This function must be private and not return any value.**
-  - The `init_module` function can have at most one parameter, and its type must be `&signer`
-  - The `init_module` function should not have generic parameters
-  - The `init_module` function is commonly used to initialize module-specific data structures or set initial states.
 
-<Aside type="note">
-  `init_module` is optional. You only need to implement it if you want to:
+<Aside type="danger" title="`init_module` is deprecated">
+  The `init_module` function is **deprecated** and is being removed because it causes issues in the VM. Do not use it in new modules. Initialize modules with an explicit `public entry fun initialize` that the publisher calls after publishing the package (see below).
 
-  - Initialize module data when publishing a module for the first time
-  - Set up initial states or configurations
-  - Create resource accounts or other module-specific setup tasks
+  Existing modules that still rely on `init_module` continue to work for now, but should migrate to the explicit initialization pattern.
 </Aside>
 
-<Aside type="tip">
-  Remember: The `init_module` function will only be called once in a module's lifecycle - when it is first published.
-  Subsequent upgrades to the module will not trigger the `init_module` function again.
+### Legacy: `init_module` (deprecated)
+
+Historically, module initialization was handled by an `init_module` function:
+
+- When a module was published for the first time (i.e., the module did not exist on-chain), the VM would search for and execute the `init_module(account: &signer)` function.
+- When upgrading an existing on-chain module, `init_module` is NOT called.
+- The signer of the publishing account was passed in. The function had to be private, take at most one `&signer` parameter, have no generic parameters, and return no value.
+
+Because this implicit publish-time execution is being removed, new modules should use the explicit pattern below instead.
+
+### Recommended: explicit `initialize` entry function
+
+Expose a `public entry fun initialize` that the module publisher calls in a separate transaction after publishing the package. Guard it so it runs only once, and only for the publisher:
+
+```move
+module my_addr::my_module {
+    use std::signer;
+    use aptos_framework::error;
+
+    /// Caller is not the module publisher.
+    const ENOT_AUTHORIZED: u64 = 1;
+    /// Module is already initialized.
+    const EALREADY_INITIALIZED: u64 = 2;
+
+    struct ModuleData has key { /* fields */ }
+
+    public entry fun initialize(publisher: &signer) {
+        assert!(signer::address_of(publisher) == @my_addr, error::permission_denied(ENOT_AUTHORIZED));
+        assert!(!exists<ModuleData>(@my_addr), error::already_exists(EALREADY_INITIALIZED));
+        move_to(publisher, ModuleData { /* ... */ });
+    }
+}
+```
+
+<Aside type="note" title="Why the guards?">
+  `init_module` ran automatically, exactly once, as the publisher. An entry function does not get those guarantees for free, so recover them explicitly:
+
+  - The `signer::address_of(...) == @my_addr` assertion ensures only the publisher can initialize the module.
+  - The `!exists<ModuleData>(...)` assertion ensures initialization runs only once.
+
+  One operational difference: initialization now requires a **separate transaction** after publishing, so the module is briefly published-but-uninitialized. Send the `initialize` call immediately after publishing, and have dependent functions assert that initialization has completed.
 </Aside>

@@ -25,16 +25,16 @@ Aptos Labs 在 [`aptos-labs/aptos-networks`](https://github.com/aptos-labs/aptos
 
 ## 已发布的校验和
 
-测试网校验和对应于
-[`aptos-networks@8cfc400`](https://github.com/aptos-labs/aptos-networks/tree/8cfc400bc1e42a232b5b36cde779a5b71d4d275b/testnet)
-中的 blob(截至 2026-05-15).每当 Aptos Labs 发布新版本时,本表都会更新.
+校验和对应于
+[`aptos-networks@b348905`](https://github.com/aptos-labs/aptos-networks/tree/b3489052b466160c7c1c81055d7d071c6396c4f2)
+中的 blob(两个网络通用,截至 2026-07-07).每当 Aptos Labs 发布新版本时,本表都会更新.
 
 | 网络      | 文件               | 大小(字节)       | blake3                                                             |
 | ------- | ---------------- | ------------ | ------------------------------------------------------------------ |
 | testnet | `digest_key.bin` | `4002048590` | `ffff6ab738c58c1c7eeb697eecbc369205e111c9ef271ab2cbe524869671b441` |
 | testnet | `pp.bin`         | `889521361`  | `5094dd22376eefde2febae5f2c9935d7eab0440af93166d246aa5c9f8ecb1b52` |
-| mainnet | `digest_key.bin` | _待定 — 尚未发布_  | _待定 — 尚未发布_                                                        |
-| mainnet | `pp.bin`         | _待定 — 尚未发布_  | _待定 — 尚未发布_                                                        |
+| mainnet | `digest_key.bin` | `4002048590` | `e80a8c3aa08706a8a85fcf2d727549af2fccfbfde190588b025b48629adc4b85` |
+| mainnet | `pp.bin`         | `889521361`  | `48e4ae87140802d5baf861e681946d4922c07748a29dad14487664a76a7fea4a` |
 
 <Aside type="note">
   这两个 blob 都通过 Git LFS 存储,因此下载 URL 必须使用 `github.com/.../raw/...`(它会跟随 LFS 重定向),
@@ -54,9 +54,9 @@ Aptos Labs 在 [`aptos-labs/aptos-networks`](https://github.com/aptos-labs/aptos
 
 ```shellscript filename="Terminal"
 wget -O /opt/aptos/genesis/digest_key.bin \
-  https://github.com/aptos-labs/aptos-networks/raw/main/<network>/digest_key.bin
+  https://github.com/aptos-labs/aptos-networks/raw/b3489052b466160c7c1c81055d7d071c6396c4f2/<network>/digest_key.bin
 wget -O /opt/aptos/genesis/pp.bin \
-  https://github.com/aptos-labs/aptos-networks/raw/main/<network>/pp.bin
+  https://github.com/aptos-labs/aptos-networks/raw/b3489052b466160c7c1c81055d7d071c6396c4f2/<network>/pp.bin
 ```
 
 将 `<network>` 替换为相应的网络(`testnet` 或 `mainnet`).
@@ -66,8 +66,8 @@ wget -O /opt/aptos/genesis/pp.bin \
 确认每个文件能够正确反序列化,并计算其 `blake3` 校验和:
 
 ```shellscript filename="Terminal"
-aptos node validate-digest-key --file /opt/aptos/genesis/digest_key.bin
-aptos node validate-public-parameters --file /opt/aptos/genesis/pp.bin
+aptos node validate-digest-key /opt/aptos/genesis/digest_key.bin
+aptos node validate-public-parameters /opt/aptos/genesis/pp.bin
 ```
 
 每个命令都会输出以下形状的 JSON:
@@ -111,17 +111,17 @@ consensus:
 
 ```shellscript filename="Terminal"
 cd ~/$WORKSPACE   # 存放 genesis.blob 和 waypoint.txt 的目录
-wget -O digest_key.bin https://github.com/aptos-labs/aptos-networks/raw/main/testnet/digest_key.bin
-wget -O pp.bin https://github.com/aptos-labs/aptos-networks/raw/main/testnet/pp.bin
+wget -O digest_key.bin https://github.com/aptos-labs/aptos-networks/raw/b3489052b466160c7c1c81055d7d071c6396c4f2/<network>/digest_key.bin
+wget -O pp.bin https://github.com/aptos-labs/aptos-networks/raw/b3489052b466160c7c1c81055d7d071c6396c4f2/<network>/pp.bin
 ```
 
-将 `testnet` 替换为您所运营的网络(主网 blob 尚未发布;参见 [已发布的校验和](#已发布的校验和) 备注).
+将 `<network>` 替换为相应的网络(`testnet` 或 `mainnet`).
 
 ### 2. 使用 Aptos CLI 验证
 
 ```shellscript filename="Terminal"
-aptos node validate-digest-key --file digest_key.bin
-aptos node validate-public-parameters --file pp.bin
+aptos node validate-digest-key digest_key.bin
+aptos node validate-public-parameters pp.bin
 ```
 
 将 `size` 和 `blake3` 与 [已发布的校验和](#已发布的校验和) 表中您所在网络的值进行比较.如果不匹配,
@@ -185,9 +185,12 @@ trustedSetup:
   path: /opt/aptos/data/trusted-setup
   # 即使 URL 未变,也通过递增此整数来强制重新下载.默认为 0.
   refreshCounter: 0
-  digestKeyUrl: "https://github.com/aptos-labs/aptos-networks/raw/8cfc400bc1e42a232b5b36cde779a5b71d4d275b/testnet/digest_key.bin"
-  publicParametersUrl: "https://github.com/aptos-labs/aptos-networks/raw/8cfc400bc1e42a232b5b36cde779a5b71d4d275b/testnet/pp.bin"
+  digestKeyUrl: "https://github.com/aptos-labs/aptos-networks/raw/b3489052b466160c7c1c81055d7d071c6396c4f2/<network>/digest_key.bin"
+  publicParametersUrl: "https://github.com/aptos-labs/aptos-networks/raw/b3489052b466160c7c1c81055d7d071c6396c4f2/<network>/pp.bin"
 ```
+
+将 `<network>` 替换为 `testnet` 或 `mainnet`.上述 URL 锁定到
+[已发布的校验和](#已发布的校验和) 表中的 `aptos-networks` 提交;当 Aptos Labs 发布新版本时请更新它.
 
 <Aside type="tip">
   **将 URL 锁定到 `aptos-networks` 的某个提交 SHA**,而非 `main`.锁定能使轮换变得显式和可比对,并防止
@@ -201,11 +204,14 @@ chart 在集群内部获取字节,因此集群内的下载过程不会经过 `ap
 
 ```shellscript filename="Terminal"
 wget -O /tmp/digest_key.bin \
-  https://github.com/aptos-labs/aptos-networks/raw/8cfc400bc1e42a232b5b36cde779a5b71d4d275b/testnet/digest_key.bin
-aptos node validate-digest-key --file /tmp/digest_key.bin
+  https://github.com/aptos-labs/aptos-networks/raw/b3489052b466160c7c1c81055d7d071c6396c4f2/<network>/digest_key.bin
+wget -O /tmp/pp.bin \
+  https://github.com/aptos-labs/aptos-networks/raw/b3489052b466160c7c1c81055d7d071c6396c4f2/<network>/pp.bin
+aptos node validate-digest-key /tmp/digest_key.bin
+aptos node validate-public-parameters /tmp/pp.bin
 ```
 
-将打印的 `blake3` 与 [已发布的校验和](#已发布的校验和) 表进行比较.
+将两个文件打印的 `blake3` 与 [已发布的校验和](#已发布的校验和) 表进行比较.
 
 ### 3. 应用并重启
 
@@ -229,7 +235,7 @@ trustedSetup:
   # URL 不变
 ```
 
-## 确认集群一致性
+## 使用 Prometheus 指标验证发布
 
 在您的验证器重启后(任一流程),有两个 Prometheus 指标将每个已加载 blob 的 `blake3` 作为标签暴露出来:
 

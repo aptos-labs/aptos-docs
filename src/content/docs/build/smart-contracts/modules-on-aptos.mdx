@@ -19,7 +19,13 @@ During package publishing time, a few constraints are maintained:
 - Both Structs and public function signatures are published as immutable.
 
 <Aside type="danger" title="`init_module` is deprecated">
-  The `init_module` function is **deprecated** and is being removed because it causes issues in the VM. Do not use it in new modules. Initialize modules with an explicit `public entry fun initialize` that the publisher calls after publishing the package (see below).
+  The `init_module` function is **deprecated** and is being removed. Do not use it in new modules. Initialize modules with an explicit `entry fun initialize` that the publisher calls after publishing the package (see below).
+
+  Reasons for removal:
+
+  - **No clear linking semantics** — it is ambiguous whether `init_module` belongs to old or new code during an upgrade.
+  - **No initialization order** — when multiple modules define `init_module`, there are no guarantees about which runs first.
+  - **Adds significant complexity to the VM** — implicit publish-time execution is a special case the VM must track and enforce.
 
   Existing modules that still rely on `init_module` continue to work for now, but should migrate to the explicit initialization pattern.
 </Aside>
@@ -36,7 +42,7 @@ Because this implicit publish-time execution is being removed, new modules shoul
 
 ### Recommended: explicit `initialize` entry function
 
-Expose a `public entry fun initialize` that the module publisher calls in a separate transaction after publishing the package. Guard it so it runs only once, and only for the publisher:
+Expose an `entry fun initialize` that the module publisher calls in a separate transaction after publishing the package. Guard it so it runs only once, and only for the publisher:
 
 ```move
 module my_addr::my_module {
@@ -50,7 +56,7 @@ module my_addr::my_module {
 
     struct ModuleData has key { /* fields */ }
 
-    public entry fun initialize(publisher: &signer) {
+    entry fun initialize(publisher: &signer) {
         assert!(signer::address_of(publisher) == @my_addr, error::permission_denied(ENOT_AUTHORIZED));
         assert!(!exists<ModuleData>(@my_addr), error::already_exists(EALREADY_INITIALIZED));
         move_to(publisher, ModuleData { /* ... */ });

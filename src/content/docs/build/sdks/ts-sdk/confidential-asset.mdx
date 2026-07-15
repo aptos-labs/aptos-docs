@@ -5,7 +5,8 @@ sidebar:
   label: "Confidential Assets"
 ---
 
-import { Aside, Steps } from '@astrojs/starlight/components';
+import { Aside } from '@astrojs/starlight/components';
+import PackageTabs from '@components/PackageTabs.astro';
 
 The `@aptos-labs/confidential-asset` package is a high-level TypeScript client for the
 [Confidential Asset (CA)](/build/smart-contracts/confidential-asset) protocol.
@@ -13,9 +14,7 @@ It handles proof generation, WASM initialization, balance decryption, and transa
 
 ## Installation
 
-```bash
-npm install @aptos-labs/ts-sdk @aptos-labs/confidential-asset
-```
+<PackageTabs type="add" pkg="@aptos-labs/ts-sdk @aptos-labs/confidential-asset" pkgManagers={['npm', 'yarn', 'pnpm']} />
 
 The package depends on `@aptos-labs/confidential-asset-bindings` for cryptographic operations
 (Bulletproof range proofs and discrete-log decryption). The WASM binary is loaded on demand:
@@ -47,11 +46,11 @@ console.log("WASM ready:", isWasmInitialized());
 
 `ConfidentialAsset` constructor options:
 
-| Option | Type | Default | Description |
-|---|---|---|---|
-| `config` | `AptosConfig` | required | Network configuration |
-| `confidentialAssetModuleAddress` | `string` | `"0x1"` | Module address |
-| `withFeePayer` | `boolean` | `false` | Use fee-payer transactions by default |
+| Option                           | Type          | Default  | Description                           |
+| -------------------------------- | ------------- | -------- | ------------------------------------- |
+| `config`                         | `AptosConfig` | required | Network configuration                 |
+| `confidentialAssetModuleAddress` | `string`      | `"0x1"`  | Module address                        |
+| `withFeePayer`                   | `boolean`     | `false`  | Use fee-payer transactions by default |
 
 ## Key Management
 
@@ -329,20 +328,20 @@ await ca.deposit({ signer: alice, tokenAddress: TOKEN, amount: 1000n, withFeePay
 
 ## Error Reference
 
-| Error code | Meaning | Resolution |
-|---|---|---|
-| `E_CONFIDENTIAL_STORE_NOT_REGISTERED` (3) | No store for this `(user, token)` | Call `registerBalance` first |
-| `E_CONFIDENTIAL_STORE_ALREADY_REGISTERED` (2) | Already registered | Check `hasUserRegistered` first |
-| `E_INCOMING_TRANSFERS_PAUSED` (4) | Recipient paused incoming transfers | Wait or ask recipient to resume |
-| `E_PENDING_BALANCE_MUST_BE_ROLLED_OVER` (6) | Pending count hit 65536 | Call `rolloverPendingBalance` |
-| `E_NORMALIZATION_REQUIRED` (7) | Normalize before rollover | Pass `senderDecryptionKey` to rollover, or call `normalizeBalance` |
-| `E_ALREADY_NORMALIZED` (8) | Already normalized | Check `isBalanceNormalized` first |
-| `E_PENDING_BALANCE_NOT_ZERO_BEFORE_KEY_ROTATION` (5) | Pending must be zero before rotation | SDK handles this automatically in `rotateEncryptionKey` |
-| `E_SELF_TRANSFER` (15) | Sender = recipient | Use a different recipient |
-| `E_ASSET_TYPE_DISALLOWED` (9) | Token not on allow-list | This token type is not yet enabled |
-| `E_EMERGENCY_PAUSED` (20) | Protocol paused by governance | Check `isEmergencyPaused()` and wait |
-| `E_UNSAFE_DISPATCHABLE_FA` (16) | Dispatchable FA not supported | Only non-dispatchable FA types are supported |
-| `E_MEMO_TOO_LONG` (19) | Memo > 256 bytes | Shorten the memo |
+| Error code                                           | Meaning                              | Resolution                                                         |
+| ---------------------------------------------------- | ------------------------------------ | ------------------------------------------------------------------ |
+| `E_CONFIDENTIAL_STORE_NOT_REGISTERED` (3)            | No store for this `(user, token)`    | Call `registerBalance` first                                       |
+| `E_CONFIDENTIAL_STORE_ALREADY_REGISTERED` (2)        | Already registered                   | Check `hasUserRegistered` first                                    |
+| `E_INCOMING_TRANSFERS_PAUSED` (4)                    | Recipient paused incoming transfers  | Wait or ask recipient to resume                                    |
+| `E_PENDING_BALANCE_MUST_BE_ROLLED_OVER` (6)          | Pending count hit 65536              | Call `rolloverPendingBalance`                                      |
+| `E_NORMALIZATION_REQUIRED` (7)                       | Normalize before rollover            | Pass `senderDecryptionKey` to rollover, or call `normalizeBalance` |
+| `E_ALREADY_NORMALIZED` (8)                           | Already normalized                   | Check `isBalanceNormalized` first                                  |
+| `E_PENDING_BALANCE_NOT_ZERO_BEFORE_KEY_ROTATION` (5) | Pending must be zero before rotation | SDK handles this automatically in `rotateEncryptionKey`            |
+| `E_SELF_TRANSFER` (15)                               | Sender = recipient                   | Use a different recipient                                          |
+| `E_ASSET_TYPE_DISALLOWED` (9)                        | Token not on allow-list              | This token type is not yet enabled                                 |
+| `E_EMERGENCY_PAUSED` (20)                            | Protocol paused by governance        | Check `isEmergencyPaused()` and wait                               |
+| `E_UNSAFE_DISPATCHABLE_FA` (16)                      | Dispatchable FA not supported        | Only non-dispatchable FA types are supported                       |
+| `E_MEMO_TOO_LONG` (19)                               | Memo > 256 bytes                     | Shorten the memo                                                   |
 
 ## Best Practices
 
@@ -359,10 +358,10 @@ the new DK and verify it can decrypt the balance before discarding the old one.
 
 ## Privacy Boundaries
 
-| Hidden | Not hidden |
-|---|---|
-| Transfer amounts | Sender and recipient addresses |
-| User balances | Total tokens in confidential mode (`get_total_confidential_supply`) |
+| Hidden           | Not hidden                                                          |
+| ---------------- | ------------------------------------------------------------------- |
+| Transfer amounts | Sender and recipient addresses                                      |
+| User balances    | Total tokens in confidential mode (`get_total_confidential_supply`) |
 
 ## Resources
 

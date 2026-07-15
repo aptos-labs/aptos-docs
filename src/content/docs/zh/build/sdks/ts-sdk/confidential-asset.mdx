@@ -6,14 +6,13 @@ sidebar:
 ---
 
 import { Aside } from '@astrojs/starlight/components';
+import PackageTabs from '@components/PackageTabs.astro';
 
 `@aptos-labs/confidential-asset` 是 [机密资产（CA）](/zh/build/smart-contracts/confidential-asset) 协议的高级 TypeScript 客户端。它会自动处理证明生成、WASM 初始化、余额解密和交易构建，让开发者无需直接操作密码学原语。
 
 ## 安装
 
-```bash
-npm install @aptos-labs/ts-sdk @aptos-labs/confidential-asset
-```
+<PackageTabs type="add" pkg="@aptos-labs/ts-sdk @aptos-labs/confidential-asset" pkgManagers={['npm', 'yarn', 'pnpm']} />
 
 该包依赖 `@aptos-labs/confidential-asset-bindings` 执行密码学操作（Bulletproof 范围证明和离散对数解密）。WASM 二进制文件按需加载：
 
@@ -44,11 +43,11 @@ console.log("WASM 就绪:", isWasmInitialized());
 
 `ConfidentialAsset` 构造参数：
 
-| 参数 | 类型 | 默认值 | 说明 |
-|---|---|---|---|
-| `config` | `AptosConfig` | 必填 | 网络配置 |
-| `confidentialAssetModuleAddress` | `string` | `"0x1"` | 模块地址 |
-| `withFeePayer` | `boolean` | `false` | 是否默认使用代付 Gas 交易 |
+| 参数                               | 类型            | 默认值     | 说明              |
+| -------------------------------- | ------------- | ------- | --------------- |
+| `config`                         | `AptosConfig` | 必填      | 网络配置            |
+| `confidentialAssetModuleAddress` | `string`      | `"0x1"` | 模块地址            |
+| `withFeePayer`                   | `boolean`     | `false` | 是否默认使用代付 Gas 交易 |
 
 ## 密钥管理
 
@@ -320,20 +319,20 @@ await ca.deposit({ signer: alice, tokenAddress: TOKEN, amount: 1000n, withFeePay
 
 ## 错误参考
 
-| 错误码 | 含义 | 解决方法 |
-|---|---|---|
-| `E_CONFIDENTIAL_STORE_NOT_REGISTERED` (3) | 该 `(用户, 代币)` 无机密存储 | 先调用 `registerBalance` |
-| `E_CONFIDENTIAL_STORE_ALREADY_REGISTERED` (2) | 已注册 | 注册前先检查 `hasUserRegistered` |
-| `E_INCOMING_TRANSFERS_PAUSED` (4) | 接收方已暂停入账 | 等待接收方恢复，或换其他接收方 |
-| `E_PENDING_BALANCE_MUST_BE_ROLLED_OVER` (6) | 待处理计数达到 65536 上限 | 调用 `rolloverPendingBalance` |
-| `E_NORMALIZATION_REQUIRED` (7) | Rollover 前需要先归一化 | 向 rollover 传入 `senderDecryptionKey`，或手动调用 `normalizeBalance` |
-| `E_ALREADY_NORMALIZED` (8) | 余额已归一化 | 先检查 `isBalanceNormalized` |
-| `E_PENDING_BALANCE_NOT_ZERO_BEFORE_KEY_ROTATION` (5) | 密钥轮换前待处理余额必须为零 | `rotateEncryptionKey` 会自动处理 |
-| `E_SELF_TRANSFER` (15) | 发送方与接收方相同 | 换一个接收方 |
-| `E_ASSET_TYPE_DISALLOWED` (9) | 代币不在白名单中 | 该代币类型尚未启用 CA |
-| `E_EMERGENCY_PAUSED` (20) | 协议被治理紧急暂停 | 检查 `isEmergencyPaused()` 并等待 |
-| `E_UNSAFE_DISPATCHABLE_FA` (16) | 不支持 dispatchable FA | 仅支持非 dispatchable FA 类型 |
-| `E_MEMO_TOO_LONG` (19) | Memo 超过 256 字节 | 缩短 memo |
+| 错误码                                                  | 含义                  | 解决方法                                                         |
+| ---------------------------------------------------- | ------------------- | ------------------------------------------------------------ |
+| `E_CONFIDENTIAL_STORE_NOT_REGISTERED` (3)            | 该 `(用户, 代币)` 无机密存储  | 先调用 `registerBalance`                                        |
+| `E_CONFIDENTIAL_STORE_ALREADY_REGISTERED` (2)        | 已注册                 | 注册前先检查 `hasUserRegistered`                                   |
+| `E_INCOMING_TRANSFERS_PAUSED` (4)                    | 接收方已暂停入账            | 等待接收方恢复，或换其他接收方                                              |
+| `E_PENDING_BALANCE_MUST_BE_ROLLED_OVER` (6)          | 待处理计数达到 65536 上限    | 调用 `rolloverPendingBalance`                                  |
+| `E_NORMALIZATION_REQUIRED` (7)                       | Rollover 前需要先归一化    | 向 rollover 传入 `senderDecryptionKey`，或手动调用 `normalizeBalance` |
+| `E_ALREADY_NORMALIZED` (8)                           | 余额已归一化              | 先检查 `isBalanceNormalized`                                    |
+| `E_PENDING_BALANCE_NOT_ZERO_BEFORE_KEY_ROTATION` (5) | 密钥轮换前待处理余额必须为零      | `rotateEncryptionKey` 会自动处理                                  |
+| `E_SELF_TRANSFER` (15)                               | 发送方与接收方相同           | 换一个接收方                                                       |
+| `E_ASSET_TYPE_DISALLOWED` (9)                        | 代币不在白名单中            | 该代币类型尚未启用 CA                                                 |
+| `E_EMERGENCY_PAUSED` (20)                            | 协议被治理紧急暂停           | 检查 `isEmergencyPaused()` 并等待                                 |
+| `E_UNSAFE_DISPATCHABLE_FA` (16)                      | 不支持 dispatchable FA | 仅支持非 dispatchable FA 类型                                      |
+| `E_MEMO_TOO_LONG` (19)                               | Memo 超过 256 字节      | 缩短 memo                                                      |
 
 ## 最佳实践
 
@@ -347,9 +346,9 @@ await ca.deposit({ signer: alice, tokenAddress: TOKEN, amount: 1000n, withFeePay
 
 ## 隐私边界
 
-| 隐藏 | 不隐藏 |
-|---|---|
-| 转账金额 | 发送方和接收方地址 |
+| 隐藏   | 不隐藏                                         |
+| ---- | ------------------------------------------- |
+| 转账金额 | 发送方和接收方地址                                   |
 | 用户余额 | 机密模式下的代币总量（`get_total_confidential_supply`） |
 
 ## 相关资源

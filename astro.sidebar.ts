@@ -371,26 +371,6 @@ export const sidebar = [
               }),
             ],
           }),
-          group("build.group.indexer.nft-aggregator", {
-            collapsed: true,
-            items: [
-              "build/indexer/nft-aggregator",
-              "build/indexer/nft-aggregator/analytics-api",
-              "build/indexer/nft-aggregator/graphql-api",
-              "build/indexer/nft-aggregator/marketplaces",
-              "build/indexer/nft-aggregator/nft-aggregator-table",
-              group("build.group.indexer.nft-aggregator.marketplaces", {
-                collapsed: true,
-                items: [
-                  "build/indexer/nft-aggregator/marketplaces/bluemove",
-                  "build/indexer/nft-aggregator/marketplaces/rarible",
-                  "build/indexer/nft-aggregator/marketplaces/topaz",
-                  "build/indexer/nft-aggregator/marketplaces/tradeport",
-                  "build/indexer/nft-aggregator/marketplaces/wapal",
-                ],
-              }),
-            ],
-          }),
           group("build.group.indexer.txn-stream", {
             collapsed: true,
             items: [

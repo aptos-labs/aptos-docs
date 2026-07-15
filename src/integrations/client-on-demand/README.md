@@ -16,9 +16,6 @@ A reusable Astro client directive that enables true lazy loading of React compon
 ### Basic Usage
 
 ```astro
-<!-- Hydrates when "toggle-chat" event is dispatched -->
-<ChatWidget client:on-demand="toggle-chat" />
-
 <!-- Hydrates when "play-video" event is dispatched -->
 <VideoPlayer client:on-demand="play-video" />
 

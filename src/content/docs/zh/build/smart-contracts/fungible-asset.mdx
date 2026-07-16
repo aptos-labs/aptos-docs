@@ -360,6 +360,19 @@ module my_addr::my_fungible_asset_example {
 
 在底层,FA 标准需要管理每个账户资产余额的存储方式.绝大多数情况下,用户会将所有 FA 余额存储在主 `FungibleStore` 中.但在某些高级 DeFi 场景下,也可以创建额外的"二级 Store".
 
+两种 store 底层都是同一个 `FungibleStore` 资源;区别仅在于底层 Object 的创建方式和寻址方式:
+
+```move filename="fungible_store"
+struct FungibleStore has key {
+    // 基础元数据对象的地址.
+    metadata: Object<Metadata>,
+    // 该同质化资产的余额.
+    balance: u64,
+    // 若为 true,则禁用 owner 转账,只有 `TransferRef` 才能将 FA 移入/移出该 store.
+    frozen: bool,
+}
+```
+
 - 每个账户对每种 FA 仅拥有一个不可删除的主 store,其地址由账户地址和元数据对象地址按确定性方式推导.如果主 store 不存在,当通过 `primary_fungible_store.move` 中的函数存入 FA 时会自动创建.
 - 二级 store 地址不具备确定性,且在为空时可删除.用户可通过提供的函数创建任意数量的二级 store,但链上定位二级 store 会更复杂.
 
@@ -375,7 +388,24 @@ public fun primary_store<T: key>(owner: address, metadata: Object<T>): Object<Fu
 public fun create_primary_store<T: key>(owner_addr: address, metadata: Object<T>): Object<FungibleStore>
 ```
 
-使用二级 store 的主要场景是由智能合约管理的资产.例如,资产池可能需要为一种或多种 FA 管理多个同质化资产 store.
+### 主 store 与二级 store 对比
+
+|             | 主 store                                    | 二级 store                               |
+| ----------- | ------------------------------------------ | -------------------------------------- |
+| 地址          | 确定性(`sha3_256(owner \| metadata \| 0xFC)`) | 非确定性;等于持有它的 Object 的地址                 |
+| 每个 owner 数量 | 每种 FA `Metadata` 恰好一个                      | 任意多个                                   |
+| 创建方式        | 首次存入时通过 `primary_fungible_store` 函数自动创建    | 通过 `fungible_asset::create_store` 显式创建 |
+| 是否可删除       | 否 —— 不可删除                                  | 是 —— 当余额为零时                            |
+| 典型 owner    | 账户(用户钱包)                                   | 由智能合约控制的 Object                        |
+| 典型用途        | 持有用户的某种代币余额                                | 在协议内部隔离余额(资金池,托管,金库)                   |
+
+使用二级 store 的主要场景是由智能合约管理的资产.例如:
+
+- 流动性池需要在不同的 store 中持有两种或更多不同同质化资产的储备.
+- 托管或归属(vesting)合约将每个用户的锁定余额隔离在各自的 store 中.
+- 市场或质押合约在托管同一种 FA 的多份余额时,不会将它们混同在单个账户的主 store 中.
+
+### 创建二级 store
 
 要创建二级 store,需:
 
@@ -386,9 +416,117 @@ public fun create_primary_store<T: key>(owner_addr: address, metadata: Object<T>
 public fun create_store<T: key>(constructor_ref: &ConstructorRef, metadata: Object<T>): Object<FungibleStore>
 ```
 
-这会创建一个由新 Object 拥有的二级 store.有时可以复用 Object 作为 store.例如,元数据对象本身可以作为 store 持有自身类型的 FA,或流动性池对象可以作为发行的流动性池币的 store.
+这会创建一个由新 Object 拥有的二级 store.返回的 `Object<FungibleStore>` 初始 `balance` 为 `0`,`frozen` 为 `false`.有时可以复用 Object 作为 store.例如,元数据对象本身可以作为 store 持有自身类型的 FA,或流动性池对象可以作为发行的流动性池币的 store.
 
 正确设置 `FungibleStore` 对象的 owner 对于管理其中的 FA 至关重要.默认情况下,新创建对象的 owner 是传入创建函数的 signer.对于由智能合约自身管理的 `FungibleStore`,owner 通常应为合约控制的 Object 地址.在这些场景下,应妥善保存这些对象的 `ExtendRef`,以便在需要时通过合约逻辑创建 signer 来修改 `FungibleStore`.
+
+下面的示例创建了一个由合约控制的 Object,保存了它的 `ExtendRef`(以便合约后续能作为 store 的 owner 进行操作),并在该 Object 上创建了一个二级 store:
+
+```move filename="example.move"
+module my_addr::secondary_store_example {
+    use aptos_framework::fungible_asset::{Self, FungibleStore, Metadata};
+    use aptos_framework::object::{Self, Object, ExtendRef};
+    use std::signer;
+
+    #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
+    struct ManagedStore has key {
+        // 保存下来,以便合约后续能生成 signer 从该 store 提取资产.
+        extend_ref: ExtendRef,
+        store: Object<FungibleStore>,
+    }
+
+    // 创建一个由本模块控制的新 Object 拥有的二级 store.
+    public fun new_managed_store(creator: &signer, metadata: Object<Metadata>): Object<FungibleStore> {
+        // 创建一个可删除的 Object 来持有该 store,以便其为空时可以清理.
+        let constructor_ref = &object::create_object(signer::address_of(creator));
+
+        // 将该 Object 转化为针对 `metadata` 的 FungibleStore.
+        let store = fungible_asset::create_store(constructor_ref, metadata);
+
+        // 保留 ExtendRef,以便合约按需生成 owner `signer`.
+        let extend_ref = object::generate_extend_ref(constructor_ref);
+        let object_signer = object::generate_signer(constructor_ref);
+        move_to(&object_signer, ManagedStore { extend_ref, store });
+
+        store
+    }
+}
+```
+
+### 与二级 store 交互
+
+由于二级 store 是通过其 Object 寻址,而非从账户推导,因此你需要直接传入 `Object<FungibleStore>` 来与之交互.提取需要 store owner 的 `signer`,而存入则不需要:
+
+```move filename="store_transfer"
+// 从你拥有的 store 提取.返回一个必须存入某处的 `FungibleAsset` 值.
+public fun fungible_asset::withdraw<T: key>(owner: &signer, store: Object<T>, amount: u64): FungibleAsset
+
+// 将 `FungibleAsset` 存入任意 store.
+public fun fungible_asset::deposit<T: key>(store: Object<T>, fa: FungibleAsset)
+
+// 一次调用完成两个 store 之间的转移(提取 + 存入).
+public entry fun fungible_asset::transfer<T: key>(sender: &signer, from: Object<T>, to: Object<T>, amount: u64)
+```
+
+<Aside type="caution">
+  如果该同质化资产注册了调度钩子(参见 [可调度同质化资产](#dispatchable-fungible-asset-advanced)),请改用对应的 `dispatchable_fungible_asset::withdraw`/`deposit`/`transfer` 函数,以便执行自定义逻辑.这些函数对没有钩子的资产同样适用,因此在与二级 store 交互时可作为安全的默认选择.
+</Aside>
+
+当 store 由合约控制的 Object 拥有时,在提取前需从保存的 `ExtendRef` 生成 owner `signer`:
+
+```move filename="example.move"
+public fun withdraw_from_managed_store(
+    manager: &signer,
+    managed: Object<ManagedStore>,
+    amount: u64,
+): FungibleAsset acquires ManagedStore {
+    // 在此添加你自己的访问控制,以确保 `manager` 有权提取.
+    let managed_store = borrow_global<ManagedStore>(object::object_address(&managed));
+    let store_signer = object::generate_signer_for_extending(&managed_store.extend_ref);
+    fungible_asset::withdraw(&store_signer, managed_store.store, amount)
+}
+```
+
+### 检查 store
+
+以下 `#[view]` 函数适用于任何 `FungibleStore`,无论主 store 还是二级 store:
+
+```move filename="store_views"
+// 若该地址已初始化 FungibleStore,则返回 true.
+#[view]
+public fun fungible_asset::store_exists(store: address): bool
+
+// 返回该 store 所跟踪的 Metadata 对象.
+#[view]
+public fun fungible_asset::store_metadata<T: key>(store: Object<T>): Object<Metadata>
+
+// 返回 store 中持有的余额(若 store 不存在则为 0).
+#[view]
+public fun fungible_asset::balance<T: key>(store: Object<T>): u64
+
+// 返回 store 是否被冻结(若 store 不存在则默认为 false).
+#[view]
+public fun fungible_asset::is_frozen<T: key>(store: Object<T>): bool
+```
+
+### 删除二级 store
+
+与主 store 不同,二级 store 在为空后可以删除.删除需要 `DeleteRef`,因此该 store 的 Object 必须创建为可删除对象(例如使用 `object::create_object`,而非 `object::create_named_object`).调用:
+
+```move filename="remove_store"
+public fun fungible_asset::remove_store(delete_ref: &DeleteRef)
+```
+
+除非 store 余额恰好为零,否则 `remove_store` 会以 `EBALANCE_IS_NOT_ZERO` 中止,因此请先提取或转出所有剩余 FA.成功后,它会移除 `FungibleStore` 资源并发出 `FungibleStoreDeletion` 事件:
+
+```move filename="fungible_store_deletion_event"
+#[event]
+struct FungibleStoreDeletion has drop, store {
+    store: address,
+    owner: address,
+    metadata: address,
+}
+```
 
 ## 从 `Coin` 迁移到同质化资产标准
 

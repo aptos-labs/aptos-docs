@@ -360,6 +360,19 @@ The `dispatchable_fungible_asset::withdraw/deposit` functions are replacements, 
 
 Behind the scenes, the Fungible Asset Standard needs to manage how the asset balances are stored on each account. In the vast majority of circumstances, users will store all FA balances in their Primary `FungibleStore`. Sometimes though, additional “Secondary Stores” can be created for advanced DeFi applications.
 
+Both kinds of store are the same `FungibleStore` resource under the hood; the difference is purely in how the underlying Object is created and addressed:
+
+```move filename="fungible_store"
+struct FungibleStore has key {
+    // The address of the base metadata object.
+    metadata: Object<Metadata>,
+    // The balance of the fungible metadata.
+    balance: u64,
+    // If true, owner transfers are disabled and only a `TransferRef` can move the FA in/out of this store.
+    frozen: bool,
+}
+```
+
 - Each account owns only one non-deletable primary store for each type of FA, the address of which is derived in a deterministic manner from the account address and metadata object address. If primary store does not exist, it will be created if FA is going to be deposited by calling functions defined in `primary_fungible_store.move`
 - Secondary stores do not have deterministic addresses and are deletable when empty. Users are able to create as many secondary stores as they want using the provided functions but there is a caveat that addressing secondary stores on-chain may be more complex.
 
@@ -375,7 +388,24 @@ And if you want to create a primary store manually you can use this function:
 public fun create_primary_store<T: key>(owner_addr: address, metadata: Object<T>): Object<FungibleStore>
 ```
 
-The primary reason to use a secondary store is for assets managed by a smart contract. For example, an asset pool may have to manage multiple fungible stores for one or more types of FA.
+### Primary vs. secondary stores
+
+|                 | Primary store                                                        | Secondary store                                                     |
+| --------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Address         | Deterministic (`sha3_256(owner \| metadata \| 0xFC)`)                | Non-deterministic; equal to the address of the Object that holds it |
+| Count per owner | Exactly one per FA `Metadata`                                        | As many as you want                                                 |
+| Creation        | Auto-created on first deposit via `primary_fungible_store` functions | Explicitly created with `fungible_asset::create_store`              |
+| Deletable       | No — it is non-deletable                                             | Yes — when the balance is zero                                      |
+| Typical owner   | An account (user wallet)                                             | An Object controlled by a smart contract                            |
+| Typical use     | Holding a user's balance of a token                                  | Isolating balances inside a protocol (pools, escrow, vaults)        |
+
+The primary reason to use a secondary store is for assets managed by a smart contract. For example:
+
+- A liquidity pool that has to hold reserves of two or more different fungible assets in separate stores.
+- An escrow or vesting contract that isolates each user's locked balance in its own store.
+- A marketplace or staking contract that keeps custody of many balances of the same FA without commingling them in a single account's primary store.
+
+### Creating a secondary store
 
 To create a secondary store, you must:
 
@@ -386,9 +416,117 @@ To create a secondary store, you must:
 public fun create_store<T: key>(constructor_ref: &ConstructorRef, metadata: Object<T>): Object<FungibleStore>
 ```
 
-This will create a secondary store owned by the newly created Object. Sometimes an object can be reused as a store. For example, a metadata object can also be a store to hold some FA of its own type or a liquidity pool object can be a store of the issued liquidity pool's coin.
+This will create a secondary store owned by the newly created Object. The returned `Object<FungibleStore>` starts with a `balance` of `0` and `frozen` set to `false`. Sometimes an object can be reused as a store. For example, a metadata object can also be a store to hold some FA of its own type or a liquidity pool object can be a store of the issued liquidity pool's coin.
 
 It is crucial to set the correct owner of a `FungibleStore` object for managing the FA stored inside. By default, the owner of a newly created object is the creator whose `signer` is passed into the creation function. For `FungibleStore` objects managed by smart contract itself, the owner should usually be an Object address controlled by the contract. For those cases, those objects should keep their `ExtendRef` at the proper place to create `signer` as needed to modify the `FungibleStore` via contract logic.
+
+The example below creates a contract-owned Object, keeps its `ExtendRef` so the contract can later act as the store owner, and creates a secondary store on that Object:
+
+```move filename="example.move"
+module my_addr::secondary_store_example {
+    use aptos_framework::fungible_asset::{Self, FungibleStore, Metadata};
+    use aptos_framework::object::{Self, Object, ExtendRef};
+    use std::signer;
+
+    #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
+    struct ManagedStore has key {
+        // Kept so the contract can generate a signer to withdraw from the store later.
+        extend_ref: ExtendRef,
+        store: Object<FungibleStore>,
+    }
+
+    // Creates a new secondary store owned by a fresh Object that this module controls.
+    public fun new_managed_store(creator: &signer, metadata: Object<Metadata>): Object<FungibleStore> {
+        // Create a deletable Object to own the store so it can be cleaned up when empty.
+        let constructor_ref = &object::create_object(signer::address_of(creator));
+
+        // Turn that Object into a FungibleStore for `metadata`.
+        let store = fungible_asset::create_store(constructor_ref, metadata);
+
+        // Retain an ExtendRef so the contract can produce the owner `signer` on demand.
+        let extend_ref = object::generate_extend_ref(constructor_ref);
+        let object_signer = object::generate_signer(constructor_ref);
+        move_to(&object_signer, ManagedStore { extend_ref, store });
+
+        store
+    }
+}
+```
+
+### Interacting with a secondary store
+
+Because a secondary store is addressed by its Object rather than derived from an account, you interact with it by passing the `Object<FungibleStore>` directly. Withdrawals require the store owner's `signer`, while deposits do not:
+
+```move filename="store_transfer"
+// Withdraw from a store you own. Returns a `FungibleAsset` value that must be deposited somewhere.
+public fun fungible_asset::withdraw<T: key>(owner: &signer, store: Object<T>, amount: u64): FungibleAsset
+
+// Deposit a `FungibleAsset` into any store.
+public fun fungible_asset::deposit<T: key>(store: Object<T>, fa: FungibleAsset)
+
+// Move FA between two stores in one call (withdraw + deposit).
+public entry fun fungible_asset::transfer<T: key>(sender: &signer, from: Object<T>, to: Object<T>, amount: u64)
+```
+
+<Aside type="caution">
+  If the fungible asset registers dispatch hooks (see [Dispatchable Fungible Asset](#dispatchable-fungible-asset-advanced)), call the matching `dispatchable_fungible_asset::withdraw`/`deposit`/`transfer` functions instead so the custom logic runs. Those functions also work for assets without hooks, so they are a safe default when interacting with secondary stores.
+</Aside>
+
+When the store is owned by a contract-controlled Object, generate the owner `signer` from the stored `ExtendRef` before withdrawing:
+
+```move filename="example.move"
+public fun withdraw_from_managed_store(
+    manager: &signer,
+    managed: Object<ManagedStore>,
+    amount: u64,
+): FungibleAsset acquires ManagedStore {
+    // Add your own access control here to ensure `manager` is allowed to withdraw.
+    let managed_store = borrow_global<ManagedStore>(object::object_address(&managed));
+    let store_signer = object::generate_signer_for_extending(&managed_store.extend_ref);
+    fungible_asset::withdraw(&store_signer, managed_store.store, amount)
+}
+```
+
+### Inspecting a store
+
+The following `#[view]` functions work with any `FungibleStore`, primary or secondary:
+
+```move filename="store_views"
+// Returns true if a FungibleStore has been initialized at this address.
+#[view]
+public fun fungible_asset::store_exists(store: address): bool
+
+// Returns the Metadata object this store tracks.
+#[view]
+public fun fungible_asset::store_metadata<T: key>(store: Object<T>): Object<Metadata>
+
+// Returns the balance held in the store (0 if the store does not exist).
+#[view]
+public fun fungible_asset::balance<T: key>(store: Object<T>): u64
+
+// Returns whether the store is frozen (defaults to false when the store does not exist).
+#[view]
+public fun fungible_asset::is_frozen<T: key>(store: Object<T>): bool
+```
+
+### Deleting a secondary store
+
+Unlike primary stores, secondary stores can be deleted once they are empty. Deletion requires a `DeleteRef`, which is why the store's Object must be created as a deletable object (for example with `object::create_object`, not `object::create_named_object`). Call:
+
+```move filename="remove_store"
+public fun fungible_asset::remove_store(delete_ref: &DeleteRef)
+```
+
+`remove_store` aborts with `EBALANCE_IS_NOT_ZERO` unless the store's balance is exactly zero, so withdraw or transfer out any remaining FA first. On success it removes the `FungibleStore` resource and emits a `FungibleStoreDeletion` event:
+
+```move filename="fungible_store_deletion_event"
+#[event]
+struct FungibleStoreDeletion has drop, store {
+    store: address,
+    owner: address,
+    metadata: address,
+}
+```
 
 ## Migration from `Coin` to the Fungible Asset Standard
 

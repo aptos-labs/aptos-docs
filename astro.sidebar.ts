@@ -796,6 +796,7 @@ export const sidebar = [
           "network/blockchain/gas-txn-fee",
           "network/blockchain/base-gas",
           "network/blockchain/txns-states",
+          "network/blockchain/transaction-payloads",
           "network/blockchain/events",
         ],
       }),

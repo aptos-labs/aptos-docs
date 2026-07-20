@@ -868,4 +868,4 @@ export const sidebar = [
   /*group("contribute", {
     items: ["contribute/components/themed-image"],
   }),*/
-] satisfies StarlightUserConfig["sidebar"];
+] as StarlightUserConfig["sidebar"];

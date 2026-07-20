@@ -14,9 +14,6 @@ import { defineConfig, envField, fontProviders } from "astro/config";
 import favicons from "astro-favicons";
 import icon from "astro-icon";
 import mermaid from "astro-mermaid";
-import rehypeKatex from "rehype-katex";
-import rehypeRaw from "rehype-raw";
-import remarkMath from "remark-math";
 import starlightImageZoom from "starlight-image-zoom";
 import starlightLinksValidatorOriginal from "starlight-links-validator";
 import starlightLlmsTxt from "starlight-llms-txt";
@@ -70,6 +67,7 @@ import starlightOpenAPI from "starlight-openapi";
 import { sidebar } from "./astro.sidebar.ts";
 import { cspConfig } from "./src/config/csp";
 import { SITE_TITLES, SUPPORTED_LANGUAGES } from "./src/config/i18n";
+import { markdownProcessor } from "./src/config/markdown";
 import onDemandDirective from "./src/integrations/client-on-demand/register.js";
 import { devServerFileWatcher } from "./src/integrations/dev-server-file-watcher";
 import { firebaseIntegration } from "./src/integrations/firebase";
@@ -77,7 +75,6 @@ import { llmsTxtIndex } from "./src/integrations/llms-txt-index";
 import { monacoEditorIntegration } from "./src/integrations/monacoEditor";
 import { ogImagesIntegration } from "./src/integrations/ogImages";
 import { ENV } from "./src/lib/env";
-import { remarkClientOnly } from "./src/plugins";
 
 const ALGOLIA_APP_ID = ENV.ALGOLIA_APP_ID;
 const ALGOLIA_SEARCH_API_KEY = ENV.ALGOLIA_SEARCH_API_KEY;
@@ -96,6 +93,8 @@ export default defineConfig({
   build: {
     inlineStylesheets: "never",
   },
+  // Preserve Astro 6's HTML-aware whitespace handling while upgrading to Astro 7.
+  compressHTML: true,
   site:
     ENV.VERCEL_ENV === "production"
       ? "https://aptos.dev"
@@ -247,19 +246,14 @@ export default defineConfig({
         // Generate the OpenAPI documentation pages if enabled
         ...(enableApiReference
           ? [
-              starlightOpenAPI(
-                [
-                  {
-                    base: "rest-api",
-                    label: "REST API Reference",
-                    schema: "./public/aptos-spec.json",
-                    sidebarMethodBadges: true,
-                  },
-                ],
+              starlightOpenAPI([
                 {
-                  routeEntrypoint: "./src/components/OpenAPI/Route.astro",
+                  base: "rest-api",
+                  label: "REST API Reference",
+                  schema: "./public/aptos-spec.json",
+                  sidebarMethodBadges: true,
                 },
-              ),
+              ]),
             ]
           : []),
       ],
@@ -324,9 +318,7 @@ export default defineConfig({
   ],
   adapter: process.env.VERCEL
     ? vercel({
-        staticHeaders: {
-          cspMode: "global",
-        },
+        staticHeaders: true,
         edgeMiddleware: false,
         imageService: true,
         imagesConfig: {
@@ -385,19 +377,7 @@ export default defineConfig({
     },
   },
   markdown: {
-    remarkPlugins: [
-      remarkMath,
-      [
-        remarkClientOnly,
-        {
-          components: {
-            GraphQLEditor: "react",
-            Faucet: "react",
-          },
-        },
-      ],
-    ],
-    rehypePlugins: [rehypeRaw, rehypeKatex],
+    processor: markdownProcessor,
   },
   prefetch: true,
   image: {

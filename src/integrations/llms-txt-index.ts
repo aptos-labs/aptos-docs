@@ -15,8 +15,8 @@ import type { AstroIntegration, RouteOptions } from "astro";
 export function llmsTxtIndex(): AstroIntegration {
   const overrides = new Map([
     ["/llms.txt.ts", "./src/pages/llms-index.ts"],
-    ["/llms-small.txt.ts", "./src/pages/llms-small.txt.ts"],
-    ["/llms-full.txt.ts", "./src/pages/llms-full.txt.ts"],
+    ["/llms-small.txt.ts", "./src/routes/llms-small.txt.ts"],
+    ["/llms-full.txt.ts", "./src/routes/llms-full.txt.ts"],
   ]);
 
   return {

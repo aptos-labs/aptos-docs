@@ -30,16 +30,16 @@ their node. The flow depends on how you deploy:
 
 ## Published checksums
 
-Testnet checksums correspond to the blobs at
-[`aptos-networks@8cfc400`](https://github.com/aptos-labs/aptos-networks/tree/8cfc400bc1e42a232b5b36cde779a5b71d4d275b/testnet)
-(current as of 2026-05-15). This table is updated whenever Aptos Labs publishes a new revision.
+Checksums correspond to the blobs at
+[`aptos-networks@b348905`](https://github.com/aptos-labs/aptos-networks/tree/b3489052b466160c7c1c81055d7d071c6396c4f2)
+(both networks, current as of 2026-07-07). This table is updated whenever Aptos Labs publishes a new revision.
 
-| Network | File             | Size (bytes)              | blake3                                                             |
-| ------- | ---------------- | ------------------------- | ------------------------------------------------------------------ |
-| testnet | `digest_key.bin` | `4002048590`              | `ffff6ab738c58c1c7eeb697eecbc369205e111c9ef271ab2cbe524869671b441` |
-| testnet | `pp.bin`         | `889521361`               | `5094dd22376eefde2febae5f2c9935d7eab0440af93166d246aa5c9f8ecb1b52` |
-| mainnet | `digest_key.bin` | _TBD — not yet published_ | _TBD — not yet published_                                          |
-| mainnet | `pp.bin`         | _TBD — not yet published_ | _TBD — not yet published_                                          |
+| Network | File             | Size (bytes) | blake3                                                             |
+| ------- | ---------------- | ------------ | ------------------------------------------------------------------ |
+| testnet | `digest_key.bin` | `4002048590` | `ffff6ab738c58c1c7eeb697eecbc369205e111c9ef271ab2cbe524869671b441` |
+| testnet | `pp.bin`         | `889521361`  | `5094dd22376eefde2febae5f2c9935d7eab0440af93166d246aa5c9f8ecb1b52` |
+| mainnet | `digest_key.bin` | `4002048590` | `e80a8c3aa08706a8a85fcf2d727549af2fccfbfde190588b025b48629adc4b85` |
+| mainnet | `pp.bin`         | `889521361`  | `48e4ae87140802d5baf861e681946d4922c07748a29dad14487664a76a7fea4a` |
 
 <Aside type="note">
   Both blobs are stored via Git LFS, so download URLs must use `github.com/.../raw/...` (which follows the LFS
@@ -59,9 +59,9 @@ Pick a directory on the validator host — anywhere on persistent local storage 
 
 ```shellscript filename="Terminal"
 wget -O /opt/aptos/genesis/digest_key.bin \
-  https://github.com/aptos-labs/aptos-networks/raw/main/<network>/digest_key.bin
+  https://github.com/aptos-labs/aptos-networks/raw/b3489052b466160c7c1c81055d7d071c6396c4f2/<network>/digest_key.bin
 wget -O /opt/aptos/genesis/pp.bin \
-  https://github.com/aptos-labs/aptos-networks/raw/main/<network>/pp.bin
+  https://github.com/aptos-labs/aptos-networks/raw/b3489052b466160c7c1c81055d7d071c6396c4f2/<network>/pp.bin
 ```
 
 Replace `<network>` with the appropriate network (`testnet` or `mainnet`).
@@ -71,8 +71,8 @@ Replace `<network>` with the appropriate network (`testnet` or `mainnet`).
 Confirm each file deserializes correctly and compute its `blake3` checksum:
 
 ```shellscript filename="Terminal"
-aptos node validate-digest-key --file /opt/aptos/genesis/digest_key.bin
-aptos node validate-public-parameters --file /opt/aptos/genesis/pp.bin
+aptos node validate-digest-key /opt/aptos/genesis/digest_key.bin
+aptos node validate-public-parameters /opt/aptos/genesis/pp.bin
 ```
 
 Each command prints JSON of the following shape:
@@ -117,18 +117,17 @@ need to drop the files alongside `genesis.blob` / `waypoint.txt`.
 
 ```shellscript filename="Terminal"
 cd ~/$WORKSPACE   # the directory holding genesis.blob and waypoint.txt
-wget -O digest_key.bin https://github.com/aptos-labs/aptos-networks/raw/main/testnet/digest_key.bin
-wget -O pp.bin https://github.com/aptos-labs/aptos-networks/raw/main/testnet/pp.bin
+wget -O digest_key.bin https://github.com/aptos-labs/aptos-networks/raw/b3489052b466160c7c1c81055d7d071c6396c4f2/<network>/digest_key.bin
+wget -O pp.bin https://github.com/aptos-labs/aptos-networks/raw/b3489052b466160c7c1c81055d7d071c6396c4f2/<network>/pp.bin
 ```
 
-Replace `testnet` with the network you operate on (mainnet blobs are not yet published; see the
-[Published checksums](#published-checksums) note).
+Replace `<network>` with the appropriate network (`testnet` or `mainnet`).
 
 ### 2. Verify with the Aptos CLI
 
 ```shellscript filename="Terminal"
-aptos node validate-digest-key --file digest_key.bin
-aptos node validate-public-parameters --file pp.bin
+aptos node validate-digest-key digest_key.bin
+aptos node validate-public-parameters pp.bin
 ```
 
 Compare `size` and `blake3` against the [Published checksums](#published-checksums) table for your network. If
@@ -194,9 +193,12 @@ trustedSetup:
   path: /opt/aptos/data/trusted-setup
   # Bump this integer to force re-download even when URLs are unchanged. Default 0.
   refreshCounter: 0
-  digestKeyUrl: "https://github.com/aptos-labs/aptos-networks/raw/8cfc400bc1e42a232b5b36cde779a5b71d4d275b/testnet/digest_key.bin"
-  publicParametersUrl: "https://github.com/aptos-labs/aptos-networks/raw/8cfc400bc1e42a232b5b36cde779a5b71d4d275b/testnet/pp.bin"
+  digestKeyUrl: "https://github.com/aptos-labs/aptos-networks/raw/b3489052b466160c7c1c81055d7d071c6396c4f2/<network>/digest_key.bin"
+  publicParametersUrl: "https://github.com/aptos-labs/aptos-networks/raw/b3489052b466160c7c1c81055d7d071c6396c4f2/<network>/pp.bin"
 ```
+
+Replace `<network>` with `testnet` or `mainnet`. The URLs above pin to the `aptos-networks` commit from the
+[Published checksums](#published-checksums) table; bump it when Aptos Labs publishes a new revision.
 
 <Aside type="tip">
   **Pin to an `aptos-networks` commit SHA**, not `main`. Pinning makes rotations explicit and diffable, and
@@ -211,11 +213,14 @@ sanity-check the URL before rollout, download a copy locally and run the
 
 ```shellscript filename="Terminal"
 wget -O /tmp/digest_key.bin \
-  https://github.com/aptos-labs/aptos-networks/raw/8cfc400bc1e42a232b5b36cde779a5b71d4d275b/testnet/digest_key.bin
-aptos node validate-digest-key --file /tmp/digest_key.bin
+  https://github.com/aptos-labs/aptos-networks/raw/b3489052b466160c7c1c81055d7d071c6396c4f2/<network>/digest_key.bin
+wget -O /tmp/pp.bin \
+  https://github.com/aptos-labs/aptos-networks/raw/b3489052b466160c7c1c81055d7d071c6396c4f2/<network>/pp.bin
+aptos node validate-digest-key /tmp/digest_key.bin
+aptos node validate-public-parameters /tmp/pp.bin
 ```
 
-Compare the printed `blake3` against the [Published checksums](#published-checksums) table.
+Compare the printed `blake3` for both files against the [Published checksums](#published-checksums) table.
 
 ### 3. Apply and restart
 
@@ -240,7 +245,7 @@ trustedSetup:
   # urls unchanged
 ```
 
-## Confirm fleet consistency
+## Verify the rollout with Prometheus metrics
 
 After your validators have restarted (any flow), two Prometheus metrics expose the `blake3` of each loaded blob
 as a label:

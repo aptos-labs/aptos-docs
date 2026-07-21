@@ -1,496 +1,358 @@
 ---
-title: "机密资产(CA)"
+title: "机密资产（CA）"
+description: "通过 @aptos-labs/confidential-asset TypeScript SDK 操作机密资产的完整指南：安装、密钥管理、转账、提款及密钥轮换。"
+sidebar:
+  label: "Confidential Assets"
 ---
 
 import { Aside } from '@astrojs/starlight/components';
+import PackageTabs from '@components/PackageTabs.astro';
 
-你可以使用`Aptos`客户端的`confidentialCoin`属性来与`CA`进行交互
+`@aptos-labs/confidential-asset` 是 [机密资产（CA）](/zh/build/smart-contracts/confidential-asset) 协议的高级 TypeScript 客户端。它会自动处理证明生成、WASM 初始化、余额解密和交易构建，让开发者无需直接操作密码学原语。
 
-### 初始化
+## 安装
 
-CA中的操作需要生成零知识证明(ZKPs),根据你的运行环境,需要定义`范围证明`的计算方式.
+<PackageTabs type="add" pkg="@aptos-labs/ts-sdk @aptos-labs/confidential-asset" pkgManagers={['npm', 'yarn', 'pnpm']} />
 
-对于Web环境,可以使用`confidential-asset-wasm-bindings/confidential-asset-wasm-bindings`:
+该包依赖 `@aptos-labs/confidential-asset-bindings` 执行密码学操作（Bulletproof 范围证明和离散对数解密）。WASM 二进制文件按需加载：
 
-让我们准备范围证明生成并配置SDK使用它:
+- **浏览器**：自动从 unpkg CDN 获取。
+- **Node.js**：从本地 `node_modules` 加载，无需网络。
+
+## 初始化
 
 ```typescript
-import initWasm, {
-  batch_range_proof as batchRangeProof,
-  batch_verify_proof as batchVerifyProof,
-  range_proof as rangeProof,
-  verify_proof as verifyProof,
-} from '@aptos-labs/confidential-asset-wasm-bindings/range-proofs'
+import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
 import {
-  BatchRangeProofInputs,
-  BatchVerifyRangeProofInputs,
-  RangeProofInputs,
-  VerifyRangeProofInputs,
-} from '@lukachi/aptos-labs-ts-sdk'
-
-const RANGE_PROOF_WASM_URL =
-  'https://unpkg.com/@aptos-labs/confidential-asset-wasm-bindings@0.3.16/range-proofs/aptos_rp_wasm_bg.wasm'
-
-export async function genBatchRangeZKP(
-  opts: BatchRangeProofInputs,
-): Promise<{ proof: Uint8Array; commitments: Uint8Array[] }> {
-  await initWasm({ module_or_path: RANGE_PROOF_WASM_URL })
-
-  const proof = batchRangeProof(
-    new BigUint64Array(opts.v),
-    opts.rs,
-    opts.val_base,
-    opts.rand_base,
-    opts.num_bits,
-  )
-
-  return {
-    proof: proof.proof(),
-    commitments: proof.comms(),
-  }
-}
-
-export async function verifyBatchRangeZKP(
-  opts: BatchVerifyRangeProofInputs,
-): Promise<boolean> {
-  await initWasm({ module_or_path: RANGE_PROOF_WASM_URL })
-
-  return batchVerifyProof(
-    opts.proof,
-    opts.comm,
-    opts.val_base,
-    opts.rand_base,
-    opts.num_bits,
-  )
-}
-```
-
-然后,只需将其放在应用的最顶部:
-
-```typescript
-import { RangeProofExecutor } from '@aptos-labs/ts-sdk'
-
-RangeProofExecutor.setGenBatchRangeZKP(genBatchRangeZKP);
-RangeProofExecutor.setVerifyBatchRangeZKP(verifyBatchRangeZKP);
-RangeProofExecutor.setGenerateRangeZKP(generateRangeZKP);
-RangeProofExecutor.setVerifyRangeZKP(verifyRangeZKP);
-```
-
-对于原生应用:
-
-从[这里](https://github.com/aptos-labs/confidential-asset-wasm-bindings)生成`android`和`ios`绑定,并按需集成到你的应用中.
-
-最后但同样重要的是:
-
-要获取机密资产的"数值"余额,还需要解决离散对数问题(DLP).
-CA实现了Pollard's Kangaroo方法来解决Ristretto曲线上的DLP.
-[来源](https://cr.yp.to/dlog/cuberoot-20120919.pdf)
-
-因此我们还需要初始化解密函数:
-
-```typescript
-// Copyright © Aptos Foundation
-// SPDX-License-Identifier: Apache-2.0
-
-import initWasm, {
-  create_kangaroo,
-  WASMKangaroo,
-} from '@aptos-labs/confidential-asset-wasm-bindings/pollard-kangaroo'
-import {
-  ConfidentialAmount,
+  ConfidentialAsset,
   TwistedEd25519PrivateKey,
-  TwistedElGamal,
-  TwistedElGamalCiphertext,
-} from '@lukachi/aptos-labs-ts-sdk'
-import { bytesToNumberLE } from '@noble/curves/abstract/utils'
+  initializeWasm,
+  isWasmInitialized,
+} from "@aptos-labs/confidential-asset";
 
-const POLLARD_KANGAROO_WASM_URL =
-  'https://unpkg.com/@aptos-labs/confidential-asset-wasm-bindings@0.3.15/pollard-kangaroo/aptos_pollard_kangaroo_wasm_bg.wasm'
+const config = new AptosConfig({ network: Network.TESTNET });
+const aptos = new Aptos(config);
 
-export async function createKangaroo(secret_size: number) {
-  await initWasm({ module_or_path: POLLARD_KANGAROO_WASM_URL })
+// CA 模块部署在 0x1（aptos_framework）。
+const ca = new ConfidentialAsset({ config });
 
-  return create_kangaroo(secret_size)
-}
-
-export const preloadTables = async () => {
-  const kangaroo16 = await createKangaroo(16)
-  const kangaroo32 = await createKangaroo(32)
-  const kangaroo48 = await createKangaroo(48)
-
-  TwistedElGamal.setDecryptionFn(async pk => {
-    if (bytesToNumberLE(pk) === 0n) return 0n
-
-    let result = kangaroo16.solve_dlp(pk, 500n)
-
-    if (!result) {
-      result = kangaroo32.solve_dlp(pk, 1500n)
-    }
-
-    if (!result) {
-      result = kangaroo48.solve_dlp(pk)
-    }
-
-    if (!result) throw new TypeError('Decryption failed')
-
-    return result
-  })
-}
+// 在用户首次交互前预加载 WASM，避免首次证明生成时的延迟。
+await initializeWasm();
+console.log("WASM 就绪:", isWasmInitialized());
 ```
 
-[//]: # "TODO: 更新16->32->48的使用说明"
+`ConfidentialAsset` 构造参数：
 
-现在,将以下代码放在你的应用顶部:
+| 参数                               | 类型            | 默认值     | 说明              |
+| -------------------------------- | ------------- | ------- | --------------- |
+| `config`                         | `AptosConfig` | 必填      | 网络配置            |
+| `confidentialAssetModuleAddress` | `string`      | `"0x1"` | 模块地址            |
+| `withFeePayer`                   | `boolean`     | `false` | 是否默认使用代付 Gas 交易 |
 
-```typescript
-const init = async () => {
-  await preloadTables();
-}
-```
+## 密钥管理
 
-对于原生应用,你可以[在此](https://github.com/aptos-labs/confidential-asset-wasm-bindings)生成`android`和`ios`绑定来代替WASM使用.
+CA 操作使用一套独立于 Aptos 账户签名密钥的密钥对：
 
-***
-
-现在我们准备就绪.让我们定义Aptos客户端:
-
-```typescript
-const APTOS_NETWORK: Network = NetworkToNetworkName[Network.TESTNET];
-const config = new AptosConfig({ network: APTOS_NETWORK });
-export const aptos = new Aptos(config);
-```
-
-### 创建解密密钥(DK)
-
-要与保密资产交互,首先需要创建一个[唯一的密钥对](/zh/build/sdks/ts-sdk/confidential-asset#confidential-asset-store).
-
-生成新密钥:
+- **`TwistedEd25519PrivateKey`**（解密密钥，DK）：由用户私密保管，永不离开客户端。
+- **`TwistedEd25519PublicKey`**（加密密钥，EK）：存储在链上，供他人为该用户加密金额。
 
 ```typescript
+import { TwistedEd25519PrivateKey } from "@aptos-labs/confidential-asset";
+
+// 生成新的解密密钥
 const dk = TwistedEd25519PrivateKey.generate();
+
+// 派生对应的加密密钥（公开）
+const ek = dk.publicKey();
+
+// 序列化以便安全存储
+const dkHex = dk.toString();
+
+// 从已保存的十六进制字符串恢复
+const restoredDk = new TwistedEd25519PrivateKey(dkHex);
 ```
-
-或导入现有密钥:
-
-```typescript
-const dk = new TwistedEd25519PrivateKey("0x...");
-```
-
-你也可以使用`签名`派生密钥(仅用于测试目的,勿在生产环境使用):
-
-```typescript
-const user = Account.generate()
-
-const signature = user.sign(TwistedEd25519PrivateKey.decryptionKeyDerivationMessage);
-
-const dk = TwistedEd25519PrivateKey.fromSignature(signature);
-```
-
-或者使用[无密钥账户](/zh/build/guides/aptos-keyless)中的[pepper](/zh/build/guides/aptos-keyless/how-keyless-works)
-
-### 注册
-
-接下来,你需要在合约中[注册](/zh/build/sdks/ts-sdk/confidential-asset#register)之前生成的加密密钥(EK):
-
-```typescript
-export const registerConfidentialBalance = async (
-  account: Account,
-  publicKeyHex: string,
-  tokenAddress = "0x...",
-) => {
-  const txBody = await aptos.confidentialAsset.deposit({
-    sender: account.accountAddress,
-    to: AccountAddress.from(to),
-    tokenAddress: tokenAddress,
-    amount: amount,
-  })
-
-  const txResponse = await aptos.signAndSubmitTransaction({ signer: user, transaction: userRegisterCBTxBody });
-
-  const txReceipt = await aptos.waitForTransaction({ transactionHash: txResponse.hash });
-
-  return txReceipt;
-}
-```
-
-检查用户是否已注册特定代币:
-
-```typescript
-export const getIsAccountRegisteredWithToken = async (
-  account: Account,
-  tokenAddress = "0x...",
-) => {
-  const isRegistered = await aptos.confidentialAsset.hasUserRegistered({
-    accountAddress: account.accountAddress,
-    tokenAddress: tokenAddress,
-  })
-
-  return isRegistered
-}
-```
-
-### 存款
-
-假设你已经拥有代币.
-
-以下代码会将代币存入你的保密余额:
-
-```typescript
-export const depositConfidentialBalance = async (
-  account: Account,
-  amount: bigint,
-  to: string,
-  tokenAddress = "0x...",
-) => {
-  const txBody = await aptos.confidentialAsset.deposit({
-    sender: account.accountAddress,
-    to: AccountAddress.from(to),
-    tokenAddress: tokenAddress,
-    amount: amount,
-  })
-  // 签名并发送交易
-}
-```
-
-### 获取用户余额
-
-存款后,让我们检查用户的余额.
-
-````typescript
-const userConfidentialBalance = await aptos.confidentialAsset.getBalance({ accountAddress: user.accountAddress, tokenAddress: TOKEN_ADDRESS });
-```该方法返回用户的[`pending`和`actual`](confidential-asset#confidential-asset-store)保密余额，要[解密](confidential-asset#encryption-and-decryption)这些余额，可以使用`ConfidentialAmount`类
-
-```typescript
-export const getConfidentialBalances = async (
-  account: Account,
-  decryptionKeyHex: string,
-  tokenAddress = "0x...",
-) => {
-  const decryptionKey = new TwistedEd25519PrivateKey(decryptionKeyHex)
-
-  const { pending, actual } = await aptos.confidentialAsset.getBalance({
-    accountAddress: account.accountAddress,
-    tokenAddress,
-  })
-
-  try {
-    const [confidentialAmountPending, confidentialAmountActual] =
-      await Promise.all([
-        ConfidentialAmount.fromEncrypted(pending, decryptionKey),
-        ConfidentialAmount.fromEncrypted(actual, decryptionKey),
-      ])
-
-    return {
-      pending: confidentialAmountPending,
-      actual: confidentialAmountActual,
-    }
-  } catch (error) {
-    return {
-      pending: ConfidentialAmount.fromAmount(0n),
-      actual: ConfidentialAmount.fromAmount(0n),
-    }
-  }
-}
-````
-
-### 余额结转
-
-当您向用户的保密余额存款后,可以看到例如`pending`余额中有`5n`,而`actual`余额为`0n`.
-
-用户无法操作`pending`余额,因此您可以将其[结转](/zh/build/sdks/ts-sdk/confidential-asset#rollover-pending-balance)到`actual`余额.
-
-为此,请使用`aptos.confidentialAsset.rolloverPendingBalance`.
 
 <Aside type="caution">
-  重要提示:在`rollover`操作前,用户的actual余额需要先进行[标准化](/zh/build/sdks/ts-sdk/confidential-asset#normalize)处理.
+  解密密钥是解密余额、生成花费证明的唯一凭证。一旦丢失，机密余额将无法恢复。请安全存储——最佳实践是从用户签名密钥确定性派生，这样无需单独备份。
 </Aside>
 
-要同时处理[标准化](#normalization)和`rollover`操作,可以使用`aptos.confidentialAsset.safeRolloverPendingCB`.
+## 快速开始
 
 ```typescript
-export const safelyRolloverConfidentialBalance = async (
-  account: Account,
-  decryptionKeyHex: string,
-  tokenAddress = "0x...",
-) => {
-  const rolloverTxPayloads = await aptos.confidentialAsset.safeRolloverPendingCB({
-    sender: account.accountAddress,
-    tokenAddress,
-    decryptionKey: new TwistedEd25519PrivateKey(decryptionKeyHex),
-  })
+import { Aptos, AptosConfig, Network, Account } from "@aptos-labs/ts-sdk";
+import { ConfidentialAsset, TwistedEd25519PrivateKey } from "@aptos-labs/confidential-asset";
 
-  // 签名并发送批量交易
-}
-```
+const aptos = new Aptos(new AptosConfig({ network: Network.TESTNET }));
+const ca = new ConfidentialAsset({ config: aptos.config });
 
-***
+// APT 同质化资产 metadata 地址
+const TOKEN = "0xa";
 
-### 标准化
+const alice = Account.generate();
+const bob = Account.generate();
+// 请先通过测试网水龙头为账户注资...
 
-通常您不需要显式调用[标准化](/zh/build/sdks/ts-sdk/confidential-asset#normalize)操作
+// 1. 生成解密密钥并注册机密余额
+const aliceDk = TwistedEd25519PrivateKey.generate();
+const bobDk = TwistedEd25519PrivateKey.generate();
+await ca.registerBalance({ signer: alice, tokenAddress: TOKEN, decryptionKey: aliceDk });
+await ca.registerBalance({ signer: bob, tokenAddress: TOKEN, decryptionKey: bobDk });
 
-如果您需要手动操作:
+// 2. 将 Alice 公开余额中的 1000 个代币存入机密待处理余额
+await ca.deposit({ signer: alice, tokenAddress: TOKEN, amount: 1000n });
 
-<Aside type="caution">
-  首先检查保密余额是否已标准化,因为尝试对已标准化的余额再次标准化会抛出异常
-</Aside>
-
-```typescript
-export const getIsBalanceNormalized = async (
-  account: Account,
-  tokenAddress = "0x...",
-) => {
-  const isNormalized = await aptos.confidentialAsset.isUserBalanceNormalized({
-    accountAddress: account.accountAddress,
-    tokenAddress: tokenAddress,
-  })
-
-  return isNormalized
-}
-```
-
-获取余额后,最终调用`aptos.confidentialAsset.normalizeUserBalance`方法:
-
-```typescript
-export const normalizeConfidentialBalance = async (
-  account: Account,
-  decryptionKeyHex: string,
-  encryptedPendingBalance: TwistedElGamalCiphertext[],
-  amount: bigint,
-  tokenAddress = "0x...",
-) => {
-  const normalizeTx = await aptos.confidentialAsset.normalizeUserBalance({
-    tokenAddress,
-    decryptionKey: new TwistedEd25519PrivateKey(decryptionKeyHex),
-    unnormalizedEncryptedBalance: encryptedPendingBalance,
-    balanceAmount: amount,
-
-    sender: account.accountAddress,
-  })
-
-  // 签名并发送交易
-}
-```
-
-### 提现
-
-要将资产从[机密余额](/zh/build/sdks/ts-sdk/confidential-asset#withdraw)中提现:
-
-```typescript
-export const withdrawConfidentialBalance = async (
-  account: Account,
-  receiver: string,
-  decryptionKeyHex: string,
-  withdrawAmount: bigint,
-  encryptedActualBalance: TwistedElGamalCiphertext[],
-  tokenAddress = '0x...',
-) => {
-  const withdrawTx = await aptos.confidentialAsset.withdraw({
-    sender: account.accountAddress,
-    to: receiver,
-    tokenAddress,
-    decryptionKey: decryptionKey,
-    encryptedActualBalance,
-    amountToWithdraw: withdrawAmount,
-  })
-
-  // 签名并发送交易
-}
-```
-
-### 转账
-
-进行[机密转账](/zh/build/sdks/ts-sdk/confidential-asset#confidential-transfer)需要知道接收方的加密密钥和`aptos`账户地址
-
-假设您已有接收方账户地址,让我们获取其加密密钥:
-
-```typescript
-export const getEkByAddr = async (addrHex: string, tokenAddress: string) => {
-  return aptos.confidentialAsset.getEncryptionByAddr({
-    accountAddress: AccountAddress.from(addrHex),
-    tokenAddress,
-  })
-}
-```
-
-现在将所有步骤整合并进行转账:
-
-```typescript
-export const transferConfidentialCoin = async (
-  account: Account,
-  decryptionKeyHex: string,
-  encryptedActualBalance: TwistedElGamalCiphertext[],
-  amountToTransfer: bigint,
-  recipientAddressHex: string,
-  auditorsEncryptionKeyHexList: string[],
-  tokenAddress = "0x...",
-) => {
-  const decryptionKey = new TwistedEd25519PrivateKey(decryptionKeyHex)
-
-  const recipientEncryptionKeyHex = await getEkByAddr(
-    recipientAddressHex,
-    tokenAddress,
-  )
-
-  const transferTx = await aptos.confidentialAsset.transferCoin({
-    senderDecryptionKey: decryptionKey,
-    recipientEncryptionKey: new TwistedEd25519PublicKey(
-      recipientEncryptionKeyHex,
-    ),
-    encryptedActualBalance: encryptedActualBalance,
-    amountToTransfer,
-    sender: account.accountAddress,
-    tokenAddress,
-    recipientAddress: recipientAddressHex,
-    auditorEncryptionKeys: auditorsEncryptionKeyHexList.map(
-      hex => new TwistedEd25519PublicKey(hex),
-    ),
-  })
-
-  // 签名并发送交易
-}
-```
-
-### 密钥轮换
-
-要进行[密钥轮换](/zh/build/sdks/ts-sdk/confidential-asset#rotate-encryption-key),您需要创建新的解密密钥并使用`aptos.confidentialAsset.rotateCBKey`
-
-<Aside type="caution">
-  但请注意,`key-rotation`会检查待处理余额是否为0.
-  在这种情况下,我们可以使用带有`freeze`选项的`rollover`操作,将资产从待处理余额转移到实际余额并锁定余额.
-
-  ```typescript
-  aptos.confidentialAsset.safeRolloverPendingCB({
-    ...,
-    withFreezeBalance: false,
-  })
-  ```
-</Aside>
-
-现在让我们创建新的解密密钥并轮换加密密钥:
-
-```typescript
-const balances = await getBalances(user.accountAddress.toString(), myDecryptionKey, TOKEN_ADDRESS);
-
-const NEW_DECRYPTION_KEY = TwistedEd25519PrivateKey.generate();
-const keyRotationAndUnfreezeTxResponse = await ConfidentialCoin.safeRotateCBKey(aptos, user, {
-  sender: user.accountAddress,
-
-  currDecryptionKey: currentDecryptionKey,
-  newDecryptionKey: NEW_DECRYPTION_KEY,
-
-  currEncryptedBalance: balances.actual.amountEncrypted,
-
-  withUnfreezeBalance: true, // 如果您想在之后解冻余额
-  tokenAddress: TOKEN_ADDRESS,
+// 3. 将待处理余额 rollover 为可用余额
+await ca.rolloverPendingBalance({
+  signer: alice,
+  tokenAddress: TOKEN,
+  senderDecryptionKey: aliceDk,
 });
 
-// 保存：新的解密密钥
-console.log(NEW_DECRYPTION_KEY.toString());
+// 4. 查询 Alice 的解密后余额
+const balance = await ca.getBalance({
+  accountAddress: alice.accountAddress,
+  tokenAddress: TOKEN,
+  decryptionKey: aliceDk,
+});
+console.log("可用余额:", balance.availableBalance()); // bigint
+console.log("待处理余额:", balance.pendingBalance()); // bigint
 
-// 检查新的余额
-const newBalance = await getBalances(user.accountAddress.toString(), NEW_DECRYPTION_KEY, TOKEN_ADDRESS);
+// 5. 向 Bob 发起 300 代币的机密转账（金额在链上隐藏）
+await ca.transfer({
+  signer: alice,
+  tokenAddress: TOKEN,
+  recipient: bob.accountAddress,
+  amount: 300n,
+  senderDecryptionKey: aliceDk,
+});
 
-console.log(newBalance.pending.amount);
-console.log(newBalance.actual.amount);
+// 6. 将 200 代币提回 Alice 的公开余额
+await ca.withdraw({
+  signer: alice,
+  tokenAddress: TOKEN,
+  senderDecryptionKey: aliceDk,
+  amount: 200n,
+});
 ```
+
+## API 参考
+
+### registerBalance
+
+为 `(signer, token)` 创建机密存储，并将 EK 发布到链上。
+
+```typescript
+await ca.registerBalance({
+  signer: alice,
+  tokenAddress: TOKEN,
+  decryptionKey: aliceDk,
+});
+
+// 注册前建议先检查
+const registered = await ca.hasUserRegistered({
+  accountAddress: alice.accountAddress,
+  tokenAddress: TOKEN,
+});
+```
+
+### deposit
+
+将代币从 signer 的公开 FA 余额转入 `pending_balance`。存入金额在链上可见，无需 ZKP。
+
+```typescript
+await ca.deposit({
+  signer: alice,
+  tokenAddress: TOKEN,
+  amount: 1000n,
+  recipient: alice.accountAddress, // 可选，默认为 signer
+});
+```
+
+<Aside type="note">
+  存入的资金会进入 `pending_balance`。调用 `rolloverPendingBalance` 后才可花费。
+</Aside>
+
+### getBalance
+
+从链上获取加密余额，并用 DK 在本地解密。
+
+```typescript
+const balance = await ca.getBalance({
+  accountAddress: alice.accountAddress,
+  tokenAddress: TOKEN,
+  decryptionKey: aliceDk,
+});
+
+balance.availableBalance(); // bigint — 可花费金额
+balance.pendingBalance();   // bigint — 待处理金额（不可花费）
+```
+
+解密通过 WASM 模块对每个 16 位块执行 BSGS（Baby-Step Giant-Step）算法。
+
+### rolloverPendingBalance
+
+将 `pending_balance` 移入 `available_balance`。
+
+```typescript
+await ca.rolloverPendingBalance({
+  signer: alice,
+  tokenAddress: TOKEN,
+  senderDecryptionKey: aliceDk, // 需要归一化时必填
+  withPauseIncoming: false,     // 密钥轮换前设为 true
+});
+```
+
+<Aside type="caution">
+  Rollover 前 `available_balance` 必须已归一化。传入 `senderDecryptionKey` 可让 SDK 自动先归一化；否则未归一化余额会抛出错误。
+</Aside>
+
+### normalizeBalance
+
+将 `available_balance` 各块重新压缩到 16 位范围。通常由 `rolloverPendingBalance` 自动调用。
+
+```typescript
+const normalized = await ca.isBalanceNormalized({
+  accountAddress: alice.accountAddress,
+  tokenAddress: TOKEN,
+});
+if (!normalized) {
+  await ca.normalizeBalance({
+    signer: alice,
+    tokenAddress: TOKEN,
+    senderDecryptionKey: aliceDk,
+  });
+}
+```
+
+### transfer
+
+将**隐私金额**从发送方 `available_balance` 转移到接收方 `pending_balance`，金额在链上永不公开。
+
+```typescript
+await ca.transfer({
+  signer: alice,
+  tokenAddress: TOKEN,
+  recipient: bob.accountAddress,
+  amount: 300n,
+  senderDecryptionKey: aliceDk,
+  additionalAuditorEncryptionKeys: [], // 可选的自愿审计员
+  memo: new TextEncoder().encode("发票 #42"), // 可选，最大 256 字节
+});
+```
+
+如需在转账前自动 rollover，使用 `transferWithTotalBalance`：
+
+```typescript
+await ca.transferWithTotalBalance({
+  signer: alice,
+  tokenAddress: TOKEN,
+  recipient: bob.accountAddress,
+  amount: 300n,
+  senderDecryptionKey: aliceDk,
+});
+```
+
+<Aside type="caution">
+  接收方必须已为该代币调用 `registerBalance`。不允许自转账。
+</Aside>
+
+### withdraw
+
+将代币从 `available_balance` 提回公开 FA 存储。
+
+```typescript
+await ca.withdraw({
+  signer: alice,
+  tokenAddress: TOKEN,
+  senderDecryptionKey: aliceDk,
+  amount: 200n,
+  recipient: bob.accountAddress, // 可选，默认为 signer
+});
+```
+
+如需在提款前自动 rollover，使用 `withdrawWithTotalBalance`。
+
+### rotateEncryptionKey
+
+替换链上 EK，并用新密钥重新加密 `available_balance` 的 R 分量。
+
+```typescript
+const newDk = TwistedEd25519PrivateKey.generate();
+
+// SDK 自动处理：rollover + 暂停入账 → 轮换 → 恢复入账
+await ca.rotateEncryptionKey({
+  signer: alice,
+  tokenAddress: TOKEN,
+  senderDecryptionKey: aliceDk,    // 旧 DK
+  newSenderDecryptionKey: newDk,   // 新 DK
+});
+
+// 请立即保存 newDk——旧 DK 此后对该余额无效。
+```
+
+## 审计员
+
+当代币配置了审计员（全局或资产级），SDK 会在每次花费操作时自动包含为该审计员加密的金额密文，无需额外配置。
+
+```typescript
+// 查询资产级审计员密钥（未设置时返回 undefined）
+const auditorEk = await ca.getAssetAuditorEncryptionKey({ tokenAddress: TOKEN });
+
+// 添加自愿审计员
+await ca.transfer({
+  // ...其他参数
+  additionalAuditorEncryptionKeys: [auditorEk],
+});
+```
+
+## 代付 Gas
+
+所有写入方法都支持代付 Gas 交易：
+
+```typescript
+// 全局启用
+const caFeePayer = new ConfidentialAsset({ config, withFeePayer: true });
+
+// 或按次启用
+await ca.deposit({ signer: alice, tokenAddress: TOKEN, amount: 1000n, withFeePayer: true });
+```
+
+## 错误参考
+
+| 错误码                                                  | 含义                  | 解决方法                                                         |
+| ---------------------------------------------------- | ------------------- | ------------------------------------------------------------ |
+| `E_CONFIDENTIAL_STORE_NOT_REGISTERED` (3)            | 该 `(用户, 代币)` 无机密存储  | 先调用 `registerBalance`                                        |
+| `E_CONFIDENTIAL_STORE_ALREADY_REGISTERED` (2)        | 已注册                 | 注册前先检查 `hasUserRegistered`                                   |
+| `E_INCOMING_TRANSFERS_PAUSED` (4)                    | 接收方已暂停入账            | 等待接收方恢复，或换其他接收方                                              |
+| `E_PENDING_BALANCE_MUST_BE_ROLLED_OVER` (6)          | 待处理计数达到 65536 上限    | 调用 `rolloverPendingBalance`                                  |
+| `E_NORMALIZATION_REQUIRED` (7)                       | Rollover 前需要先归一化    | 向 rollover 传入 `senderDecryptionKey`，或手动调用 `normalizeBalance` |
+| `E_ALREADY_NORMALIZED` (8)                           | 余额已归一化              | 先检查 `isBalanceNormalized`                                    |
+| `E_PENDING_BALANCE_NOT_ZERO_BEFORE_KEY_ROTATION` (5) | 密钥轮换前待处理余额必须为零      | `rotateEncryptionKey` 会自动处理                                  |
+| `E_SELF_TRANSFER` (15)                               | 发送方与接收方相同           | 换一个接收方                                                       |
+| `E_ASSET_TYPE_DISALLOWED` (9)                        | 代币不在白名单中            | 该代币类型尚未启用 CA                                                 |
+| `E_EMERGENCY_PAUSED` (20)                            | 协议被治理紧急暂停           | 检查 `isEmergencyPaused()` 并等待                                 |
+| `E_UNSAFE_DISPATCHABLE_FA` (16)                      | 不支持 dispatchable FA | 仅支持非 dispatchable FA 类型                                      |
+| `E_MEMO_TOO_LONG` (19)                               | Memo 超过 256 字节      | 缩短 memo                                                      |
+
+## 最佳实践
+
+**预热 WASM。** 在用户打开 CA 界面时调用 `initializeWasm()`，避免首次证明生成时出现明显延迟。
+
+**花费前检查是否需要 rollover。** 若 `pendingBalance()` 非零且合并后余额充足，使用 `*WithTotalBalance` 系列方法一次性完成 rollover 和花费。
+
+**验证接收方是否已注册。** 转账前调用 `hasUserRegistered` 确认接收方已注册。
+
+**密钥轮换后立即保存新密钥。** `rotateEncryptionKey` 会使旧 DK 失效，请立即持久化新 DK，并在丢弃旧密钥前验证它能成功解密余额。
+
+## 隐私边界
+
+| 隐藏   | 不隐藏                                         |
+| ---- | ------------------------------------------- |
+| 转账金额 | 发送方和接收方地址                                   |
+| 用户余额 | 机密模式下的代币总量（`get_total_confidential_supply`） |
+
+## 相关资源
+
+- [机密资产智能合约参考](/zh/build/smart-contracts/confidential-asset)
+- [WASM 绑定库](https://github.com/aptos-labs/confidential-asset-bindings)
+- [SDK 源码](https://github.com/aptos-labs/aptos-ts-sdk/tree/main/confidential-asset)

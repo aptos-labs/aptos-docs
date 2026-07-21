@@ -15,9 +15,10 @@ export class MarkdownProcessor {
   }
 
   static async create(): Promise<MarkdownProcessor> {
-    const { remarkPlugins = [], rehypePlugins = [] } = markdownProcessorOptions;
+    const { gfm, remarkPlugins = [], rehypePlugins = [] } = markdownProcessorOptions;
 
     const moveMarkdownConfig = {
+      gfm,
       remarkPlugins: [
         remarkConvertCodeBlocks,
         remarkRemoveAnchorLinks,

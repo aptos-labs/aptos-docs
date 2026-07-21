@@ -6,6 +6,8 @@ import { remarkClientOnly } from "../plugins";
 
 /** Shared Markdown pipeline for Starlight content and generated Move reference pages. */
 export const markdownProcessorOptions = {
+  // Preserve the explicit GFM setting from the Astro 6 configuration.
+  gfm: true,
   remarkPlugins: [
     remarkMath,
     [

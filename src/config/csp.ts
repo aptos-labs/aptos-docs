@@ -65,8 +65,12 @@ export const cspConfig = {
       { resource: GTM_HOST, kind: "element" },
       { resource: VERCEL_HOSTS, kind: "element" },
     ],
-    // hashes: [
-    //   "sha256-",
-    // ] as CspHash[],
+    // Astro 7.1.1 does not automatically include these two virtual Starlight
+    // scripts in its generated CSP. Keep their exact hashes here so the theme
+    // provider and picker remain functional while retaining a strict policy.
+    hashes: [
+      { hash: "sha256-VWo5Wp4aqSj6nSgMpeAp9cKieaoIfwFUAunAVugI5gA=", kind: "element" },
+      { hash: "sha256-GkZBRnvSuhtx/cvzvukVkX2JJZW+DdPlVr7BX8Tefqo=", kind: "element" },
+    ],
   },
 } satisfies CspConfig;

@@ -1,4 +1,3 @@
-//#region node_modules/.pnpm/@vercel+edge@1.2.2/node_modules/@vercel/edge/dist/index.mjs
 var __create = Object.create;
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
@@ -8,7 +7,13 @@ var __hasOwnProp = Object.prototype.hasOwnProperty;
 var __commonJS = (cb, mod) =>
   function __require() {
     return (
-      mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod),
+      mod ||
+        (0, cb[__getOwnPropNames(cb)[0]])(
+          (mod = {
+            exports: {},
+          }).exports,
+          mod,
+        ),
       mod.exports
     );
   };
@@ -60,7 +65,13 @@ var require_headers = __commonJS({
       }
       return to;
     };
-    var __toCommonJS = (mod) => __copyProps2(__defProp2({}, "__esModule", { value: true }), mod);
+    var __toCommonJS = (mod) =>
+      __copyProps2(
+        __defProp2({}, "__esModule", {
+          value: true,
+        }),
+        mod,
+      );
     var headers_exports = {};
     __export(headers_exports, {
       CITY_HEADER_NAME: () => CITY_HEADER_NAME2,
@@ -93,7 +104,7 @@ var require_headers = __commonJS({
       return header ? decodeURIComponent(header) : void 0;
     }
     function getFlag(countryCode) {
-      const regex = /* @__PURE__ */ new RegExp("^[A-Z]{2}$").test(countryCode);
+      const regex = new RegExp("^[A-Z]{2}$").test(countryCode);
       if (!countryCode || !regex) return void 0;
       return String.fromCodePoint(
         ...countryCode
@@ -147,7 +158,13 @@ var require_middleware = __commonJS({
       }
       return to;
     };
-    var __toCommonJS = (mod) => __copyProps2(__defProp2({}, "__esModule", { value: true }), mod);
+    var __toCommonJS = (mod) =>
+      __copyProps2(
+        __defProp2({}, "__esModule", {
+          value: true,
+        }),
+        mod,
+      );
     var middleware_exports = {};
     __export(middleware_exports, {
       next: () => next2,
@@ -201,14 +218,6 @@ import_headers.geolocation;
 import_headers.ipAddress;
 var export_next = import_middleware.next;
 var export_rewrite = import_middleware.rewrite;
-//#endregion
-//#region src/middlewares/en-redirect.ts
-/**
- * Middleware to redirect /en/* routes to /* routes
- * For example:
- * - /en/sample-page -> /sample-page
- * - /en -> /
- */
 function middleware$3(request) {
   const url = new URL(request.url);
   const pathname = url.pathname;
@@ -219,8 +228,6 @@ function middleware$3(request) {
     return Response.redirect(url);
   }
 }
-//#endregion
-//#region src/middlewares/i18n-redirect.ts
 var LANGUAGE_CODES = [
   {
     code: "en",
@@ -312,24 +319,7 @@ function middleware$2(request) {
     if (url.pathname !== pathname) return Response.redirect(url);
   }
 }
-//#endregion
-//#region src/middlewares/markdown-negotiation.ts
-/**
- * Content negotiation for agents that ask for Markdown.
- *
- * When a request sends `Accept: text/markdown` (or `text/markdown; q=...`)
- * for a documentation URL that has a matching rendered `.md` export, we
- * internally rewrite the request so the response body is Markdown while the
- * browser default stays HTML.
- *
- * The docs site already ships per-page Markdown via `src/pages/[...slug].md.ts`,
- * so a rewrite is all we need — no body transformation happens here.
- *
- * Spec references:
- *   - https://www.rfc-editor.org/rfc/rfc9110#field.accept
- *   - https://developers.cloudflare.com/fundamentals/reference/markdown-for-agents/
- */
-var SKIP_EXTENSIONS = /* @__PURE__ */ new Set([
+var SKIP_EXTENSIONS = new Set([
   ".md",
   ".txt",
   ".json",
@@ -357,18 +347,6 @@ var SKIP_EXTENSIONS = /* @__PURE__ */ new Set([
 ]);
 var SKIP_PREFIXES = ["/_", "/api/", "/.well-known/", "/scripts/"];
 var SKIP_EXACT_OR_SUBPATH = ["/rest-api", "/move-reference", "/gas-profiling"];
-/**
- * Returns true when the `Accept` header explicitly lists `text/markdown` with
- * a non-zero quality value. Per RFC 9110 §12.4.2, `q=0` means "not acceptable",
- * so `Accept: text/markdown;q=0` must fall back to HTML instead of rewriting
- * to `.md`.
- *
- * Both the media type and the `q` parameter are matched case-insensitively
- * (RFC 9110 §5.6.6 / §8.3.1: media types and parameter names are
- * case-insensitive). Wildcards (`* /*`, `text/*`) are intentionally ignored —
- * HTML is the canonical representation and we only opt into Markdown on an
- * explicit listing of `text/markdown`.
- */
 function acceptsMarkdown(accept) {
   if (!accept) return false;
   for (const part of accept.split(",")) {
@@ -403,32 +381,12 @@ function middleware$1(request) {
   const targetPath = normalized === "/" ? "/index.md" : `${normalized}.md`;
   const rewriteUrl = new URL(url);
   rewriteUrl.pathname = targetPath;
-  return export_rewrite(rewriteUrl, { headers: { Vary: "Accept" } });
+  return export_rewrite(rewriteUrl, {
+    headers: {
+      Vary: "Accept",
+    },
+  });
 }
-//#endregion
-//#region src/vercel-middleware.ts
-var config = {
-  matcher: [
-    "/",
-    "/build/:path*",
-    "/contribute/:path*",
-    "/network/:path*",
-    "/llms-txt",
-    "/move-reference",
-    "/move-reference/:path*",
-    "/en",
-    "/en/:path*",
-    "/zh",
-    "/zh/build/:path*",
-    "/zh/contribute/:path*",
-    "/zh/network/:path*",
-    "/zh/llms-txt",
-    "/zh/move-reference",
-    "/zh/move-reference/:path*",
-    "/zh/en",
-    "/zh/en/:path*",
-  ],
-};
 async function applyMiddleware(req, middlewares) {
   return middlewares.reduce(
     async (chain, middleware) => {
@@ -439,12 +397,6 @@ async function applyMiddleware(req, middlewares) {
     Promise.resolve(void 0),
   );
 }
-async function middleware(req) {
-  return await applyMiddleware(req, [middleware$3, middleware$1, middleware$2, export_next]);
-}
-//#endregion
-export { config, middleware as default };
-
 export const config = {
   matcher: [
     "/",
@@ -467,3 +419,6 @@ export const config = {
     "/zh/en/:path*",
   ],
 };
+export default async function middleware(req) {
+  return await applyMiddleware(req, [middleware$3, middleware$1, middleware$2, export_next]);
+}

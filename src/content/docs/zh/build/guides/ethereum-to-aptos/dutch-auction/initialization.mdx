@@ -1,6 +1,6 @@
 ---
 title: "Initialization"
-description: "对比 Solidity 基于 constructor 的 collection 初始化，与 Move 的 init_module 和 object 化 collection 创建。"
+description: "对比 Solidity 基于 constructor 的 collection 初始化，与 Move 的显式 initialize 函数和 object 化 collection 创建。"
 sidebar:
   label: "Initialization"
 ---
@@ -16,7 +16,9 @@ constructor()
 ## Move
 
 ```move
-fun init_module(creator: &signer) {
+public entry fun initialize(creator: &signer) {
+    assert!(signer::address_of(creator) == @dutch_auction_address, error::permission_denied(ENOT_OWNER));
+
     let description = string::utf8(DUTCH_AUCTION_COLLECTION_DESCRIPTION);
     let name = string::utf8(DUTCH_AUCTION_COLLECTION_NAME);
     let uri = string::utf8(DUTCH_AUCTION_COLLECTION_URI);
@@ -31,4 +33,4 @@ fun init_module(creator: &signer) {
 }
 ```
 
-`init_module` 会先创建一个 collection object，后续所有 token object 都会归属于它。相比 Solidity，这里仍然存在“一次性初始化”步骤，但产物不再是继承了 ERC-721 行为的合约状态机，而是一套链上的 object 结构。
+`initialize` 会先创建一个 collection object，后续所有 token object 都会归属于它。发布者在发布包之后，通过单独的一笔交易调用它；生产环境的模块还应加上“只执行一次”的保护（见 [Aptos 上的模块](/zh/build/smart-contracts/modules-on-aptos)）。相比 Solidity，这里仍然存在“一次性初始化”步骤，但产物不再是继承了 ERC-721 行为的合约状态机，而是一套链上的 object 结构。

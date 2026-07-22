@@ -63,10 +63,10 @@ R_i = r_i · EK             (key ciphertext)
 
 ### Balance Chunking
 
-| Balance type | Chunks | Total bits | Max value |
-|---|---|---|---|
-| `pending_balance` | 4 × 16-bit | 64 | 2⁶⁴ − 1 |
-| `available_balance` | 8 × 16-bit | 128 | 2¹²⁸ − 1 |
+| Balance type        | Chunks     | Total bits | Max value |
+| ------------------- | ---------- | ---------- | --------- |
+| `pending_balance`   | 4 × 16-bit | 64         | 2⁶⁴ − 1   |
+| `available_balance` | 8 × 16-bit | 128        | 2¹²⁸ − 1  |
 
 ### Normalization
 
@@ -99,12 +99,12 @@ Every state-modifying operation (except `deposit`) requires a ZKP. Two kinds are
 
 Four NP relations, each proved with a Schnorr-style Σ-protocol:
 
-| Operation | NP relation | What is proved |
-|---|---|---|
-| `register_balance` | R_reg | EK = DK⁻¹ · H (user knows DK) |
-| `withdraw_to` | R_withdraw | Withdrawal amount matches ciphertext; balance stays non-negative |
-| `confidential_transfer` | R_transfer | Sent amount matches recipient ciphertext; balance conservation |
-| `rotate_encryption_key` | R_keyrot | New EK = δ · old EK; R components re-encrypted correctly |
+| Operation               | NP relation | What is proved                                                   |
+| ----------------------- | ----------- | ---------------------------------------------------------------- |
+| `register_balance`      | R\_reg      | EK = DK⁻¹ · H (user knows DK)                                    |
+| `withdraw_to`           | R\_withdraw | Withdrawal amount matches ciphertext; balance stays non-negative |
+| `confidential_transfer` | R\_transfer | Sent amount matches recipient ciphertext; balance conservation   |
+| `rotate_encryption_key` | R\_keyrot   | New EK = δ · old EK; R components re-encrypted correctly         |
 
 ### Bulletproof Range Proofs
 
@@ -120,11 +120,11 @@ ciphertexts for the applicable auditors; these are verified on-chain.
 
 ### Auditor Priority
 
-| Priority | Type | Description |
-|---|---|---|
-| Highest | Asset auditor | Set per-token by the asset creator; overrides the global auditor |
-| Default | Global auditor | Set by Aptos governance; applies to all tokens without an asset auditor |
-| Optional | Voluntary auditors | Added per-transfer by the sender; supplementary, any number |
+| Priority | Type               | Description                                                             |
+| -------- | ------------------ | ----------------------------------------------------------------------- |
+| Highest  | Asset auditor      | Set per-token by the asset creator; overrides the global auditor        |
+| Default  | Global auditor     | Set by Aptos governance; applies to all tokens without an asset auditor |
+| Optional | Voluntary auditors | Added per-transfer by the sender; supplementary, any number             |
 
 The effective auditor (global or asset-specific) is mandatory when configured. The on-chain proof verifier
 enforces that the ciphertext for the effective auditor is correctly formed.
@@ -137,12 +137,12 @@ verifier enforces epoch consistency.
 
 ## Governance
 
-| Setting | Who controls | Effect |
-|---|---|---|
-| Allow-list | Governance | Only allow-listed FA types can be used with CA; bypassed if allow-list is empty |
-| Emergency pause | Governance | Halts all operations except deposits and withdrawals |
-| Global auditor | Governance | Sets/changes the mandatory global auditor EK |
-| Asset auditor | FA creator | Sets/changes the mandatory per-token auditor EK |
+| Setting         | Who controls | Effect                                                                          |
+| --------------- | ------------ | ------------------------------------------------------------------------------- |
+| Allow-list      | Governance   | Only allow-listed FA types can be used with CA; bypassed if allow-list is empty |
+| Emergency pause | Governance   | Halts all operations except deposits and withdrawals                            |
+| Global auditor  | Governance   | Sets/changes the mandatory global auditor EK                                    |
+| Asset auditor   | FA creator   | Sets/changes the mandatory per-token auditor EK                                 |
 
 <Aside type="tip">
   Withdrawals remain possible even when the protocol is emergency-paused, ensuring users can always retrieve funds.
@@ -261,19 +261,19 @@ public entry fun rotate_encryption_key_raw(
 
 ## View Functions
 
-| Function | Returns | Description |
-|---|---|---|
-| `get_encryption_key` | `Option<vector<u8>>` | User's current EK for a token |
-| `has_user_registered` | `bool` | Whether a confidential store exists for `(user, token)` |
-| `get_pending_balance` | raw bytes | Encrypted pending balance |
-| `get_available_balance` | raw bytes | Encrypted available balance |
-| `get_pending_balance_count` | `u32` | Number of pending deposits since last rollover |
-| `is_balance_normalized` | `bool` | Whether available balance is in 16-bit normal form |
-| `is_incoming_paused` | `bool` | Whether incoming transfers are paused |
-| `get_global_auditor` | `Option<vector<u8>>` | Global auditor EK (if set by governance) |
-| `get_asset_auditor` | `Option<vector<u8>>` | Asset-specific auditor EK (if set by creator) |
-| `is_emergency_paused` | `bool` | Whether governance has engaged the emergency pause |
-| `get_total_confidential_supply` | `u128` | Total tokens currently locked in all confidential stores |
+| Function                        | Returns              | Description                                              |
+| ------------------------------- | -------------------- | -------------------------------------------------------- |
+| `get_encryption_key`            | `Option<vector<u8>>` | User's current EK for a token                            |
+| `has_user_registered`           | `bool`               | Whether a confidential store exists for `(user, token)`  |
+| `get_pending_balance`           | raw bytes            | Encrypted pending balance                                |
+| `get_available_balance`         | raw bytes            | Encrypted available balance                              |
+| `get_pending_balance_count`     | `u32`                | Number of pending deposits since last rollover           |
+| `is_balance_normalized`         | `bool`               | Whether available balance is in 16-bit normal form       |
+| `is_incoming_paused`            | `bool`               | Whether incoming transfers are paused                    |
+| `get_global_auditor`            | `Option<vector<u8>>` | Global auditor EK (if set by governance)                 |
+| `get_asset_auditor`             | `Option<vector<u8>>` | Asset-specific auditor EK (if set by creator)            |
+| `is_emergency_paused`           | `bool`               | Whether governance has engaged the emergency pause       |
+| `get_total_confidential_supply` | `u128`               | Total tokens currently locked in all confidential stores |
 
 ## Limitations
 

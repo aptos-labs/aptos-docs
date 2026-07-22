@@ -1,0 +1,257 @@
+---
+title: "交易有效载荷（Payload）与 BCS"
+description: "了解 Aptos 交易 payload 的类型、REST JSON 与 BCS 的对应关系，以及如何使用 TypeScript 构建和解析 payload。"
+sidebar:
+  label: "交易 Payload 与 BCS"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+交易有效载荷（payload）定义交易执行的操作。发送者、序列号、gas、过期时间和签名不属于 payload。
+
+Aptos REST API 使用 JSON 表示 payload。签名和网络传输使用 [BCS](https://github.com/aptos-labs/bcs)（Binary Canonical Serialization）表示 payload 和交易。
+
+## Payload 类型
+
+`TransactionPayload` 是 BCS 枚举。每个变体以 ULEB128 编码的枚举索引开头。
+
+| BCS 索引 | Payload                | REST JSON `type`                | 说明                     |
+| -----: | ---------------------- | ------------------------------- | ---------------------- |
+|    `0` | Script payload         | `script_payload`                | 执行交易携带的 Move 脚本。       |
+|    `1` | Module bundle payload  | `module_bundle_payload`         | 已弃用。                   |
+|    `2` | Entry function payload | `entry_function_payload`        | 调用已发布模块中的入口函数。         |
+|    `3` | Multisig payload       | `multisig_payload`              | 代表链上多签账户执行操作。          |
+|    `4` | Versioned payload      | 不直接暴露                           | 版本化 payload；无序交易使用该变体。 |
+|    `5` | Encrypted payload      | `encrypted_transaction_payload` | 加密交易 payload。          |
+
+`write_set_payload` 仅用于创世和系统交易，不属于普通用户交易的 `TransactionPayload`。
+
+## BCS 编码规则
+
+以下规则适用于各类 payload 的 BCS 布局：
+
+| 类型                  | 编码方式                                         |
+| ------------------- | -------------------------------------------- |
+| 枚举                  | ULEB128 枚举索引，后接该变体的字段。                       |
+| `vector<T>`         | ULEB128 元素数量，后接各元素。                          |
+| `vector<u8>`        | ULEB128 字节长度，后接原始字节。                         |
+| `Option<T>`         | `0x00` 表示 `None`；`0x01` 后接 `T` 表示 `Some(T)`。 |
+| `u64`、`u128`、`u256` | 固定宽度、小端序。                                    |
+| 地址                  | 32 字节。                                       |
+
+## Script payload
+
+`Script` 携带 Move 脚本字节码、类型参数和脚本参数。
+
+REST JSON：
+
+```json
+{
+  "type": "script_payload",
+  "code": { "bytecode": "0xa11ceb0b..." },
+  "type_arguments": [],
+  "arguments": ["0x123", "100000000"]
+}
+```
+
+BCS 布局：
+
+```text
+uleb128(0)                    // TransactionPayload::Script
+vector<u8>                    // Move 脚本字节码
+vector<TypeTag>               // 类型参数
+vector<TransactionArgument>   // 脚本参数
+```
+
+`TransactionArgument` 是带类型标签的枚举。新应用通常使用入口函数 payload；脚本 payload 用于需要随交易携带 Move 字节码的场景。
+
+## Module bundle payload
+
+`ModuleBundle` 已弃用。节点保留该枚举位置以维持 BCS 兼容性，但拒绝提交该类型的新交易。发布 Move 包应使用 SDK 的包发布接口。
+
+REST JSON：
+
+```json
+{
+  "type": "module_bundle_payload"
+}
+```
+
+保留的 BCS 布局：
+
+```text
+uleb128(1)  // TransactionPayload::ModuleBundle
+u64         // 无实际用途的兼容字段
+```
+
+## Entry function payload
+
+`EntryFunction` 调用已发布模块中的 `public entry fun`。
+
+REST JSON：
+
+```json
+{
+  "type": "entry_function_payload",
+  "function": "0x1::aptos_account::transfer",
+  "type_arguments": [],
+  "arguments": ["0x123", "100000000"]
+}
+```
+
+BCS 布局：
+
+```text
+uleb128(2)          // TransactionPayload::EntryFunction
+ModuleId            // 模块地址和模块名
+Identifier          // 函数名
+vector<TypeTag>     // 类型参数
+vector<vector<u8>>  // 函数参数
+```
+
+每个函数参数按照 ABI 中对应的 Move 类型进行 BCS 编码，并存入单独的 `vector<u8>`。参数字节不包含类型信息，解析时必须使用函数 ABI。
+
+使用 TypeScript SDK 构建入口函数 payload：
+
+```typescript filename="build-entry-function.ts"
+import { AccountAddress, Aptos, AptosConfig, Network, U64 } from "@aptos-labs/ts-sdk";
+
+const aptos = new Aptos(new AptosConfig({ network: Network.TESTNET }));
+
+const transaction = await aptos.transaction.build.simple({
+  sender: AccountAddress.fromString("0xabc"),
+  data: {
+    function: "0x1::aptos_account::transfer",
+    functionArguments: [AccountAddress.fromString("0x123"), new U64(100_000_000)],
+  },
+});
+
+const payloadHex = transaction.rawTransaction.payload.bcsToHex().toString();
+```
+
+## Multisig payload
+
+`Multisig` 指定链上多签账户，并可包含一个入口函数或脚本 payload。
+
+REST JSON：
+
+```json
+{
+  "type": "multisig_payload",
+  "multisig_address": "0x123",
+  "transaction_payload": {
+    "type": "entry_function_payload",
+    "function": "0x1::aptos_account::transfer",
+    "type_arguments": [],
+    "arguments": ["0x456", "100000000"]
+  }
+}
+```
+
+BCS 布局：
+
+```text
+uleb128(3)                         // TransactionPayload::Multisig
+AccountAddress                     // 多签账户地址
+Option<MultisigTransactionPayload> // 待执行的 payload
+```
+
+`MultisigTransactionPayload` 是嵌套枚举：标签 `0` 表示入口函数，标签 `1` 表示脚本。`None` 表示使用已存储在链上多签账户中的 payload。
+
+链上多签账户与多代理交易不同。多代理交易包含多个签名者，但使用普通的交易 payload。
+
+## Versioned payload
+
+`Payload` 是可扩展的版本化结构。当前内部版本为 `TransactionPayloadInner::V1`。
+
+BCS 布局：
+
+```text
+uleb128(4)              // TransactionPayload::Payload
+uleb128(0)              // TransactionPayloadInner::V1
+TransactionExecutable   // 入口函数、脚本、空操作或加密操作
+TransactionExtraConfig  // 多签地址、重放保护 nonce 等配置
+```
+
+REST API 根据 `TransactionExecutable` 和 `TransactionExtraConfig` 将其转换为入口函数、脚本或多签 JSON，不直接返回 `Payload::V1` 类型。
+
+### 无序交易
+
+无序交易不是独立的 payload 变体。它使用 `TransactionPayload::Payload`，并在 `TransactionExtraConfig` 中设置 `replay_protection_nonce: Some(u64)`。其 `RawTransaction.sequence_number` 设置为 `u64::MAX`。
+
+```typescript filename="build-orderless-transaction.ts"
+const transaction = await aptos.transaction.build.simple({
+  sender: sender.accountAddress,
+  data: {
+    function: "0x1::aptos_account::transfer",
+    functionArguments: [recipient.accountAddress, 100],
+  },
+  options: {
+    replayProtectionNonce: 12345n,
+  },
+});
+```
+
+`replayProtectionNonce` 必须在交易有效期内保持唯一。无序交易的最大有效期为 60 秒。
+
+## Encrypted payload
+
+`EncryptedPayload` 用于支持 AIP-144 的网络。提交时包含密文、payload 哈希、加密 epoch、额外配置和可选的入口函数声明。
+
+REST JSON：
+
+```json
+{
+  "type": "encrypted_transaction_payload",
+  "encrypted_state": "encrypted",
+  "payload_hash": "0x...",
+  "ciphertext": "0x...",
+  "encryption_epoch": "123",
+  "claimed_entry_fun": null
+}
+```
+
+BCS 布局：
+
+```text
+uleb128(5)                     // TransactionPayload::EncryptedPayload
+uleb128(0)                     // EncryptedPayload::Encrypted
+Ciphertext                      // 密文
+TransactionExtraConfig         // 额外配置
+[u8; 32]                       // payload 哈希
+u64                            // 加密 epoch
+Option<ClaimedEntryFunction>   // 可选的入口函数声明
+```
+
+REST API 使用 `encrypted_state` 区分 `encrypted`、`decrypted` 和 `failed_decryption`。只有 `encrypted` 状态可用于提交交易。详见[加密待处理交易](/zh/build/guides/encrypted-pending-transactions)。
+
+## 解析 BCS payload
+
+`TransactionPayload.deserialize()` 解析 payload 的枚举和字段。入口函数参数仍是原始字节，需根据 ABI 单独解析。
+
+```typescript filename="decode-entry-function-payload.ts"
+import {
+  Deserializer,
+  TransactionPayload,
+  TransactionPayloadEntryFunction,
+  U64,
+} from "@aptos-labs/ts-sdk";
+
+function decodeEntryFunctionPayload(payloadHex: string) {
+  const decoded = TransactionPayload.deserialize(Deserializer.fromHex(payloadHex));
+
+  if (!(decoded instanceof TransactionPayloadEntryFunction)) {
+    throw new Error("Expected an entry function payload");
+  }
+
+  // ABI 中第二个参数的类型为 u64。
+  const amountBytes = decoded.entryFunction.args[1].bcsToBytes();
+  return U64.deserialize(new Deserializer(amountBytes)).value;
+}
+```
+
+`TransactionPayload`、`RawTransaction` 和 `SignedTransaction` 是不同的 BCS 对象。交易签名覆盖完整的原始交易，而不只覆盖 payload。
+
+<Aside type="note">
+  `TransactionPayload` 的链上定义位于 aptos-core 的 `types/src/transaction/mod.rs`。REST JSON 类型及转换逻辑位于 `api/types/src/transaction.rs` 和 `api/types/src/convert.rs`。
+</Aside>

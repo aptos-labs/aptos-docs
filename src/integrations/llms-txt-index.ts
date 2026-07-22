@@ -13,10 +13,14 @@ import type { AstroIntegration, RouteOptions } from "astro";
  * `/_llms-txt/[slug].txt` for custom sets; that route is not overridden.
  */
 export function llmsTxtIndex(): AstroIntegration {
+  // These handlers deliberately live outside `src/pages/`: Astro would otherwise
+  // register duplicate file-based routes in addition to the routes injected by
+  // starlight-llms-txt. Replacing the plugin entrypoints preserves the public
+  // URLs while keeping route registration unambiguous.
   const overrides = new Map([
     ["/llms.txt.ts", "./src/pages/llms-index.ts"],
-    ["/llms-small.txt.ts", "./src/pages/llms-small.txt.ts"],
-    ["/llms-full.txt.ts", "./src/pages/llms-full.txt.ts"],
+    ["/llms-small.txt.ts", "./src/routes/llms-small.txt.ts"],
+    ["/llms-full.txt.ts", "./src/routes/llms-full.txt.ts"],
   ]);
 
   return {

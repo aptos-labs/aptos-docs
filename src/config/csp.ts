@@ -1,4 +1,6 @@
-import type { CspDirective } from "astro/dist/core/csp/config";
+import type { AstroUserConfig } from "astro";
+
+type CspConfig = Exclude<NonNullable<NonNullable<AstroUserConfig["security"]>["csp"]>, boolean>;
 
 /**
  * Helper function to add HTTPS schema to URLs for CSP
@@ -44,17 +46,31 @@ export const cspConfig = {
     `connect-src 'self' ${APTOS_HOSTS} ${ALGOLIA_HOSTS} ${GOOGLE_HOSTS} ${GTM_HOST} ${GA_HOSTS} ${VERCEL_HOSTS} ${PUSHER_HOSTS} ${VERCEL_ANALYTICS_HOSTS}`,
     `frame-src 'self' ${FIREBASE_HOSTS} ${VERCEL_HOSTS} ${VIDEO_HOSTS} ${STACKBLITZ_HOST} ${FIGMA_HOSTS}`,
     `media-src 'self' ${TWITTER_HOSTS}`,
-    "style-src-attr 'unsafe-inline'",
-    `script-src-elem 'self' 'unsafe-inline' ${CDN_HOSTS} ${GOOGLE_HOSTS} ${GTM_HOST} ${VERCEL_HOSTS}`,
-    `style-src-elem 'self' 'unsafe-inline' ${VERCEL_HOSTS} ${GOOGLE_FONTS_HOSTS}`,
-  ] as CspDirective[],
+  ],
   styleDirective: {
-    resources: ["'self'", VERCEL_HOSTS, "'unsafe-inline'"],
+    resources: [
+      { resource: "'self'", kind: "element" },
+      { resource: VERCEL_HOSTS, kind: "element" },
+      { resource: GOOGLE_FONTS_HOSTS, kind: "element" },
+      { resource: "'unsafe-inline'", kind: "element" },
+      { resource: "'unsafe-inline'", kind: "attribute" },
+    ],
   },
   scriptDirective: {
-    resources: ["'self'", "'unsafe-inline'", CDN_HOSTS, GOOGLE_HOSTS, GTM_HOST, VERCEL_HOSTS],
-    // hashes: [
-    //   "sha256-",
-    // ] as CspHash[],
+    resources: [
+      { resource: "'self'", kind: "element" },
+      { resource: "'unsafe-inline'", kind: "element" },
+      { resource: CDN_HOSTS, kind: "element" },
+      { resource: GOOGLE_HOSTS, kind: "element" },
+      { resource: GTM_HOST, kind: "element" },
+      { resource: VERCEL_HOSTS, kind: "element" },
+    ],
+    // Astro 7.1.1 does not automatically include these two virtual Starlight
+    // scripts in its generated CSP. Keep their exact hashes here so the theme
+    // provider and picker remain functional while retaining a strict policy.
+    hashes: [
+      { hash: "sha256-VWo5Wp4aqSj6nSgMpeAp9cKieaoIfwFUAunAVugI5gA=", kind: "element" },
+      { hash: "sha256-GkZBRnvSuhtx/cvzvukVkX2JJZW+DdPlVr7BX8Tefqo=", kind: "element" },
+    ],
   },
-};
+} satisfies CspConfig;

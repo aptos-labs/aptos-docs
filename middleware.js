@@ -31,7 +31,7 @@ var __copyProps = (to, from, except, desc) => {
 var __toESM = (mod, isNodeMode, target) => (
   (target = mod != null ? __create(__getProtoOf(mod)) : {}),
   __copyProps(
-    !mod || !mod.__esModule
+    isNodeMode || !mod || !mod.__esModule
       ? __defProp(target, "default", {
           value: mod,
           enumerable: true,
@@ -41,7 +41,8 @@ var __toESM = (mod, isNodeMode, target) => (
   )
 );
 var require_headers = __commonJS({
-  "../functions/headers.js"(exports$1, module) {
+  "../functions/headers.js"(exports, module) {
+    "use strict";
     var __defProp2 = Object.defineProperty;
     var __getOwnPropDesc2 = Object.getOwnPropertyDescriptor;
     var __getOwnPropNames2 = Object.getOwnPropertyNames;
@@ -112,13 +113,10 @@ var require_headers = __commonJS({
       );
     }
     function ipAddress2(input) {
-      const headers = "headers" in input ? input.headers : input;
-      return getHeader(headers, IP_HEADER_NAME2);
+      return getHeader("headers" in input ? input.headers : input, IP_HEADER_NAME2);
     }
     function getRegionFromRequestId(requestId) {
-      if (!requestId) {
-        return "dev1";
-      }
+      if (!requestId) return "dev1";
       return requestId.split(":")[0];
     }
     function geolocation2(request) {
@@ -136,7 +134,8 @@ var require_headers = __commonJS({
   },
 });
 var require_middleware = __commonJS({
-  "../functions/middleware.js"(exports$1, module) {
+  "../functions/middleware.js"(exports, module) {
+    "use strict";
     var __defProp2 = Object.defineProperty;
     var __getOwnPropDesc2 = Object.getOwnPropertyDescriptor;
     var __getOwnPropNames2 = Object.getOwnPropertyNames;
@@ -174,9 +173,8 @@ var require_middleware = __commonJS({
     module.exports = __toCommonJS(middleware_exports);
     function handleMiddlewareField(init, headers) {
       if (init?.request?.headers) {
-        if (!(init.request.headers instanceof Headers)) {
+        if (!(init.request.headers instanceof Headers))
           throw new Error("request.headers must be an instance of Headers");
-        }
         const keys = [];
         for (const [key, value] of init.request.headers) {
           headers.set("x-middleware-request-" + key, value);
@@ -223,18 +221,14 @@ var export_rewrite = import_middleware.rewrite;
 function middleware$3(request) {
   const url = new URL(request.url);
   const pathname = url.pathname;
-  if (pathname.endsWith(".md")) {
-    return void 0;
-  }
+  if (pathname.endsWith(".md")) return;
   const enPathMatch = /^\/en(\/.*|$)/.exec(pathname);
   if (enPathMatch) {
-    const restOfPath = enPathMatch[1] ?? "/";
-    url.pathname = restOfPath;
+    url.pathname = enPathMatch[1] ?? "/";
     return Response.redirect(url);
   }
-  return void 0;
 }
-const SUPPORTED_LANGUAGES = [
+var LANGUAGE_CODES = [
   {
     code: "en",
     label: "English",
@@ -244,11 +238,10 @@ const SUPPORTED_LANGUAGES = [
     code: "zh",
     label: "简体中文",
   },
-];
-const LANGUAGE_CODES = SUPPORTED_LANGUAGES.map((lang) => lang.code);
-const DEFAULT_LANG = "en";
-const NON_DEFAULT_LANGS = LANGUAGE_CODES.filter((code) => code !== DEFAULT_LANG);
-const MOST_COMMON_CRAWLERS = [
+].map((lang) => lang.code);
+var DEFAULT_LANG = "en";
+var NON_DEFAULT_LANGS = LANGUAGE_CODES.filter((code) => code !== DEFAULT_LANG);
+var MOST_COMMON_CRAWLERS = [
   "Googlebot\\/",
   "Googlebot-Mobile",
   "Googlebot-Image",
@@ -301,47 +294,32 @@ const MOST_COMMON_CRAWLERS = [
   "W3C_Validator",
 ].map((crawler) => new RegExp(crawler, "i"));
 function isCrawler(userAgent) {
-  if (!userAgent) {
-    return true;
-  }
+  if (!userAgent) return true;
   return MOST_COMMON_CRAWLERS.some((regexp) => regexp.test(userAgent));
 }
 function middleware$2(request) {
   const url = new URL(request.url);
   const pathname = url.pathname;
-  if (pathname.endsWith(".md")) {
-    return void 0;
-  }
-  const userAgent = request.headers.get("user-agent");
-  if (isCrawler(userAgent)) {
-    return void 0;
-  }
+  if (pathname.endsWith(".md")) return;
+  if (isCrawler(request.headers.get("user-agent"))) return;
   const cookies = request.headers.get("cookie") ?? "";
   const langCookieMatch = /preferred_locale=([a-z-]+)/.exec(cookies);
   let preferredLocale = langCookieMatch ? langCookieMatch[1] : null;
-  if (!preferredLocale) {
-    const acceptLanguage = request.headers.get("accept-language") ?? "";
-    preferredLocale = acceptLanguage.split(",")[0]?.split(";")[0]?.split("-")[0] ?? DEFAULT_LANG;
-  }
+  if (!preferredLocale)
+    preferredLocale =
+      (request.headers.get("accept-language") ?? "").split(",")[0]?.split(";")[0]?.split("-")[0] ??
+      DEFAULT_LANG;
   const langPathMatch = /^\/([a-z]{2})(\/.*|$)/.exec(pathname);
-  const currentLang = langPathMatch ? langPathMatch[1] : DEFAULT_LANG;
-  if (currentLang !== preferredLocale) {
-    if (preferredLocale === DEFAULT_LANG) {
+  if ((langPathMatch ? langPathMatch[1] : DEFAULT_LANG) !== preferredLocale) {
+    if (preferredLocale === DEFAULT_LANG)
       url.pathname = langPathMatch ? (langPathMatch[2] ?? "/") : pathname;
-    } else if (NON_DEFAULT_LANGS.includes(preferredLocale)) {
-      if (!langPathMatch) {
-        url.pathname = `/${preferredLocale}${pathname}`;
-      } else {
-        url.pathname = `/${preferredLocale}${langPathMatch[2] ?? "/"}`;
-      }
-    }
-    if (url.pathname !== pathname) {
-      return Response.redirect(url);
-    }
+    else if (NON_DEFAULT_LANGS.includes(preferredLocale))
+      if (!langPathMatch) url.pathname = `/${preferredLocale}${pathname}`;
+      else url.pathname = `/${preferredLocale}${langPathMatch[2] ?? "/"}`;
+    if (url.pathname !== pathname) return Response.redirect(url);
   }
-  return void 0;
 }
-const SKIP_EXTENSIONS = new Set([
+var SKIP_EXTENSIONS = new Set([
   ".md",
   ".txt",
   ".json",
@@ -367,14 +345,13 @@ const SKIP_EXTENSIONS = new Set([
   ".zip",
   ".wasm",
 ]);
-const SKIP_PREFIXES = ["/_", "/api/", "/.well-known/", "/scripts/"];
-const SKIP_EXACT_OR_SUBPATH = ["/rest-api", "/move-reference", "/gas-profiling"];
+var SKIP_PREFIXES = ["/_", "/api/", "/.well-known/", "/scripts/"];
+var SKIP_EXACT_OR_SUBPATH = ["/rest-api", "/move-reference", "/gas-profiling"];
 function acceptsMarkdown(accept) {
   if (!accept) return false;
   for (const part of accept.split(",")) {
     const [rawMediaType, ...rawParams] = part.split(";");
-    const mediaType = (rawMediaType ?? "").trim().toLowerCase();
-    if (mediaType !== "text/markdown") continue;
+    if ((rawMediaType ?? "").trim().toLowerCase() !== "text/markdown") continue;
     const qParam = rawParams.map((param) => param.trim()).find((param) => /^q\s*=/i.test(param));
     if (!qParam) return true;
     const rawQ = qParam.slice(qParam.indexOf("=") + 1).trim();
@@ -391,24 +368,14 @@ function hasSkippedExtension(pathname) {
   return SKIP_EXTENSIONS.has(tail.slice(dotIdx).toLowerCase());
 }
 function middleware$1(request) {
-  if (request.method !== "GET" && request.method !== "HEAD") {
-    return void 0;
-  }
-  const accept = request.headers.get("accept");
-  if (!acceptsMarkdown(accept)) {
-    return void 0;
-  }
+  if (request.method !== "GET" && request.method !== "HEAD") return;
+  if (!acceptsMarkdown(request.headers.get("accept"))) return;
   const url = new URL(request.url);
   const pathname = url.pathname;
-  if (hasSkippedExtension(pathname)) {
-    return void 0;
-  }
-  if (SKIP_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
-    return void 0;
-  }
-  if (SKIP_EXACT_OR_SUBPATH.some((base) => pathname === base || pathname.startsWith(`${base}/`))) {
-    return void 0;
-  }
+  if (hasSkippedExtension(pathname)) return;
+  if (SKIP_PREFIXES.some((prefix) => pathname.startsWith(prefix))) return;
+  if (SKIP_EXACT_OR_SUBPATH.some((base) => pathname === base || pathname.startsWith(`${base}/`)))
+    return;
   const normalized =
     pathname.length > 1 && pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
   const targetPath = normalized === "/" ? "/index.md" : `${normalized}.md`;
@@ -422,10 +389,10 @@ function middleware$1(request) {
 }
 async function applyMiddleware(req, middlewares) {
   return middlewares.reduce(
-    async (chain, middleware2) => {
+    async (chain, middleware) => {
       const response = await chain;
       if (response) return response;
-      return middleware2(req);
+      return middleware(req);
     },
     Promise.resolve(void 0),
   );

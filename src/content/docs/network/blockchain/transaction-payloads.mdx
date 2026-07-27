@@ -1,0 +1,257 @@
+---
+title: "Transaction Payloads and BCS"
+description: "Learn the Aptos transaction payload types, how REST JSON maps to BCS, and how to build and decode payloads with TypeScript."
+sidebar:
+  label: "Transaction Payloads and BCS"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+A transaction payload defines the operation that a transaction executes. The sender, sequence number, gas settings, expiration time, and signature are not part of the payload.
+
+The Aptos REST API represents payloads as JSON. Transaction signing and network transport use [BCS](https://github.com/aptos-labs/bcs) (Binary Canonical Serialization) to represent payloads and transactions.
+
+## Payload types
+
+`TransactionPayload` is a BCS enum. Each variant begins with a ULEB128-encoded enum index.
+
+| BCS index | Payload                | REST JSON `type`                | Description                                            |
+| --------: | ---------------------- | ------------------------------- | ------------------------------------------------------ |
+|       `0` | Script payload         | `script_payload`                | Executes a Move script included in the transaction.    |
+|       `1` | Module bundle payload  | `module_bundle_payload`         | Deprecated.                                            |
+|       `2` | Entry function payload | `entry_function_payload`        | Calls an entry function in a published module.         |
+|       `3` | Multisig payload       | `multisig_payload`              | Executes an operation as an on-chain multisig account. |
+|       `4` | Versioned payload      | Not exposed directly            | Versioned payload used by orderless transactions.      |
+|       `5` | Encrypted payload      | `encrypted_transaction_payload` | Contains an encrypted transaction payload.             |
+
+`write_set_payload` is used only by genesis and system transactions. It is not a `TransactionPayload` that a regular user transaction can submit.
+
+## BCS encoding rules
+
+The following rules apply to the BCS layouts in this document:
+
+| Type                  | Encoding                                                           |
+| --------------------- | ------------------------------------------------------------------ |
+| Enum                  | ULEB128 enum index followed by the fields of the selected variant. |
+| `vector<T>`           | ULEB128 element count followed by each element.                    |
+| `vector<u8>`          | ULEB128 byte length followed by the bytes.                         |
+| `Option<T>`           | `0x00` for `None`; `0x01` followed by `T` for `Some(T)`.           |
+| `u64`, `u128`, `u256` | Fixed-width, little-endian.                                        |
+| Address               | 32 bytes.                                                          |
+
+## Script payload
+
+`Script` contains Move script bytecode, type arguments, and script arguments.
+
+REST JSON:
+
+```json
+{
+  "type": "script_payload",
+  "code": { "bytecode": "0xa11ceb0b..." },
+  "type_arguments": [],
+  "arguments": ["0x123", "100000000"]
+}
+```
+
+BCS layout:
+
+```text
+uleb128(0)                    // TransactionPayload::Script
+vector<u8>                    // Move script bytecode
+vector<TypeTag>               // Type arguments
+vector<TransactionArgument>   // Script arguments
+```
+
+`TransactionArgument` is an enum that includes a type index. New applications generally use entry function payloads. Script payloads are intended for operations that must include Move bytecode in the transaction.
+
+## Module bundle payload
+
+`ModuleBundle` is deprecated. Nodes retain its enum position for BCS compatibility but reject new transactions that use it. Use the SDK package publishing API to publish a Move package.
+
+REST JSON:
+
+```json
+{
+  "type": "module_bundle_payload"
+}
+```
+
+Retained BCS layout:
+
+```text
+uleb128(1)  // TransactionPayload::ModuleBundle
+u64         // Compatibility field with no current behavior
+```
+
+## Entry function payload
+
+`EntryFunction` calls a `public entry fun` in a published module.
+
+REST JSON:
+
+```json
+{
+  "type": "entry_function_payload",
+  "function": "0x1::aptos_account::transfer",
+  "type_arguments": [],
+  "arguments": ["0x123", "100000000"]
+}
+```
+
+BCS layout:
+
+```text
+uleb128(2)          // TransactionPayload::EntryFunction
+ModuleId            // Module address and name
+Identifier          // Function name
+vector<TypeTag>     // Type arguments
+vector<vector<u8>>  // Function arguments
+```
+
+Each function argument is BCS-encoded according to its Move type in the ABI and stored in a separate `vector<u8>`. The argument bytes do not include type information, so decoding requires the function ABI.
+
+Build an entry function payload with the TypeScript SDK:
+
+```typescript filename="build-entry-function.ts"
+import { AccountAddress, Aptos, AptosConfig, Network, U64 } from "@aptos-labs/ts-sdk";
+
+const aptos = new Aptos(new AptosConfig({ network: Network.TESTNET }));
+
+const transaction = await aptos.transaction.build.simple({
+  sender: AccountAddress.fromString("0xabc"),
+  data: {
+    function: "0x1::aptos_account::transfer",
+    functionArguments: [AccountAddress.fromString("0x123"), new U64(100_000_000)],
+  },
+});
+
+const payloadHex = transaction.rawTransaction.payload.bcsToHex().toString();
+```
+
+## Multisig payload
+
+`Multisig` specifies an on-chain multisig account and can include an entry function or script payload.
+
+REST JSON:
+
+```json
+{
+  "type": "multisig_payload",
+  "multisig_address": "0x123",
+  "transaction_payload": {
+    "type": "entry_function_payload",
+    "function": "0x1::aptos_account::transfer",
+    "type_arguments": [],
+    "arguments": ["0x456", "100000000"]
+  }
+}
+```
+
+BCS layout:
+
+```text
+uleb128(3)                         // TransactionPayload::Multisig
+AccountAddress                     // Multisig account address
+Option<MultisigTransactionPayload> // Payload to execute
+```
+
+`MultisigTransactionPayload` is a nested enum: index `0` is an entry function and index `1` is a script. `None` uses a payload already stored in the on-chain multisig account.
+
+An on-chain multisig account is different from a multi-agent transaction. A multi-agent transaction has multiple signers but uses a regular transaction payload.
+
+## Versioned payload
+
+`Payload` is an extensible, versioned structure. Its current inner version is `TransactionPayloadInner::V1`.
+
+BCS layout:
+
+```text
+uleb128(4)              // TransactionPayload::Payload
+uleb128(0)              // TransactionPayloadInner::V1
+TransactionExecutable   // Entry function, script, empty, or encrypted operation
+TransactionExtraConfig  // Multisig address, replay-protection nonce, and other settings
+```
+
+The REST API converts this structure into entry function, script, or multisig JSON based on `TransactionExecutable` and `TransactionExtraConfig`. It does not return `Payload::V1` as a separate REST payload type.
+
+### Orderless transactions
+
+An orderless transaction is not a separate payload variant. It uses `TransactionPayload::Payload` and sets `replay_protection_nonce: Some(u64)` in `TransactionExtraConfig`. Its `RawTransaction.sequence_number` is set to `u64::MAX`.
+
+```typescript filename="build-orderless-transaction.ts"
+const transaction = await aptos.transaction.build.simple({
+  sender: sender.accountAddress,
+  data: {
+    function: "0x1::aptos_account::transfer",
+    functionArguments: [recipient.accountAddress, 100],
+  },
+  options: {
+    replayProtectionNonce: 12345n,
+  },
+});
+```
+
+`replayProtectionNonce` must be unique during the transaction's validity period. An orderless transaction has a maximum expiration period of 60 seconds.
+
+## Encrypted payload
+
+`EncryptedPayload` is available on networks that support AIP-144. On submission, it contains the ciphertext, payload hash, encryption epoch, extra configuration, and an optional claimed entry function.
+
+REST JSON:
+
+```json
+{
+  "type": "encrypted_transaction_payload",
+  "encrypted_state": "encrypted",
+  "payload_hash": "0x...",
+  "ciphertext": "0x...",
+  "encryption_epoch": "123",
+  "claimed_entry_fun": null
+}
+```
+
+BCS layout:
+
+```text
+uleb128(5)                     // TransactionPayload::EncryptedPayload
+uleb128(0)                     // EncryptedPayload::Encrypted
+Ciphertext                      // Ciphertext
+TransactionExtraConfig         // Extra configuration
+[u8; 32]                       // Payload hash
+u64                            // Encryption epoch
+Option<ClaimedEntryFunction>   // Optional claimed entry function
+```
+
+The REST API uses `encrypted_state` to distinguish `encrypted`, `decrypted`, and `failed_decryption`. Only the `encrypted` state can be submitted. See [Encrypted Pending Transactions](/build/guides/encrypted-pending-transactions).
+
+## Decode a BCS payload
+
+`TransactionPayload.deserialize()` decodes the payload enum and its fields. Entry function arguments remain raw bytes and must be decoded separately using the ABI.
+
+```typescript filename="decode-entry-function-payload.ts"
+import {
+  Deserializer,
+  TransactionPayload,
+  TransactionPayloadEntryFunction,
+  U64,
+} from "@aptos-labs/ts-sdk";
+
+function decodeEntryFunctionPayload(payloadHex: string) {
+  const decoded = TransactionPayload.deserialize(Deserializer.fromHex(payloadHex));
+
+  if (!(decoded instanceof TransactionPayloadEntryFunction)) {
+    throw new Error("Expected an entry function payload");
+  }
+
+  // The second argument is u64 according to the function ABI.
+  const amountBytes = decoded.entryFunction.args[1].bcsToBytes();
+  return U64.deserialize(new Deserializer(amountBytes)).value;
+}
+```
+
+`TransactionPayload`, `RawTransaction`, and `SignedTransaction` are different BCS objects. A transaction signature covers the complete raw transaction, not only its payload.
+
+<Aside type="note">
+  The on-chain `TransactionPayload` definition is in `types/src/transaction/mod.rs` in aptos-core. The REST JSON types and conversion logic are in `api/types/src/transaction.rs` and `api/types/src/convert.rs`.
+</Aside>

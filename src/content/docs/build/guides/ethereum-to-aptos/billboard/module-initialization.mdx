@@ -1,6 +1,6 @@
 ---
 title: "Modules and Initialization"
-description: "Compare Solidity contracts and constructors with Move modules, Move.toml, and init_module."
+description: "Compare Solidity contracts and constructors with Move modules, Move.toml, and explicit initialization."
 sidebar:
   label: "Modules and Initialization"
 ---
@@ -23,8 +23,16 @@ contract Billboard {
 
 ```move
 module billboard_address::billboard {
-    fun init_module(owner: &signer) {
-        // initialization
+    use std::signer;
+
+    /// Caller is not the module publisher.
+    const ENOT_AUTHORIZED: u64 = 1;
+
+    struct Billboard has key { /* fields */ }
+
+    entry fun initialize(owner: &signer) {
+        assert!(signer::address_of(owner) == @billboard_address, ENOT_AUTHORIZED);
+        move_to(owner, Billboard { /* ... */ });
     }
 }
 ```
@@ -32,7 +40,7 @@ module billboard_address::billboard {
 ## Key differences
 
 - Solidity declares contracts with the `contract` keyword. Move declares modules as `address::module_name`.
-- Solidity constructors run once at deployment. Move initialization logic typically lives in `init_module`.
+- Solidity constructors run once at deployment. In Move, initialization is an explicit action invoked by the developer, giving them more control — over initialization order and over the separation of code from data (a core Move paradigm). An explicit `entry fun initialize` must be called by the publisher after publishing (see [Modules on Aptos](/build/smart-contracts/modules-on-aptos#recommended-explicit-initialize-entry-function)).
 - Package metadata and named addresses live in `Move.toml`, not inline in the module.
 
 ```toml

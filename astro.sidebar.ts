@@ -796,6 +796,7 @@ export const sidebar = [
           "network/blockchain/gas-txn-fee",
           "network/blockchain/base-gas",
           "network/blockchain/txns-states",
+          "network/blockchain/transaction-payloads",
           "network/blockchain/events",
         ],
       }),
@@ -868,4 +869,4 @@ export const sidebar = [
   /*group("contribute", {
     items: ["contribute/components/themed-image"],
   }),*/
-] satisfies StarlightUserConfig["sidebar"];
+] as StarlightUserConfig["sidebar"];

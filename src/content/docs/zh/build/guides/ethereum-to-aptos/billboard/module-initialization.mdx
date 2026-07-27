@@ -1,6 +1,6 @@
 ---
 title: "Modules and Initialization"
-description: "对比 Solidity 的 contract / constructor 与 Move 的 module、Move.toml 和 init_module。"
+description: "对比 Solidity 的 contract / constructor 与 Move 的 module、Move.toml 和显式初始化。"
 sidebar:
   label: "Modules and Initialization"
 ---
@@ -23,8 +23,16 @@ contract Billboard {
 
 ```move
 module billboard_address::billboard {
-    fun init_module(owner: &signer) {
-        // initialization
+    use std::signer;
+
+    /// Caller is not the module publisher.
+    const ENOT_AUTHORIZED: u64 = 1;
+
+    struct Billboard has key { /* fields */ }
+
+    entry fun initialize(owner: &signer) {
+        assert!(signer::address_of(owner) == @billboard_address, ENOT_AUTHORIZED);
+        move_to(owner, Billboard { /* ... */ });
     }
 }
 ```
@@ -32,7 +40,7 @@ module billboard_address::billboard {
 ## 关键差异
 
 - Solidity 用 `contract` 关键字声明合约；Move 用 `address::module_name` 声明模块。
-- Solidity 的 constructor 在部署时执行一次；Move 的初始化逻辑通常写在 `init_module`。
+- Solidity 的 constructor 在部署时执行一次；在 Move 中，初始化是由开发者显式触发的操作，赋予其更多控制权——包括对初始化顺序的控制，以及对代码与数据分离（Move 的核心范式）的遵循。显式的 `entry fun initialize` 须由发布者在发布之后调用（见 [Aptos 上的模块](/zh/build/smart-contracts/modules-on-aptos)）。
 - 包元数据和 named address 放在 `Move.toml`，而不是直接写在模块里。
 
 ```toml

@@ -1,6 +1,6 @@
-import type { AstroMarkdownOptions } from "@astrojs/markdown-remark";
-import { createMarkdownProcessor } from "@astrojs/markdown-remark";
+import { type AstroMarkdownOptions, createMarkdownProcessor } from "@astrojs/markdown-remark";
 import matter from "gray-matter";
+import { markdownProcessorOptions } from "../../../config/markdown";
 import remarkConvertCodeBlocks from "../plugins/remark-convert-codeblocks.js";
 import remarkFixMoveLinks from "../plugins/remark-fix-move-links.js";
 import remarkGroupMoveDefinitions from "../plugins/remark-group-move-definitions.js";
@@ -14,11 +14,11 @@ export class MarkdownProcessor {
     this.processor = processor;
   }
 
-  static async create(astroConfig: { markdown: AstroMarkdownOptions }): Promise<MarkdownProcessor> {
-    const { remarkPlugins = [], rehypePlugins = [] } = astroConfig.markdown;
+  static async create(): Promise<MarkdownProcessor> {
+    const { gfm, remarkPlugins = [], rehypePlugins = [] } = markdownProcessorOptions;
 
-    const moveMarkdownConfig: AstroMarkdownOptions = {
-      ...astroConfig.markdown,
+    const moveMarkdownConfig = {
+      gfm,
       remarkPlugins: [
         remarkConvertCodeBlocks,
         remarkRemoveAnchorLinks,
@@ -37,7 +37,7 @@ export class MarkdownProcessor {
         ],
       ],
       rehypePlugins: [...rehypePlugins],
-    } as const;
+    } as AstroMarkdownOptions;
 
     const processor = await createMarkdownProcessor(moveMarkdownConfig);
     return new MarkdownProcessor(processor);

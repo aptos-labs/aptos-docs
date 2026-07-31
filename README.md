@@ -88,11 +88,13 @@ Key environment variables:
 
 ### Search
 
-The site ships Algolia DocSearch when the configured Algolia index can serve
-results, and falls back to Starlight's built-in [Pagefind](https://pagefind.app/)
-search otherwise. The decision is made once per build by probing the index, so a
-deleted Algolia application, a rotated search key, or an index the crawler never
-populated degrades to a working local search instead of an empty search modal.
+The site ships Algolia DocSearch only when a build can prove the configured
+Algolia index serves results, and uses Starlight's built-in
+[Pagefind](https://pagefind.app/) search otherwise. Pagefind indexes the built
+HTML and runs entirely in the browser, so search keeps working when a deleted
+Algolia application, a rotated search key, an index the crawler never populated,
+or an unreachable Algolia would otherwise leave the site with an empty search
+modal.
 
 Run `pnpm check:search` to see which provider the current environment would ship
 and, when Algolia is unhealthy, what needs fixing. Set `SEARCH_PROVIDER=algolia`

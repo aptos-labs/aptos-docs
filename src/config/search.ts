@@ -7,10 +7,12 @@
  * query fails at request time and the site is left with no search at all
  * (the DocSearch plugin disables Starlight's built-in Pagefind search).
  *
- * To avoid that, the build probes the configured Algolia index once and falls
- * back to Pagefind when the probe proves the credentials cannot serve results.
- * Transient failures (timeouts, 5xx, temporary DNS failures) keep DocSearch
- * enabled so a blip in Algolia's availability doesn't silently swap providers.
+ * To avoid that, the build probes the configured Algolia index once and only
+ * ships DocSearch when the probe comes back with a populated index. Anything
+ * else — a deleted application, a rejected key, an empty index, or a probe that
+ * could not complete — ships Pagefind, because a local index that always works
+ * beats a remote one that might not. Set `SEARCH_PROVIDER=algolia` to ship
+ * DocSearch without probing.
  */
 
 export type SearchProvider = "algolia" | "pagefind";
@@ -227,17 +229,11 @@ export async function resolveSearchProvider({
     };
   }
 
-  if (health.transient) {
-    return {
-      provider: "algolia",
-      reason: `Algolia health check failed temporarily (${health.reason}); keeping DocSearch`,
-      health,
-    };
-  }
-
   return {
     provider: "pagefind",
-    reason: `Algolia is unusable (${health.reason}); falling back to Pagefind`,
+    reason: health.transient
+      ? `Algolia could not be verified (${health.reason}); falling back to Pagefind`
+      : `Algolia is unusable (${health.reason}); falling back to Pagefind`,
     health,
   };
 }

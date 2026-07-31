@@ -65,9 +65,10 @@ function starlightLinksValidator(options) {
 
 import starlightOpenAPI from "starlight-openapi";
 import { sidebar } from "./astro.sidebar.ts";
-import { cspConfig } from "./src/config/csp";
+import { createCspConfig } from "./src/config/csp";
 import { SITE_TITLES, SUPPORTED_LANGUAGES } from "./src/config/i18n";
 import { markdownProcessor } from "./src/config/markdown";
+import { resolveSearchProvider } from "./src/config/search";
 import onDemandDirective from "./src/integrations/client-on-demand/register.js";
 import { devServerFileWatcher } from "./src/integrations/dev-server-file-watcher";
 import { firebaseIntegration } from "./src/integrations/firebase";
@@ -82,6 +83,33 @@ const ALGOLIA_INDEX_NAME = ENV.ALGOLIA_INDEX_NAME;
 
 const hasAlgoliaConfig = ALGOLIA_APP_ID && ALGOLIA_SEARCH_API_KEY && ALGOLIA_INDEX_NAME;
 const enableApiReference = true;
+
+// Pick the search provider before Starlight is configured: DocSearch when the
+// Algolia index can actually serve results, Starlight's built-in Pagefind
+// search otherwise. Set SEARCH_PROVIDER=algolia|pagefind to bypass the probe.
+const searchResolution = await resolveSearchProvider({
+  credentials: {
+    appId: ALGOLIA_APP_ID,
+    apiKey: ALGOLIA_SEARCH_API_KEY,
+    indexName: ALGOLIA_INDEX_NAME,
+  },
+  override: ENV.SEARCH_PROVIDER,
+  skipHealthCheck: ENV.SKIP_SEARCH_HEALTH_CHECK === "true",
+});
+const useAlgolia = searchResolution.provider === "algolia";
+
+if (hasAlgoliaConfig && !useAlgolia) {
+  console.warn(
+    `[search] Algolia DocSearch is configured but unusable — ${searchResolution.reason}. ` +
+      "Serving Pagefind instead. Run `pnpm check:search` for details.",
+  );
+} else {
+  console.info(`[search] Using ${searchResolution.provider} — ${searchResolution.reason}.`);
+}
+
+// Exposed to the client so Head.astro and the WebMCP search tool know which
+// search UI is on the page.
+process.env.SEARCH_PROVIDER = searchResolution.provider;
 
 /** @type {(config: import("vite").UserConfig) => boolean} */
 const isClientViteBuild = (config) => !config.build?.ssr;
@@ -236,7 +264,9 @@ export default defineConfig({
         starlightLlmsTxt({
           rawContent: true,
         }),
-        ...(hasAlgoliaConfig
+        // Registering the DocSearch plugin also disables Pagefind, so it is only
+        // added when Algolia is known to work (see `resolveSearchProvider`).
+        ...(useAlgolia
           ? [
               starlightDocSearch({
                 clientOptionsModule: "./src/config/docsearch.ts",
@@ -401,6 +431,14 @@ export default defineConfig({
         access: "public",
         optional: !hasAlgoliaConfig,
       }),
+      // Always set from `searchResolution` above, so this reflects the provider
+      // that actually shipped rather than the requested one.
+      SEARCH_PROVIDER: envField.enum({
+        context: "client",
+        access: "public",
+        values: ["algolia", "pagefind"],
+        default: "pagefind",
+      }),
       GITHUB_TOKEN: envField.string({
         context: "server",
         access: "secret",
@@ -423,7 +461,7 @@ export default defineConfig({
     validateSecrets: true,
   },
   security: {
-    csp: cspConfig,
+    csp: createCspConfig(searchResolution.provider),
   },
   fonts: [
     {

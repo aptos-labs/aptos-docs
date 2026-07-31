@@ -36,6 +36,15 @@ const FIGMA_HOSTS = withHttps("embed.figma.com");
 const GOOGLE_FONTS_HOSTS = withHttps(["fonts.googleapis.com", "fonts.gstatic.com"]);
 
 /**
+ * Hash of the `is:inline` script in Starlight's Pagefind search component, which
+ * reveals the ⌘K hint in the search button and swaps the modifier key on Apple
+ * devices. Astro does not hash `is:inline` scripts, so without this the hint
+ * stays hidden. `tests/search-provider.test.ts` recomputes it from the installed
+ * Starlight package so a version bump that edits the script fails loudly.
+ */
+const STARLIGHT_SEARCH_SHORTCUT_HASH = "sha256-f/zAUE74ucc3JYp4r4QQvkJofoQdkOIhHYK+jeZ6eko=";
+
+/**
  * Content Security Policy configuration for Astro.
  *
  * Pagefind searches inside a WebAssembly module running in a Web Worker created
@@ -86,6 +95,9 @@ export function createCspConfig(searchProvider: SearchProvider = "algolia") {
       hashes: [
         { hash: "sha256-VWo5Wp4aqSj6nSgMpeAp9cKieaoIfwFUAunAVugI5gA=", kind: "element" },
         { hash: "sha256-GkZBRnvSuhtx/cvzvukVkX2JJZW+DdPlVr7BX8Tefqo=", kind: "element" },
+        ...(usesPagefind
+          ? ([{ hash: STARLIGHT_SEARCH_SHORTCUT_HASH, kind: "element" }] as const)
+          : []),
       ],
     },
   } satisfies CspConfig;

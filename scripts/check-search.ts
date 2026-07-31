@@ -39,7 +39,9 @@ console.log(`Provider:    ${resolution.provider} (${resolution.reason})`);
 if (health.healthy) process.exit(0);
 
 if (health.transient) {
-  console.warn("\nThe failure looks temporary, so builds keep DocSearch enabled. Re-run to confirm.");
+  console.warn(
+    "\nThe failure looks temporary. Builds ship Pagefind until the probe succeeds, so re-run this check before assuming DocSearch is gone for good.",
+  );
   process.exit(1);
 }
 

@@ -1,4 +1,5 @@
 import type { AstroUserConfig } from "astro";
+import type { SearchProvider } from "./search";
 
 type CspConfig = Exclude<NonNullable<NonNullable<AstroUserConfig["security"]>["csp"]>, boolean>;
 
@@ -35,42 +36,57 @@ const FIGMA_HOSTS = withHttps("embed.figma.com");
 const GOOGLE_FONTS_HOSTS = withHttps(["fonts.googleapis.com", "fonts.gstatic.com"]);
 
 /**
- * Content Security Policy configuration for Astro
+ * Content Security Policy configuration for Astro.
+ *
+ * Pagefind searches inside a WebAssembly module running in a Web Worker created
+ * from a blob URL, both of which a strict policy blocks by default. The failure
+ * is silent — the search modal just never returns results — so the two
+ * relaxations are added only for builds that actually ship Pagefind.
+ * See https://pagefind.app/docs/hosting/#content-security-policy-csp.
  */
-export const cspConfig = {
-  directives: [
-    "default-src 'self'",
-    `img-src 'self' ${TWITTER_HOSTS} ${GOOGLE_HOSTS} ${GTM_HOST} ${GA_HOSTS} ${VERCEL_HOSTS} data: blob:`,
-    `font-src 'self' ${VERCEL_HOSTS} ${GOOGLE_FONTS_HOSTS} data:`,
-    "worker-src 'self'",
-    `connect-src 'self' ${APTOS_HOSTS} ${ALGOLIA_HOSTS} ${GOOGLE_HOSTS} ${GTM_HOST} ${GA_HOSTS} ${VERCEL_HOSTS} ${PUSHER_HOSTS} ${VERCEL_ANALYTICS_HOSTS}`,
-    `frame-src 'self' ${FIREBASE_HOSTS} ${VERCEL_HOSTS} ${VIDEO_HOSTS} ${STACKBLITZ_HOST} ${FIGMA_HOSTS}`,
-    `media-src 'self' ${TWITTER_HOSTS}`,
-  ],
-  styleDirective: {
-    resources: [
-      { resource: "'self'", kind: "element" },
-      { resource: VERCEL_HOSTS, kind: "element" },
-      { resource: GOOGLE_FONTS_HOSTS, kind: "element" },
-      { resource: "'unsafe-inline'", kind: "element" },
-      { resource: "'unsafe-inline'", kind: "attribute" },
+export function createCspConfig(searchProvider: SearchProvider = "algolia") {
+  const usesPagefind = searchProvider === "pagefind";
+
+  return {
+    directives: [
+      "default-src 'self'",
+      `img-src 'self' ${TWITTER_HOSTS} ${GOOGLE_HOSTS} ${GTM_HOST} ${GA_HOSTS} ${VERCEL_HOSTS} data: blob:`,
+      `font-src 'self' ${VERCEL_HOSTS} ${GOOGLE_FONTS_HOSTS} data:`,
+      usesPagefind ? "worker-src 'self' blob:" : "worker-src 'self'",
+      `connect-src 'self' ${APTOS_HOSTS} ${ALGOLIA_HOSTS} ${GOOGLE_HOSTS} ${GTM_HOST} ${GA_HOSTS} ${VERCEL_HOSTS} ${PUSHER_HOSTS} ${VERCEL_ANALYTICS_HOSTS}`,
+      `frame-src 'self' ${FIREBASE_HOSTS} ${VERCEL_HOSTS} ${VIDEO_HOSTS} ${STACKBLITZ_HOST} ${FIGMA_HOSTS}`,
+      `media-src 'self' ${TWITTER_HOSTS}`,
     ],
-  },
-  scriptDirective: {
-    resources: [
-      { resource: "'self'", kind: "element" },
-      { resource: "'unsafe-inline'", kind: "element" },
-      { resource: CDN_HOSTS, kind: "element" },
-      { resource: GOOGLE_HOSTS, kind: "element" },
-      { resource: GTM_HOST, kind: "element" },
-      { resource: VERCEL_HOSTS, kind: "element" },
-    ],
-    // Astro 7.1.1 does not automatically include these two virtual Starlight
-    // scripts in its generated CSP. Keep their exact hashes here so the theme
-    // provider and picker remain functional while retaining a strict policy.
-    hashes: [
-      { hash: "sha256-VWo5Wp4aqSj6nSgMpeAp9cKieaoIfwFUAunAVugI5gA=", kind: "element" },
-      { hash: "sha256-GkZBRnvSuhtx/cvzvukVkX2JJZW+DdPlVr7BX8Tefqo=", kind: "element" },
-    ],
-  },
-} satisfies CspConfig;
+    styleDirective: {
+      resources: [
+        { resource: "'self'", kind: "element" },
+        { resource: VERCEL_HOSTS, kind: "element" },
+        { resource: GOOGLE_FONTS_HOSTS, kind: "element" },
+        { resource: "'unsafe-inline'", kind: "element" },
+        { resource: "'unsafe-inline'", kind: "attribute" },
+      ],
+    },
+    scriptDirective: {
+      resources: [
+        // Bare resources land in `script-src`; `kind: "element"` scopes them to
+        // `script-src-elem`. WebAssembly is checked against `script-src`, so
+        // Pagefind's permission has to be declared without a kind.
+        "'self'",
+        ...(usesPagefind ? ["'wasm-unsafe-eval'"] : []),
+        { resource: "'self'", kind: "element" },
+        { resource: "'unsafe-inline'", kind: "element" },
+        { resource: CDN_HOSTS, kind: "element" },
+        { resource: GOOGLE_HOSTS, kind: "element" },
+        { resource: GTM_HOST, kind: "element" },
+        { resource: VERCEL_HOSTS, kind: "element" },
+      ],
+      // Astro 7.1.1 does not automatically include these two virtual Starlight
+      // scripts in its generated CSP. Keep their exact hashes here so the theme
+      // provider and picker remain functional while retaining a strict policy.
+      hashes: [
+        { hash: "sha256-VWo5Wp4aqSj6nSgMpeAp9cKieaoIfwFUAunAVugI5gA=", kind: "element" },
+        { hash: "sha256-GkZBRnvSuhtx/cvzvukVkX2JJZW+DdPlVr7BX8Tefqo=", kind: "element" },
+      ],
+    },
+  } satisfies CspConfig;
+}

@@ -57,18 +57,19 @@ With the development server running (`pnpm dev`), your changes will be reflected
 - Interactive components (GraphiQL editor, Testnet Faucet)
 - API Reference via OpenAPI specifications
 - Move Reference documentation
-- Search functionality (Algolia DocSearch)
+- Search functionality (Algolia DocSearch, with Pagefind as a fallback)
 - Dynamic OG Images
 
 ## Common Commands
 
-| Command        | Description                   |
-| -------------- | ----------------------------- |
-| `pnpm dev`     | Start the development server  |
-| `pnpm build`   | Build the site for production |
-| `pnpm preview` | Preview the production build  |
-| `pnpm lint`    | Check for linting issues      |
-| `pnpm format`  | Fix formatting issues         |
+| Command             | Description                            |
+| ------------------- | -------------------------------------- |
+| `pnpm dev`          | Start the development server           |
+| `pnpm build`        | Build the site for production          |
+| `pnpm preview`      | Preview the production build           |
+| `pnpm lint`         | Check for linting issues               |
+| `pnpm format`       | Fix formatting issues                  |
+| `pnpm check:search` | Report which search provider will ship |
 
 ## Environment Variables
 
@@ -81,8 +82,21 @@ Key environment variables:
 | `ENABLE_MOVE_REFERENCE` | Public | Build Move Reference docs      | Optional (default: `false`)          |
 | Firebase Credentials    | Public | Authentication features        | Required for Faucet/Auth             |
 | Algolia Credentials     | Public | Documentation search           | Optional                             |
+| `SEARCH_PROVIDER`       | Public | Force `algolia` or `pagefind`  | Optional (default: `auto`)           |
 | `GTAG_ID`               | Public | Google Analytics tracking      | Optional                             |
 | `OG_IMAGES_SECRET`      | Secret | Dynamic OG image generation    | Recommended for Vercel               |
+
+### Search
+
+The site ships Algolia DocSearch when the configured Algolia index can serve
+results, and falls back to Starlight's built-in [Pagefind](https://pagefind.app/)
+search otherwise. The decision is made once per build by probing the index, so a
+deleted Algolia application, a rotated search key, or an index the crawler never
+populated degrades to a working local search instead of an empty search modal.
+
+Run `pnpm check:search` to see which provider the current environment would ship
+and, when Algolia is unhealthy, what needs fixing. Set `SEARCH_PROVIDER=algolia`
+or `SEARCH_PROVIDER=pagefind` to bypass the probe.
 
 ## Project Structure
 
@@ -161,7 +175,7 @@ For more information on configuring redirects, see the [Vercel redirects documen
 | **Styling**         | [Tailwind CSS](https://tailwindcss.com/)            | Utility-first CSS framework                |
 | **UI Components**   | [React](https://react.dev/)                         | UI library (via Astro Islands)             |
 | **Package Manager** | [pnpm](https://pnpm.io/)                            | Fast, disk space efficient package manager |
-| **Search**          | [Algolia DocSearch](https://docsearch.algolia.com/) | Documentation search                       |
+| **Search**          | [Algolia DocSearch](https://docsearch.algolia.com/) | Documentation search (Pagefind fallback)   |
 | **Authentication**  | [Firebase](https://firebase.google.com/)            | Auth and backend services                  |
 | **Deployment**      | [Vercel](https://vercel.com/)                       | Hosting platform                           |
 

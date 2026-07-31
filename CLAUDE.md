@@ -261,7 +261,7 @@ This is a single-service Astro/Starlight documentation site. No databases, Docke
 
 - `pnpm dev` starts the Astro dev server at `http://localhost:4321`.
 - The `predev` script automatically builds middleware matcher and starts middleware watcher in the background.
-- Search (Algolia DocSearch) is disabled in dev mode; this is expected.
+- Search is disabled in dev mode; this is expected. Which provider a build ships (Algolia DocSearch or Starlight's Pagefind fallback) is decided in `src/config/search.ts`; run `pnpm check:search` to see the current decision.
 
 ### Linting and testing
 

@@ -1,0 +1,100 @@
+---
+title: "Keyless 的工作原理"
+description: "深入了解 Aptos Keyless 如何通过 OIDC 提供商认证派生并访问区块链账户。"
+sidebar:
+  label: "工作原理"
+---
+
+import { YouTube } from 'astro-embed';
+
+Aptos Keyless 让 dApp 能够为成功通过 OIDC 提供商（例如 Google）登录 dApp 的用户**派生**并**访问**区块链账户。关键是，该区块链账户的作用域仅限此 dApp。这意味着，其他 dApp 即使能够让同一用户通过同一 OIDC 提供商登录，也无法访问该账户，而会获得各自独立的账户。
+
+_这是如何实现的？_
+
+本文将说明下图所示的完整 Keyless 流程：从用户首次登录 dApp，到获得零知识证明，最后在链上提交交易。
+
+![Keyless 概览](~/images/aptos-keyless/keyless-overview.png "Keyless 概览")
+
+## 概览
+
+从很高层面看，用户通过 OIDC 提供商成功登录 dApp 后，dApp 会收到由 OIDC 提供商签名的 **JSON Web Token（JWT）**。JWT 包含以下三项重要信息：
+
+1. 用户身份（位于 JWT 的 `sub` 字段）。
+2. dApp 身份（位于 JWT 的 `aud` 字段）。
+3. 应用特定数据，具体是**临时公钥（EPK）**（位于 JWT 的 `nonce` 字段）；只有用户知道其对应的**临时私钥（ESK）**。
+
+现在，假设用户的区块链账户地址（大致）是对上述 `sub` 中的用户身份和 `aud` 中的 dApp 身份进行哈希后的结果。
+
+那么，**关键观察**是：已签名 JWT 实际上充当一种**数字证书**，在**短时间内**将此区块链地址绑定到 EPK，并允许 EPK 为其签署交易（TXN）。换言之，它会安全地将该区块链账户的交易签名权限委托给 EPK（注意：EPK 包含过期时间，因此有效期很短）。
+
+如果用户丢失 ESK，只需再次通过 OIDC 提供商登录，应用便可取得针对新 EPK 的新签名 JWT（某些情况下，也可通过 OAuth 刷新令牌请求新的签名 JWT）。
+
+该系统面临的**挑战**是保护隐私：在链上公开 JWT 会泄露用户身份；向 OIDC 提供商公开 EPK 则会使其能够追踪用户在链上的交易。
+
+下文将说明 Keyless 账户如何工作，以及如何解决这些挑战。
+
+## 流程：在 dApp 中为用户派生 Keyless 账户
+
+首先，了解 dApp 如何让用户通过（例如）Google 登录，派生该用户的 Keyless 区块链地址，并向其发送资产。
+
+![Keyless 账户图](~/images/aptos-keyless/keyless-account.png "Keyless 账户图")
+
+**第 1 步**：用户生成一个临时密钥对：含过期时间的 EPK 及其对应 ESK。dApp 保存 EPK，并在用户侧安全地存储 ESK（例如浏览器的本地存储；若 ESK 是 WebAuthn 通行密钥，则存入可信执行环境）。
+
+**第 2 步**：dApp 将 EPK 承诺为 $H(`\mathsf{epk}`, \rho)$，其中 $\rho$ 是盲化因子。当用户点击“使用 Google 登录”按钮时，dApp 会将用户重定向到 Google 登录页；尤其会将 URL 的 `nonce` 参数设为此 EPK 承诺。这会向 Google 隐藏 EPK，从而保护用户交易活动的隐私。
+
+**第 3 步**：通常，用户已有之前登录 Google 账户留下的 HTTP Cookie，Google 因此只需检查该 Cookie。若用户拥有多个 Google 账户，Google 会要求用户选择要用于登录 dApp 的账户（较少见的路径是要求用户输入 Google 用户名和密码）。
+
+**第 4 步**：用户登录后，Google 会向 dApp 发送签名 JWT；其中包括用户的 `sub` 标识符（例如 `uid-123`）、应用的 `aud` 标识符（例如 `"dapp-xyz"`）以及带有 EPK 承诺的 `nonce`（这假设 dApp 已在 Google 注册并获得该 `"dapp-xyz"` 标识符）。
+
+**第 5 步**：dApp 已几乎具备派生用户 Keyless 账户所需的一切：用户标识符（`sub`）和 dApp 标识符（`aud`）。不过，为保护用户隐私，dApp 还会使用第三项信息：称为 **pepper** 的盲化因子 $r$。dApp 会联系所谓的 **guardian**，后者会根据给定的（`sub`、`aud`）确定性地派生一个随机 $r$。重要的是，guardian 只有在看到针对所查询（`sub`、`aud`）的有效签名 JWT 时才会向 dApp 公开 $r$。
+
+**第 6 步**：dApp 将账户地址派生为 $\mathsf{addr} = H(\texttt{"uid-123"}, \texttt{"dapp-xyz"}, r)$，其中 $H$ 是加密哈希函数。
+
+注意，pepper $r$ 用于在地址内隐藏用户和应用身份；如上所述，只有持有有效 JWT 的已授权用户才能取得此 pepper。
+
+还要注意，地址与 EPK 无关。因此 ESK 无需长期存在，也可以丢失。
+
+最后，dApp 可向用户地址 $\mathsf{addr}$ 发送 NFT 等资产。
+
+但 dApp 如何授权来自 $\mathsf{addr}$ 的交易？下一节将说明。
+
+## 流程：交易前获取零知识证明
+
+上一流程说明了 dApp 如何在 guardian 帮助下让 Google 用户登录，并派生保护隐私的 Keyless 地址。
+
+接下来说明此 dApp 如何获得零知识证明（ZKP），以便代表用户授权从该地址发出的交易。重要的是，交易会隐藏用户的身份信息（例如 `sub` 字段）。
+
+![Keyless 证明图](~/images/aptos-keyless/keyless-proof.png "Keyless 证明图")
+
+**第 1 步**：dApp 向**证明服务**发送所有必要的公开信息（即 $\mathsf{epk}$、$\mathsf{GPK}$）和私密信息（即 JWT、Google 的签名 $\sigma\_G$、EPK 盲化因子 $\rho$ 以及 pepper $r$）。
+
+**第 2 步**：证明器派生用户地址 $\mathsf{addr}$，并针对 Keyless 关系 $\mathcal{R}\_\mathsf{keyless}$（如下文所述）计算零知识证明（ZKP）$\pi$。该证明充当**保护隐私**的数字证书，并将用户地址 $\mathsf{addr}$ 绑定到临时公钥 $\mathsf{epk}$。证明器随后将 $\pi$ 发送给 dApp。
+
+为将 $\mathsf{epk}$ 与用户地址 $\mathsf{addr}$ 绑定，ZKP 会向验证者证明：用户持有 (1) Google 签名的 JWT，(2) 该 JWT 在 `nonce` 字段中承诺了 $\mathsf{epk}$，且 (3) 其内容与地址中的信息一致；同时不泄露 JWT、其签名 $\sigma\_G$、$\rho$ 或 $r$ 的任何信息。
+
+更正式地说，ZKP $\pi$ 会让验证者（即区块链）确信：对于公开输入 $(\mathsf{addr}, \mathsf{epk}, \mathsf{GPK})$，证明器知道秘密输入 $(\mathsf{jwt}, \sigma\_G, \rho, r)$，使得下图所示关系 $\mathcal{R}\_\mathsf{keyless}$ 成立：
+
+![Keyless 关系图](~/images/aptos-keyless/keyless_relation.png "Keyless 关系图")
+
+回顾前文，签名 JWT 本身会将区块链地址 $\mathsf{addr}$ 绑定到 $\mathsf{epk}$，使 $\mathsf{epk}$ 能为 $\mathsf{addr}$ 签署交易。但 JWT 会泄露用户身份，因此 ZKP 用于隐藏 JWT（和其他私密信息），同时证明必要的检查确实成立（即 $\mathcal{R}\_\mathsf{keyless}$ 中的检查）。
+
+下面说明 dApp 如何从 $\mathsf{addr}$ 授权交易。
+
+## 流程：从 Keyless 账户发送交易
+
+前一流程说明 dApp 如何从证明服务获得 ZKP。接下来说明 dApp 如何利用此 ZKP 为该账户发起交易。
+
+![Keyless 签名图](~/images/aptos-keyless/keyless-signing.png "Keyless 签名图")
+
+**第 1 步**：dApp 从用户处取得针对交易的临时签名 $\sigma\_\mathsf{eph}$。这可由管理 ESK 的 dApp 在用户不知情时完成；也可以向用户发出实际签名请求，例如 ESK 为存储在用户可信硬件中的 WebAuthn 通行密钥时。
+
+**第 2 步**：dApp 将交易、ZKP $\pi$、临时公钥 $\mathsf{epk}$ 和临时签名 $\sigma\_\mathsf{eph}$ 发送给区块链验证者。
+
+**第 3 步**：为检查交易是否已正确签名，验证者会执行多个步骤：(1) 检查 $\mathsf{epk}$ 是否未过期，(2) 从交易中获取用户地址 $\mathsf{addr}$，(3) 根据 $(\mathsf{addr}, \mathsf{epk}, \mathsf{GPK})$ 验证 ZKP，以及 (4) 根据 $\mathsf{epk}$ 验证交易上的临时签名 $\sigma\_\mathsf{eph}$。若所有检查均通过，即可安全地执行交易。
+
+## 想了解更多？
+
+下面这段 20 分钟的演示也讲解了 Keyless 账户背后的核心理念。<br />
+
+<YouTube title="Keyless Presentation" id="sKqeGR4BoI0" />

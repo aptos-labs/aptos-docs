@@ -1,0 +1,192 @@
+---
+title: "向量"
+label: "向量"
+description: "掌握 Move 中用于动态数组、集合和智能合约列表操作的向量操作。"
+sidebar:
+  label: "向量"
+---
+
+Move 中的向量（Vector）提供灵活的动态数组式数据结构，支持索引、添加和移除元素等多种操作。Move 向量可增长，并支持从 0 开始的索引。
+
+## 向量的核心功能
+
+### 结构
+
+`vector` 模块提供各种原生函数和 Move 函数来管理动态数组：
+
+- `empty`：创建空向量。
+- `length`：返回向量长度。
+- `borrow`：返回给定索引处元素的不可变引用。
+- `push_back`：在向量末尾添加元素。
+- `borrow_mut`：返回给定索引处元素的可变引用。
+- `pop_back`：移除并返回向量的最后一个元素。
+- `destroy_empty`：销毁空向量。
+- `swap`：交换给定两个索引处的元素。
+
+### 常量
+
+以下常量定义模块中使用的错误代码：
+
+- `EINDEX_OUT_OF_BOUNDS`：0x20000
+
+### API 概览
+
+#### 创建向量
+
+- `empty<Element>(): vector<Element>`：创建空向量。
+- `singleton<Element>(e: Element): vector<Element>`：创建包含单个元素的向量。
+
+#### 管理元素
+
+- `push_back<Element>(v: &mut vector<Element>, e: Element)`：在向量末尾添加元素。
+- `pop_back<Element>(v: &mut vector<Element>): Element`：移除并返回向量的最后一个元素。
+- `remove<Element>(v: &mut vector<Element>, i: u64): Element`：移除指定索引处的元素，并移动后续元素。
+- `swap_remove<Element>(v: &mut vector<Element>, i: u64): Element`：将给定索引处的元素与最后一个元素交换后移除。
+
+#### 获取元素
+
+- `borrow<Element>(v: &vector<Element>, i: u64): &Element`：返回给定索引处元素的不可变引用。
+- `borrow_with_default<Element>(v: &vector<Element>, i: u64, default: &Element): &Element`：若索引越界，则返回元素引用或默认值。
+- `borrow_mut<Element>(v: &mut vector<Element>, i: u64): &mut Element`：返回给定索引处元素的可变引用。
+
+#### 实用函数
+
+- `length<Element>(v: &vector<Element>): u64`：返回向量中的元素数。
+- `is_empty<Element>(v: &vector<Element>): bool`：检查向量是否为空。
+- `contains<Element>(v: &vector<Element>, e: &Element): bool`：检查向量是否包含给定元素。
+- `index_of<Element>(v: &vector<Element>, e: &Element): (bool, u64)`：若找到给定元素，返回其索引。
+- `reverse<Element>(v: &mut vector<Element>)`：反转向量中元素的顺序。
+- `append<Element>(lhs: &mut vector<Element>, other: vector<Element>)`：将一个向量的所有元素追加到另一个向量。
+- `for_each<Element>(v: vector<Element>, f: |Element|)`：对向量中每个元素应用函数。
+- `for_each_ref<Element>(v: &vector<Element>, f: |&Element|)`：对向量中每个元素的引用应用函数。
+- `for_each_mut<Element>(v: &mut vector<Element>, f: |&mut Element|)`：对向量中每个元素的可变引用应用函数。
+- `fold<Accumulator, Element>(v: vector<Element>, init: Accumulator, f: |Accumulator, Element|Accumulator): Accumulator`：应用函数以累积向量元素的值。
+- `map<Element, NewElement>(v: vector<Element>, f: |Element|NewElement): vector<NewElement>`：将函数映射到向量元素，生成新向量。
+- `filter<Element: drop>(v: vector<Element>, p: |&Element|bool): vector<Element>`：使用谓词函数筛选向量。
+
+## 使用示例
+
+### 创建并使用向量
+
+```move filename="vector.move"
+module 0x42::vector_usage {
+    use std::vector;
+
+    public entry fun main() {
+        let v = vector::empty<u64>();
+        vector::push_back(&mut v, 10);
+        vector::push_back(&mut v, 20);
+
+        let length = vector::length(&v);
+        assert!(length == 2, 0);
+
+        let first_elem = vector::borrow(&v, 0);
+        assert!(*first_elem == 10, 0);
+
+        let second_elem = vector::borrow(&v, 1);
+        assert!(*second_elem == 20, 0);
+
+        let last_elem = vector::pop_back(&mut v);
+        assert!(last_elem == 20, 0);
+
+        vector::destroy_empty(v);
+    }
+}
+```
+
+### 追加向量
+
+```move filename="vector.move"
+module 0x42::vector_usage {
+    use std::vector;
+
+    public fun append_vectors() {
+        let v1 = vector::empty<u64>();
+        let v2 = vector::empty<u64>();
+
+        vector::push_back(&mut v1, 1);
+        vector::push_back(&mut v1, 2);
+
+        vector::push_back(&mut v2, 3);
+        vector::push_back(&mut v2, 4);
+
+        vector::append(&mut v1, v2);
+
+        let length = vector::length(&v1);
+        assert!(length == 4, 0);
+
+        let first_elem = vector::borrow(&v1, 0);
+        assert!(*first_elem == 1, 0);
+
+        let second_elem = vector::borrow(&v1, 1);
+        assert!(*second_elem == 2, 0);
+
+        let third_elem = vector::borrow(&v1, 2);
+        assert!(*third_elem == 3, 0);
+
+        let fourth_elem = vector::borrow(&v1, 3);
+        assert!(*fourth_elem == 4, 0);
+    }
+}
+```
+
+### 移除元素
+
+```move filename="vector.move"
+module 0x42::vector_usage {
+    use std::vector;
+
+    public fun remove_elements() {
+        let v = vector::empty<u64>();
+
+        vector::push_back(&mut v, 1);
+        vector::push_back(&mut v, 2);
+        vector::push_back(&mut v, 3);
+
+        let removed_elem = vector::remove(&mut v, 1);
+        assert!(removed_elem == 2, 0);
+
+        let length = vector::length(&v);
+        assert!(length == 2, 0);
+
+        let first_elem = vector::borrow(&v, 0);
+        assert!(*first_elem == 1, 0);
+
+        let second_elem = vector::borrow(&v, 1);
+        assert!(*second_elem == 3, 0);
+    }
+}
+```
+
+### 交换元素
+
+```move filename="vector.move"
+module 0x42::vector_usage {
+    use std::vector;
+
+    public fun swap_elements() {
+        let v = vector::empty<u64>();
+
+        vector::push_back(&mut v, 1);
+        vector::push_back(&mut v, 2);
+        vector::push_back(&mut v, 3);
+
+        vector::swap(&mut v, 0, 2);
+
+        let first_elem = vector::borrow(&v, 0);
+        assert!(*first_elem == 3, 0);
+
+        let third_elem = vector::borrow(&v, 2);
+        assert!(*third_elem == 1, 0);
+    }
+}
+```
+
+## 源代码
+
+- [vector.move](https://github.com/aptos-labs/aptos-core/blob/main/third_party/move/move-stdlib/sources/vector.move)
+
+## 其他示例
+
+- [Move Spiders 向量教程](https://movespiders.com/courses/modules/datastructures/lessonId/1)
+- [Move Spiders 向量教程 2](https://movespiders.com/courses/modules/basics/lessonId/7)

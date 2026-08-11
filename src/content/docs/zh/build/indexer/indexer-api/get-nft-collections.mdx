@@ -1,0 +1,57 @@
+---
+title: "获取账户拥有的 NFT 集合"
+description: "获取账户拥有的 NFT 集合详情，包括集合元数据、代币数量和完整集合属性"
+sidebar:
+  label: "NFT 集合"
+---
+
+import { GraphQLEditor } from '~/components/react/GraphQLEditor';
+
+import { Aside } from '@astrojs/starlight/components';
+
+`GetAccountNftCollections` 会获取指定账户地址拥有的 NFT 集合详细信息。其中包括集合 ID、每个集合中不同代币的数量，以及每个集合的详细属性。这对于需要展示与账户关联的 NFT 持仓完整详情的应用特别有用。
+
+<Aside type="note">
+  亲自试用！您可以在编辑器底部自定义变量。
+</Aside>
+
+<GraphQLEditor
+  query={`query GetAccountNftCollections($address: String) {
+  current_collection_ownership_v2_view(
+    where: { owner_address: { _eq: $address } }
+    limit: 1000000
+    offset: 0
+    order_by: [{ last_transaction_version: desc }, { collection_id: asc }]
+  ) {
+    collection_id
+    distinct_tokens
+    last_transaction_version
+    owner_address
+    current_collection {
+      collection_id
+      collection_name
+      creator_address
+      current_supply
+      description
+      last_transaction_timestamp
+      last_transaction_version
+      max_supply
+      mutable_description
+      mutable_uri
+      table_handle_v1
+      token_standard
+      total_minted_v2
+      uri
+      __typename
+    }
+    __typename
+  }
+}`}
+  variables={`{
+  "address": "0x8824ebb6e0d60656f6d4d5bbc408805d9ca6b984aad78b16f42b1dae545d6762"
+}`}
+/>
+
+#### 变量：
+
+- `$address`：**String** — 要查询 NFT 集合数据的 Aptos 账户地址。例如：`"0x8824ebb6e0d60656f6d4d5bbc408805d9ca6b984aad78b16f42b1dae545d6762"`

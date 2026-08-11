@@ -1,0 +1,117 @@
+---
+title: "使用 Move 脚本生成交易"
+description: "使用 Move 脚本创建自定义测试交易，通过智能合约交互模拟测试处理器。"
+sidebar:
+  label: "Move 脚本"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+## 概览
+
+本节说明如何使用 Move 脚本创建测试交易。
+
+## 前提条件
+
+1. 克隆 [aptos-core](https://github.com/aptos-labs/aptos-core) 仓库：
+   - 前往 aptos-core/ecosystem/indexer-grpc/indexer-transaction-generator 目录。
+
+## 如何使用 Move 脚本生成测试交易
+
+<Steps>
+  1. 设置 move\_fixtures 文件夹
+
+     继续前，确保已在正确位置设置 move\_fixtures 文件夹：
+
+     1. 位置：
+        在 aptos-core/ecosystem/indexer-grpc/indexer-transaction-generator/imported\_transactions 目录中创建 move\_fixtures 文件夹。这里将存放测试交易的 Move 脚本及其配置。
+
+        <Aside type="note"> **注意：** 请勿在处理器仓库中创建 move\_fixtures 文件夹。所有 Move 相关文件都应位于 aptos-core 仓库的指定目录中。 </Aside>
+     2. 设置文件夹的步骤：
+        - 如果从头开始，请删除 aptos-core 仓库中 move\_fixtures 文件夹的所有现有文件和项目。
+        - 在 move\_fixtures 文件夹中创建自己的 Move 项目或脚本（下一步详述）。
+
+  2. 创建 Move 项目并编写 Move 脚本
+
+     创建 Move 项目，并编写模块以输出希望在处理器中测试的场景。可参考[示例](https://github.com/aptos-labs/aptos-core/tree/main/ecosystem/indexer-grpc/indexer-transaction-generator/imported_transactions/move_fixtures)。
+
+  3. 设置测试账户
+
+     1. 这些账户将用于部署模块。
+     2. 按需设置账户；这些账户将用于发送脚本化交易。请参阅[此指南](/zh/build/cli/setup-cli)创建账户。
+     3. 使用你的账户更新 [testing\_accounts.yaml](https://github.com/aptos-labs/aptos-core/blob/main/ecosystem/indexer-grpc/indexer-transaction-generator/imported_transactions/testing_accounts.yaml)。
+
+     <Aside type="note"> **注意：** 请勿在此使用真实账户。只能使用专为测试而通过 CLI 创建的**测试账户**。设置测试账户时始终选择 **devnet**；后续需用它配置账户配置文件并通过 faucet 注资。 </Aside>
+
+  4. 创建配置文件
+
+     每个配置文件定义一个测试场景中的一系列交易。
+
+     1. 在 move\_fixtures [目录](https://github.com/aptos-labs/aptos-core/blob/main/ecosystem/indexer-grpc/indexer-transaction-generator/imported_transactions/move_fixtures)中创建配置文件，并按其对应测试场景命名。
+     2. 此配置文件应包含每笔交易的唯一名称和详细信息，并按执行顺序列出交易。其结构如下：
+
+        - output\_name：保存交易结果的输出文件名称。
+        - script\_path：作为交易一部分执行的 Move 脚本文件路径。
+        - sender\_address：发送交易的账户地址。
+
+        输出数量完全由你决定，但每笔交易的输出名称应唯一。可添加测试处理器所需的任意数量交易。
+
+        ```yaml
+        transactions:
+          - output_name: simple_user_script1
+            script_path: simple_user_script
+            sender_address: <account_address>
+          - output_name: simple_user_script2
+            script_path: simple_user_script2
+            sender_address: <account_address>
+        ```
+
+  5. 生成 JSON 文件和 Rust 文件
+
+     设置好 Move 文件和配置后，运行与导入交易相同的命令，但附加 mode 标志：
+
+     - testing-folder 是存放 Move 文件的位置。
+     - output-folder 可设为任何存放生成文件的文件夹。
+     - \--mode=script 标志指定交易生成器以脚本模式运行，即执行 Move 脚本并生成相应交易数据。默认模式为 import，它从网络获取交易。
+
+     ```shellscript
+     cd ~/aptos-core/ecosystem/indexer-grpc/indexer-transaction-generator
+     cargo run -- --testing-folder ./imported_transactions --output-folder ../indexer-test-transactions/src/ --script
+     ```
+
+     此命令将：
+
+     1. 读取 move\_fixtures 文件夹中的配置。
+     2. 执行指定的 Move 脚本。
+     3. 将生成的 JSON 文件输出到指定文件夹（~/aptos-core/ecosystem/indexer-grpc/indexer-test-transactions/src/json\_transactions）。
+     4. 根据生成的 JSON 文件，用新交易数据覆盖 generated\_transactions.rs。该文件包含可在测试中使用的交易常量。
+
+  6. 验证
+
+     验证目标目录中的 json\_transactions 文件夹包含配置文件中指定名称的生成 JSON 文件，并确保 generated\_transactions.rs 已相应更新。
+</Steps>
+
+## 如何使用测试交易
+
+### 导出生成的文件
+
+更新 mod.rs 文件以包含带有交易常量的生成 Rust 文件。若 mod.rs 不存在，请在目标文件夹中创建它：
+
+[参考 mod.rs](https://github.com/aptos-labs/aptos-indexer-processor-example/blob/main/test-transactions-example/src/json_transactions/mod.rs)。
+
+### 导出 json\_transactions 文件夹
+
+由于 generated\_transactions.rs 依赖 json\_transactions，请确保在库文件中正确导出 json\_transactions 文件夹，以便测试直接访问交易数据。
+
+[参考 lib.rs](https://github.com/aptos-labs/aptos-indexer-processor-example/blob/main/test-transactions-example/src/lib.rs)。
+
+### 集成到测试用例
+
+如果决定将 Rust 文件输出到不同 crate，可更新 cargo.toml，将包含生成文件的 crate 作为依赖导入。否则可直接在测试文件中导入生成文件。
+[示例](https://github.com/aptos-labs/aptos-indexer-processors-v2/blob/main/integration-tests/Cargo.toml#L19)。
+
+## 后续步骤
+
+集成交易常量后，即可在处理器测试中使用它们验证功能。有关编写处理器测试的详细说明，请参阅“编写处理器测试”。
+
+[示例](https://github.com/aptos-labs/aptos-indexer-processors-v2/blob/main/integration-tests/src/sdk_tests/events_processor_tests.rs)

@@ -1,0 +1,152 @@
+---
+title: "View 函数"
+description: "使用 .NET SDK 通过动态和强类型方式，以 View 函数查询区块链上的智能合约。"
+sidebar:
+  label: "View 函数"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="caution" emoji="❗">
+  此 SDK 目前处于 beta 阶段。请在
+  [aptos-labs/aptos-dotnet-sdk](https://github.com/aptos-labs/aptos-dotnet-sdk)
+  仓库创建 issue，报告遇到的问题。
+</Aside>
+
+View 函数可用于查询区块链上的智能合约。它们在智能合约中定义为带有 view 修饰符的入口函数。本指南提供 View 函数、其类型和用法的代码片段。
+
+## 动态类型 View 函数
+
+如果不关心 View 函数的返回类型，可在不提供任何类型参数的情况下使用 View 函数。
+
+我们将调用的 Move 函数：
+
+```move
+public fun balance<CoinType>(owner: address): u64
+```
+
+要调用此 View 函数，将使用 ContractClient 的 View 函数。
+
+```csharp {9-16}
+using Aptos;
+
+class Program
+{
+    static void Main(string[] args)
+    {
+        var client = new AptosClient(Networks.Mainnet);
+
+        // Call the view function by specifying the function name, arguments, and type arguments
+        var values = await client.Contract.View(
+            new GenerateViewFunctionPayloadData(
+                function: "0x1::coin::balance",
+                functionArguments: ["0x1"],
+                typeArguments: ["0x1::aptos_coin::AptosCoin"]
+            )
+        );
+
+        // Returns a list of return values: ["100"]
+        ulong balance = ulong.Parse(values[0]);
+    }
+}
+```
+
+## 简单强类型 View 函数
+
+对于具有常见返回类型的 View 函数，可以通过传入类型参数为返回值指定类型。
+
+我们将调用的 Move 函数：
+
+```move
+public fun get_current_epoch_proposal_counts(validator_index: u64): (u64, u64)
+```
+
+要调用此 View 函数，将使用 ContractClient 的 View 函数并传入类型参数。
+
+```csharp {9-16}
+using Aptos;
+
+class Program
+{
+    static void Main(string[] args)
+    {
+        var client = new AptosClient(Networks.Mainnet);
+
+        // Call the view function by specifying the function name, arguments, and type arguments
+        var values = await client.Contract.View<List<ulong>>(
+            new GenerateViewFunctionPayloadData(
+                function: "0x1::stake::get_current_epoch_proposal_counts",
+                functionArguments: [(ulong)0],
+                typeArguments: []
+            )
+        );
+
+        // Returns a list of return values: ["100", "100"]
+        ulong successfulProposals = values[0];
+        ulong failedProposals = values[1];
+    }
+}
+```
+
+## 复杂强类型 View 函数
+
+对于具有复杂返回类型的 View 函数，可使用 `Newtonson.Json` 反序列化返回值。默认情况下，传入 View 函数的所有类型都会使用 `Newtonson.Json` 的 `JsonConvert.DeserializeObject<T>()` 反序列化返回值。也可通过创建自定义 `JsonConverter` 覆盖反序列化行为。
+
+我们将调用的 Move 函数：
+
+```move
+public fun supply<CoinType>(): Option<u128>
+```
+
+创建自己的 JsonConverter 以反序列化返回值。
+
+```csharp {9-26}
+using Aptos;
+using Newtonsoft.Json;
+
+[JsonConverter(typeof(CoinSupplyConverter))]
+class CoinSupply(ulong value) {
+    public ulong Value;
+}
+
+class CoinSupplyConverter : JsonConverter<CoinSupply> {
+    public override CoinSupply ReadJson(JsonReader reader, Type objectType, CoinSupply existingValue, bool hasExistingValue, JsonSerializer serializer) {
+        // The return type of the view function is an Option<u128> -> [{ "vec": [] }] or [{ "vec": ["100"] }]
+        JArray array = JArray.Load(reader);
+        var option = array[0];
+
+        // If the Option is None
+        if (option["vec"].Count == 0) return null;
+
+        // If the Option is Some
+        ulong value = ulong.Parse(option["vec"][0]);
+        return new CoinSupply(value);
+    }
+}
+```
+
+要调用此 View 函数，将使用 ContractClient 的 View 函数并传入类型参数。
+
+```csharp {10-17}
+using Aptos;
+using Newtonsoft.Json;
+
+class Program
+{
+    static void Main(string[] args)
+    {
+        var client = new AptosClient(Networks.Mainnet);
+
+        // Call the view function by specifying the function name, arguments, and type arguments
+        CoinSupply coinSupply = await client.Contract.View<CoinSupply>(
+            new GenerateViewFunctionPayloadData(
+                function: "0x1::coin::supply",
+                functionArguments: [],
+                typeArguments: ["0x1::aptos_coin::AptosCoin"]
+            )
+        );
+
+        ulong coinSupply = coinSupply.Value;
+    }
+}
+```

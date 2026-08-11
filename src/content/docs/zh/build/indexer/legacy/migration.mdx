@@ -1,0 +1,129 @@
+---
+title: "迁移至交易流服务"
+description: "从旧版 Indexer 迁移到现代交易流服务的指南，包含托管和自托管部署选项。"
+sidebar:
+  label: "迁移指南"
+---
+
+本指南说明当你正在运行旧版 Indexer 时，如何迁移至交易流服务。
+
+旧版 Indexer 堆栈需要运行归档全节点，并使用额外线程处理交易，维护困难且成本高。添加更多自定义逻辑则需要更大的机器，或运行数量线性增长的多个全节点。
+
+这种新 Indexer 方式使用[交易流服务](/zh/build/indexer/txn-stream)。可以使用 [Labs 托管交易流服务](/zh/build/indexer/txn-stream/aptos-hosted-txn-stream)，也可以[运行自己的交易流服务实例](/zh/build/indexer/txn-stream/self-hosted)。
+
+## 1. 克隆仓库
+
+```shellscript filename="Terminal"
+# SSH
+git clone git@github.com:aptos-labs/aptos-indexer-processors.git
+
+# HTTPS
+git clone https://github.com/aptos-labs/aptos-indexer-processors.git
+```
+
+前往服务目录：
+
+```shellscript filename="Terminal"
+cd aptos-indexer-processors
+cd rust/processor
+```
+
+## 2. 将处理器迁移到交易流服务
+
+对于每个要迁移的处理器，都需使用以下模板创建配置文件。可在[此处](/zh/build/indexer/txn-stream/self-hosted#配置)了解配置文件中每个字段的详细信息。
+
+```yaml filename="config.yaml"
+health_check_port: 8084
+server_config:
+  processor_config:
+    type: default_processor
+  postgres_connection_string: <postgres_uri, e.g. postgresql://postgres:@localhost:5432/indexer>
+  indexer_grpc_data_service_address: <url_from_api_gateway>
+  indexer_grpc_http2_ping_interval_in_secs: 60
+  indexer_grpc_http2_ping_timeout_in_secs: 10
+  auth_token: <auto_token_from_api_gateway>
+  starting_version: 0 # optional
+  ending_version: 0 # optional
+```
+
+要将处理器连接到交易流服务，需要设置 indexer\_grpc\_data\_service\_address 的 URL。选择以下选项之一。
+
+### 选项 A：连接 Labs 托管交易流服务
+
+使用 Labs 托管交易流服务的主要好处是，不再需要运行归档全节点来获取交易流。该服务有速率限制。连接 Labs 托管交易流的说明见[此处](/zh/build/indexer/txn-stream/aptos-hosted-txn-stream)。
+
+### 选项 B：运行自托管交易流服务
+
+也可以运行交易流服务的自托管实例，并将处理器连接到它。运行自托管交易流的说明见[此处](/zh/build/indexer/txn-stream/self-hosted)。
+
+## 3. （可选）将自定义处理器迁移到交易流服务
+
+如果使用旧版 Indexer 编写过自定义处理器，强烈建议从新的数据库重新开始。使用新数据库可确保在此次迁移期间应用所有自定义数据库迁移。
+
+### a. 迁移自定义表架构
+
+将每个自定义迁移复制到 [migrations](https://github.com/aptos-labs/aptos-indexer-processors/tree/main/rust/processor/src/db/postgres/migrations) 文件夹，以迁移自定义架构。
+
+### b. 迁移自定义处理器代码
+
+将自定义处理器复制到 [processors](https://github.com/aptos-labs/aptos-indexer-processors/tree/main/rust/processor) 文件夹，将相关自定义模型复制到 [models](https://github.com/aptos-labs/aptos-indexer-processors/tree/main/rust/processor/src/db/common/models) 文件夹。通过将它们添加到以下 Rust 代码文件中，使自定义处理器与其余代码集成。
+
+[mod.rs](https://github.com/aptos-labs/aptos-indexer-processors/blob/main/rust/processor/src/processors/mod.rs)
+
+```rust filename="mod.rs"
+pub enum Processor {
+    ...
+    CoinProcessor,
+    ...
+}
+
+impl Processor {
+    ...
+    COIN_PROCESSOR_NAME => Self::CoinProcessor,
+    ...
+}
+```
+
+[worker.rs](https://github.com/aptos-labs/aptos-indexer-processors/blob/main/rust/processor/src/worker.rs)
+
+```rust filename="worker.rs"
+Processor::CoinProcessor => {
+    Arc::new(CoinTransactionProcessor::new(self.db_pool.clone()))
+},
+```
+
+## 4. 使用 Diesel 回填 Postgres 数据库
+
+尽管新处理器与旧处理器使用相同的 Postgres 架构，仍建议进行完整回填（最好写入全新的数据库），因为 protobuf 转换会使某些字段略有不同。
+
+这些说明假设你熟悉使用 [Diesel migrations](https://docs.rs/diesel_migrations/latest/diesel_migrations/)。使用以下命令运行完整数据库迁移：
+
+```shellscript filename="Terminal"
+DATABASE_URL=postgres://postgres@localhost:5432/postgres diesel migration run
+```
+
+## 5. 运行迁移后的处理器
+
+要运行单个处理器，请使用以下命令：
+
+```shellscript filename="Terminal"
+cargo run --release -- -c config.yaml
+```
+
+如果有多个处理器，则需要为每个处理器运行单独的服务实例。
+
+{/* TODO: Add instructions for running with Docker */}
+
+如果希望将处理器作为 Docker 镜像运行，说明列在此处。
+
+## 常见问题
+
+### 1. protobuf 将来会更新吗？届时需要做什么？
+
+protobuf 架构未来可能更新。向后不兼容的变更将在发行说明中发布。
+
+### 2. 如果已经在旧版 Indexer 中编写自定义逻辑，迁移是否容易？
+
+由于新 Indexer 堆栈与旧 Indexer 堆栈拥有相同的 Postgres 架构，迁移处理器应很容易。仍强烈建议为此次迁移创建新数据库，以应用所有自定义数据库迁移。
+
+请遵循本指南第 3 步，将自定义逻辑迁移到新的处理器堆栈。

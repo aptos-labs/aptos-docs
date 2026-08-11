@@ -1,0 +1,101 @@
+---
+title: "多节点 Localnet"
+description: "使用 Aptos Forge 部署具有多个验证节点和验证者全节点的本地网络，以支持高级测试和开发场景。"
+sidebar:
+  label: "多节点"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+本指南说明如何运行包含多个验证节点和验证者全节点的本地网络。为此，将使用 [aptos-core](https://github.com/aptos-labs/aptos-core) 源代码中的 [Aptos Forge](https://github.com/aptos-labs/aptos-core/tree/main/testsuite/forge-cli/src)。
+
+<Aside type="note">
+  本指南中的步骤仅应用于多节点本地网络的测试网络。请勿将其用于生产环境中的网络部署。
+  本指南还假设你已完成[从源码构建 Aptos](/zh/network/nodes/building-from-source)中的步骤。
+</Aside>
+
+## 含多个验证者的 Localnet
+
+要部署含多个本地验证者的 localnet，请从 [aptos-core](https://github.com/aptos-labs/aptos-core) 源代码的根目录运行以下命令：
+
+```sh
+cargo run -p aptos-forge-cli \
+        -- \
+        --suite "run_forever" \
+        --num-validators 4 test local-swarm
+```
+
+这会启动由 4 个验证者组成的本地网络，每个验证者都在自己的进程中运行。除非手动终止，网络会一直运行。
+
+终端输出会显示验证者文件的位置（例如创世文件、日志、节点配置等）以及用于启动每个节点的命令。每个节点的进程 ID（PID）和服务器地址（例如 REST API）也会在其启动时显示。例如，运行上述命令后应看到：
+
+```text
+...
+2022-09-01T15:41:27.228289Z [main] INFO crates/aptos-genesis/src/builder.rs:462 Building genesis with 4 validators. Directory of output: "/private/var/folders/dx/c0l2rrkn0656gfx6v5_dy_p80000gn/T/.tmpq9uPMJ"
+...
+2022-09-01T15:41:28.090606Z [main] INFO testsuite/forge/src/backend/local/swarm.rs:207 The root (or mint) key for the swarm is: 0xf9f...
+...
+2022-09-01T15:41:28.094800Z [main] INFO testsuite/forge/src/backend/local/node.rs:129 Started node 0 (PID: 78939) with command: ".../aptos-core/target/debug/aptos-node" "-f" "/private/var/folders/dx/c0l2rrkn0656gfx6v5_dy_p80000gn/T/.tmpq9uPMJ/0/node.yaml"
+2022-09-01T15:41:28.094825Z [main] INFO testsuite/forge/src/backend/local/node.rs:137 Node 0: REST API is listening at: http://127.0.0.1:64566
+2022-09-01T15:41:28.094838Z [main] INFO testsuite/forge/src/backend/local/node.rs:142 Node 0: Inspection service is listening at http://127.0.0.1:64568
+...
+```
+
+利用该输出的信息，可以停止单个节点并重新启动它。例如，要停止并重启节点 0，请执行以下命令：
+
+```sh
+kill -9 <Node 0 PID>
+cargo run -p aptos-node \
+        -- \
+        -f <Location to the node 0 configuration file displayed above>
+```
+
+## Faucet 与铸币
+
+要在此测试网络中铸造代币，需要运行 faucet。可使用以下命令：
+
+```sh
+cargo run -p aptos-faucet-service -- run-simple --key <key> --node-url <node_url>
+```
+
+可按以下方式取得上述值：
+
+- key：启动 swarm 时会看到类似输出：The root (or mint) key for the swarm is: 0xf9f...。这就是 key。
+- node\_url：启动 swarm 时会看到类似输出：REST API is listening at: [http://127.0.0.1:64566。这就是](http://127.0.0.1:64566。这就是) node\_url。
+
+上述命令会在本地运行 faucet，并监听端口 8081。随后可使用此 faucet 为测试账户铸造代币，例如：
+
+```sh
+curl -X POST http://127.0.0.1:8081/mint?amount=<amount to mint>&pub_key=<public key to mint tokens to>
+```
+
+除使用 faucet 服务外，也可直接使用 faucet CLI：
+
+```sh
+cargo run -p aptos-faucet-cli -- --amount 10 --accounts <account_address> --key <private_key>
+```
+
+<Aside type="tip">
+  有关 faucet 工作方式的更多信息，请参阅 [README](https://github.com/aptos-labs/aptos-core/tree/main/crates/aptos-faucet)。
+  还可查看如何将 [Aptos CLI](/zh/build/cli) 与已有 faucet 一起使用。
+</Aside>
+
+## 验证者全节点
+
+要在网络内同时运行验证者全节点，请使用 --num-validator-fullnodes 标志。例如：
+
+```sh
+cargo run -p aptos-forge-cli \
+        -- \
+        --suite "run_forever" \
+        --num-validators 3 \
+        --num-validator-fullnodes 1 test local-swarm
+```
+
+## 其他用法
+
+要查看所有工具使用选项，请运行：
+
+```sh
+cargo run -p aptos-forge-cli --help
+```

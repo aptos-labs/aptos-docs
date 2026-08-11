@@ -1,0 +1,46 @@
+---
+title: "执行"
+description: "探索 Aptos 上的交易执行，包括确定性处理、使用 Block-STM 的并行执行，以及实现高吞吐量的性能优化。"
+sidebar:
+  label: "执行"
+---
+
+在 Aptos 中，执行是指验证者运行并应用有序区块中的智能合约交易的过程。执行输出随后会应用到区块链状态。
+
+执行必须是[确定性的](https://en.wikipedia.org/wiki/Deterministic_algorithm)，所有验证者理想情况下都应就账本的同一最终状态达成一致。多数验证者（超过三分之二）必须同意账本最终状态，才能达成共识。有关共识属性的更多详情，请参阅[拜占庭容错（BFT）](/zh/network/glossary#byzantine-fault-tolerance-bft)和[共识](/zh/network/glossary#consensus)部分。
+
+高效执行，尤其是并行执行，是扩展区块链性能和吞吐量的关键，其影响体现在区块时间上。截至 2024 年 12 月，Aptos 区块会在 250 毫秒内关闭。
+
+## 为什么需要并行执行？
+
+![](https://miro.medium.com/v2/resize:fit:4800/format:webp/0*qG0KRe1KzsP8Odth)
+
+最简单的智能合约执行方式是按顺序逐笔执行区块中的交易，但这种方式难以扩展。大量顺序交易，特别是执行时间不同的交易，会导致区块链延迟和吞吐量大幅下降。
+
+为解决此问题，区块链开始采用并行执行，即并行处理多笔交易的能力。不过，并行执行面临的挑战是某些交易可能读取或写入同一资源，从而产生冲突。
+
+### 静态并行化
+
+解决并行执行冲突问题的一种方法是**静态并行化**，要求开发者预先指定交易之间的冲突。但这会加重开发者负担，并且在许多情况下会迫使实际上并不冲突的交易按顺序执行。
+
+### 动态并行化
+
+**动态并行化**会即时计算交易执行顺序，在执行期间动态检测依赖关系并避免冲突。区块链动态并行化的另一重要属性是：执行输出应与按预设顺序执行交易时保持一致。
+
+动态并行化无需开发者预先指定冲突，因此开发者可以灵活编写应用，不受静态声明交易依赖关系的设计限制。
+
+## Block-STM
+
+Aptos 使用名为 Block-STM 的高效多线程内存中并行执行引擎。Block-STM 利用交易的预设顺序，将软件事务内存技术与新颖的协作调度相结合。
+
+Block-STM 是 Aptos Labs 团队开发的先进动态并行执行引擎。
+
+自发布以来，[Polygon](https://polygon.technology/blog/innovating-the-main-chain-a-polygon-pos-study-in-parallelization)、Sei、[Starknet](https://www.starknet.io/blog/parallel-execution-and-v0-13-2/) 等区块链已采用它来实现各自链上的并行执行。
+
+了解更多：
+
+- [Block-STM 博客文章](https://medium.com/aptoslabs/block-stm-how-we-execute-over-160k-transactions-per-second-on-the-aptos-blockchain-3b003657e4ba)
+- [Block-STM 论文](https://arxiv.org/pdf/2203.06871)
+- [a16z crypto 研究演讲](https://www.youtube.com/watch?v=2SE5tqPzhyw)
+- [Stark Spaces | Block-STM 和 Starknet](https://www.youtube.com/watch?v=y1kXOi39RX0)
+- [Block-STM：加速智能合约处理](https://blog.chain.link/block-stm/)

@@ -1,0 +1,269 @@
+---
+title: "Move VSCode 扩展"
+label: "VSCode 扩展"
+description: "了解 Aptos 区块链上 Move 智能合约开发所用的 Move VSCode 扩展。"
+sidebar:
+  label: "VSCode 扩展"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Aptos 上的 Move 语言扩展
+
+这是用于[在 Aptos 区块链上使用 Move 语言开发智能合约](/zh/build/smart-contracts)的官方 Visual Studio Code（和 Cursor）扩展。
+
+该扩展从零构建，提供现代、高性能的开发体验，包含语义高亮、实时诊断、自动格式化，以及与 Aptos 工具链其他部分的无缝集成等核心功能，旨在帮助开发者轻松、自信地构建和测试 Move 合约。
+
+扩展由 Aptos 团队积极维护，旨在与 Move 语言共同演进，既支持刚接触 Move 的开发者，也支持构建更复杂应用的开发者。
+
+## 功能
+
+- 语义高亮
+- 转到定义
+- 查找所有引用和符号重命名
+- 悬停显示类型和文档
+- 上下文自动补全
+- 类型和函数参数的内联提示
+
+![内联提示](~/images/move-vscode-extension/inlay_hints.png)
+
+- 实时诊断
+- [代码建议](#带修复的代码建议)
+- `movefmt` 集成
+
+![使用 movefmt 格式化](~/images/move-vscode-extension/format.gif)
+
+- 运行 `#[test]` 函数
+- 使用 Move Prover 检查模块和函数
+
+## 安装
+
+我们同时在 [VSCode Marketplace](https://marketplace.visualstudio.com/items?itemName=AptosLabs.move-on-aptos) 和 [OpenVSX](https://open-vsx.org/extension/aptoslabs/move-on-aptos) 发布版本。
+
+我们还发布 `nightly` 预发布版，它们每晚从 `main` 分支构建。若要使用它们，请从编辑器的 Extensions View 中选择**切换到预发布版本**。
+
+![选择预发布版本](~/images/move-vscode-extension/pre-releases.png)
+
+### 从源代码构建
+
+克隆仓库后运行：
+
+```
+cargo run -p xtask -- install --server --client
+```
+
+（或仅运行 `cargo xtask install --server --client`，请参阅 [https://github.com/matklad/cargo-xtask](https://github.com/matklad/cargo-xtask)）
+
+该命令会构建 `move-on-aptos.vsix` 扩展文件并将其安装到 VSCode。
+随后会运行 `cargo install` 来构建和安装语言服务器。
+
+将以下内容放入 `settings.json`，以使扩展指向本地构建的语言服务器：
+
+```
+"move-on-aptos.server.path": "~/.cargo/bin/aptos-language-server",
+```
+
+### 从源代码构建：Cursor AI 编辑器
+
+如果使用 [https://www.cursor.com/](https://www.cursor.com/) AI 编辑器，还需要执行一些额外操作。
+
+运行上述安装命令。结果将生成 `./editors/code/move-on-aptos.vsix` VSCode 扩展包。
+然后在编辑器中使用 `"Install from VSIX..."` 命令安装它。
+
+## 配置
+
+<Aside type="note">
+  扩展本身不会从网络下载依赖。
+
+  如果 `AptosFramework` 导入出现 `unresolved reference` 错误，请在项目中运行一次 `aptos move compile`，以下载远程依赖。
+</Aside>
+
+此扩展通过 VSCode 的配置设置提供配置。
+所有配置均位于 `move-on-aptos.*` 下。
+
+### Move 包目录的推荐配置
+
+LSP 实际可执行的功能有所限制，因此部分设置需要手动指定。
+
+#### 将 Move 库源文件标记为只读
+
+将以下内容添加到 `settings.json`：
+
+```json5
+    "files.readonlyInclude": {
+        "**/build/*/sources/**/*.move": true,
+        "**/.move/**/*.move": true,
+    }
+```
+
+#### 正确自动闭合 `b"` 和 `x"`
+
+```json5
+    "[move]": {
+        "editor.wordSeparators": "`~!@#$%^&*()-=+[{]}\\|;:'\",.<>/?bx",
+    },
+```
+
+配置值中的许多符号是默认值；我们为字符串前缀添加了 `b` 和 `x` 符号。
+
+#### 为 `Organize Imports` 命令设置键盘快捷键
+
+```json5
+    {
+        "key": "ctrl+alt+o",
+        "command": "move-on-aptos.organizeImports",
+        "when": "editorTextFocus && !editorReadonly"
+    }
+```
+
+## 高级配置
+
+### 诊断
+
+扩展提供多种诊断，从“未解析引用”等硬错误到样式 lint。
+对于不同编码风格，其中一些诊断可能较少有用，因此可以使用以下配置将其禁用：
+
+```json5
+{
+    "move-on-aptos.diagnostics.disabled": [],
+}
+```
+
+其中的值是错误消息中的诊断代码，例如此处的 `unused-variable`：
+
+![诊断代码示例](~/images/move-vscode-extension/diag_code.png)
+
+### 内联提示
+
+支持 `let` 语句和 lambda 参数的类型提示。
+
+```move
+module 0x1::m {
+    fun main() {
+        let a/*: integer*/ = 1;
+        let f: |u8| u8 = |e/*: u8*/| e;
+    }
+}
+```
+
+要禁用它们，请使用：
+
+```json5
+{
+    "move-on-aptos.inlayHints.typeHints.enable": false,
+}
+```
+
+### 格式化（适用于 `movefmt` >= 1.2.1）
+
+如有必要，请指定 `movefmt` 可执行文件的路径和额外参数（例如 `--config-path`）：
+
+```json5
+{
+    "move-on-aptos.movefmt.path": "~/code/movefmt/target/release/movefmt",
+    "move-on-aptos.movefmt.extraArgs": [],
+}
+```
+
+可在 VSCode 中通过以下方式启用保存时格式化：
+
+```json5
+{
+    "editor.formatOnSave": true,
+}
+```
+
+## 调试
+
+启用 INFO 日志级别很有用；它不会产生太多日志，却可提供有价值的调试信息：
+
+```
+    "move-on-aptos.server.extraEnv": { "RA_LOG": "info" },
+```
+
+## 其他命令
+
+### `aptos-language-server diagnostics`
+
+在文件（或包目录）上运行服务器诊断。若提供 `--apply-fixes`，将自动应用可用的自动修复：
+
+[查看可自动修复的诊断](#带修复的代码建议)
+
+```shell
+  $ aptos-language-server diagnostics --apply-fixes replace-with-method-call ./aptos-stdlib/sources/cryptography/keyless.move
+processing package 'aptos-stdlib', file: /home/mkurnikov/code/aptos-core/aptos-move/framework/aptos-stdlib/sources/cryptography/keyless.move
+note[replace-with-method-call]: Can be replaced with method call
+   ┌─ /home/mkurnikov/code/aptos-core/aptos-move/framework/aptos-stdlib/sources/cryptography/keyless.move:67:17
+   │
+67 │         assert!(string::bytes(&iss).length() <= MAX_ISSUER_UTF8_BYTES_LENGTH, error::invalid_argument(E_INVALID_ISSUER_UTF8_BYTES_LENGTH));
+   │                 ^^^^^^^^^^^^^^^^^^^
+   │
+   ┌─ /home/mkurnikov/code/aptos-core/aptos-move/framework/aptos-stdlib/sources/cryptography/keyless.move:67:17
+   │
+67 │         assert!(iss.bytes().length() <= MAX_ISSUER_UTF8_BYTES_LENGTH, error::invalid_argument(E_INVALID_ISSUER_UTF8_BYTES_LENGTH));
+   │                 ^^^^^^^^^^^ after fix
+
+
+```
+
+## 带修复的代码建议
+
+### 使用方法调用记法
+
+**代码**：`replace-with-method-call`
+
+![替换为方法调用](~/images/move-vscode-extension/replace_with_method_call.gif)
+
+### 使用复合赋值表达式
+
+**代码**：`replace-with-compound-expr`
+
+![复合赋值表达式](~/images/move-vscode-extension/compound_expr.gif)
+
+### 使用向量索引表达式
+
+**代码**：`replace-with-index-expr`
+
+检测形如 `*vector::borrow(&some_vector, index)` 和 `*some_vector.borrow(index)` 的表达式，它们可转换为 `some_vector[index]`。
+
+![向量索引表达式](~/images/move-vscode-extension/vector_index_expr.gif)
+
+### 使用字段初始化简写
+
+**代码**：`use-struct-lit-field-shorthand`、`use-struct-pat-field-shorthand`、`use-schema-lit-field-shorthand`
+
+检测可使用简写形式编写的结构体字面量字段。
+
+![字段初始化简写](~/images/move-vscode-extension/field_shorthand.gif)
+
+### 冗余整数类型转换
+
+**代码**：`remove-redundant-cast`
+
+检测类似 `number as u8` 的表达式，其中 `number` 已经具有要转换到的类型。
+
+![冗余类型转换](~/images/move-vscode-extension/redundant_cast.gif)
+
+### 在变量名前添加 `_` 前缀
+
+**代码**：`rename-with-underscore-prefix`
+
+为未使用的变量添加 `_` 前缀。
+
+![重命名修复](~/images/move-vscode-extension/rename_fix.gif)
+
+## 路线图
+
+- 更多错误高亮：
+  - 实现 Aptos Move 编译器的更多错误（如能力检查）
+  - 实现 `aptos move lint` 中的 lint，并提供扩展快速修复。
+
+- 使用导入：
+  - 检测未使用的导入，并使用 VSCode 的“Organize Imports”功能移除它们。
+  - 显示当前模块未导入项的补全项，并自动为其创建 `use` 语句。
+
+- 与 `aptos-cli` 命令集成：编译包、发布模块和执行交易。
+
+- `Move.toml` 支持。
+
+- AI 集成（通过 MCP 服务器）。

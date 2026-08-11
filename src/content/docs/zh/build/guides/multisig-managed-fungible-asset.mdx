@@ -1,0 +1,145 @@
+---
+title: "使用多签管理同质化资产"
+description: "将多签账户与同质化资产标准结合，以提升同质化资产的受保护管理安全性。"
+sidebar:
+  label: "多签同质化资产"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+本教程介绍一个实用场景：将 Aptos 框架多签账户与同质化资产标准相结合，提升同质化资产管理的安全边际。继续之前，请确保已了解模块发布和 Aptos 框架多签账户；如未了解，强烈建议先完成以下教程：
+
+- [第一个 Move 模块](/zh/build/guides/first-move-module)
+
+## 第 1 步：选择 SDK
+
+本教程基于 [TypeScript SDK](/zh/build/sdks/ts-sdk) 编写。
+
+欢迎其他开发者添加对 [Python SDK](/zh/build/sdks/python-sdk)、[Rust SDK](/zh/build/sdks/rust-sdk)、[Go SDK](/zh/build/sdks/go-sdk) 和 [Unity SDK](/zh/build/sdks/unity-sdk) 的支持！
+
+## 第 2 步：发布模块
+
+要创建一个由 Aptos 框架多签账户控制、支持所有管理操作（铸造、转移、销毁、冻结/解冻）的同质化资产，前提是拥有一个基于同质化资产标准设计完善的智能合约。Aptos 团队在 `aptos-core` 仓库中提供了示例代码。
+
+克隆 `aptos-core` 仓库：
+
+```shellscript filename="Terminal"
+git clone git@github.com:aptos-labs/aptos-core.git ~/aptos-core
+```
+
+进入 `managed_fungible_asset` 目录，然后使用 CLI 将该包发布到 `default` 账户：
+
+```shellscript filename="Terminal"
+cd ~/aptos-core/aptos-move/move-examples/fungible_asset/managed_fungible_asset
+aptos move publish --named-addresses example_addr=default
+```
+
+进入 `multisig_managed_coin` 目录，并同样使用 CLI 将该包发布到 `default` 账户：
+
+```shellscript filename="Terminal"
+cd ~/aptos-core/aptos-move/move-examples/fungible_asset/multisig_managed_coin
+aptos move publish --named-addresses example_addr=default
+```
+
+在本教程中，`multisig_managed_coin` 需要调用同一地址上 `managed_fungible_asset` 定义的函数。因此必须发布两个模块。
+
+<Aside type="note">
+  发布模块前，不要忘记使用水龙头为账户注资。
+</Aside>
+
+## 第 3 步：启动示例
+
+```shellscript filename="Terminal"
+cd ~/aptos-core/ecosystem/typescript/sdk/examples/typescript
+```
+
+运行 `multisig_managed_coin` 示例：
+
+```shellscript filename="Terminal"
+MODULE_ADDR=${DEFAULT_ACCOUNT_ADDRESS} pnpm run multisig_managed_coin
+```
+
+<Aside type="note">
+  该示例使用 Aptos devnet；历史上它会在每周四重置。
+  运行示例时请确保 devnet 正在运行！如果使用带水龙头的 localnet，可改为运行以下命令：
+
+  ```shellscript filename="Terminal"
+  export APTOS_NODE_URL=http://0.0.0.0:8080
+  export APTOS_FAUCET_URL=http://0.0.0.0:8081
+  export MODULE_ADDR=${DEFAULT_ACCOUNT_ADDRESS}
+  pnpm run multisig_managed_coin
+  ```
+</Aside>
+
+示例脚本应能顺利执行且不出现错误。随后可在 Aptos Explorer 中搜索控制台打印的 `owner1` 和 `owner2` 地址，查看其执行的操作。
+
+下面跟随脚本了解其功能：
+
+### 生成单签账户
+
+首先生成三个单签账户 owner1、owner2 和 owner3，它们将共同拥有一个 Aptos 框架多签账户。
+
+{/* TODO Code snippet
+  typescript title=Generate 3 single signers"
+  /sdks/typescript/examples/typescript/multisig_managed_coin.ts
+  section_1
+  */}
+
+### 创建带有受管同质化资产的 Aptos 框架多签账户
+
+接下来，让 owner1 调用 `multisig_managed_coin.move` 中定义的 `initialize()` 函数。它首先创建由 owner1 所有的 Aptos 框架多签账户，并将 owner2 和 owner3 添加为所有者；随后创建名为“meme coin”的同质化资产，使用参数列表中指定的自定义设置，并让多签账户成为该资产的管理员。每项提案至少需要 2 个批准才能执行。
+
+{/* TODO Code snippet
+  typescript title=Query the multisig account and then call the initialize function"
+  /sdks/typescript/examples/typescript/multisig_managed_coin.ts
+  section_2
+  */}
+
+### 铸造
+
+然后分别向 owner2 和 owner3 铸造 1000 和 2000 个 meme coin。该提案交易由 owner2 提交，并获得 owner3 的额外批准。
+
+{/* TODO Code snippet
+  typescript title="Mint 1000 to owner2 and 2000 to owner3"
+  /sdks/typescript/examples/typescript/multisig_managed_coin.ts
+  section_3
+  */}
+
+### 冻结
+
+铸造后，该示例展示如何冻结账户 owner1。该提案交易同样由 owner2 提交，并额外由 owner3 批准。
+
+{/* TODO Code snippet
+  typescript title=""Freeze owner1"
+  /sdks/typescript/examples/typescript/multisig_managed_coin.ts
+  section_4
+  */}
+
+<Aside type="note">
+  解冻操作相似，只需将 `set_primary_stores_frozen_status` 函数的最后一个参数替换为 `false`。
+</Aside>
+
+### 强制转移
+
+owner1 被冻结时，普通转账无法从该账户取出或向该账户存入资产。但作为“meme coin”的管理员，多签账户具有执行这些操作的能力。
+接下来，Owner2 提出交易，强制将 1000 个 meme coin 从 owner3 转移到 owner1。这次由 owner1 批准。
+
+{/* TODO Code snippet
+  typescript title=""Force transfer 1000 meme coins from owner3 to owner1"
+  /sdks/typescript/examples/typescript/multisig_managed_coin.ts
+  section_5
+  */}
+
+### 销毁
+
+最后，三个所有者各自拥有 1000 个 meme coin。让我们销毁所有代币！Owner2 提出交易，owner1 批准。
+
+{/* TODO Code snippet
+  typescript title="Burn 1000 meme coins from all the three owners' accounts"
+  /sdks/typescript/examples/typescript/multisig_managed_coin.ts
+  section_6
+  */}
+
+## 总结
+
+本教程展示了使用 Aptos 框架多签账户管理同质化资产的端到端流程。同样地，你可以创建自己的模块，并利用功能强大的 SDK 创建满足自身需求的管理方案。

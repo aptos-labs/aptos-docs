@@ -1,0 +1,124 @@
+---
+title: "构建和发送交易"
+description: "使用采用新精简交易 DSL 的 Kaptos 构建、签名和提交 Aptos 交易"
+sidebar:
+  label: "构建交易"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Kaptos 提供两种提交交易的方式：
+
+- **可组合流程**（`buildSimpleTransaction` -> `sign` -> `submitTransaction.simple`）
+- 面向常见单签名人执行的**单次调用流程**（`execute`）
+
+本页使用最新 SDK 更新中引入的精简交易 API（`typeArgs(...)`、`args(...)`）。
+
+## 创建账户
+
+先生成凭证，再在测试网络上为地址充值。
+
+```kotlin
+val aptos = Aptos(AptosConfig(AptosSettings(network = Network.DEVNET)))
+
+val alice = Account.generate()
+val bob = Account.generate()
+
+aptos.fundAccount(accountAddress = alice.accountAddress, amount = 100_000_000L).expect("Failed to fund Alice")
+aptos.fundAccount(accountAddress = bob.accountAddress, amount = 100_000_000L).expect("Failed to fund Bob")
+```
+
+有关基于私钥的账户，请参阅[账户](/zh/build/sdks/community-sdks/kotlin-sdk/account)。
+
+## 构建交易
+
+将 `buildSimpleTransaction` 与精简入口函数构建器配合使用。
+
+```kotlin
+val txn =
+  aptos.buildSimpleTransaction(sender = alice.accountAddress) {
+    function = "0x1::coin::transfer"
+    typeArgs("0x1::aptos_coin::AptosCoin")
+    args(
+      bob.accountAddress,
+      1_000_000UL,
+    )
+  }
+```
+
+`args(...)` 会为常用类型（`Boolean`、`Int`、`ULong`、`String`、`ByteArray`、`List<T>`、`AccountAddress` 等）自动执行 Kotlin -> Move 强制转换，因此通常不需要显式包装器。
+
+如果需要调整交易参数，请传入选项：
+
+```kotlin
+val txn =
+  aptos.buildSimpleTransaction(
+    sender = alice.accountAddress,
+    options = InputGenerateTransactionOptions(maxGasAmount = 20_000),
+  ) {
+    function = "0x1::coin::transfer"
+    typeArgs("0x1::aptos_coin::AptosCoin")
+    args(bob.accountAddress, 1_000_000UL)
+  }
+```
+
+## 签名交易
+
+如果希望在提交前显式控制认证，请使用 `sign`。
+
+```kotlin
+val senderAuthenticator = aptos.sign(signer = alice, transaction = txn)
+```
+
+## 提交交易
+
+提交原始交易和发送者认证器。
+
+```kotlin
+val pendingTxn =
+  aptos
+    .submitTransaction.simple(
+      transaction = txn,
+      senderAuthenticator = senderAuthenticator,
+    )
+    .expect("Failed to submit transaction")
+```
+
+## 等待执行
+
+使用待处理交易哈希等待链上确认。
+
+```kotlin
+val executedTxn =
+  aptos
+    .waitForTransaction(HexInput.fromString(pendingTxn.hash))
+    .expect("Transaction did not execute successfully")
+```
+
+## 一次调用执行
+
+如果无需检查中间交易或认证器对象，请使用 `execute`：
+
+```kotlin
+val pendingTxn =
+  aptos
+    .execute(signer = alice) {
+      function = "0x1::coin::transfer"
+      typeArgs("0x1::aptos_coin::AptosCoin")
+      args(bob.accountAddress, 1_000_000UL)
+    }
+    .expect("Failed to build/sign/submit transaction")
+```
+
+然后照常等待：
+
+```kotlin
+val executedTxn =
+  aptos
+    .waitForTransaction(HexInput.fromString(pendingTxn.hash))
+    .expect("Transaction did not execute successfully")
+```
+
+<Aside type="note" emoji="ℹ️">
+  仍可使用向后兼容的 API（`buildTransaction.simple`、`entryFunctionData { typeArguments = ...; functionArguments = ... }` 和 `signAndSubmitTransaction`）。对于新代码，建议默认使用精简 API。
+</Aside>

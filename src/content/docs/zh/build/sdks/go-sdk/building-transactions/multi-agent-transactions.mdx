@@ -1,0 +1,88 @@
+---
+title: "Go SDK：多代理交易"
+description: "使用 Go SDK 通过协调签名让多个账户参与单笔交易。"
+sidebar:
+  label: "多代理交易"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+多代理交易允许多个账户参与 Move 合约逻辑。
+
+它可用于要求多方在执行前同意一笔交易，或使用多个账户中的资源。
+
+## 编写多代理交易
+
+创建和执行多代理交易的流程与[常规交易流程](/zh/build/sdks/go-sdk/building-transactions)类似，但有几个显著差异。
+
+<Aside type="note">
+  多代理交易和赞助交易使用 `client.BuildTransactionMultiAgent`，而不是 `client.BuildTransaction`。
+</Aside>
+
+<Steps>
+  1. 构建交易时，加入 `aptos.AdditionalSigners`，其中包含每个额外签名者的列表。
+
+     <Aside type="note">
+       请务必用需要多个代理签名的入口函数替换下方 `Function` 字段。
+     </Aside>
+
+     ```go filename="multi_agent.go"
+     transaction, err := client.BuildTransactionMultiAgent(alice.AccountAddress(), aptos.TransactionPayload{
+       Payload: &aptos.EntryFunction{
+         // Replace module and function with your multi-agent function
+         Module: aptos.ModuleId{
+           Address: aptos.AccountOne,
+           Name:    "aptos_account",
+         },
+         Function: "transfer",
+         ArgTypes: []aptos.TypeTag{},
+         Args: [][]byte{
+           accountBytes,
+           amountBytes,
+         },
+       },
+       AdditionalSigners: []aptos.AccountAddress{bob.AccountAddress()},
+     })
+     ```
+
+     {/* TODO Support simulation of multiagent */}
+
+  2. 为每个签名者分别签名。
+
+     下一步将组合这些签名。
+
+     ```go filename="multi_agent.go"
+     aliceAuth, err := rawTxn.Sign(alice)
+     if err != nil {
+         panic("Failed to sign transaction as sender:" + err.Error())
+     }
+     bobAuth, err := rawTxn.Sign(bob)
+     if err != nil {
+         panic("Failed to sign transaction as second signer:" + err.Error())
+     }
+     ```
+
+  3. 将签名与原始交易组合，创建多代理已签名交易。
+
+     ```go filename="multi_agent.go"
+     signedTxn, ok := rawTxn.ToMultiAgentSignedTransaction(aliceAuth, []crypto.AccountAuthenticator{bobAuth})
+     ```
+
+  4. 通过 `aptos.AdditionalSigners` 参数组合所有代理签名并提交交易。
+
+     ```go filename="multi_agent.go"
+     submitResponse, err := client.SubmitTransaction(signedTxn)
+     ```
+
+  5. 最后等待交易完成。
+
+     ```go filename="multi_agent.go"
+     txnResult, err := client.WaitForTransaction(submitResponse.Hash)
+     ```
+</Steps>
+
+{/* TODO: Add full code snippet for Go */}
+
+## 常见错误
+
+`NUMBER_OF_SIGNER_ARGUMENTS_MISMATCH`：当你尝试为不需要该数量账户的函数进行多代理签名时出现。例如，若尝试为 `0x1::aptos_account::transfer` 函数使用多个签名，由于它只预期一个地址，提供多个地址便会产生错误。

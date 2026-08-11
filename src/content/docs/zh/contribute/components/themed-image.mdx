@@ -1,0 +1,186 @@
+---
+title: ThemedImage 组件
+description: 一个可复用的 Astro 组件，用于针对浅色和深色主题显示不同图片，并借助 Astro 内置 Image 组件自动优化。
+---
+
+import { ThemedImage } from '~/components/ThemedImage';
+
+## 功能
+
+- ✅ 支持浅色和深色模式图片
+- ✅ 使用 Astro 优化的 Image 组件以获得更佳性能
+- ✅ 支持 `~/images` 别名路径
+- ✅ 自动优化和处理图片
+- ✅ 支持严格类型检查的 TypeScript
+- ✅ 遵循 Starlight 的主题约定（`light:sl-hidden` 和 `dark:sl-block`）
+
+## 在线演示
+
+切换浅色与深色模式，查看组件的实际效果：
+
+<ThemedImage
+  alt="Staking Flow"
+  sources={{
+light: '~/images/staking-light.svg',
+dark: '~/images/staking-dark.svg',
+}}
+/>
+
+## 用法
+
+### 基本用法
+
+```astro
+---
+import ThemedImage from '~/components/ThemedImage';
+---
+
+<ThemedImage
+  alt="Staking Flow"
+  sources={{
+    light: '~/images/staking-light.svg',
+    dark: '~/images/staking-dark.svg',
+  }}
+/>
+```
+
+### 使用自定义尺寸
+
+<ThemedImage
+  alt="Aptos Token Standard Flow"
+  sources={{
+light: '~/images/aptos-token-standard-flow.svg',
+dark: '~/images/aptos-token-standard-flow-dark.svg',
+}}
+  width={600}
+  height={400}
+/>
+
+```astro
+<ThemedImage
+  alt="Aptos Token Standard Flow"
+  sources={{
+    light: '~/images/aptos-token-standard-flow.svg',
+    dark: '~/images/aptos-token-standard-flow-dark.svg',
+  }}
+  width={600}
+  height={400}
+/>
+```
+
+### 使用自定义 CSS 类
+
+<ThemedImage
+  alt="Digital Asset"
+  sources={{
+light: '~/images/digital-asset-light.svg',
+dark: '~/images/digital-asset-dark.svg',
+}}
+  class="rounded-lg shadow-md"
+/>
+
+```astro
+<ThemedImage
+  alt="Digital Asset"
+  sources={{
+    light: '~/images/digital-asset-light.svg',
+    dark: '~/images/digital-asset-dark.svg',
+  }}
+  class="rounded-lg shadow-md"
+/>
+```
+
+### 使用导入的图片
+
+```astro
+---
+import lightImage from '~/images/my-light-image.png';
+import darkImage from '~/images/my-dark-image.png';
+import ThemedImage from '~/components/ThemedImage';
+---
+
+<ThemedImage
+  alt="My Image"
+  sources={{
+    light: lightImage,
+    dark: darkImage,
+  }}
+/>
+```
+
+## 属性
+
+| 属性         | 类型                                                                  | 必填 | 默认值       | 说明               |
+| ---------- | ------------------------------------------------------------------- | -- | --------- | ---------------- |
+| `alt`      | `string`                                                            | ✅  | -         | 图片的替代文本（无障碍功能必填） |
+| `sources`  | `{ light: string \| ImageMetadata, dark: string \| ImageMetadata }` | ✅  | -         | 包含浅色和深色模式图片源的对象  |
+| `width`    | `number`                                                            | ❌  | -         | 图片宽度（像素）         |
+| `height`   | `number`                                                            | ❌  | -         | 图片高度（像素）         |
+| `loading`  | `'lazy' \| 'eager'`                                                 | ❌  | `'lazy'`  | 图片加载策略           |
+| `decoding` | `'async' \| 'sync' \| 'auto'`                                       | ❌  | `'async'` | 图片解码策略           |
+| `class`    | `string`                                                            | ❌  | `''`      | 要应用的额外 CSS 类     |
+
+## 工作原理
+
+组件会渲染两个 `<Image>` 组件：
+
+1. **浅色模式图片**：在浅色主题中可见，在深色主题中隐藏（`light:sl-block dark:sl-hidden`）
+2. **深色模式图片**：在浅色主题中隐藏，在深色主题中可见（`light:sl-hidden dark:sl-block`）
+
+这两个图片都使用 Astro 优化的 `<Image>` 组件，提供以下功能：
+
+- 自动图片优化
+- WebP/AVIF 格式转换
+- 响应式图片生成
+- 默认延迟加载
+- 防止累计布局偏移（CLS）
+
+## 图片路径别名
+
+该组件支持 Astro 项目中配置的 `~/images` 别名：
+
+```javascript
+// astro.config.mjs
+export default defineConfig({
+  vite: {
+    resolve: {
+      alias: {
+        "~/images": fileURLToPath(new URL("./src/assets/images", import.meta.url)),
+      },
+    },
+  },
+});
+```
+
+这样便可使用 `~/images/my-image.svg` 等路径，而无需使用相对路径。
+
+## CSS 类
+
+组件使用 Starlight 的主题类：
+
+- `light:sl-block`：在浅色模式中显示元素
+- `dark:sl-hidden`：在深色模式中隐藏元素
+- `light:sl-hidden`：在浅色模式中隐藏元素
+- `dark:sl-block`：在深色模式中显示元素
+
+## 更多示例
+
+以下是展示不同用例的其他示例：
+
+<ThemedImage
+  alt="Indexer Architecture"
+  sources={{
+light: '~/images/indexer-architecture-light.svg',
+dark: '~/images/indexer-architecture-dark.svg',
+}}
+/>
+
+<ThemedImage
+  alt="GitHub Logo"
+  sources={{
+light: '~/images/github-light.svg',
+dark: '~/images/github-dark.svg',
+}}
+  width={100}
+  height={100}
+/>

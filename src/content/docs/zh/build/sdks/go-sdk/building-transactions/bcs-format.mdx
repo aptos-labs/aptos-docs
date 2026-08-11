@@ -1,0 +1,38 @@
+---
+title: "Go SDK - 二进制规范序列化（BCS）格式"
+description: "了解如何使用 Go SDK 的二进制规范序列化（BCS）格式传递交易参数"
+sidebar:
+  label: "BCS 格式"
+---
+
+Aptos Go SDK 的所有交易参数均会编码为二进制规范序列化（BCS）格式的字节。Aptos 链识别这种格式，并使用特定类型（例如，它不使用 uint64 或 big.Int，而使用 `u64`、`u128` 等类型）。
+
+您可以显式指定参数类型，直接使用 BCS 格式构建交易：
+
+```go filename="example.go"
+	accountBytes, err := bcs.Serialize(&bob.Address)
+	if err != nil {
+		panic("Failed to serialize bob's address:" + err.Error())
+	}
+
+	amountBytes, err := bcs.SerializeU64(TransferAmount)
+	if err != nil {
+		panic("Failed to serialize transfer amount:" + err.Error())
+	}
+	rawTxn, err := client.BuildTransaction(alice.AccountAddress(), aptos.TransactionPayload{
+		Payload: &aptos.EntryFunction{
+			Module: aptos.ModuleId{
+				Address: aptos.AccountOne,
+				Name:    "aptos_account",
+			},
+			Function: "transfer",
+			ArgTypes: []aptos.TypeTag{},
+			Args: [][]byte{
+				accountBytes,
+				amountBytes,
+			},
+		}},
+	)
+```
+
+浏览 [BCS GitHub 仓库](https://github.com/aptos-labs/bcs)，了解更多 BCS 信息。

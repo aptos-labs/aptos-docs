@@ -1,0 +1,132 @@
+---
+title: "面向浏览器扩展钱包构建者的钱包适配器插件"
+description: "为浏览器扩展钱包实现钱包适配器插件，以通过 AIP-62 标准实现 dapp 自动识别"
+sidebar:
+  label: "面向浏览器扩展钱包"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+钱包适配器插件使 dapp 可以使用你的钱包。采用 AIP-62 Wallet 标准后，dapp 只需更新其 `aptos-wallet-adapter` 版本，即可连接新添加的钱包插件。
+
+为浏览器扩展钱包实现钱包插件主要分为两步：
+
+1. 为浏览器扩展实现钱包适配器插件。
+2. 更新 `aptos-wallet-adapter` 包，让 dapp 了解你的钱包。
+
+## 1. 实现钱包适配器插件
+
+你可以使用 [`wallet-standard`](https://github.com/aptos-labs/wallet-standard) 仓库的示例，实现兼容 [AIP-62](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-62.md)、并可被 dapp 自动识别的钱包适配器插件。
+
+<Aside type="note">
+  有关实现和注册钱包适配器插件的示例，请参阅 [Wallet Adapter Demo dapp](https://github.com/aptos-labs/aptos-wallet-adapter/tree/main/apps/nextjs-example)。其中 [`standardWallet.ts`](https://github.com/aptos-labs/aptos-wallet-adapter/blob/main/apps/nextjs-example/src/utils/standardWallet.ts) 包含插件实现，[ `page.tsx`](https://github.com/aptos-labs/aptos-wallet-adapter/blob/main/apps/nextjs-example/src/app/page.tsx) 包含 `registerWallet` 逻辑。
+</Aside>
+
+<Steps>
+  1. 将示例复制到浏览器扩展代码库中。
+
+  2. 按照示例说明，使其使用你的钱包执行 AIP-62 函数。
+
+     <Aside type="note">
+       AIP-62 兼容钱包所需的完整函数列表可在[此处](https://github.com/aptos-labs/wallet-standard/blob/38defe159b8641ff1763c4db61827c78ab448dab/src/detect.ts#L16)查看。
+     </Aside>
+
+  3. 使用插件实现添加对 registerWallet 的调用，使其在页面加载时被调用。
+
+     这将通知 dapp 你的钱包可用。
+
+     ```tsx filename="Example.tsx"
+     // Put this function with your "MyWallet" implementation so it gets called on page load.
+     (function () {
+     if (typeof window === "undefined") return;
+     const myWallet = new MyWallet();
+     registerWallet(myWallet);
+     })();
+     ```
+
+  4. 前往仓库并尝试连接钱包，以测试变更。
+
+     1. 扩展调用 `registerWallet` 后，应能点击\*\*“连接钱包”\*\*并将钱包作为选项看到。
+        1. 随后可使用演示 dapp 的功能验证钱包的其他功能是否按预期工作。
+        2. **这模拟了真实 dapp 与浏览器扩展交互的方式。**
+     2. 还可将 [`standardWallet.ts`](https://github.com/aptos-labs/aptos-wallet-adapter/blob/main/apps/nextjs-example/src/utils/standardWallet.ts) 从 `MyWallet` 更新为你钱包的实现，然后在本地运行 [Wallet Adapter Demo dapp](https://github.com/aptos-labs/aptos-wallet-adapter/tree/main/apps/nextjs-example) 来测试实现。
+        1. 有关如何在本地运行演示，请参阅 Wallet Adapter Demo dapp 的 [README.md](https://github.com/aptos-labs/aptos-wallet-adapter/tree/main/apps/nextjs-example)。
+        2. 在演示中，[ `page.tsx`](https://github.com/aptos-labs/aptos-wallet-adapter/blob/main/apps/nextjs-example/src/app/page.tsx) 会调用 `registerWallet`。_这不太符合实际，因为实际应由浏览器扩展调用 `registerWallet`。_
+
+  5. 发布浏览器扩展的新版本。
+</Steps>
+
+## 2. 更新 [`wallet-adapter-core`](https://github.com/aptos-labs/aptos-wallet-adapter/tree/main/packages/wallet-adapter-core)，使其了解你的扩展
+
+为了让尚未使用你钱包的 dapp 用户也能选择通过你的钱包创建账户，需要在 [`wallet-adapter-core`](https://github.com/aptos-labs/aptos-wallet-adapter/tree/main/packages/wallet-adapter-core) 中添加浏览器扩展的下载链接。
+
+<Steps>
+  1. Fork monorepo。
+
+  2. 在 VSCode 等本地编辑器中打开你的 fork。
+
+  3. 为变更创建新分支。
+
+     ```shellscript filename="Terminal"
+     git checkout -b your-wallet
+     ```
+
+  4. 进入相应目录。
+
+  5. 按照 AptosStandardSupportedWallet 接口，将钱包详细信息添加到 registry。
+
+     ```tsx filename="registry.ts"
+     export interface AptosStandardSupportedWallet<Name extends string = string> {
+     // The name of your wallet cast to WalletName (Ex. "Petra" as WalletName<"Petra">)
+     name: WalletName<Name>;
+     // The link to your chrome extension or main website where new users can create an account with your wallet.
+     url: string;
+     // An icon for your wallet. Can be one of 4 data types. Be sure to follow the below format exactly (including the "," after base64).
+     icon: `data:image/${"svg+xml" | "webp" | "png" | "gif"};base64,${string}`;
+     // Copy this exactly
+     readyState: WalletReadyState.NotDetected;
+     // Copy this exactly
+     isAIP62Standard: true;
+     }
+     ```
+
+     例如：
+
+     ```tsx filename="Example.tsx"
+     {
+     name: "Petra" as WalletName<"Petra">,
+     url: "https://chromewebstore.google.com/detail/petra-aptos-wallet/ejjladinnckdgjemekebdpeokbikhfci?hl=en",
+     icon: "data:image/png;base64,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",
+     readyState: WalletReadyState.NotDetected,
+     isAIP62Standard: true,
+     }
+     ```
+
+  6. 在 type.ts 中更新 AvailableWallets 类型，使其包含钱包名称。
+
+     ```tsx filename="type.ts"
+     export type AvailableWallets = "Nightly" | "Petra" | "T wallet" | "Your Wallet's Name";
+     ```
+
+  7. 更新 aptos-wallet-adapter 顶层的 [README 文件](https://github.com/aptos-labs/aptos-wallet-adapter/blob/main/README.md)，将钱包加入 AIP-62 兼容钱包列表。
+
+  8. 提交并推送变更到 fork。
+
+     <Aside type="note">
+       将变更推送到 fork 后，[ `aptos-wallet-adapter`](https://github.com/aptos-labs/aptos-wallet-adapter) 仓库顶部应会出现绿色按钮，询问你是否要创建拉取请求。
+     </Aside>
+
+  9. 按照[贡献指南](https://github.com/aptos-labs/aptos-wallet-adapter/blob/main/CONTRIBUTING.md#creating-a-pull-request)为仓库创建拉取请求。
+</Steps>
+
+## 资源
+
+- Wallet Adapter Demo App
+  - [在线站点](https://aptos-wallet-adapter-example.vercel.app/)
+  - [源代码](https://github.com/aptos-labs/aptos-wallet-adapter/tree/main/apps/nextjs-example)
+  - 有关 AIP-62 兼容 wallet-adapter 插件的实现示例，请参阅 [`standardWallet.ts`](https://github.com/aptos-labs/aptos-wallet-adapter/blob/main/apps/nextjs-example/src/utils/standardWallet.ts)。
+- [`wallet-standard`](https://github.com/aptos-labs/wallet-standard) 源代码。
+- [`wallet-adapter-core`](https://github.com/aptos-labs/aptos-wallet-adapter/tree/main/packages/wallet-adapter-core) 源代码。
+- [AIP-62 标准](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-62.md)。

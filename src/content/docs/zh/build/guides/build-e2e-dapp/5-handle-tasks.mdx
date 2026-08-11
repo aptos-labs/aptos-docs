@@ -1,0 +1,363 @@
+---
+title: "5. 处理任务"
+description: "通过实现任务管理功能完成 dapp，以获取现有任务并添加新任务。"
+sidebar:
+  label: "5. 处理任务"
+---
+
+在[构建 Aptos 端到端 dapp](/zh/build/guides/build-e2e-dapp)教程的第五章（也是最后一章）中，将为应用添加功能，使用户界面能够处理账户已创建列表的情况。
+
+前面已介绍如何[从链上获取数据](/zh/build/guides/build-e2e-dapp/3-fetch-data-from-chain)（账户的待办列表），以及如何通过钱包[向链上提交交易](/zh/build/guides/build-e2e-dapp/4-submit-data-to-chain)（新待办列表）。
+
+下面通过实现获取任务和添加任务功能来完成应用。
+
+## 获取任务
+
+1. 创建保存任务的本地状态 `tasks`。它使用 Task 类型（与智能合约中设置的属性相同）：
+
+```typescript filename="App.tsx"
+type Task = {
+  address: string;
+  completed: boolean;
+  content: string;
+  task_id: string;
+};
+
+function App() {
+	const [tasks, setTasks] = useState<Task[]>([]);
+	...
+}
+```
+
+2. 更新 `fetchList` 函数，以获取账户 `TodoList` 资源中的任务：
+
+```typescript filename="App.tsx"
+const fetchList = async () => {
+  if (!account) return [];
+  try {
+    const todoListResource = await aptosClient().getAccountResource({
+      accountAddress:account?.address,
+      resourceType:`${moduleAddress}::todolist::TodoList`
+    });
+    setAccountHasList(true);
+		// tasks table handle
+    const tableHandle = (todoListResource as any).tasks.handle;
+		// tasks table counter
+    const taskCounter = (todoListResource as any).task_counter;
+
+    let tasks = [];
+    let counter = 1;
+    while (counter <= taskCounter) {
+      const tableItem = {
+        key_type: "u64",
+        value_type: `${moduleAddress}::todolist::Task`,
+        key: `${counter}`,
+      };
+      const task = await aptosClient().getTableItem<Task>({handle:tableHandle, data:tableItem});
+      tasks.push(task);
+      counter++;
+    }
+	  // set tasks in local state
+    setTasks(tasks);
+  } catch (e: any) {
+    setAccountHasList(false);
+  }
+};
+```
+
+**这一部分有些复杂，请继续跟随！**
+
+任务存储在表中（这是合约的构建方式）。要获取表项（即任务），需要该任务的表句柄。还需要资源中的 `task_counter`，以便遍历并获取 `task_id` 与 `task_counter` 匹配的任务。
+
+```typescript filename="App.tsx"
+const tableHandle = (TodoListResource as any).data.tasks.handle;
+const taskCounter = (TodoListResource as any).data.task_counter;
+```
+
+现在已有任务表句柄和 `task_counter` 变量，可以遍历 `taskCounter`。定义 `counter` 并设为 1，因为 task\_counter/task\_id 永远不小于 1。
+
+当 `counter` 小于等于 `taskCounter` 时，获取表项并将其推入 tasks 数组：
+
+```typescript filename="App.tsx"
+let tasks = [];
+let counter = 1;
+while (counter <= taskCounter) {
+  const tableItem = {
+    key_type: "u64",
+    value_type: `${moduleAddress}::todolist::Task`,
+    key: `${counter}`,
+  };
+  const task = await aptosClient().getTableItem(tableHandle, tableItem);
+  tasks.push(task);
+  counter++;
+}
+```
+
+查看合约中的表结构：
+
+```typescript filename="App.tsx"
+tasks: Table<u64, Task>,
+```
+
+可见其 `key` 类型为 `u64`，`value` 为 `Task` 类型。每当创建新任务时，会将 `key` 设为递增的任务计数器。
+
+```move filename="todolist.move"
+// adds the new task into the tasks table
+table::upsert(&mut todo_list.tasks, counter, new_task);
+```
+
+因此构建的对象为：
+
+```typescript filename="App.tsx"
+{
+  key_type: "u64",
+  value_type:`${moduleAddress}::todolist::Task`,
+  key: `${taskCounter}`,
+}
+```
+
+其中 `key_type` 是表的 `key` 类型，`key` 是要查找的键值，`value_type` 是表的 `value`，即 `Task` 结构体。Task 结构体使用与之前资源查询相同的格式：
+
+- 持有该模块的账户地址，即 profile 账户地址
+- 资源所在的模块名称，即 `todolist`
+- 结构体名称，即 `Task`
+
+最后，需要显示刚获取的任务。
+
+3. 在 `App.tsx` 文件中，使用以下代码更新 UI：
+
+导入 `Input`：`import { Input } from "./components/ui/input";`
+
+```tsx filename="App.tsx"
+{!accountHasList ? (
+  <Button onClick={addNewList} disabled={transactionInProgress}>
+    Add new list
+  </Button>
+) : (
+  <div className="flex flex-col gap-10">
+    {tasks &&
+      tasks.length > 0 &&
+      tasks.map((task) => (
+        <div key={task.task_id} className="flex justify-between flex-row">
+          <p className="text-xl font-bold">{task.content}</p>
+          <div>
+            <Input type="checkbox"/>
+          </div>
+        </div>
+      ))}
+  </div>
+)}
+```
+
+当账户没有列表时，这将显示**添加新列表**按钮；否则显示任务。
+
+刷新浏览器即可查看效果。
+
+尚未添加任务，因此暂时不会看到内容。接下来添加创建任务的选项！
+
+## 添加任务
+
+1. 使&#x7528;_&#x6DFB;加任&#x52A1;_&#x8F93;入框更新 UI：
+
+```tsx filename="App.tsx"
+{!accountHasList ? (
+  ...
+) : (
+  <div className="flex flex-col gap-10">
+    // Add this!
+    <div className="flex flex-row gap-10">
+      <Input/>
+      <Button>Add new task</Button>
+    </div>
+    ...
+  </div>
+  ...
+)}
+```
+
+这里添加了用于编写任务的文本输入框和用于添加任务的按钮。
+
+2. 创建保存任务内容的新本地状态：
+
+```tsx filename="App.tsx"
+function App() {
+  ...
+  const [newTask, setNewTask] = useState<string>("");
+  ...
+}
+```
+
+3. 找到 `<Input/>` 组件，为其添加 `onChange` 事件，并将输入值设为 `newTask` 本地状态：
+
+```tsx filename="App.tsx"
+<Input value={newTask} onChange={(e) => setNewTask(e.target.value)} />
+```
+
+现在已有可用流程：用户在 Input 组件中输入内容时，将触发函数并使用该内容设置本地状态。
+
+4. 再添加一个将输入任务提交到链上的函数！找到 `<Button>` 组件并按以下方式更新：
+
+```tsx filename="App.tsx"
+<Button
+  onClick={onTaskAdded} // add this
+>
+  Add new task
+</Button>
+```
+
+这会添加触发 `onTaskAdded` 函数的 `onClick` 事件。
+
+用户添加新任务时，需要：
+
+- 验证其已连接钱包。
+- 构建将提交到链上的交易载荷。
+- 使用钱包向链提交交易。
+- 等待交易。
+- 使用新任务更新 UI（无需刷新页面）。
+
+5. 添加 `onTaskAdded` 函数：
+
+```tsx filename="App.tsx"
+  const onTaskAdded = async () => {
+    // check for connected account
+    if (!account) return;
+    setTransactionInProgress(true);
+    const transaction: InputTransactionData = {
+      data: {
+        function: `${moduleAddress}::todolist::create_task`,
+        functionArguments: [newTask],
+      },
+    };
+
+    // hold the latest task.task_id from our local state
+    const latestId = tasks.length > 0 ? parseInt(tasks[tasks.length - 1].task_id) + 1 : 1;
+
+    // build a newTaskToPush object into our local state
+    const newTaskToPush: Task = {
+      address: account.address.toString(),
+      completed: false,
+      content: newTask,
+      task_id: latestId + "",
+    };
+
+    try {
+      // sign and submit transaction to chain
+      const response = await signAndSubmitTransaction(transaction);
+      // wait for transaction
+      await aptosClient().waitForTransaction({ transactionHash: response.hash });
+
+      // Create a new array based on current state:
+      let newTasks = [...tasks];
+
+      // Add item to the tasks array
+      newTasks.push(newTaskToPush);
+      // Set state
+      setTasks(newTasks);
+      // clear input text
+      setNewTask("");
+    } catch (error: any) {
+      console.log("error", error);
+    } finally {
+      setTransactionInProgress(false);
+    }
+  };
+```
+
+**以下说明发生了什么。**
+
+首先使用钱包提供者的 `account` 属性确保有账户连接到应用。
+
+然后构建要提交到链上的交易数据：
+
+```tsx filename="App.tsx"
+const transaction:InputTransactionData = {
+      data:{
+        function:`${moduleAddress}::todolist::create_task`,
+        functionArguments:[newTask]
+      }
+    }
+```
+
+- `function`：由模块地址、模块名和函数名组成。
+- `functionArguments`：函数所需参数；本例中为任务内容。
+
+接着，在 try/catch 块中，使用钱包提供者函数将交易提交到链，并使用 SDK 函数等待交易。若一切顺利，需找到当前最新任务 ID，将其添加到当前 tasks 状态数组。还会创建要推入当前 tasks 状态数组的新任务，从而无需刷新页面即可在 UI 的任务列表中显示新任务。
+
+**试试看！**
+
+在文本输入框中输入新任务，点击**添加**，批准交易，然后查看它被添加到任务列表中。
+
+## 将任务标记为已完成
+
+接下来实现 `complete_task` 函数。UI 中已有复选框，用户可用它将任务标记为已完成。
+
+1. 为 `<Checkbox/>` 组件添加 `onCheck` 属性，使其选中时调用 `onCheckboxChange`：
+
+```tsx filename="App.tsx"
+ <Input type="checkbox" onChange={(event) => onCheckboxChange(event, task.task_id)} />
+```
+
+2. 创建 `onCheckboxChange` 函数：
+
+```tsx filename="App.tsx"
+const onCheckboxChange = async (event: React.ChangeEvent<HTMLInputElement>, taskId: string) => {
+    if (!account) return;
+    if (!event.target.checked) return;
+    setTransactionInProgress(true);
+    const transaction: InputTransactionData = {
+      data: {
+        function: `${moduleAddress}::todolist::complete_task`,
+        functionArguments: [taskId],
+      },
+    };
+
+    try {
+      // sign and submit transaction to chain
+      const response = await signAndSubmitTransaction(transaction);
+      // wait for transaction
+      await aptosClient().waitForTransaction({ transactionHash: response.hash });
+
+      setTasks((prevState) => {
+        const newState = prevState.map((obj) => {
+          // if task_id equals the checked taskId, update completed property
+          if (obj.task_id === taskId) {
+            return { ...obj, completed: true };
+          }
+
+          // otherwise return object as is
+          return obj;
+        });
+
+        return newState;
+      });
+    } catch (error: any) {
+      console.log("error", error);
+    } finally {
+      setTransactionInProgress(false);
+    }
+  };
+```
+
+这里基本重复创建新列表或新任务时所做的操作。
+
+确保账户已连接，设置交易进行中状态，构建交易载荷，提交交易，等待交易，然后在 UI 上将任务更新为已完成。
+
+3. 更新 `Checkbox` 组件：若任务已标记完成，默认选中：
+
+```tsx filename="App.tsx"
+...
+actions={[
+<div>
+    {task.completed ? (
+    <Input type="checkbox" checked={true} disabled />
+    ) : (
+    <Input type="checkbox" onChange={(event) => onCheckboxChange(event, task.task_id)} />
+    )}
+</div>,
+]}
+...
+```
+
+试试看！选中任务的复选框，批准交易，然后查看任务被标记为已完成。
+
+现在已学会从端到端构建 Aptos dapp。恭喜！

@@ -1,0 +1,64 @@
+---
+title: "Move 资源"
+description: "了解 Aptos 上 Move 中的资源、它们与实例的区别、权限模型，以及管理链上状态的存储机制。"
+sidebar:
+  label: "资源"
+---
+
+在 Aptos 上，链上状态组织为资源和模块，然后存储在各个账户中。这与 Ethereum 等其他区块链不同，后者的每个智能合约都维护自己的存储空间。有关账户的详细信息，请参阅[账户](/zh/network/blockchain/accounts)。
+
+## 资源与实例
+
+Move 模块定义 struct 定义。struct 定义可包含 `key` 或 `store` 等能力。资源是具有 `key` 能力、存储在全局存储或直接存储在账户中的 struct 实例。`store` 能力允许将 struct 实例存储在资源中。以下示例展示 APT coin 的存储方式：CoinStore 是包含 APT coin 的资源，而 Coin 本身是一个实例：
+
+```move
+/// A holder of a specific coin type and associated event handles.
+/// These are kept in a single resource to ensure locality of data.
+struct CoinStore<phantom CoinType> has key {
+    coin: Coin<CoinType>,
+}
+
+/// Main structure representing a coin/token in an account's custody.
+struct Coin<phantom CoinType> has store {
+    /// Amount of coin this address has.
+    value: u64,
+}
+```
+
+在拥有账户的许可下，可从 CoinStore 中取出 Coin 实例并轻松转移至另一个 CoinStore 资源。若定义允许，也可将其保存在其他自定义资源中，例如：
+
+```move
+struct CustomCoinBox<phantom CoinType> has key {
+    coin: Coin<CoinType>,
+}
+```
+
+## 定义资源和对象
+
+所有实例和资源均在存储于某地址的模块中定义。例如，`0x1234::coin::CoinStore<0x1234::coin::SomeCoin>` 可表示为：
+
+```move
+module 0x1234::coin {
+    struct CoinStore<phantom CoinType> has key {
+        coin: Coin<CoinType>,
+    }
+
+    struct SomeCoin { }
+}
+```
+
+在此示例中，`0x1234` 是地址，`coin` 是模块，`CoinStore` 是可作为资源存储的 struct，而 `SomeCoin` 是不太可能表示为实例的 struct。使用 phantom 类型可让不同 `CoinType` 参数存在多个不同类型的 CoinStore 资源。
+
+## 实例（包括资源）的权限
+
+资源和其他实例的权限由定义该 struct 的模块决定。例如，资源中的实例可被访问甚至从资源中移除，但未经定义该实例 struct 的模块许可，不能更改其内部状态。
+
+另一方面，所有权通过在账户下存储资源，或通过定义 struct 的模块内的逻辑表示。
+
+## 查看资源
+
+资源存储在账户中。通过在所有者账户中搜索资源的完整查询路径（包括存储它的账户、地址和模块）可以找到资源。您可在 [Aptos Explorer](https://explorer.aptoslabs.com/) 中搜索所有者账户来查看资源，也可直接从全节点 API 获取资源。
+
+## 资源的存储方式
+
+定义 struct 的模块指定实例的存储方式。例如，存入代币的事件可以存储在发生存款的接收方账户中，也可以存储在部署代币模块的账户中。通常，将数据存储在单个用户账户中可提高执行效率，因为不同账户发出的交易之间不存在状态读写冲突，从而可实现顺畅的并行执行。

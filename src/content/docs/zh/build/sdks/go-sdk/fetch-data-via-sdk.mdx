@@ -1,0 +1,94 @@
+---
+title: "Go SDK：获取数据"
+description: "了解如何使用 Aptos Go SDK 获取链上数据、账户信息和资源。"
+sidebar:
+  label: "获取数据"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+可使用 `Aptos` 客户端和多种辅助函数获取链上数据。具体来说，[参考文档](https://pkg.go.dev/github.com/aptos-labs/aptos-go-sdk)中列出的许多函数都会获取链上数据，例如 `Account`、`AccountResources` 和 `Transactions`。
+
+以下示例展示如何获取应用中可能需要的常见数据：
+
+```go filename="fetch_data.go"
+client, err := aptos.NewClient(aptos.DevnetConfig)
+if err != nil {
+  panic("Failed to create client:" + err.Error())
+}
+
+address := aptos.AccountAddress{}
+err := address.ParseStringRelaxed("0x123")
+if err != nil {
+  panic("Failed to parse address:" + err.Error())
+}
+
+accountInfo, err := client.Account(address)
+resources, err := client.AccountResources(address)
+transactions, err := client.Transactions()
+```
+
+<Aside type="note">
+  许多函数具有 `ledgerVersion` 等可选输入，可用来指定查询状态时使用的账本版本。
+</Aside>
+
+`Aptos` 客户端开箱即用，既可查询[全节点](https://api.mainnet.aptoslabs.com/v1/spec#/)中的网络数据，也可查询包含聚合和增强数据的 [Indexer](https://cloud.hasura.io/public/graphiql?endpoint=https://api.mainnet.aptoslabs.com/v1/graphql) API。若要为 Indexer API 数据使用自定义查询，可按如下方式使用 `client.QueryIndexer()`：
+
+```go filename="fetch_data.go"
+	var out []CoinBalance
+	var q struct {
+		Current_coin_balances []struct {
+			CoinType     string `graphql:"coin_type"`
+			Amount       uint64
+			OwnerAddress string `graphql:"owner_address"`
+		} `graphql:"current_coin_balances(where: {owner_address: {_eq: $address}})"`
+	}
+
+	variables := map[string]any{
+		"address": address.StringLong(),
+	}
+	err := ic.Query(&q, variables)
+
+	if err != nil {
+		return nil, err
+	}
+
+	for _, coin := range q.Current_coin_balances {
+		out = append(out, CoinBalance{
+			CoinType: coin.CoinType,
+			Amount:   coin.Amount,
+		})
+	}
+```
+
+<Aside type="note">
+  请注意，GraphQL 中的所有值都必须大写并采用 CamelCase。若要转换为直接数据库字段名，请使用 `graphql` 标签。
+</Aside>
+
+## 使用 Move View 函数
+
+可通过 `client.View` 调用返回自定义链上数据的 view 函数。
+
+例如，可通过 `chain_id` view 函数查询正在使用的网络：
+
+```go filename="fetch_data.go"
+viewResponse, err := client.View(&aptos.ViewPayload {
+  Module: aptos.ModuleId{Address: aptos.AccountAddress{}, Name: "chain_id"},
+  Function: "get",
+  ArgTypes: []aptos.TypeTag{},
+  Args: [][]byte{},
+)
+
+chainId := viewResponse[0]
+```
+
+## 确保 Indexer 数据新鲜
+
+在后台，某些请求会使用 [Indexer API](/zh/build/indexer) 访问已处理或聚合的数据。这些额外解析需要一些时间，因此数据可能略微落后于最新账本。
+
+如果要确保数据新鲜，可以等待 indexer 达到特定版本。
+
+```go filename="fetch_data.go"
+// Wait on processorName to reach version 12345
+err := client.WaitOnIndexer("processorName", 12345)
+```

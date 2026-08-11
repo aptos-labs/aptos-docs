@@ -1,0 +1,83 @@
+---
+title: "无序交易"
+description: "创建可按任意顺序执行的交易，支持灵活的多机器签名场景。"
+sidebar:
+  label: "无序交易"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+无序交易让你创建彼此之间不指定执行顺序的交易。这在多台机器需要签署交易、但签署顺序不影响交易结果或创建者的场景中特别有用。
+
+## 构建无序交易
+
+创建和执行多代理交易的流程与[简单交易流程](/zh/build/sdks/ts-sdk/building-transactions)及[多代理交易流程](/zh/build/sdks/ts-sdk/building-transactions/multi-agent-transactions)类似。
+
+<Aside type="note">
+  使用 `Replay Protection Nonce` 以确保交易唯一且不可重放（即不能使用相同 nonce 多次执行），而不是提供 `sequenceNumber`（或完全不提供序列号）。
+</Aside>
+
+例如，要创建使用无序交易的单签名者交易，可在 `build.simple` 方法中按如下方式指定 `nonce`：
+
+```typescript filename="build-a-transaction.ts"
+const transaction = await aptos.transaction.build.simple({
+  sender: sender.accountAddress,
+  data: {
+	  // All transactions on Aptos are implemented via smart contracts.
+	  function: "0x1::aptos_account::transfer",
+	  functionArguments: [destination.accountAddress, 100],
+  },
+  options: {
+    replayProtectionNonce: 12345n, // This is the nonce that will be used to ensure the transaction is unique.
+  }
+});
+```
+
+类似地，如果构建多代理交易，可在 `build.multiAgent` 方法中指定 `replayProtectionNonce`：
+
+```typescript filename="build-a-transaction.ts"
+const transaction = await aptos.transaction.build.multiAgent({
+  sender: sender.accountAddress,
+  secondarySignerAddresses: [bob.accountAddress], // List of secondary signers
+  data: {
+	  // All transactions on Aptos are implemented via smart contracts.
+	  function: "0x1::aptos_account::transfer",
+	  functionArguments: [destination.accountAddress, 100],
+  },
+  options: {
+    replayProtectionNonce: 12345n, // This is the nonce that will be used to ensure the transaction is unique.
+  }
+});
+```
+
+构建赞助交易时也是如此；可在 `build.multiAgent` 方法中指定 `replayProtectionNonce`：
+
+```typescript filename="build-a-transaction.ts"
+const transaction = await aptos.transaction.build.multiAgent({
+  sender: sender.accountAddress,
+  withFeePayer: true, // This indicates that the transaction will be sponsored.
+  data: {
+	  // All transactions on Aptos are implemented via smart contracts.
+	  function: "0x1::aptos_account::transfer",
+	  functionArguments: [destination.accountAddress, 100],
+  },
+  options: {
+    replayProtectionNonce: 12345n, // This is the nonce that will be used to ensure the transaction is unique.
+  }
+});
+```
+
+<Aside type="note">
+  对于无序交易，每笔交易的 `replayProtectionNonce` 必须唯一。此外，交易的过期时间最长为提交后的 60 秒。若交易未在该时间内执行，将被视为过期且不会执行。
+</Aside>
+
+之后只需遵循与简单交易相同的步骤：
+
+1. [**模拟**交易（可选）](/zh/build/sdks/ts-sdk/building-transactions/simulating-transactions)。
+2. **签署**交易。
+3. **将**交易提交到网络。
+4. **等待**交易执行。
+
+### 示例
+
+- [TS SDK 示例](https://github.com/aptos-labs/aptos-ts-sdk/blob/main/examples/typescript/simple_orderless_transfer.ts)

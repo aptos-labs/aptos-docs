@@ -1,0 +1,66 @@
+---
+title: "链上治理"
+description: "了解 Aptos 链上治理、如何创建和投票表决提案，以及如何通过民主流程参与区块链升级决策。"
+sidebar:
+  label: "治理"
+---
+
+import { ThemedImage } from '~/components/ThemedImage';
+
+Aptos 链上治理是 Aptos 社区成员创建并投票表决提案的流程，可降低区块链升级成本。Aptos 链上治理提案涵盖：
+
+- 更改区块链参数，例如纪元时长、验证者质押的最低要求和最大允许值。
+- 更改区块链核心代码。
+- 升级 Aptos Framework 模块以修复错误，或添加、增强 Aptos 区块链功能。
+- 部署新的框架模块（地址为 `0x1` 至 `0xa`）。
+
+## 提案如何变为可决议状态
+
+以下概述了提案如何产生以及何时可以决议：
+
+<ThemedImage
+  alt="提案投票流程"
+  sources={{
+light: '~/images/voting-resolution-flow.svg',
+dark: '~/images/voting-resolution-flow-dark.svg',
+}}
+/>
+
+- Aptos 社区可在 [Aptos Foundation AIP GitHub](https://github.com/aptos-foundation/AIPs) 提出 Aptos 改进提案（AIP）。
+- 在适当情况下，可通过 `aptos_governance` 模块为 AIP 创建链上提案。
+- 投票者随后可通过 `aptos_governance` 模块对该提案进行链上投票。若提案获得足够支持，即可决议。
+- 治理要求在到期阈值前投出最少票数。但如果在该阈值之前累计获得超过总供应量 50% 的充分票数，提案可**无需等待完整投票期**即执行。
+
+## 谁可以提案
+
+- 要提案或投票，必须质押，但不必运行验证者节点。不过，建议作为验证者集合的一部分运行带质押的验证者，以获得质押奖励。
+- 要创建提案，提案人支持的质押池必须具有最低要求的提案人质押。提案人的质押必须至少锁定与提案投票期相同的时长，以避免潜在的垃圾提案。
+- 提案人可调用 [`aptos_governance::create_proposal`](https://github.com/aptos-labs/aptos-core/blob/27a255ebc662817944435349afc4ec33ea317e64/aptos-move/framework/aptos-framework/sources/aptos_governance.move#L183) 创建提案。
+
+## 谁可以投票
+
+- 要投票，必须质押，但不必运行验证者节点。投票权来自支持的质押池。
+- 投票权根据提案人或投票者支持的质押池在当前纪元的活跃质押计算。此外，质押池的锁定期必须至少与提案持续时间相同。
+- 投票前请验证提案。确保每项提案都链接至其源代码；若有相应 AIP，标题和描述中应包含该 AIP。
+
+如果您是[质押池](/zh/network/blockchain/staking)投票者，请遵循[这里](/zh/network/nodes/validator-node/connect-nodes/staking-pool-voter)的投票说明。
+
+如果您是[委托质押者](/zh/network/blockchain/delegated-staking)，请遵循[这里](/zh/network/nodes/validator-node/connect-nodes/staking-pool-voter#delegation-pool-voter)的投票说明。
+
+## 谁可以决议
+
+- 任何人都可通过 Aptos CLI 的 `aptos governance execute-proposal` 命令决议已满足投票要求的链上提案。
+
+## Aptos 改进提案（AIP）
+
+AIP 是由 Aptos 社区或 Aptos Labs 团队创建、用于改进 Aptos 链运行和开发的提案。要提交 AIP，请使用[模板](https://github.com/aptos-foundation/AIPs/blob/main/TEMPLATE.md)在 [Aptos Foundation 的 GitHub 仓库](https://github.com/aptos-foundation/AIPs/issues)中创建 issue。要跟踪新的 AIP，请查看 [Aptos Discord 频道](https://discord.gg/aptosnetwork)中的 `#aip-announcements` 频道。要查看并投票表决链上提案，请前往 [Aptos 治理网站](https://governance.aptosfoundation.org/)。
+
+## Aptos 治理的技术实现
+
+大多数治理逻辑位于 [`aptos_governance.move 和 voting.move`](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources)。`aptos_governance` 模块说明用户如何与 Aptos 治理交互。它是 Aptos 链上治理流程的外部接口模块，包含 Aptos 治理特有的逻辑和检查。`voting` 模块是 Aptos 治理标准，Aptos 链上的 DAO 可使用它创建自己的链上治理流程。
+
+若要在 Aptos 上创建 DAO，可将 `aptos_governance` 对 `voting` 模块的使用作为示例。在 `aptos_governance` 中，我们依赖 `voting` 模块来创建、投票表决和决议提案。
+
+- `aptos_governance::create_proposal` 在链下 AIP 具有足够重要性时调用 `voting::create_proposal`，以在链上创建提案。
+- `aptos_governance::vote` 调用 `voting::vote`，以在链上记录对提案的投票；
+- 任何人均可调用 `aptos_governance::resolve`。它调用 `voting::resolve`，以在链上决议提案。

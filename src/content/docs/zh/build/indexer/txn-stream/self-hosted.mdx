@@ -1,0 +1,105 @@
+---
+title: "自托管交易流服务"
+description: "使用 Indexer 全节点、gRPC Manager 和 Data Service 组件部署自己的交易流服务，以私有方式访问区块链数据。"
+sidebar:
+  label: "自托管"
+---
+
+{/* <IndexerBetaNotice /> */}
+
+要运行自托管交易流服务，需要运行以下组件。
+
+Indexer FN \[[https://github.com/aptos-labs/aptos-core/tree/main/ecosystem/indexer-grpc/indexer-grpc-fullnode](https://github.com/aptos-labs/aptos-core/tree/main/ecosystem/indexer-grpc/indexer-grpc-fullnode)]：启用 indexer gRPC 功能的全节点。数据服务通常需要访问全部历史数据，因此 FN 必须从创世同步，才能引导整个堆栈。数据持久化到文件存储后，稍后可通过 pruner 删除历史数据。
+
+GrpcManager \[[https://github.com/aptos-labs/aptos-core/tree/main/ecosystem/indexer-grpc/indexer-grpc-manager](https://github.com/aptos-labs/aptos-core/tree/main/ecosystem/indexer-grpc/indexer-grpc-manager)]：管理堆栈内所有组件的集中式组件。它可在两种模式（master 和 non-master）下运行，且只允许一个 master。以 master 模式运行时，还会从上游 FN 拉取数据，并将数据持久化到文件存储（本地文件系统或 Google Cloud Storage）。
+
+DataService \[[https://github.com/aptos-labs/aptos-core/tree/main/ecosystem/indexer-grpc/indexer-grpc-data-service-v2](https://github.com/aptos-labs/aptos-core/tree/main/ecosystem/indexer-grpc/indexer-grpc-data-service-v2)]：提供面向客户端的流式 gRPC 服务。它可在两种模式下运行：live 模式从本地缓存提供数据，historical 模式从文件存储提供数据。
+
+## 配置示例
+
+- FN
+
+```
+indexer_grpc:
+  enabled: true
+  address: 0.0.0.0:50051 # The address to service Grpc request.
+  processor_task_count: 32
+  processor_batch_size: 100
+  output_batch_size: 100
+
+indexer_table_info:
+  table_info_service_mode: IndexingOnly
+  parser_task_count: 10
+  parser_batch_size: 100
+```
+
+- GrpcManager
+
+```
+health_check_port: 8081 # The port for monitoring purpose.
+server_config:
+  is_master: true # Whether running in master mode.
+  service_config:
+    listen_address: 0.0.0.0:50052 # The port that serves Grpc requests.
+  self_advertised_address: 0.0.0.0:50052
+  grpc_manager_addresses: # All GrpcManager addresses in the stack, need to point to the server_config.self_advertised_address in GrpcManager config.
+    - >-
+      http://0.0.0.0:50052
+  fullnode_addresses: # All upstream FN addresses in the stack, need to point to the indexer_grpc.address in FN config.
+    - >-
+      http://0.0.0.0:50051
+    - >-
+      http://other-fullnode.xyz:50051
+  file_store_config:
+    file_store_type: GcsFileStore
+    gcs_file_store_bucket_name: indexer
+    gcs_file_store_service_account_key_path: /secrets/indexer-sa-key
+  chain_id: 1
+```
+
+- DataService
+
+```
+health_check_port: 8081 # The port for monitoring purpose.
+server_config:
+  chain_id: 1
+  self_advertised_address: 0.0.0.0:50053
+  grpc_manager_addresses: # All GrpcManager addresses in the stack, need to point to the server_config.self_advertised_address in GrpcManager config.
+    - >-
+      http://0.0.0.0:50052
+  service_config:
+    listen_address: 0.0.0.0:50053
+  live_data_service_config: # For live data service.
+    enabled: true
+    num_slots: 5000000 # Max number of transactions to cache.
+    size_limit_bytes: 10000000000 # Cache size in bytes.
+  historical_data_service_config: # For historical data service.
+    enabled: true
+    file_store_config:
+      file_store_type: GcsFileStore
+      gcs_file_store_bucket_name: indexer
+      gcs_file_store_service_account_key_path: /secrets/indexer-sa-key
+```
+
+## 使用
+
+- 使用 GrpcManager 进行路由或负载均衡
+
+先调用 GrpcManager.GetDataServiceForRequest；它会返回一个数据服务实例的地址。
+
+然后调用 DataService.GetTransactions。
+
+- 直接使用 DataService
+
+直接调用 DataService.GetTransactions。在此情况下，可能需要同时运行 live data service 和 historical data service。
+
+## 高级用法
+
+- 不保留完整历史
+  如果流永远不需要提供旧数据，也不想保留完整历史，例如只想现在开始流式处理并只关心未来数据，可以选择不从创世同步。
+
+为此，先启动 FN 并进行快速同步。然后从 [https://console.cloud.google.com/storage/browser/aptos-indexer-grpc-mainnet-table-info-backup](https://console.cloud.google.com/storage/browser/aptos-indexer-grpc-mainnet-table-info-backup) 下载最新 table info 数据库（对于 Testnet，将 mainnet 替换为 testnet），解压到 FN 中的 db 文件夹。
+
+随后启动 GrpcManager；它会在文件存储中生成 metadata.json（根据配置，它可以是本地文件流或 GCS）。手动将版本更新为希望开始处理的下一个版本。（该版本必须是 100000 的倍数加 1，例如 1000000001，并且 FN 必须拥有该版本的数据。）
+
+最后重启所有二进制文件，服务应开始工作。

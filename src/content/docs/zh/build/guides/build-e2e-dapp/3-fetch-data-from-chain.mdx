@@ -1,0 +1,131 @@
+---
+title: "3. 从链上获取数据"
+description: "学习检查 TodoList 资源并实现条件式 UI 逻辑，以获取链上数据。"
+sidebar:
+  label: "3. 获取数据"
+---
+
+import { Steps } from '@astrojs/starlight/components';
+
+在 [Aptos 端到端 dApp 构建教程](/zh/build/guides/build-e2e-dapp)的第三章中，你将学习如何从链上获取数据。
+
+我们的 UI 逻辑取决于已连接账户是否创建了待办列表。如果账户已创建待办列表，应用应显示该列表；否则，应用应显示一个可创建新列表的按钮。
+
+为此，我们首先需要检查已连接账户是否拥有 `TodoList` 资源。在智能合约中，每当有人创建待办列表时，我们都会创建 `TodoList` 资源并将其存入该账户。
+
+要从链上获取数据，可以使用 [Aptos TypeScript SDK](/zh/build/sdks/ts-sdk)。该 SDK 提供类和函数，方便我们与 Aptos 链交互和查询。
+
+开始操作：
+
+<Steps>
+  1. 如果本地服务器正在运行，请将其停止，然后打开 `App.tsx` 文件。
+
+  2. **从钱包适配器 React Provider 导入 wallet**：
+     ```tsx filename="App.tsx"
+     import { useWallet } from "@aptos-labs/wallet-adapter-react";
+     ```
+
+  3. **从钱包适配器中提取 account 对象**：
+
+     ```tsx filename="App.tsx"
+     function App (
+       const { account } = useWallet();
+     )
+     ```
+
+     未连接账户时，`account` 对象为 `null`；连接账户后，它会保存账户信息，包括账户地址。
+
+  4. **设置 React Hook 和状态**：
+
+     - 使用以下代码导入 `useEffect` 和 `useState`：
+
+     ```tsx filename="App.tsx"
+     import { useState, useEffect } from "react";
+     ```
+
+     - 创建本地状态以跟踪账户是否有待办列表，并添加 `useEffect` Hook，在账户变更时获取数据：
+
+     ```tsx filename="App.tsx"
+     function App() {
+       const [accountHasList, setAccountHasList] = useState<boolean>(false);
+       useEffect(() => {
+         fetchList();
+       }, [account?.address]);
+     }
+     ```
+
+  5. **导入所需依赖**：
+
+     - 使用以下代码导入 `MODULE_ADDRESS` 变量：
+
+     ```tsx filename="App.tsx"
+     import { MODULE_ADDRESS } from "./constants";
+     ```
+
+     - 使用以下代码导入 `aptosClient`：
+
+     ```tsx filename="App.tsx"
+     import { aptosClient } from "./utils/aptosClient";
+     ```
+
+  6. **创建 `fetchList` 函数**：
+     ```tsx filename="App.tsx"
+     const fetchList = async () => {
+       if (!account) return [];
+       const moduleAddress = MODULE_ADDRESS;
+       try {
+         const todoListResource = await aptosClient().getAccountResource(
+           {
+             accountAddress:account?.address,
+             resourceType:`${moduleAddress}::todolist::TodoList`
+           }
+         );
+         setAccountHasList(true);
+       } catch (e: any) {
+         setAccountHasList(false);
+       }
+     };
+     ```
+
+  7. **根据 `accountHasList` 状态更新 UI**：
+
+     - 使用以下代码导入 `Button` 组件：
+
+     ```tsx filename="App.tsx"
+     import { Button } from "./components/ui/button";
+     ```
+
+     - 根据 `accountHasList` 状态更新 UI：
+
+     ```tsx filename="App.tsx"
+     return (
+       <>
+         <TopBanner />
+         <Header />
+         <div className="flex items-center justify-center flex-col">
+           {!accountHasList && (
+             <div className="flex items-center justify-center flex-col">
+               <Button>Add new list</Button>
+             </div>
+           )}
+         </div>
+       </>
+     );
+     ```
+
+     `aptosClient().getAccountResource()` 需要以下参数：持有目标资源的**账户地址**，以及链上 **Move 结构体类型**的字符串表示：
+
+     - **账户地址**：当前已连接账户（从钱包账户对象取得）。
+     - **Move 结构体类型字符串语法**：
+       - 持有 Move 模块的账户地址。
+       - 资源所在的模块名：`todolist`。
+       - 资源名：`TodoList`。
+
+     如果请求成功且该账户拥有资源，我们将本地状态设为 `true`；否则设为 `false`。
+
+     现在，**Add new list** 按钮只会在账户尚未拥有列表时显示。
+
+  8. 使用 `npm run dev` 启动本地服务器。此时应能看到 **Add new list** 按钮。
+</Steps>
+
+接下来，在第 4 章中学习如何通过[向链提交数据](/zh/build/guides/build-e2e-dapp/4-submit-data-to-chain)创建新列表。

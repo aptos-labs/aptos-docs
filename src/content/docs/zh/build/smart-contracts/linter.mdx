@@ -1,0 +1,324 @@
+---
+title: "Aptos Move Lint"
+label: "Linter"
+description: "了解 Aptos 区块链上 Move 智能合约开发使用的 Linter。"
+sidebar:
+  label: "Linter"
+---
+
+“Aptos Move Lint”工具会在 Move 包上运行，以发现并警告 Move 程序中的常见问题，从而改进 Move 代码。
+
+可使用 aptos CLI 命令运行：`aptos move lint`。
+
+如发现问题，请提交 [bug 和反馈](https://github.com/aptos-labs/aptos-core/issues/new?title=%5Blinter%5D%20%3CDescriptive%20Title%3E\&body=%3CDetailed%20description%20of%20the%20issue%20or%20feature%20request%3E\&labels=move-linter\&projects=aptos-labs/16)。我们也在[此处](https://github.com/aptos-labs/aptos-core/issues/15221)跟踪新 lint 规则的想法和优先级请求，欢迎贡献。
+
+## Lint 检查
+
+### `aborting_overflow_checks`
+
+检查类似 C 代码溢出检查的模式：
+
+```move
+// Overflow check
+if (x > x + y) {
+  abort 1;
+};
+
+// Underflow check
+if (x < x - y) {
+  abort 1;
+};
+```
+
+Move 中此类检查没有意义，因为它们要么立即中止，要么总是返回 true/false。
+
+### `almost_swapped`
+
+检查看起来像失败交换尝试的表达式模式并通知用户。这些模式很可能是错误代码。目前仅检测对变量或结构体字段赋值等简单访问模式。例如：
+
+- `a = b; b = a;` 应正确交换为 `(a, b) = (b, a);`
+- `a.x = b.x; b.x = a.x;` 应正确交换为 `(a.x, b.x) = (b.x, a.x);`
+
+### `assert_const`
+
+检查简单断言，包括 `assert!(true)` 和 `assert!(false)`。前者可替换为 abort，后者等同于无操作，可完全移除。
+
+### `avoid_copy_on_identity_comparison`
+
+检查 `vector` 或 `struct` 类型复制值之间的身份比较（`==` 或 `!=`，即复制开销可能较大的类型）。它建议改用基于引用的身份比较（满足上述条件时，用 `&x == &y` 替代 `x == y`）。
+
+[Move Book](https://aptos-labs.github.io/move-book/equality-and-comparison.html#avoid-extra-copies)中也给出了此建议。由于自动复制推断，在具有 `copy` 能力的值上使用 `==` 或 `!=` 时，可能不明显正在发生复制。此 lint 识别可通过引用比较避免向量或结构体额外复制的情况。
+
+### `blocks_in_conditions`
+
+检查条件中（如 `if`、`match` 和 `while` 条件）使用代码块的情况，因为这会使代码难以阅读。此 lint 捕获的模式示例：
+
+```move
+if ({let x = foo(); !x}) { // uses a block in condition
+  bar();
+}
+```
+
+通常可将代码块提升到条件之前，从而提高可读性。
+
+Move 常见模式是在条件中提供内联规范，尤其是循环不变量，这需要在条件中创建代码块。lint 检查排除此模式，继续允许此规范模式。
+
+请注意，`assert!` 会被转换为条件中止，因此 `assert!` 条件中的代码块也会被此 lint 报告。
+
+### `empty_if`
+
+检查没有主体的 `if` 语句，例如：
+
+```move
+if (x) {
+}
+```
+
+### `equal_operands_in_bin_op`
+
+检查具有相同操作数的二元运算。例如 `x % x`、`x ^ x`、`x > x`、`x >= x`、`x == x`、`x | x`、`x & x`、`x / x` 和 `x != x` 均会被捕获。该 lint 还会建议以 `0`、`true` 或 `false` 等简化值或表达式替换。
+
+### `empty_range`
+
+检查 `for` 循环中的空范围，例如 `for i in 0..0 { ... }`，它不会执行循环体。当范围起始大于或等于结束时可能出现此情况。
+
+### `unnecessary_cast`
+
+检查源表达式已经是目标类型时不必要的类型转换。这些转换冗余，移除后可提高可读性。
+
+例如：
+
+```move
+let x: u64 = 42;
+let y = x as u64; // unnecessary cast, x is already u64
+```
+
+可简化为：
+
+```move
+let x: u64 = 42;
+let y = x; // cast removed
+```
+
+### `known_to_abort`
+
+检查使用常量值会违反运行时约束并中止执行的表达式。具体检测：
+
+- **移位量过大**：`x << n` 或 `x >> n` 中 `n` 为常量，且大于或等于 `x` 类型位宽。例如 `value << 64`（`value` 为 `u64`）总会中止。
+- **除以零或取模零**：`x / 0` 或 `x % 0` 总会在运行时中止。
+- **范围外类型转换**：`constant as type` 中 `constant` 超出目标 `type` 的可表示范围。例如 `300 as u8` 会中止，因为 `u8` 只能表示 0–255。
+
+### `needless_bool`
+
+检查以下模式（`x` 为任意布尔表达式）：
+
+- `if (x) true else false` 可替换为 `x`。
+- `if (x) false else true` 可替换为 `!x`。
+- `if (x) { return true } else { return false }` 可替换为 `return x`。
+- `if (x) { return false } else { return true }` 可替换为 `return !x`。
+- `if (x) true else true` 或 `if (x) false else false` 应移除冗余分支。
+
+### `needless_deref_ref`
+
+检查立即解引用所取得引用的模式，并建议移除解引用-引用运算符对：
+
+- `*&x.f` 可简化为 `x.f`
+- `*&mut x.f` 可简化为 `x.f`
+- `*&mut x.f = 5;` 可简化为 `x.f = 5;`
+
+### `needless_loops`
+
+检查首次迭代总会退出的循环，这使循环结构没有必要。该 lint 检测立即 return、abort 或 break，且没有有意义迭代的循环。
+
+识别模式：
+
+- 第一条指令为 `return`、`abort` 或 `break` 的循环
+- 第一条指令为条件分支，且两个分支都立即退出循环的循环
+
+无用循环示例：
+
+```move
+// Always returns on first iteration
+loop {
+    return 42;
+}
+
+// Always aborts on first iteration
+loop {
+    abort 1;
+}
+```
+
+可完全移除循环结构，直接使用退出语句。该 lint 使用保守分析以避免误报，只标记循环结构中退出行为立即显而易见的情形。
+
+### `needless_mutable_reference`
+
+检查未被可变使用的可变引用或借用（当前包括可变引用参数、局部变量的可变借用、`borrow_global_mut`），建议使用不可变引用或借用。
+
+例如，以下函数中 `&mut` 可替换为 `&`，因为引用未被可变使用：
+
+```move
+fun foo(x: u64): u64 {
+  let y = &mut x;
+  *y
+}
+
+```
+
+### `needless_ref_deref`
+
+检查为解引用而取得不可变引用的模式，建议移除引用-解引用运算符对：`&*x` 可简化为 `x`。
+
+### `needless_ref_in_field_access`
+
+检查访问结构体或枚举字段时取得不必要引用的模式，建议移除显式引用：
+
+- `(&s).f` 可简化为 `s.f`
+- `(&mut s).f = 42;` 可简化为 `s.f = 42;`
+
+### `needless_return`
+
+检查不必要的 `return` 语句，即可直接返回值而无需 `return` 关键字的情况。例如：
+
+```move
+public fun foo(): bool {
+  // ...
+  return true;
+}
+```
+
+可简化为：
+
+```move
+public fun foo(): bool {
+  // ...
+  true
+}
+```
+
+### `nested_if`
+
+检查可用 `&&` 简化的嵌套 if 语句。它识别内部无 else 的 if 语句位于同样无 else 的外部 if 语句中的模式：
+
+```move
+if (a) {
+    if (b) {
+        // some code
+    }
+}
+```
+
+可简化为：
+
+```move
+if (a && b) {
+    // some code
+}
+```
+
+简化版更易读，同时避免不必要嵌套并保持相同逻辑行为。
+
+### `nonminimal_bool`
+
+检查当布尔字面量（`true` 或 `false`）属于二元或一元布尔运算符时可简化的布尔表达式。例如：
+
+- `x && true` 等价于 `x`
+- `x || true` 等价于 `true`
+- `x => false` 等价于 `!x`
+- `x <==> true` 等价于 `x`
+- `! true` 等价于 `false`
+
+不考虑建议简化中的副作用或短路。例如 `1/0 || true` 逻辑上等价于 `true`，但应用简化会改变程序语义。
+
+### `no_op`
+
+检查可在不改变程序行为的情况下移除的语句，例如：
+
+- `42;`
+- `*(&mut 0) = /*...*/;`
+- `x << 4;`
+
+Linter 不会考虑算术错误可能导致的中止。若语句被标记，它几乎肯定是程序员错误，但应评估相关代码以了解意图。有时正确修复是移除语句，有时应更改语句。
+
+### `self_assignment`
+
+检查变量或结构体字段被赋值给自身的模式，并建议移除赋值。这些赋值不会影响程序状态，例如：
+
+- `let x = x;`
+- `x = x;`
+- `a.x = a.x;`
+
+### `simpler_bool_expression`
+
+检查可通过不同布尔代数定律简化的布尔模式。例如：
+
+- 吸收律：`a && b || a` 可简化为 `a`；`a || a && b` 可简化为 `a`
+- 幂等律：`a && a` 或 `a || a` 可简化为 `a`
+- 矛盾律：`a && !a` 或 `!a && a` 可简化为 `false`
+- 排中律：`a || !a` 或 `!a || a` 可简化为 `true`
+- 分配律：`(a && b) || (a && c)` 可简化为 `a && (b || c)`；`(a || b) && (a || c)` 可简化为 `a || (b && c)`
+
+其中 `a`、`b` 和 `c` 可以是简单或复合表达式。
+
+### `simpler_numeric_expression`
+
+检查可使用更简单数值表达式的各种模式。在所有情况下，代码必须已经通过类型检查，`x` 可以是任意数值表达式。
+
+- `x & 0`、`x * 0`、`0 & x`、`0 * x`、`0 << x`、`0 >> x`、`x % 1` 均可替换为 `0`。
+- `x | 0`、`x ^ 0`、`x >> 0`、`x << 0`、`x + 0`、`x - 0`、`x / 1`、`x * 1`、`0 | x`、`0 ^ x`、`0 + x`、`1 * x` 均可替换为 `x`。
+
+### `unnecessary_boolean_identity_comparison`
+
+检查以下形式的布尔身份比较：
+
+- `x == true`、`true == x` 可替换为 `x`。
+- `x == false`、`false == x` 可替换为 `!x`。
+
+所有这些情形中，`x` 可以是任意布尔表达式。
+
+### `unnecessary_numerical_extreme_comparison`
+
+检查与极值（数值类型可表示的最小值和最大值）进行的不必要或可更精确清晰的数值比较。根据比较给出不同建议。
+
+例如，`x` 是 `u8`、`u16`、`u32`、`u64`、`u128` 或 `u256` 类型的数值表达式，`MAX` 是该类型最大可表示值：
+
+- `x < 0`、`0 > x`、`x > MAX`、`MAX < x` 始终为 false，应移除比较。
+- `x >= 0`、`0 <= x`、`x <= MAX`、`MAX >= x` 始终为 true，应移除比较。
+- `x <= 0`、`0 >= x`、`x >= MAX`、`MAX <= x` 可简化为 `==`。
+- `x > 0`、`0 < x`、`x < MAX`、`MAX > x` 可改为 `!=` 以更清晰地表达。
+
+### `while_true`
+
+检查 `while (true) { .... }` 模式，并建议改用更明确的 `loop { .... }`。
+
+## 抑制 Lint 警告
+
+若要抑制名为 `check1`、`check2` 等的一个或多个 lint 检查，可向函数或模块添加属性 `#[lint::skip(check1, check2, ...)]`。Linter 随后不会对此函数或模块执行所命名的检查。
+
+例如，下列函数通常会因 `needless_bool` 收到警告，但由于函数上的属性，linter 不会发出警告：
+
+```move
+#[lint::skip(needless_bool)]
+fun violation(): bool {
+    if (foo()) true else false
+}
+```
+
+## 实验性检查
+
+### `cyclomatic_complexity`
+
+圈复杂度衡量函数中线性独立执行路径的数量。高数值通常与更难测试和维护的代码相关。
+
+此 linter 在遍历 Move 表达式树时执行近似计算：
+
+1. 复杂度分数从 **1** 开始。
+2. 每找到一个控制流决策点，分数递增：
+   - 每个 `if` 加 1
+   - 每个 `else if` 加 1
+   - 每个 `loop`、`while` 或 `for` 加 1
+   - 每个 `break` 或 `continue` 加 1
+   - 每个不是函数最终表达式的 `return` 语句加 1
+   - 加 n，其中 n =（match 分支数 - 1）
+
+累计分数超过默认阈值（当前为 **10**）时，linter 会发出诊断，建议简化或拆分函数。

@@ -1,0 +1,41 @@
+---
+title: "获取同质化资产信息"
+description: "查询同质化资产信息，包括符号、名称、小数位和资产类型，并向后兼容 Coin"
+sidebar:
+  label: "资产信息"
+---
+
+import { GraphQLEditor } from '~/components/react/GraphQLEditor';
+
+import { Aside } from '@astrojs/starlight/components';
+
+提供同质化资产类型列表后，`GetFungibleAssetInfo` 可获取符号、名称、小数位和资产类型本身等数据。这对于需要显示代币详情的应用特别有用，也向后兼容查询 `Coin` 信息。
+
+<Aside type="note">
+  亲自试用！您可以在编辑器底部自定义变量。
+</Aside>
+
+<GraphQLEditor
+  query={`query GetFungibleAssetInfo($in: [String!], $offset: Int) {
+  fungible_asset_metadata(
+    where: { asset_type: { _in: $in } }
+    offset: $offset
+    limit: 100
+  ) {
+    symbol
+    name
+    decimals
+    asset_type
+    __typename
+  }
+}`}
+  variables={`{
+  "in": ["0x1::aptos_coin::AptosCoin", "0x1::example_coin::ExampleCoin"],
+  "offset": 0
+}`}
+/>
+
+## 变量：
+
+- `$in`：**String 列表** — 应包含要查询信息的同质化资产类型列表。例如：`["0x1::aptos_coin::AptosCoin"]`
+- `$offset`：**Integer**（可选）— 可用于对结果分页，指定开始返回记录前要跳过的记录数。

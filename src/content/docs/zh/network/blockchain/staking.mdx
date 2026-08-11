@@ -1,0 +1,293 @@
+---
+title: "质押"
+description: "了解 Aptos 区块链上的质押，包括验证者操作、奖励、锁定期，以及参与网络的所有者、运营者和投票者模型。"
+sidebar:
+  label: "质押"
+---
+
+import { ThemedImage } from '~/components/ThemedImage';
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="note">
+  强烈建议先阅读 [Aptos 区块链深度解析](/zh/network/blockchain/blockchain-deep-dive#共识)中的共识部分。
+</Aside>
+
+在区块链这样的分布式系统中，执行交易不同于更新账本状态并将结果持久化到存储。交易排序和执行结果必须先由足够数量的验证者达成一致（即共识），才能写入存储并更新账本状态。
+
+只要质押足够的实用代币（即将代币置于托管状态），任何人都能参与 Aptos 共识过程。为激励验证者参与，共识投票权重与验证者质押额成正比，验证者获得的奖励也与质押额成正比。因此，区块链性能与验证者的奖励利益相一致。
+
+<Aside type="note">
+  当前尚未实现惩罚（slashing）。
+</Aside>
+
+当前链上数据位于 [`staking_config::StakingConfig`](https://api.mainnet.aptoslabs.com/v1/accounts/0x1/resource/0x1::staking_config::StakingConfig)，配置定义见 [`staking_config.move`](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/configs/staking_config.move)。
+
+本文其余部分介绍 Aptos 区块链上的质押机制；相关资源参见文末的[支持文档](#支持文档)。
+
+## Aptos 区块链上的质押
+
+下图概括了 Aptos 区块链上的质押流程，后续章节会逐项说明。
+
+<ThemedImage
+  alt="质押流程"
+  sources={{
+light: '~/images/staking-light.svg',
+dark: '~/images/staking-dark.svg',
+}}
+/>
+
+Aptos 质押模块定义了代表所有权的 capability。
+
+<Aside type="note">
+  请参阅 [stake.move](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/stake.move) 中定义的 `OwnerCapability`。
+</Aside>
+
+`OwnerCapability` 资源可用于控制质押池，支持三种角色：
+
+- 所有者
+- 运营者
+- 投票者
+
+通过所有者、运营者、投票者模型，托管方可以作为所有者在 Aptos 区块链上质押并参与治理。该模型将控制资金的账户与其他账户（运营者、投票者）分开，因此既支持委托和质押服务，也可安全地分配职责。以下以 Bob 和 Alice 为例说明。
+
+### 所有者
+
+所有者拥有资金。例如，Bob 在 Aptos 区块链上创建账户后，便拥有 `OwnerCapability` 资源。Bob 可以将账户的运营者地址指定为可信节点运营者 Alice 的账户，以任命 Alice 为验证者。
+
+作为所有者：
+
+- Bob 拥有用于质押的资金。
+- 只有 Bob 可以添加、解锁或提取资金。
+- 只有 Bob 可以延长锁定期。
+- Bob 可随时将运营者 Alice 更换为其他节点运营者。
+- Bob 可以设置运营者佣金比例。
+- 奖励会存入 Bob（所有者）的账户。
+
+### 运营者
+
+节点运营者由资金所有者指定，用于运行验证者节点，并获得所有者设置的佣金。所有者和运营者既可以是不同实体，也可以是同一实体。例如，Alice 作为运营者，代表资金所有者 Bob 运行验证者节点。
+
+作为运营者：
+
+- Alice 只能加入或离开验证者集合。
+- 作为验证者，Alice 执行验证工作。
+- Alice 可更改共识密钥和验证者、验证者全节点的网络地址。共识密钥用于参与验证者共识（投票和提议区块）；若密钥泄露，可以轮换该密钥。
+- 但 Alice 无法转移资金（除非 Alice 同时是所有者，即拥有 `OwnerCapability` 资源）。
+- 运营者佣金会从质押者（所有者）奖励中扣除并存入运营者账户。
+
+### 投票者
+
+所有者可以指定投票者，使其参与治理。投票者使用投票者密钥对治理投票交易签名。
+
+<Aside type="note">
+  本文介绍质押。有关使用所有者、投票者模型参与 Aptos 链上治理的方式，请参阅[治理](/zh/network/blockchain/governance)。
+</Aside>
+
+## Aptos 区块链上的验证
+
+在一个 epoch 的持续期间，以下事件会重复发生数千次：
+
+- 根据验证者的声誉（包括过去是否投票）和质押额，通过确定性公式选出验证者领导者。**此领导者选择不通过投票完成。**
+- 被选领导者发送提案，其中包含上一个提案收集到的法定人数投票，以及该领导者为新区块提出的交易排序。
+- 验证者集合中的所有验证者对领导者的新区块提案投票。达成共识后，区块即可最终确定；实际达成共识的投票列表只是验证者集合的一个子集。领导者验证者会获得奖励，**投票验证者不会获得奖励。**
+- 以上流程会为下一个新区块重新选择领导者并重复；奖励在 epoch 结束时发放。
+
+## 验证者状态和质押状态
+
+验证者和质押均有状态：
+
+- \*\*验证者状态：\*\*验证者可处于以下四种状态之一；也可从 inactive（未在任何验证者集合中跟踪）进入另外三种状态之一：
+  - inactive
+  - pending\_active
+  - active
+  - pending\_inactive
+- \*\*质押状态：\*\*处于 pending\_inactive 或 active 状态的验证者，其质押可处于以下四种状态之一：
+  - inactive
+  - pending\_active
+  - active
+  - pending\_inactive
+
+这些质押状态适用于验证者集合中已有验证者增加或移除质押额的情况。
+
+### 验证者状态
+
+<ThemedImage
+  alt="已签名交易流程"
+  sources={{
+light: '~/images/validator-state.svg',
+dark: '~/images/validator-state-dark.svg',
+}}
+/>
+
+有两个边界情况需要注意：
+
+1. 若验证者的质押额低于[最低要求](#最低和最高质押额)，会在 epoch 切换时直接从 active 变为 inactive；这只会在 epoch 切换时发生。
+2. Aptos 治理也可以直接将验证者从活跃集合中移除。**治理提案始终会触发 epoch 切换。**
+
+### 质押状态
+
+质押状态比验证者状态更细粒度：可为活跃验证者增加额外质押，也可移除部分质押。
+
+<ThemedImage
+  alt="已签名交易流程"
+  sources={{
+light: '~/images/stake-state.svg',
+dark: '~/images/stake-state-dark.svg',
+}}
+/>
+
+### 验证者规则
+
+状态变更期间适用以下规则：
+
+- 投票权只能在 epoch 边界改变（增加或减少）。
+- 验证者的共识密钥、验证者和验证者全节点网络地址只能在 epoch 边界改变。
+- Pending inactive 质押不能在锁定期结束前变为 inactive（即可提取）。
+- 活跃验证者集合中的验证者质押额不得低于最低要求。
+
+## 验证者流程
+
+<Aside type="note">
+  有关以下流程所需命令的正确执行顺序，请参阅[质押池操作](/zh/network/nodes/validator-node/connect-nodes/staking-pool-operations)。
+</Aside>
+
+1. 所有者使用 `aptos stake create-staking-contract` 初始化质押池。
+2. 准备存入质押额时（或由质押服务以所有权 capability 为交换分配资金），所有者调用 `aptos stake add-stake`。
+3. 验证者节点准备就绪后，运营者可调用 `aptos node join-validator-set` 加入活跃验证者集合；更改在下一个 epoch 生效。
+4. 验证者进行验证（作为领导者验证者提议区块）并获得奖励。质押会自动锁定固定时长（由治理设定），到期后自动续期。
+5. 运营者可随时调用 `aptos node update-consensus-key` 或 `aptos node update-validator-network-addresses` 来更新共识密钥或验证者网络地址；这些变更仅在下一个 epoch 生效。
+6. 验证者可以随时请求解锁，但只有当前锁定期到期后才可提取，最长不超过固定锁定期。
+7. 退出后，验证者可显式调用 `aptos node leave-validator-set` 离开验证者集合；若质押低于最低要求，也会在 epoch 结束时被移除。
+8. 验证者可再次执行步骤 2 至 3 重新加入集合。
+9. 所有者可随时调用 `aptos stake set-operator` 更换运营者。
+10. 所有者可随时调用 `aptos stake set-delegated-voter` 更换指定投票者。
+
+## 加入验证者集合
+
+作为验证者节点参与 Aptos 网络的步骤如下：
+
+1. 运营者运行验证者节点，配置链上验证者网络地址并轮换共识密钥。
+2. 所有者存入 Aptos 代币作为质押，或由质押服务分配资金；质押额必须至少达到最低要求。
+3. **质押池变为 active 前，验证者节点无法同步。**
+4. 运营者进行验证并获得奖励。
+5. 质押池会自动锁定固定时长（由 Aptos 治理设定）且到期后自动续期。锁定期结束前不能提取任何已质押金额，详见 [stake.move#L728](https://github.com/aptos-labs/aptos-core/blob/00a234cc233b01f1a7e1680f81b72214a7af91a9/aptos-move/framework/aptos-framework/sources/stake.move#L728)。
+6. 运营者必须等待新 epoch 开始，验证者才会变为 active。
+
+<Aside type="note">
+  有关加入验证者集合的分步说明，请参阅[加入验证者集合](/zh/network/nodes/validator-node/connect-nodes/connect-to-aptos-network#加入验证者集合)。
+</Aside>
+
+### 最低和最高质押额
+
+加入验证者集合必须质押规定的最低金额，同时也只能质押到最高金额。目前最低质押要求为 100 万 APT，最高为 5,000 万 APT。
+
+加入后，若当前质押额在任何时候超过允许的最高质押额（例如奖励加入质押额后），投票权和奖励只会按最高允许质押额计算，而非按当前全部质押额计算。所有者可提取部分质押，使余额低于最低要求；在下一个 epoch 开始时，其质押池将从验证者集合中移除。
+
+### 自动锁定时长
+
+加入验证者集合后，质押会自动锁定一个由 Aptos 治理设定的固定时长。
+
+### 自动续期
+
+锁定期到期时会自动续期，让你继续验证并获得奖励。
+
+### 解锁质押
+
+可随时请求解锁质押，但只有当前锁定期到期后才能提取，最长不超过固定锁定时长。质押在变得可提取前仍会继续赚取奖励。
+
+发生以下任一操作时，本金金额会更新：
+
+1. 运营者[请求解锁佣金](/zh/network/nodes/validator-node/connect-nodes/staking-pool-operations#请求佣金)。
+2. 质押者（所有者）提取资金。
+3. 质押者（所有者）更换运营者。
+
+质押者解锁质押也会触发佣金解锁。已赚取的任意质押奖励对应的全部佣金都会解锁，而非按解锁质押额比例计算。锁定期结束后，第二次调用 request commission 或质押者提取已解锁质押时，佣金会发给运营者。
+
+### 重设锁定期
+
+锁定期到期后会由网络自动续期，但所有者可以显式重设锁定期。
+
+<Aside type="note">
+  锁定时长由 Aptos 治理决定，即 Aptos 社区成员投票通过的约定决定，而不是由 Aptos Labs 等特殊实体决定。
+</Aside>
+
+## Epoch
+
+Aptos 区块链中的 epoch 是一段以秒为单位的时间。在这段时间内，验证者会对多个区块投票、更新验证者集合并向验证者分配奖励。
+
+<Aside type="note">
+  Aptos 主网的 epoch 设为 7200 秒（两小时）。
+</Aside>
+
+### Epoch 开始时的触发项
+
+<Aside type="note">
+  完整代码请参阅 [stake.move 的 epoch 边界触发项章节](https://github.com/aptos-labs/aptos-core/blob/256618470f2ad7d89757263fbdbae38ac7085317/aptos-move/framework/aptos-framework/sources/stake.move#L1036)。
+</Aside>
+
+每个 epoch 开始时会触发以下关键事件：
+
+- 将 pending active 验证者加入活跃集合，并将 pending inactive 验证者从活跃集合中移除。
+- 将 pending active 质押转为 active，将 pending inactive 质押转为 inactive。
+- 新 epoch 中质押池的投票权更新为全部 active 质押。
+- 为下一个 epoch 仍在验证者集合中的验证者自动续期锁定。
+- 将验证者集合中每个验证者的投票权更新为对应质押池的投票权。
+- 向参与上一个 epoch 的验证者分配奖励。
+
+## 奖励
+
+质押奖励由以下因素计算：
+
+1. `rewards_rate`，即年化收益率（APY）；奖励以当前质押额为基数按复利累积。
+2. 你的质押额。
+3. 你在 Aptos 治理中的提案者表现。
+
+<Aside type="note">
+  rewards\_rate 由 Aptos 治理设定；另请参阅[Aptos 区块链上的验证](#aptos-区块链上的验证)。
+</Aside>
+
+### 奖励公式
+
+验证者奖励按下列公式计算：
+
+```text filename="Staking Rewards Formula"
+Reward = staked_amount * rewards_rate per epoch * (Number of successful proposals by the validator / Total number of proposals made by the validator)
+```
+
+### 每个 epoch 发放奖励
+
+奖励在每个 epoch 发放。当前 epoch 结束时获得的奖励会加入质押额；下一个 epoch 的奖励将在增加后的质押额（原始质押额加已加入的奖励）上计算，如此循环。
+
+### 基于提案者表现的奖励
+
+验证者奖励按其提案者表现计算。加入验证者集合后，可以在每个 epoch 提出提案；成功提案越多，奖励越高。
+
+奖励只发给**领导者验证者**，即提出新区块的验证者，而不发给对领导者新区块提案投票的**投票验证者**。参见[Aptos 区块链上的验证](#aptos-区块链上的验证)。
+
+<Aside type="note">
+  所有验证者奖励都会因为加入原始质押额而受到锁定期约束。
+</Aside>
+
+## 离开验证者集合
+
+<Aside type="note">
+  请参阅 Move 语言中的 Aptos Stake 模块：[stake.move](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/stake.move)。
+</Aside>
+
+- 你可以随时通过以下函数序列离开验证者集合：
+  - 调用 `Stake::unlock` 解锁质押额；
+  - 然后在下一个 epoch 调用 `Stake::withdraw` 提取质押额，或调用 `Stake::leave_validator_set`。
+
+## 重新加入验证者集合
+
+离开验证者集合后，只要再次存入规定的最低质押额，即可重新加入。
+
+## 支持文档
+
+- [当前链上数据](https://api.mainnet.aptoslabs.com/v1/accounts/0x1/resource/0x1::staking_config::StakingConfig)
+- [质押池操作](/zh/network/nodes/validator-node/connect-nodes/staking-pool-operations)
+- [委托池操作](/zh/network/nodes/validator-node/connect-nodes/delegation-pool-operations)
+- [配置文件 staking\_config.move](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/configs/staking_config.move)
+- [涉及请求佣金的合约文件 staking\_contract.move](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/staking_contract.move)
+- [所有与质押相关的 .move 文件](https://github.com/aptos-labs/aptos-core/tree/main/aptos-move/framework/aptos-framework/sources)

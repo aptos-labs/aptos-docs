@@ -1,0 +1,510 @@
+---
+title: "创建你的第一个 Aptos 多签账户（Python SDK）"
+description: "使用 Python SDK 创建并管理需要多个批准的 Aptos 多签账户。"
+sidebar:
+  label: "第一个多签账户"
+---
+
+import { Aside, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
+
+本教程创建一个 2-of-3 多签账户：三位密钥持有者中的任意两位必须批准交易。你将配置开发环境、创建持有者账户、为账户注资，并提交一笔多签交易。
+
+你将完成以下任务：
+
+1. 配置 Aptos 开发环境。
+2. 创建多个密钥持有者账户。
+3. 配置需要 2-of-3 签名的多签账户。
+4. 为账户注资并验证余额。
+5. 创建并执行多签交易。
+
+<Aside type="note">
+  如果你来自 Ethereum/Solidity 生态，需要注意 Aptos 的多签账户实现方式不同。Aptos 在协议层[原生支持多签](/zh/network/blockchain/accounts)，不需要部署额外的多签智能合约。
+
+  ![多签账户示意图](~/images/multisig_chart.svg)
+
+  本文使用 [Aptos Python SDK](/zh/build/sdks/python-sdk) 与 Devnet 交互。
+</Aside>
+
+从概念上看，多签账户类似需要多位持有者共同授权的银行保险库。在 Aptos 中，授权通过数字签名实现，每位获授权的签名者都必须提供自己的密码学批准。
+
+## 环境准备
+
+创建隔离的 Python 工作区并安装 SDK。先确认已安装 [Python](https://python.org/)，版本为 3.7 或更高；Windows 如无法激活虚拟环境，请按终端提示允许当前用户运行脚本。激活后，所有依赖都会安装在项目的 `venv` 中，不会影响系统 Python。
+
+按以下示例添加或运行代码：
+
+```shellscript filename="Terminal"
+         python3 --version
+```
+
+预期输出或后续代码：
+
+```shellscript filename="Terminal"
+         python --version
+```
+
+按以下示例添加或运行代码：
+
+```shellscript filename="Terminal"
+     mkdir my-first-multisig
+```
+
+预期输出或后续代码：
+
+```shellscript filename="Terminal"
+     cd my-first-multisig
+```
+
+按以下示例添加或运行代码：
+
+```shellscript filename="Terminal"
+         python3 -m venv venv
+```
+
+预期输出或后续代码：
+
+```shellscript filename="Terminal"
+         python -m venv venv
+```
+
+按以下示例添加或运行代码：
+
+```shellscript filename="Terminal"
+         source venv/bin/activate
+```
+
+预期输出或后续代码：
+
+```shellscript filename="Terminal"
+         .\venv\Scripts\activate
+```
+
+按以下示例添加或运行代码：
+
+```powershell filename="Terminal"
+           Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
+
+预期输出或后续代码：
+
+```shellscript filename="Terminal"
+     pip install aptos-sdk
+```
+
+## 创建基础程序
+
+创建 `multisig.py`，并粘贴基础客户端、网络配置和 `main` 函数。后续章节中的代码都应放在该文件标明的“additional code”位置。`FaucetClient` 仅用于领取 Devnet 测试代币。
+
+按以下示例添加或运行代码：
+
+```shellscript filename="Terminal"
+         touch multisig.py
+```
+
+预期输出或后续代码：
+
+```shellscript filename="Terminal"
+         echo "" > multisig.py
+```
+
+按以下示例添加或运行代码：
+
+```python filename="multisig.py"
+     # Copyright © Aptos Foundation
+     # SPDX-License-Identifier: Apache-2.0
+
+     import asyncio
+     import subprocess
+     import time
+
+     from aptos_sdk.account import Account, RotationProofChallenge
+     from aptos_sdk.account_address import AccountAddress
+     from aptos_sdk.async_client import FaucetClient, RestClient
+     from aptos_sdk.authenticator import Authenticator, MultiEd25519Authenticator
+     from aptos_sdk.bcs import Serializer
+     from aptos_sdk.ed25519 import MultiPublicKey, MultiSignature
+     from aptos_sdk.transactions import (
+         EntryFunction,
+         RawTransaction,
+         Script,
+         ScriptArgument,
+         SignedTransaction,
+         TransactionArgument,
+         TransactionPayload,
+     )
+     from aptos_sdk.type_tag import StructTag, TypeTag
+
+     # Network configuration - using devnet for testing. Check current urls at:
+     # https://github.com/aptos-labs/aptos-python-sdk/blob/main/examples/common.py
+     NODE_URL = "https://fullnode.devnet.aptoslabs.com/v1"
+     FAUCET_URL = "https://faucet.devnet.aptoslabs.com"
+
+     should_wait = True
+
+     # "wait" is used to make the terminal more interactive, so it's easier to follow what is happening.
+     def wait():
+         """Wait for user to press Enter before starting next section."""
+         if should_wait:
+             input("\nPress Enter to continue...")
+
+     # Now we define our main function which calls everything else.
+     # We will add all future additions inside this function.
+     async def main(should_wait_input=True):
+         # This is just used for this tutorial.
+         global should_wait
+         should_wait = should_wait_input
+
+         # Initialize our blockchain clients
+         rest_client = RestClient(NODE_URL)
+         faucet_client = FaucetClient(FAUCET_URL, rest_client)
+
+         ############# Add additional code here ###############
+
+
+         ######################################################
+
+     if __name__ == "__main__":
+         asyncio.run(main())
+```
+
+## 创建密钥持有者
+
+生成 Alice、Bob 和 Chad 三个账户。每次执行脚本都会生成新的私钥；如需在后续运行中复用账户，请安全保存私钥和地址。输出会显示地址、认证密钥和公钥：新账户中地址与认证密钥相同，但公钥不同。
+
+按以下示例添加或运行代码：
+
+```python filename="multisig.py"
+     # Create three accounts to act as our key holders
+     alice = Account.generate()
+     bob = Account.generate()
+     chad = Account.generate()
+```
+
+预期输出或后续代码：
+
+```python filename="multisig.py"
+     print("\n=== Account addresses ===")
+     print(f"Alice: {alice.address()}")
+     print(f"Bob:   {bob.address()}")
+     print(f"Chad:  {chad.address()}")
+
+     print("\n=== Authentication keys ===")
+     print(f"Alice: {alice.auth_key()}")
+     print(f"Bob:   {bob.auth_key()}")
+     print(f"Chad:  {chad.auth_key()}")
+
+     print("\n=== Public keys ===")
+     print(f"Alice: {alice.public_key()}")
+     print(f"Bob:   {bob.public_key()}")
+     print(f"Chad:  {chad.public_key()}")
+
+     wait()
+
+     # Add additional code below this wait()
+```
+
+按以下示例添加或运行代码：
+
+```shellscript filename="Terminal"
+         python3 multisig.py
+```
+
+预期输出或后续代码：
+
+```shellscript filename="Terminal"
+         python multisig.py
+```
+
+按以下示例添加或运行代码：
+
+```shellscript filename="Terminal"
+     === Account addresses ===
+     Alice: 0x5323a06f21b04af53fc57367b50d3bbb5675c655bc9bc62f33b5e083d5d06b8b
+     Bob:   0x9f3e94fc92e0076336c122a576304c0b9fa8def13a98c469dce05e0836b9fe5b
+     Chad:  0x1d0e7b790493dcf7bc7ce60bf4ccdcca1d38ce0d7f8dd26d2791a6d3ff6da708
+
+     === Authentication keys ===
+     Alice: 0x5323a06f21b04af53fc57367b50d3bbb5675c655bc9bc62f33b5e083d5d06b8b
+     Bob:   0x9f3e94fc92e0076336c122a576304c0b9fa8def13a98c469dce05e0836b9fe5b
+     Chad:  0x1d0e7b790493dcf7bc7ce60bf4ccdcca1d38ce0d7f8dd26d2791a6d3ff6da708
+
+     === Public keys ===
+     Alice: 0x730264a36d4ec90af2e28e1cf9c4d686440598317123469a7c827d4fcdf74715
+     Bob:   0xcf21e85337a313bdac33d068960a3e52d22ce0e6190e9acc03a1c9930e1eaf3e
+     Chad:  0xa1a2aef8525eb20655387d3ed50b9a3ea1531ef6117f579d0da4bcf5a2e1f76d
+```
+
+## 配置多签保险库
+
+使用三人的公钥和阈值 2 构造 `MultiPublicKey`，再派生多签账户地址。这条规则表示三位持有者中任意两人都可以授权交易。
+
+按以下示例添加或运行代码：
+
+```python filename="multisig.py"
+     # Configure a 2-of-3 multisig account
+     threshold = 2
+
+     multisig_public_key = MultiPublicKey(
+         [alice.public_key(), bob.public_key(), chad.public_key()],
+         threshold
+     )
+
+     multisig_address = AccountAddress.from_key(multisig_public_key)
+```
+
+预期输出或后续代码：
+
+```python filename="multisig.py"
+     print("\n=== 2-of-3 Multisig account ===")
+     print(f"Account public key: {multisig_public_key}")
+     print(f"Account address:    {multisig_address}")
+
+     wait()
+
+     # Add additional code here
+```
+
+按以下示例添加或运行代码：
+
+```shellscript filename="Terminal"
+         python3 multisig.py
+```
+
+预期输出或后续代码：
+
+```shellscript filename="Terminal"
+         python multisig.py
+```
+
+按以下示例添加或运行代码：
+
+```shellscript filename="Terminal"
+     === 2-of-3 Multisig account ===
+     Account public key: 2-of-3 Multi-Ed25519 public key
+     Account address:    0x08cac3b7b7ce4fbc5b18bc039279d7854e4c898cbf82518ac2650b565ad4d364
+```
+
+## 为账户注资
+
+通过 Devnet 水龙头并发为三位持有者和多签账户注资，然后查询余额。金额以 octa 为单位，1 APT 等于 100,000,000 octa；若余额为零，可稍后重新调用水龙头。
+
+按以下示例添加或运行代码：
+
+```python filename="multisig.py"
+     print("\n=== Funding accounts ===")
+     alice_start = 10_000_000
+     bob_start = 20_000_000
+     chad_start = 30_000_000
+     multisig_start = 40_000_000
+
+     # Fund all accounts concurrently
+     alice_fund = faucet_client.fund_account(alice.address(), alice_start)
+     bob_fund = faucet_client.fund_account(bob.address(), bob_start)
+     chad_fund = faucet_client.fund_account(chad.address(), chad_start)
+     multisig_fund = faucet_client.fund_account(multisig_address, multisig_start)
+     await asyncio.gather(*[alice_fund, bob_fund, chad_fund, multisig_fund])
+```
+
+预期输出或后续代码：
+
+```python filename="multisig.py"
+     # Check all balances
+     alice_balance = rest_client.account_balance(alice.address())
+     bob_balance = rest_client.account_balance(bob.address())
+     chad_balance = rest_client.account_balance(chad.address())
+     multisig_balance = rest_client.account_balance(multisig_address)
+     [alice_balance, bob_balance, chad_balance, multisig_balance] = await asyncio.gather(
+         *[alice_balance, bob_balance, chad_balance, multisig_balance]
+     )
+
+     print(f"Alice's balance:  {alice_balance}")
+     print(f"Bob's balance:    {bob_balance}")
+     print(f"Chad's balance:   {chad_balance}")
+     print(f"Multisig balance: {multisig_balance}")
+
+     wait()
+```
+
+按以下示例添加或运行代码：
+
+```shellscript filename="Terminal"
+         python3 multisig.py
+```
+
+预期输出或后续代码：
+
+```shellscript filename="Terminal"
+         python multisig.py
+```
+
+按以下示例添加或运行代码：
+
+```shellscript filename="Terminal"
+     === Funding accounts ===
+     Alice's balance:  10000000
+     Bob's balance:    20000000
+     Chad's balance:   30000000
+     Multisig balance: 40000000
+```
+
+## 创建第一笔多签交易
+
+创建一笔从多签账户向 Chad 转移 100 octa 的原始交易，并让 Alice 与 Bob 分别签名。签名前需使用多签账户地址作为发送方，并使用当前链 ID、序列号、Gas 参数和过期时间构造交易。
+
+按以下示例添加或运行代码：
+
+```python filename="multisig.py"
+     # Create the transfer transaction
+     entry_function = EntryFunction.natural(
+         module="0x1::coin",
+         function="transfer",
+         ty_args=[TypeTag(StructTag.from_str("0x1::aptos_coin::AptosCoin"))],
+         args=[
+             TransactionArgument(chad.address(), Serializer.struct),
+             TransactionArgument(100, Serializer.u64),
+         ],
+     )
+
+     # Build the raw transaction
+     chain_id = await rest_client.chain_id()
+     raw_transaction = RawTransaction(
+         sender=multisig_address,
+         sequence_number=0,
+         payload=TransactionPayload(entry_function),
+         max_gas_amount=2000,
+         gas_unit_price=100,
+         expiration_timestamps_secs=int(time.time()) + 600,
+         chain_id=chain_id,
+     )
+```
+
+预期输出或后续代码：
+
+```python filename="multisig.py"
+     alice_signature = alice.sign(raw_transaction.keyed())
+     bob_signature = bob.sign(raw_transaction.keyed())
+
+     print("\n=== Individual signatures ===")
+     print(f"Alice: {alice_signature}")
+     print(f"Bob:   {bob_signature}")
+
+     wait()
+```
+
+按以下示例添加或运行代码：
+
+```shellscript filename="Terminal"
+         python3 multisig.py
+```
+
+预期输出或后续代码：
+
+```shellscript filename="Terminal"
+         python multisig.py
+```
+
+按以下示例添加或运行代码：
+
+```shellscript filename="Terminal"
+     === Individual signatures ===
+     Alice: 0x360e66c75b1ba787ec7b05998cbc14276d7fc0c006fb10c33d5cc3c4cc2ec4f53a8c0996b8e746fd6d86b09b4f8bb128cbf62d8b375f5b974faae040e889ac0d
+     Bob:   0xdcfd1965e531deb79de9d8daf7f28f46023107ce4f11612ce76da33e808486a0a368b34563d4f89d6179a3957a266c1e8809691fddabba3c2a3d8be14d6f2f0c
+```
+
+## 提交多签交易
+
+将两份签名组合为 `MultiSignature` 和 `MultiEd25519Authenticator`，生成已签名交易并提交。等待交易确认后再次查询余额，以验证转账已完成。
+
+按以下示例添加或运行代码：
+
+```python filename="multisig.py"
+     # Combine the signatures (map from signatory public key index to signature)
+     sig_map = [(0, alice_signature), (1, bob_signature)]
+     multisig_signature = MultiSignature(sig_map)
+
+     # Create the authenticator with our multisig configuration
+     authenticator = Authenticator(
+         MultiEd25519Authenticator(multisig_public_key, multisig_signature)
+     )
+```
+
+预期输出或后续代码：
+
+```python filename="multisig.py"
+     # Create and submit the signed transaction
+     signed_transaction = SignedTransaction(raw_transaction, authenticator)
+
+     print("\n=== Submitting transfer transaction ===")
+     tx_hash = await rest_client.submit_bcs_transaction(signed_transaction)
+     await rest_client.wait_for_transaction(tx_hash)
+     print(f"Transaction hash: {tx_hash}")
+```
+
+按以下示例添加或运行代码：
+
+```python filename="multisig.py"
+     print("\n=== New account balances ===")
+     [alice_balance, bob_balance, chad_balance, multisig_balance] = await asyncio.gather(
+         *[
+             rest_client.account_balance(alice.address()),
+             rest_client.account_balance(bob.address()),
+             rest_client.account_balance(chad.address()),
+             rest_client.account_balance(multisig_address),
+         ]
+     )
+
+     print(f"Alice's balance:  {alice_balance}")
+     print(f"Bob's balance:    {bob_balance}")
+     print(f"Chad's balance:   {chad_balance}")
+     print(f"Multisig balance: {multisig_balance}")
+```
+
+预期输出或后续代码：
+
+```shellscript filename="Terminal"
+         python3 multisig.py
+```
+
+按以下示例添加或运行代码：
+
+```shellscript filename="Terminal"
+         python multisig.py
+```
+
+预期输出或后续代码：
+
+```shellscript filename="Terminal"
+     === Submitting transfer transaction ===
+     Transaction hash: 0x2f0b7fc8e69213f0c7e720e660f789b6e3d3564729a298f2b4f6794245833f2d
+
+     === New account balances ===
+     Alice's balance:  10000000
+     Bob's balance:    20000000
+     Chad's balance:   30000100        # Increased by 100 octas
+     Multisig balance: 39999200        # Decreased by 100 octas plus gas fees
+```
+
+## 深入了解：高级功能
+
+### 靓号地址
+
+可通过生成多个账户并筛选地址前缀来寻找靓号地址；这会消耗额外时间和计算资源。
+
+### 账户轮换
+
+Aptos 支持轮换账户私钥而不改变账户地址。多签账户的密钥轮换应在充分测试后再执行。
+
+### 治理和智能合约
+
+多签账户可以参与链上治理，也可以作为资源账户、模块管理者或高价值操作的授权账户。
+
+## 后续步骤
+
+将示例改为持久化保存密钥并添加错误处理。生产环境请不要依赖水龙头或将私钥写入源代码，并考虑使用硬件签名或托管密钥方案。
+
+在验证账户状态时，可参考账户的[地址](/zh/network/blockchain/accounts#account-address)、[认证密钥](/zh/network/blockchain/accounts#authentication-key)和[公钥](/zh/network/blockchain/accounts#creating-an-account)。也可以打开 [Aptos Explorer](https://explorer.aptoslabs.com/) 切换到 Devnet 查看账户。
+
+1. 查看包含全部高级功能的[完整代码示例](https://github.com/aptos-labs/aptos-python-sdk/blob/main/examples/multisig.py)。
+2. 阅读[多签治理教程](/zh/build/cli/working-with-move-contracts/multi-signature-tutorial)。
+3. 了解 Aptos 中的[账户抽象](/zh/network/blockchain/accounts)。
+4. 加入 [Aptos Discord](https://discord.gg/aptoslabs) 获取开发者支持。

@@ -1,0 +1,81 @@
+---
+title: "赞助交易（付费者）"
+description: "使用 Kaptos 实现赞助交易：由一个账户为另一账户的交易支付 Gas 费用"
+sidebar:
+  label: "赞助交易"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Kotlin SDK 支持赞助交易，也称为付费者交易。
+
+发送赞助交易的标准流程如下：
+
+1. 通过创建**交易**确定要执行的**操作**
+2. **发送者签名**交易
+3. **付费者签名**交易
+4. **提交**交易
+
+## 确定操作
+
+如前文所示，您可以结合精简交易构建器使用 `buildSimpleTransaction` 来构建交易。对于赞助交易，请指定 `withFeePayer = true`。
+
+```kotlin
+val txn =
+  aptos.buildSimpleTransaction(
+    sender = alice.accountAddress,
+    withFeePayer = true,
+  ) {
+    function = "0x1::coin::transfer"
+    typeArgs("0x1::aptos_coin::AptosCoin")
+    args(bob.accountAddress, 1_000_000UL)
+  }
+```
+
+## 签名交易
+
+交易构建完成后，发送者使用 `sign` 签名。
+
+```kotlin
+val aliceAuthenticator =
+  aptos.sign(signer = alice, transaction = txn)
+```
+
+## 以付费者身份签名交易
+
+付费者使用 `signAsFeePayer` 签名。
+
+```kotlin
+val feePayerAuthenticator =
+  aptos.signAsFeePayer(feePayer = sponsor, transaction = txn)
+```
+
+## 提交交易
+
+携带两个认证器提交交易。
+
+```kotlin
+val pendingTxn =
+  aptos
+    .submitTransaction.simple(
+      transaction = txn,
+      senderAuthenticator = aliceAuthenticator,
+      feePayerAuthenticator = feePayerAuthenticator,
+    )
+    .expect("Failed to submit transaction")
+```
+
+<Aside type="note" emoji="ℹ️">
+  您可以使用 `signAndSubmitAsFeePayer` 合并付费者签名和提交操作。
+
+  ```kotlin
+  val pendingTxn =
+    aptos
+      .signAndSubmitAsFeePayer(
+        feePayer = sponsor,
+        senderAuthenticator = aliceAuthenticator,
+        transaction = txn,
+      )
+      .expect("Failed to sign and submit as fee payer")
+  ```
+</Aside>

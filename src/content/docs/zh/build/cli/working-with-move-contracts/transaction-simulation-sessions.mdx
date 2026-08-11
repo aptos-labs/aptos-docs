@@ -1,0 +1,204 @@
+---
+title: "交易模拟会话"
+description: "使用交易模拟会话执行复杂本地模拟的指南。"
+sidebar:
+  label: "交易模拟会话"
+---
+
+import { Aside, FileTree } from '@astrojs/starlight/components';
+
+在前面的教程中，我们演示了如何[在本地模拟交易](/zh/build/cli/working-with-move-contracts/local-simulation-benchmarking-and-gas-profiling)，或[重放过去的交易](/zh/build/cli/replay-past-transactions)。但这些方法一次只能处理一笔交易。
+
+若要按顺序模拟多笔交易，需要使用**交易模拟会话**（Transaction Simulation Sessions）——一项高级 CLI 功能。它能创建一个持久的本地环境，在多次运行之间保存和恢复状态，并可轻松检查交易输出。
+
+这使您可以测试复杂的工作流，例如合约部署、资源更新或多步骤交互。
+
+<Aside type="note" emoji="ℹ️">
+  开始前，请确保已将 Aptos CLI 更新到最新版本。
+
+  交易模拟会话是相对较新的功能，较早版本的 Aptos CLI 可能不支持它。
+</Aside>
+
+## 初始化会话
+
+您可以从以下任一来源初始化会话：
+
+- **干净的本地创世状态**：获得完全本地、隔离的环境；或
+- **分叉的网络状态**（Devnet、Testnet 或 Mainnet）：使用真实世界的数据测试变更。
+
+无论选择哪种模式，接口、命令和会话数据的保存方式都完全相同。初始化会话时只需指定所需模式。
+
+### 从分叉的网络状态开始
+
+通过网络分叉，您可以使用**实时网络数据**（余额、资源和已发布模块）测试 Move 代码。
+
+要从分叉的网络状态开始，请运行：
+
+```shellscript filename="Terminal"
+aptos move sim init --path <SESSION_PATH> --network <NETWORK> --api-key <YOUR_API_KEY>
+```
+
+其中，`<NETWORK>` 可以是 `devnet`、`testnet`、`mainnet` 或自定义全节点 URL。会话会将所有数据存储在指定的 `<SESSION_PATH>` 目录中。
+
+<Aside type="note" emoji="ℹ️">
+  使用网络分叉模式需要免费的 Aptos 开发者账户和 API 密钥。没有 API 密钥时，获得的速率限制会很低，几乎肯定会遇到限流错误。
+
+  请遵循官方说明：[设置 API 密钥](/zh/build/guides/build-e2e-dapp#设置-api-密钥)。
+</Aside>
+
+### 从干净的本地创世状态开始
+
+在日常开发中，有时您只需要一个干净起点，无需真实网络数据。这非常适合临时模拟、合成测试或持续集成。
+
+要从干净的本地创世状态开始，请运行：
+
+```shellscript filename="Terminal"
+aptos move sim init --path <SESSION_PATH>
+```
+
+其余操作完全相同，只是模拟不会访问网络，因为所有数据都在本地。
+
+## 运行模拟
+
+初始化后，可使用标准 `aptos move` 命令针对会话运行交易，并添加 `--session` 参数指定要使用的本地会话。
+
+支持的命令包括：
+
+- `run`
+- `run-script`
+- `publish`
+- `view`
+- `create-object-and-publish-package`
+- `upgrade-object-package`
+- `deploy-object`
+- `upgrade-object`
+- `create-resource-account-and-publish-package`
+
+`aptos move sim` 还提供用于管理和检查会话的其他工具。
+
+- `fund`：使用指定数量的 APT 为账户充值
+- `view-resource`：查看 Move 资源
+- `view-resource-group`：查看资源组
+
+如需更详细的帮助，请运行 `aptos move sim --help`。
+
+### 示例工作流
+
+```shellscript filename="Terminal"
+# 1. Fund your default account with 1 APT (for demo)
+aptos move sim fund --session sess --account default --amount 100000000
+
+# 2. Execute a transfer transaction
+aptos move run --session sess \
+  --function-id 0x1::aptos_account::transfer \
+  --args address:default u64:100
+
+# 3. Query your account's sequence number
+aptos move view --session sess \
+  --function-id 0x1::account::get_sequence_number \
+  --args address:default
+
+# 4. View your on-chain Account resource
+aptos move sim view-resource --session sess \
+  --account default \
+  --resource 0x1::account::Account
+
+# 5. View a resource group (e.g. your fungible store)
+aptos move sim view-resource-group --session sess \
+  --account default \
+  --resource-group 0x1::object::ObjectGroup \
+  --derived-object-address 0xA
+```
+
+同样，所有状态变更都在本地进行，并存储在会话目录下。
+
+## 检查会话数据
+
+每个交易模拟会话都会将数据组织为结构化目录树，便于检查模拟的每一步。
+
+以下是示例会话的目录布局：
+
+<FileTree>
+  - sess/
+    - \[0] fund (fungible)/
+      - summary.json
+    - \[1] execute 0x1::aptos\_account::transfer/
+      - events.json
+      - summary.json
+      - write\_set.json
+    - \[2] view 0x1::account::get\_sequence\_number/
+      - summary.json
+    - \[3] view resource 0xdbcb...::0x1::account::Account/
+      - summary.json
+    - \[4] view resource group 0x20ce...::0x1::object::ObjectGroup/
+      - summary.json
+    - config.json
+    - delta.json
+</FileTree>
+
+### 示例输出
+
+`[1] execute 0x1::aptos_account::transfer/summary.json`
+
+```json
+{
+  "execute_transaction": {
+    "status": {
+      "Keep": "Success"
+    },
+    "gas_used": 498,
+    "fee_statement": {
+      "total_charge_gas_units": 498,
+      "execution_gas_units": 4,
+      "io_gas_units": 3,
+      "storage_fee_octas": 49160,
+      "storage_fee_refund_octas": 0
+    }
+  }
+}
+```
+
+`[1] execute 0x1::aptos_account::transfer/events.json`
+
+```json
+[
+  {
+    "V2": {
+      "type_tag": "0x1::fungible_asset::Withdraw",
+      "event_data": {
+        "store": "20ce9f242351eae77cae7eb27e7e55f798e6c3b3528fcbb325bccea103e53ff9",
+        "amount": 100
+      }
+    }
+  },
+  {
+    "V2": {
+      "type_tag": "0x1::fungible_asset::Deposit",
+      "event_data": {
+        "store": "20ce9f242351eae77cae7eb27e7e55f798e6c3b3528fcbb325bccea103e53ff9",
+        "amount": 100
+      }
+    }
+  },
+  {
+    "V2": {
+      "type_tag": "0x1::transaction_fee::FeeStatement",
+      "event_data": {
+        "total_charge_gas_units": 498,
+        "execution_gas_units": 4,
+        "io_gas_units": 3,
+        "storage_fee_octas": 49160,
+        "storage_fee_refund_octas": 0
+      }
+    }
+  }
+]
+```
+
+## 后续计划
+
+我们正在为交易模拟会话添加更多功能，例如：
+
+- 集成 Gas 分析器
+- 提升性能
+- 支持快照和回滚

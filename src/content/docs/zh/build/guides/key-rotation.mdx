@@ -1,0 +1,719 @@
+---
+title: "账户密钥轮换"
+description: "用于在更改认证凭据时保持账户控制权的高级安全功能。"
+sidebar:
+  label: "密钥轮换"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+<Aside type="caution">
+  账户密钥轮换是一项应谨慎使用的高级功能；大多数用户不需要使用它。
+</Aside>
+
+Aptos Move 账户拥有公开地址、认证密钥、公钥和私钥。公开地址永久不变，并始终对应于由原始私钥派生的账户初始认证密钥。Aptos 账户模型支持轮换账户私钥：由于账户地址是初始认证密钥，因此可以把账户签名权转交给另一私钥，而无需改变公开地址。
+
+本指南展示如何使用 CLI 及 Aptos SDK 轮换账户认证密钥。
+
+- [Aptos CLI](/zh/build/cli)
+- [TypeScript SDK](/zh/build/sdks/ts-sdk)
+- [Python SDK](/zh/build/sdks/python-sdk)
+
+<Aside type="caution">
+  以下部分示例使用私钥。切勿向任何人泄露私钥。
+</Aside>
+
+## 已证明和未证明的密钥轮换
+
+链上密钥轮换逻辑通过两组 Move API 实现：
+
+1. `account::rotate_authentication_key` 执行“已证明”的轮换。
+2. `account::rotate_authentication_key_call` 执行“未证明”的轮换。
+
+### 已证明的密钥轮换
+
+`account::rotate_authentication_key` 需要带签名的 `account::RotationProofChallenge`，证明轮换操作同时获得操作前和操作后私钥的批准。成功后，`account::OriginatingAddress` 表会记录从新认证密钥到相应账户地址的映射。
+
+该表是认证密钥到账户地址的反向查询表，每个认证密钥只允许一个条目。签名证明可防止恶意方将账户认证密钥轮换到表中已有的密钥，从而阻止对先前获授权原始地址的有效查询。
+
+该表只在密钥轮换时更新，不在普通账户生成时更新。因此，理论上一个私钥可同时认证最多两个账户：由该私钥正常生成的未轮换账户，以及认证密钥被轮换为该私钥的任意第二地址。最佳实践仍是一个私钥只认证一个账户。新建账户后，可运行 `account::set_originating_address` 来确保这一点。
+
+### 未证明的密钥轮换
+
+`account::rotate_authentication_key_call` 不要求带签名的 `account::RotationProofChallenge`，因此操作后私钥无需证明同意轮换。未证明轮换不会更新 `account::OriginatingAddress` 表，也不限制一个私钥可认证的账户数量。`aptos` CLI 当前不支持未证明密钥轮换。
+
+<Aside type="note" emoji="🧠">
+  `account::rotate_authentication_key_call` 用于支持 passkey 等非标准密钥算法；这些算法无法在轮换操作期间提供知识证明。
+</Aside>
+
+尽管未证明轮换在技术上可让同一认证密钥认证任意数量的账户，但它无法确保一对一映射，不是最佳实践。执行未证明轮换后，建议使用 `account::set_originating_address`，以便能从认证密钥方便地查询原始账户地址。
+
+## 使用 Aptos CLI 轮换密钥
+
+以下教程在 localnet 上演示完整流程。代码块按原教程顺序给出，包含命令及其示例输出。
+
+<Steps>
+  1. 启动 localnet，确认启动完成后再继续。
+  2. 生成私钥，并验证尚未关联链上账户的密钥无法查询地址。
+  3. 使用该私钥初始化 localnet 配置文件；可检查配置文件和私钥。
+  4. 查询账户地址并保存到 shell 变量。
+  5. 查询初始认证密钥和对应的原始地址条目。
+  6. 为新账户设置原始地址映射。
+  7. 生成新私钥并轮换现有账户的认证密钥。
+  8. 比较旧配置文件和新配置文件，验证账户地址保持不变而公钥已改变。
+  9. 查询新旧认证密钥对应的原始地址。
+  10. 尝试轮换为同一密钥；操作应失败。
+  11. 尝试轮换为已映射的新密钥；操作应失败。
+  12. 尝试使用无效的原始地址轮换；操作应失败。
+</Steps>
+
+以下命令和输出必须按顺序执行；其中的密钥、地址、配置文件名仅为示例。
+
+运行命令：
+
+```shellscript filename="Terminal"
+     aptos node run-localnet
+```
+
+预期输出：
+
+```shellscript filename="Terminal"
+     Applying post startup steps...
+
+     Setup is complete, you can now use the localnet!
+```
+
+运行命令：
+
+```shellscript filename="Terminal"
+       mkdir -p localnet-data
+       aptos node run-localnet \
+           --assume-yes \
+           --test-dir localnet-data \
+           --force-restart &
+       export LOCALNET_PID=$!
+```
+
+预期输出：
+
+```shellscript filename="Terminal"
+       kill $LOCALNET_PID
+```
+
+运行命令：
+
+```shellscript filename="Terminal"
+     aptos key generate \
+         --assume-yes \
+         --output-file private-key-a \
+         --vanity-prefix 0xaaa
+```
+
+预期输出：
+
+```shellscript filename="Terminal"
+       {
+         "Result": {
+           "Account Address:": "0xaaa5131b4d3fcef8d33ee465c4ee65727e36039f283455be87b1164200572e5b",
+           "PublicKey Path": "private-key-a.pub",
+           "PrivateKey Path": "private-key-a"
+         }
+       }
+```
+
+运行命令：
+
+```shellscript filename="Terminal"
+     aptos account lookup-address \
+         --public-key-file private-key-a.pub \
+         --url http://localhost:8080
+```
+
+预期输出：
+
+```shellscript filename="Terminal"
+       {
+         "Error": "API error: API error Error(AccountNotFound): Account not found by Address(0xaaafb224eb00e4d0ef520ce02038ede850893622562a4189b7f6e5d94454ccd9) and Ledger version(1206)"
+       }
+```
+
+运行命令：
+
+```shellscript filename="Terminal"
+     aptos init \
+         --assume-yes \
+         --network local \
+         --private-key-file private-key-a \
+         --profile test-profile-1
+```
+
+预期输出：
+
+```shellscript filename="Terminal"
+       Configuring for profile test-profile-1
+       Configuring for network Local
+       Using command line argument for private key
+       Account 0xaaa5131b4d3fcef8d33ee465c4ee65727e36039f283455be87b1164200572e5b doesn\'t exist, creating it and funding it with 100000000 Octas
+       Account 0xaaa5131b4d3fcef8d33ee465c4ee65727e36039f283455be87b1164200572e5b funded successfully
+
+       ---
+       Aptos CLI is now set up for account 0xaaa5131b4d3fcef8d33ee465c4ee65727e36039f283455be87b1164200572e5b as profile test-profile-1!  Run `aptos --help` for more information about commands
+       {
+         "Result": "Success"
+       }
+```
+
+运行命令：
+
+```shellscript filename="Terminal"
+     aptos config show-profiles --profile test-profile-1
+```
+
+预期输出：
+
+```shellscript filename="Terminal"
+       {
+         "Result": {
+           "test-profile-1": {
+             "has_private_key": true,
+             "public_key": "0xe0bfe46f41c5be40e7a068e8dff4d6016126b226d947a39262f5b2347217a7e3",
+             "account": "aaa5131b4d3fcef8d33ee465c4ee65727e36039f283455be87b1164200572e5b",
+             "rest_url": "http://localhost:8080",
+             "faucet_url": "http://localhost:8081"
+           }
+         }
+       }
+```
+
+运行命令：
+
+```shellscript filename="Terminal"
+     aptos config show-private-key --profile test-profile-1
+```
+
+预期输出：
+
+```shellscript filename="Terminal"
+       {
+         "Result": "0xcc3b0c38ad99e171263a7af930464313d1fb105d0d8e6a4b13f9b1140563a7dd"
+       }
+```
+
+运行命令：
+
+```shellscript filename="Terminal"
+     aptos account lookup-address \
+         --public-key-file private-key-a.pub \
+         --url http://localhost:8080
+```
+
+预期输出：
+
+```shellscript filename="Terminal"
+       {
+         "Result": "aaa5131b4d3fcef8d33ee465c4ee65727e36039f283455be87b1164200572e5b"
+       }
+```
+
+运行命令：
+
+```shellscript filename="Terminal"
+     ADDRESS_A=aaa...
+```
+
+预期输出：
+
+```shellscript filename="Terminal"
+       export ADDRESS_A=$(
+           aptos account lookup-address \
+               --public-key-file private-key-a.pub \
+               --url http://localhost:8080 \
+                   | jq -r '.Result'
+       )
+       echo $ADDRESS_A
+```
+
+运行命令：
+
+```shellscript filename="Terminal"
+     aptos move view \
+         --args address:$ADDRESS_A \
+         --function-id 0x1::account::get_authentication_key \
+         --url http://localhost:8080
+```
+
+预期输出：
+
+```shellscript filename="Terminal"
+       {
+         "Result": [
+           "0xaaa5131b4d3fcef8d33ee465c4ee65727e36039f283455be87b1164200572e5b"
+         ]
+       }
+```
+
+运行命令：
+
+```shellscript
+     AUTH_KEY_A=$ADDRESS_A
+```
+
+预期输出：
+
+```shellscript filename="Terminal"
+     aptos move view \
+         --args address:$AUTH_KEY_A \
+         --function-id 0x1::account::originating_address \
+         --url http://localhost:8080
+```
+
+运行命令：
+
+```shellscript filename="Terminal"
+       {
+         "Result": [
+           {
+             "vec": []
+           }
+         ]
+       }
+```
+
+预期输出：
+
+```shellscript filename="Terminal"
+     aptos move run \
+         --assume-yes \
+         --function-id 0x1::account::set_originating_address \
+         --profile test-profile-1
+```
+
+运行命令：
+
+```shellscript filename="Terminal"
+       {
+         "Result": {
+           "transaction_hash": "0x216992ef37a3c2f42aa9f8fed8f94d9f945a00e952dfe96b46123bb5c387ab6c",
+           "gas_used": 444,
+           "gas_unit_price": 100,
+           "sender": "aaa5131b4d3fcef8d33ee465c4ee65727e36039f283455be87b1164200572e5b",
+           "sequence_number": 0,
+           "success": true,
+           "timestamp_us": 1717809169531279,
+           "version": 3268,
+           "vm_status": "Executed successfully"
+         }
+       }
+```
+
+预期输出：
+
+```shellscript filename="Terminal"
+     aptos move view \
+         --args address:$AUTH_KEY_A \
+         --function-id 0x1::account::originating_address \
+         --url http://localhost:8080
+```
+
+运行命令：
+
+```shellscript filename="Terminal"
+       {
+         "Result": [
+           {
+             "vec": [
+               "0xaaa5131b4d3fcef8d33ee465c4ee65727e36039f283455be87b1164200572e5b"
+             ]
+           }
+         ]
+       }
+```
+
+预期输出：
+
+```shellscript filename="Terminal"
+     aptos key generate \
+         --assume-yes \
+         --output-file private-key-b \
+         --vanity-prefix 0xbbb
+```
+
+运行命令：
+
+```shellscript filename="Terminal"
+       {
+         "Result": {
+           "PrivateKey Path": "private-key-b",
+           "Account Address:": "0xbbbdb12f4fa23b8fe8711b77f4ab7108f3a22077c5dfe787eed3d048a0b82734",
+           "PublicKey Path": "private-key-b.pub"
+         }
+       }
+```
+
+预期输出：
+
+```shellscript filename="Terminal"
+     aptos account rotate-key \
+         --assume-yes \
+         --new-private-key-file private-key-b \
+         --profile test-profile-1 \
+         --save-to-profile test-profile-2
+```
+
+运行命令：
+
+```shellscript filename="Terminal"
+       {
+         "Result": {
+           "message": "Saved new profile test-profile-2",
+           "transaction": {
+             "transaction_hash": "0xe561b710390511203511d15eee6f019a2e43ba32f8e3b7ce6bf812232e3bd27f",
+             "gas_used": 449,
+             "gas_unit_price": 100,
+             "sender": "aaa8dc0f5e7a6e820f7b1906d99864412b12274ed259ad06bc2c2d8ee7b51e51",
+             "sequence_number": 1,
+             "success": true,
+             "timestamp_us": 1717810059696079,
+             "version": 1109,
+             "vm_status": "Executed successfully"
+           }
+         }
+       }
+```
+
+预期输出：
+
+```shellscript filename="Terminal"
+     aptos config show-profiles --profile test-profile-1
+     aptos config show-profiles --profile test-profile-2
+```
+
+运行命令：
+
+```shellscript filename="Terminal"
+       {
+         "Result": {
+           "test-profile-1": {
+             "has_private_key": true,
+             "public_key": "0xb517173e68f4116e99c7fa1677058a6ee786a3b9e12447000db7fd85ab99dbdd",
+             "account": "aaa8dc0f5e7a6e820f7b1906d99864412b12274ed259ad06bc2c2d8ee7b51e51",
+             "rest_url": "http://localhost:8080",
+             "faucet_url": "http://localhost:8081"
+           }
+         }
+       }
+       {
+         "Result": {
+           "test-profile-2": {
+             "has_private_key": true,
+             "public_key": "0xadc3dd795fdd8569f59dc7b9900b38a5d7b95348b815de4eb5f00e2c2da07916",
+             "account": "aaa8dc0f5e7a6e820f7b1906d99864412b12274ed259ad06bc2c2d8ee7b51e51",
+             "rest_url": "http://localhost:8080",
+             "faucet_url": "http://localhost:8081"
+           }
+         }
+       }
+```
+
+预期输出：
+
+```shellscript filename="Terminal"
+     aptos move view \
+         --args address:$ADDRESS_A \
+         --function-id 0x1::account::get_authentication_key \
+         --url http://localhost:8080
+```
+
+运行命令：
+
+```shellscript filename="Terminal"
+       {
+         "Result": [
+           "0xbbbdb12f4fa23b8fe8711b77f4ab7108f3a22077c5dfe787eed3d048a0b82734"
+         ]
+       }
+```
+
+预期输出：
+
+```shellscript filename="Terminal"
+     AUTH_KEY_B=bbb...
+```
+
+运行命令：
+
+```shellscript filename="Terminal"
+       export AUTH_KEY_B=$(
+           aptos move view \
+               --args address:$ADDRESS_A \
+               --function-id 0x1::account::get_authentication_key \
+               --url http://localhost:8080 \
+               | jq -r '.Result[0]'
+       )
+       echo $AUTH_KEY_B
+```
+
+预期输出：
+
+```shellscript filename="Terminal"
+     aptos move view \
+         --args address:$AUTH_KEY_B \
+         --function-id 0x1::account::originating_address \
+         --url http://localhost:8080
+```
+
+运行命令：
+
+```shellscript filename="Terminal"
+       {
+         "Result": [
+           {
+             "vec": [
+               "0xaaa8dc0f5e7a6e820f7b1906d99864412b12274ed259ad06bc2c2d8ee7b51e51"
+             ]
+           }
+         ]
+       }
+```
+
+预期输出：
+
+```shellscript filename="Terminal"
+     aptos move view \
+         --args address:$AUTH_KEY_A \
+         --function-id 0x1::account::originating_address \
+         --url http://localhost:8080
+```
+
+运行命令：
+
+```shellscript filename="Terminal"
+       {
+         "Result": [
+           {
+             "vec": []
+           }
+         ]
+       }
+```
+
+预期输出：
+
+```shellscript filename="Terminal"
+      aptos account rotate-key \
+          --assume-yes \
+          --new-private-key-file private-key-b \
+          --profile test-profile-2 \
+          --skip-saving-profile
+```
+
+运行命令：
+
+```shellscript filename="Terminal"
+        {
+          "Error": "Invalid arguments: New public key cannot be the same as the current public key"
+        }
+```
+
+预期输出：
+
+```shellscript filename="Terminal"
+      aptos key generate \
+          --assume-yes \
+          --output-file private-key-c \
+          --vanity-prefix 0xccc
+```
+
+运行命令：
+
+```shellscript filename="Terminal"
+        {
+          "Result": {
+            "PrivateKey Path": "private-key-c",
+            "PublicKey Path": "private-key-c.pub",
+            "Account Address:": "0xccc79d46b2963cb87f2ff32c51eb6c6361e8aa108d334d3183c3016389542958"
+          }
+        }
+```
+
+预期输出：
+
+```shellscript filename="Terminal"
+      aptos init \
+          --assume-yes \
+          --network local \
+          --private-key-file private-key-c \
+          --profile test-profile-3
+```
+
+运行命令：
+
+```shellscript filename="Terminal"
+        Configuring for profile test-profile-3
+        Configuring for network Local
+        Using command line argument for private key
+        Account 0xccc79d46b2963cb87f2ff32c51eb6c6361e8aa108d334d3183c3016389542958 doesn\'t exist, creating it and funding it with 100000000 Octas
+        Account 0xccc79d46b2963cb87f2ff32c51eb6c6361e8aa108d334d3183c3016389542958 funded successfully
+
+        ---
+        Aptos CLI is now set up for account 0xccc79d46b2963cb87f2ff32c51eb6c6361e8aa108d334d3183c3016389542958 as profile test-profile-3!  Run `aptos --help` for more information about commands
+        {
+          "Result": "Success"
+        }
+```
+
+预期输出：
+
+```shellscript filename="Terminal"
+      aptos account rotate-key \
+          --assume-yes \
+          --max-gas 100000 \
+          --new-private-key-file private-key-b \
+          --profile test-profile-3 \
+          --skip-saving-profile
+```
+
+运行命令：
+
+```shellscript filename="Terminal"
+        {
+          "Error": "API error: Unknown error Transaction committed on chain, but failed execution: Move abort in 0x1::account: ENEW_AUTH_KEY_ALREADY_MAPPED(0x10015): The new authentication key already has an entry in the `OriginatingAddress` table"
+        }
+```
+
+预期输出：
+
+```shellscript filename="Terminal"
+      aptos account rotate-key \
+          --assume-yes \
+          --new-private-key-file private-key-c \
+          --profile test-profile-2 \
+          --save-to-profile test-profile-4
+```
+
+运行命令：
+
+```shellscript filename="Terminal"
+        {
+          "Result": {
+            "message": "Saved new profile test-profile-4",
+            "transaction": {
+              "transaction_hash": "0xa5dec792d82ef7471cdf82b9c957fc79b5815da770ad1dd9232ae4692e4f0895",
+              "gas_used": 449,
+              "gas_unit_price": 100,
+              "sender": "aaa8dc0f5e7a6e820f7b1906d99864412b12274ed259ad06bc2c2d8ee7b51e51",
+              "sequence_number": 2,
+              "success": true,
+              "timestamp_us": 1717812312772580,
+              "version": 5355,
+              "vm_status": "Executed successfully"
+            }
+          }
+        }
+```
+
+预期输出：
+
+```shellscript filename="Terminal"
+      aptos account rotate-key \
+          --assume-yes \
+          --max-gas 100000 \
+          --new-private-key-file private-key-b \
+          --profile test-profile-3 \
+          --skip-saving-profile
+```
+
+运行命令：
+
+```shellscript filename="Terminal"
+        {
+          "Error": "API error: Unknown error Transaction committed on chain, but failed execution: Move abort in 0x1::account: EINVALID_ORIGINATING_ADDRESS(0x6000d): Abort the transaction if the expected originating address is different from the originating address on-chain"
+        }
+```
+
+预期输出：
+
+```shell filename="Terminal"
+      aptos config delete-profile --profile test-profile-1
+      aptos config delete-profile --profile test-profile-2
+      aptos config delete-profile --profile test-profile-3
+      aptos config delete-profile --profile test-profile-4
+```
+
+运行命令：
+
+```shell filename="Terminal"
+        aptos config delete-profile --profile test-profile-1
+        aptos config delete-profile --profile test-profile-2
+        aptos config delete-profile --profile test-profile-3
+        aptos config delete-profile --profile test-profile-4
+        rm private-key-*
+        kill $LOCALNET_PID
+        rm -fr localnet-data
+```
+
+预期输出：
+
+<Aside type="note">
+  也可以使用安全存储在 Ledger 硬件钱包中的私钥执行认证密钥轮换。详情请参阅 [Ledger 认证密钥轮换指南](/zh/build/cli/trying-things-on-chain/ledger#authentication-key-rotation)。
+</Aside>
+
+## TypeScript 密钥轮换示例
+
+该示例在 Devnet 上创建 Alice 和 Bob 两个账户，为它们注资，然后将 Alice 的认证密钥轮换为 Bob 的认证密钥。完整示例请参阅 [aptos-ts-sdk 中的 `rotate_key.ts`](https://github.com/aptos-labs/aptos-ts-sdk/blob/main/examples/typescript/rotate_key.ts)。
+
+### 进入 TypeScript SDK 目录、安装依赖并运行
+
+```shellscript filename="Terminal"
+cd ~/aptos-core/ecosystem/typescript/sdk/examples/typescript-esm
+pnpm install && pnpm rotate_key
+```
+
+### `rotate_key.ts` 输出
+
+```shell filename="Terminal"
+Account Address Auth Key Private Key Public Key
+------------------------------------------------------------------------------------------------
+Alice 0x213d...031013 '0x213d...031013' '0x00a4...b2887b' '0x859e...08d2a9'
+Bob 0x1c06...ac3bb3 0x1c06...ac3bb3 0xf2be...9486aa 0xbbc1...abb808
+
+...rotating...
+
+Alice 0x213d...031013 '0x1c06...ac3bb3' '0xf2be...9486aa' '0xbbc1...abb808'
+Bob 0x1c06...ac3bb3 0x1c06...ac3bb3 0xf2be...9486aa 0xbbc1...abb808
+```
+
+## Python 密钥轮换示例
+
+该示例在 Devnet 上创建 Alice 和 Bob 两个账户，为它们注资，然后将 Alice 的认证密钥轮换为 Bob 的认证密钥。完整示例请参阅 [aptos-python-sdk 中的 `rotate_key.py`](https://github.com/aptos-labs/aptos-python-sdk/blob/main/examples/rotate_key.py)。
+
+### 进入 Python SDK 目录、安装依赖并运行
+
+```shellscript filename="Terminal"
+cd aptos-core/ecosystem/python/sdk
+poetry install && poetry run python -m examples.rotate-key
+```
+
+### `rotate_key.py` 输出
+
+```shellscript filename="Terminal"
+Account Address Auth Key Private Key Public Key
+------------------------------------------------------------------------------------------------
+Alice 0x213d...031013 '0x213d...031013' '0x00a4...b2887b' '0x859e...08d2a9'
+Bob 0x1c06...ac3bb3 0x1c06...ac3bb3 0xf2be...9486aa 0xbbc1...abb808
+
+...rotating...
+
+Alice 0x213d...031013 '0x1c06...ac3bb3' '0xf2be...9486aa' '0xbbc1...abb808'
+Bob 0x1c06...ac3bb3 0x1c06...ac3bb3 0xf2be...9486aa 0xbbc1...abb808
+```
+
+[`account::rotate_authentication_key`]: https://github.com/aptos-labs/aptos-core/blob/acb6c891cd42a63b3af96561a1aca164b800c7ee/aptos-move/framework/aptos-framework/sources/account.move#L326
+
+[`account::rotate_authentication_key_call`]: https://github.com/aptos-labs/aptos-core/blob/acb6c891cd42a63b3af96561a1aca164b800c7ee/aptos-move/framework/aptos-framework/sources/account.move#L294
+
+[`account::RotationProofChallenge`]: https://github.com/aptos-labs/aptos-core/blob/acb6c891cd42a63b3af96561a1aca164b800c7ee/aptos-move/framework/aptos-framework/sources/account.move#L79
+
+[`account::OriginatingAddress`]: https://github.com/aptos-labs/aptos-core/blob/acb6c891cd42a63b3af96561a1aca164b800c7ee/aptos-move/framework/aptos-framework/sources/account.move#L70
+
+[`account::set_originating_address`]: https://github.com/alnoki/aptos-core/blob/5ba4a8d1344b0bb6e22665525a96e787b9a44e55/aptos-move/framework/aptos-framework/sources/account.move#L528

@@ -1,0 +1,170 @@
+---
+title: "在 Aptos 应用中使用预言机"
+description: "集成 Pyth Network 等各种预言机提供商，在智能合约中访问链下数据的参考指南。"
+sidebar:
+  label: "预言机"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+本参考指南介绍可在 Aptos 上构建应用时使用的各种预言机。预言机向区块链提供链下数据，使智能合约可访问多样化信息。目前本指南记录了两个预言机：Chainlink 和 Pyth Network。
+
+## Chainlink
+
+[Chainlink](https://chain.link/) 是行业标准预言机平台，可将资本市场带到链上，并为大多数去中心化金融提供支持。
+
+这是唯一的一体化预言机平台，可在区块链和传统系统之间创建工作流，同时嵌入关键数据、合规和隐私功能；随后这些功能会表现为在可验证去中心化运行时中执行的一行代码。
+
+全球许多最大的金融服务机构和 DeFi 协议都已采用 Chainlink 的标准和基础设施。
+
+### Chainlink 数据馈送
+
+采用 Chainlink 的高质量数据标准后，Aptos 可无缝访问支持在网络上开发高度安全应用所需的防篡改数据。
+
+Chainlink Data Feeds 提供安全、可靠、去中心化的现实世界数据源，可为去中心化和传统金融中的独特智能合约用例提供动力。
+
+1. 数据提供商从众多中心化和去中心化交易所汇总原始价格数据，并考虑时间、交易量和异常值。
+2. 独立 Chainlink 节点从各种数据提供商获取市场价格数据，并将结果合并为聚合值。
+3. 多个 Chainlink 节点随后在链下聚合结果以生成“预言机报告”，并将其提供给智能合约。
+
+**Data Feeds 开发者工具**
+
+- [Aptos 上的 Data Feeds](https://docs.chain.link/data-feeds/price-feeds/addresses?page=1\&testnetPage=1\&network=aptos)：查看在 Aptos 上使用 Data Feeds 所需的所有相关地址和详细信息。
+- [Data Feeds 官方文档](https://data.chain.link/feeds)：了解如何使用 Chainlink Data Feeds。
+
+### Chainlink CCIP
+
+Chainlink 跨链互操作协议（CCIP）是互操作性标准。CCIP 使开发者能够构建安全的跨链应用，可在区块链间转移代币、发送消息和发起操作。
+
+通过[跨链代币（CCT）标准](https://blog.chain.link/ccip-v-1-5-upgrade/)，CCIP 使代币开发者能够在数分钟内以自助方式将新旧代币集成到 CCIP 中，无需供应商锁定、硬编码函数或可能限制未来可选性的外部依赖。
+
+CCT 提供多项优势：
+
+- 自助部署
+- 开发者拥有完全控制权和所有权
+- 零滑点转移
+- 通过可配置速率限制增强可编程性
+- Smart Execution 等可靠性功能
+
+CCIP 由 Chainlink 去中心化预言机网络（DON）提供支持——这是经过验证的标准，具有保障数百亿美元安全、促成超过 25 万亿美元链上交易价值的记录。
+
+**CCIP 开发者工具**
+
+- [CCIP 目录](https://docs.chain.link/ccip/directory/mainnet/chain/aptos-mainnet)：查看在 Aptos 上使用 CCIP 所需的全部相关地址和详细信息。
+- [CCIP 官方文档](https://docs.chain.link/ccip)：开始将 CCIP 集成到跨链应用中。
+- [CCIP Token Manager](https://tokenmanager.chain.link/)：直观的前端 Web 界面，供 CCT 开发者部署新 CCT 和管理现有 CCT，包含无代码引导式部署和配置工具。
+- [CCIP SDK](https://docs.chain.link/ccip/ccip-javascript-sdk)：简化 CCIP 集成的软件开发工具包，使开发者可使用 JavaScript 创建代币转移前端 dApp。
+
+## Pyth Network
+
+[Pyth Network](https://pyth.network/) 是最大的第一方预言机网络之一，可在[大量链](https://docs.pyth.network/price-feeds/contract-addresses)上提供实时数据。
+
+该网络由全球一些最大的[交易所、做市商和金融服务提供商](https://pyth.network/publishers)组成。它们将专有数据发布到链上，以供聚合并分发给智能合约应用。
+
+### 如何在 Aptos 合约中使用 Pyth 实时数据
+
+本指南说明如何在 Aptos 应用中使用实时 Pyth 数据。
+
+### 配置 `Move.toml` 文件
+
+在 `Move.toml` 文件中将 Pyth Contract 添加到项目依赖：
+
+```toml copy
+[dependencies]
+Pyth = { git = "https://github.com/pyth-network/pyth-crosschain.git", subdir = "target_chains/aptos/contracts", rev = "main" }
+```
+
+必须在编译时定义 `pyth`、`wormhole` 和 `deployers` 的命名地址。这些地址用于与 Aptos 上的 Pyth 合约交互。
+
+```toml copy
+[addresses]
+pyth = "0x7e783b349d3e89cf5931af376ebeadbfab855b3fa239b7ada8f5a92fbea6b387"
+deployer = "0xb31e712b26fd295357355f6845e77c888298636609e93bc9b05f0f604049f434"
+wormhole = "0x5bc11445584a763c1fa7ed39081f1b920954da14e04b32440cba863d03e19625"
+```
+
+请参阅 [Aptos 合约地址](https://docs.pyth.network/price-feeds/contract-addresses/aptos)，获取不同 Aptos 网络上的完整合约地址列表。
+
+### 编写合约代码
+
+以下代码片段提供从 Pyth 价格馈送获取 BTC/USD 价格的示例模块：
+
+```rust {21} copy
+module example::example {
+    use pyth::pyth;
+    use pyth::price::Price;
+    use pyth::price_identifier;
+    use aptos_framework::coin;
+
+    // Add the pyth_price_update argument to any method on your contract that needs to read the Pyth price.
+    // See https://docs.pyth.network/price-feeds/fetch-price-updates for more information on how to fetch the pyth_price_update.
+    public fun get_btc_usd_price(user: &signer, pyth_price_update: vector<vector<u8>>): Price {
+
+        // First update the Pyth price feeds
+        let coins = coin::withdraw(user, pyth::get_update_fee(&pyth_price_update));
+        pyth::update_price_feeds(pyth_price_update, coins);
+
+        // Read the current price from a price feed.
+        // Each price feed (e.g., BTC/USD) is identified by a price feed ID.
+        // The complete list of feed IDs is available at https://pyth.network/developers/price-feed-ids
+        // Note: Aptos uses the Pyth price feed ID without the `0x` prefix.
+        let btc_price_identifier = x"e62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43";
+        let btc_usd_price_id = price_identifier::from_byte_vec(btc_price_identifier);
+        pyth::get_price(btc_usd_price_id)
+    }
+}
+
+```
+
+<Aside type="note" emoji="ℹ️">
+  `pyth_price_update` 参数包含来自 Pyth 的已验证价格。使用此值调用 `pyth::update_price_feeds` 会更新链上 Pyth 价格，并确保应用拥有最新价格数据。可以从 Hermes 获取 pyth\_price\_update；有关如何获取 `pyth_price_update` 的更多信息，请参阅[获取价格更新](https://docs.pyth.network/price-feeds/fetch-price-updates)。
+</Aside>
+
+上述代码片段会执行以下操作：
+
+1. 调用 `pyth::get_update_fee`，获取更新 Pyth 价格馈送所需费用。
+2. 调用 `pyth::update_price_feeds` 并传入 `pyth_price_update`，更新 Pyth 价格馈送。
+3. 调用 `pyth::get_price` 读取当前价格，并提供要读取的[价格馈送 ID](https://pyth.network/developers/price-feed-ids)。
+
+### 其他资源
+
+以下附加资源可能有助于开发 Aptos 应用。
+
+#### Aptos 上的赞助馈送
+
+下表所列价格馈送目前在 **Aptos mainnet** 上获得赞助。
+
+更新参数：**1 秒心跳或 0.5% 价格偏离**
+
+| 名称        | 价格馈送 ID                                                            |
+| --------- | ------------------------------------------------------------------ |
+| APT/USD   | `03ae4db29ed4ae33d323568895aa00337e658e348b37509f5372ae51f0af00d5` |
+| BTC/USD   | `e62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43` |
+| ETH/USD   | `ff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace` |
+| SOL/USD   | `ef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d` |
+| USDC/USD  | `eaa020c61cc479712813461ce153894a96a6c00b21ed0cfc2798d1f9a9e9c94a` |
+| USDT/USD  | `2b89b9dc8fdf9f34709a5b106b472f0f39bb6ca9ce04b0fd7f2e971688e2e53b` |
+| CAKE/USD  | `2356af9529a1064d41e32d617e2ce1dca5733afa901daba9e2b68dee5d53ecf9` |
+| SUI/USD   | `23d7315113f5b1d3ba7a83604c44b94d79f4fd69af77f804fc7f920a6dc65744` |
+| CETUS/USD | `e5b274b2611143df055d6e7cd8d93fe1961716bcd4dca1cad87a83bc1e78c1ef` |
+| BNB/USD   | `2f95862b045670cd22bee3114c39763a4a08beeb663b145d283c31d7d1101c4f` |
+| WBTC/USD  | `c9d8b075a5c69303365ae23633d4e085199bf5c520a3b90fed1322a0342ffc33` |
+| THL/USD   | `74e3fbb0d33e0ed8c0078b56134dcebdae38852f0858a8ea4de4c5ea7474bd42` |
+| USDY/USD  | `e393449f6aff8a4b6d3e1165a7c9ebec103685f3b41e60db4277b5b6d10e7326` |
+| WETH/USD  | `9d4294bbcd1174d6f2003ec365831e64cc31d9f6f15a2b85399db8d5000960f6` |
+| THAPT/USD | `b29276972267db5d64ae718fb7f107ad9e72a79cabf9992f0e9bc75ad451a7f6` |
+| EZETH/USD | `06c217a791f5c4f988b36629af4cb88fad827b2485400a358f3b02886b54de92` |
+| WEETH/USD | `9ee4e7c60b940440a261eb54b6d8149c23b580ed7da3139f7f08f4ea29dad395` |
+| USDM/USD  | `a6a0dfa49b6b3a93510658245618099f5e842514970f596cf64fad9e0d658193` |
+| STONE/USD | `4dcc2fb96fb89a802ef9712f6bd2246d3607cf95ca5540cb24490d37003f8c46` |
+
+有关赞助馈送的更多详细信息，请查看[此处](https://docs.pyth.network/price-feeds/sponsored-feeds)。
+
+#### API 参考
+
+[Aptos API 参考](https://docs.pyth.network/price-feeds/api-reference/aptos)可让你以交互方式浏览 Pyth 合约的完整 API。
+
+#### 示例应用
+
+- [最小链上合约](https://github.com/pyth-network/pyth-examples/blob/main/price_feeds/aptos/fetch_btc_price/sources/example.move)：从 Pyth 价格馈送更新并返回 BTC/USD 价格。
+- [铸造 NFT](https://github.com/pyth-network/pyth-examples/tree/main/price_feeds/aptos/mint_nft)：使用 Pyth 价格馈送铸造 NFT 的应用。

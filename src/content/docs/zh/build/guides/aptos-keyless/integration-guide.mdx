@@ -1,0 +1,281 @@
+---
+title: "Keyless 集成指南"
+description: "通过实用示例，将按域名限定的 Keyless 账户直接集成到 dApp 的分步指南。"
+sidebar:
+  label: "集成指南"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+<Aside type="note">
+  **Keyless 账户范围限定**
+
+  使用**Aptos Keyless 集成指南**可将 Keyless 账户直接集成到应用中。这意味着区块链账户限定在应用的域名范围内（使用 Google 账户登录 dApp A 与登录 dApp B 会创建独立账户）。敬请关注 Aptos 让 Keyless 账户能够跨应用可移植使用的后续计划。
+
+  如需反馈、支持或成为共同设计伙伴以帮助我们改进 Aptos Keyless，请加入：[https://t.me/+h5CN-W35yUFiYzkx](https://t.me/+h5CN-W35yUFiYzkx)
+</Aside>
+
+从高层来看，集成 Keyless 账户有三个步骤：
+
+1. \*\*配置与 IdP 的 OpenID 集成。\*\*dApp 向所选 IdP（如 Google）注册并获得 `client_id`。
+2. **安装 Aptos TypeScript SDK。**
+3. **在应用客户端中集成 Keyless 账户支持。**
+   1. 为用户设置“使用 \[IdP] 登录”流程。
+   2. 实例化用户的 `KeylessAccount`。
+   3. 通过 `KeylessAccount` 签名并提交交易。
+
+## 示例实现
+
+可在 [aptos-keyless-example 仓库](https://github.com/aptos-labs/aptos-keyless-example/)找到演示 Google 基础 Keyless 集成的示例应用。请按照 README 中的说明启动示例。有关 Keyless 的更详细说明，请继续阅读本集成指南。
+
+<Steps>
+  1. 第 1 步：配置与 IdP 的 OpenID 集成
+
+     首先配置 IdP。
+
+     [请遵循此处说明](/zh/build/guides/aptos-keyless/oidc-support)
+
+  2. 第 2 步：安装 Aptos TypeScript SDK
+
+     ```shellscript
+     # Keyless is supported in version 1.18.1 and above
+     pnpm install @aptos-labs/ts-sdk
+     ```
+
+  3. 第 3 步：客户端集成步骤
+
+     以下是客户端集成 Keyless 账户的默认步骤。
+
+     #### 1. 在 UI 中向用户展示“使用 \[IdP] 登录”按钮
+
+     1. 在后台创建临时密钥对，并将其存储在 local storage 中。
+
+        ```typescript
+        import {EphemeralKeyPair} from '@aptos-labs/ts-sdk/keyless';
+
+        const ephemeralKeyPair = EphemeralKeyPair.generate();
+        ```
+
+        <Aside type="note">
+          在 v7.0.0 中，`EphemeralKeyPair` 已移至 `@aptos-labs/ts-sdk/keyless` 子路径。若使用 v6 或更早版本，请改为从 `@aptos-labs/ts-sdk` 导入。
+        </Aside>
+
+     2. 将 `EphemeralKeyPair` 以其 `nonce` 为键存储在 local storage 中。
+
+        ```typescript
+        // This saves the EphemeralKeyPair in local storage
+        storeEphemeralKeyPair(ephemeralKeyPair);
+        ```
+
+     <details>
+       <summary>`storeEphemeralKeyPair` 的示例实现</summary>
+
+       <Aside type="note">
+         此实现展示如何将 `EphemeralKeyPair` 存储在 local storage 中。可根据应用需求采用不同实现。
+       </Aside>
+
+       ```typescript filename="ephemeral.ts"
+
+       /**
+       * Store the ephemeral key pair in localStorage.
+       */
+       export const storeEphemeralKeyPair = (ekp: EphemeralKeyPair): void =>
+        localStorage.setItem("@aptos/ekp", encodeEphemeralKeyPair(ekp));
+
+       /**
+       * Retrieve the ephemeral key pair from localStorage if it exists.
+       */
+       export const getLocalEphemeralKeyPair = (): EphemeralKeyPair | undefined => {
+        try {
+          const encodedEkp = localStorage.getItem("@aptos/ekp");
+          return encodedEkp ? decodeEphemeralKeyPair(encodedEkp) : undefined;
+        } catch (error) {
+          console.warn(
+            "Failed to decode ephemeral key pair from localStorage",
+            error
+          );
+          return undefined;
+        }
+       };
+
+       /**
+       * Stringify the ephemeral key pairs to be stored in localStorage
+       */
+       export const encodeEphemeralKeyPair = (ekp: EphemeralKeyPair): string =>
+        JSON.stringify(ekp, (_, e) => {
+          if (typeof e === "bigint") return { __type: "bigint", value: e.toString() };
+          if (e instanceof Uint8Array)
+            return { __type: "Uint8Array", value: Array.from(e) };
+          if (e instanceof EphemeralKeyPair)
+            return { __type: "EphemeralKeyPair", data: e.bcsToBytes() };
+          return e;
+        });
+
+       /**
+       * Parse the ephemeral key pairs from a string
+       */
+       export const decodeEphemeralKeyPair = (encodedEkp: string): EphemeralKeyPair =>
+        JSON.parse(encodedEkp, (_, e) => {
+          if (e && e.__type === "bigint") return BigInt(e.value);
+          if (e && e.__type === "Uint8Array") return new Uint8Array(e.value);
+          if (e && e.__type === "EphemeralKeyPair")
+            return EphemeralKeyPair.fromBytes(e.data);
+          return e;
+        });
+       ```
+     </details>
+
+     3. 准备登录 URL 的参数。将 `redirect_uri` 和 `client_id` 设为 IdP 中配置的值。将 `nonce` 设为第 1.1 步中 `EphemeralKeyPair` 的 nonce。
+
+        ```typescript
+        const redirectUri = 'https://.../login/callback'
+        const clientId = env.IDP_CLIENT_ID
+        // Get the nonce associated with ephemeralKeyPair
+        const nonce = ephemeralKeyPair.nonce
+        ```
+
+     4. 构造登录 URL，让用户向 IdP 验证身份。务必设置 `openid` scope。可根据应用需求设置 `email`、`profile` 等其他 scope。
+
+        ```typescript
+        const loginUrl = `https://accounts.google.com/o/oauth2/v2/auth?response_type=id_token&scope=openid+email+profile&nonce=${nonce}&redirect_uri=${redirectUri}&client_id=${clientId}`
+        ```
+
+     5. 用户点击登录按钮时，将其重定向到第 1.4 步创建的 `loginUrl`。
+
+     #### 2. 通过解析令牌处理回调，并为用户创建 Keyless 账户
+
+     1. 用户完成登录流程后，会被重定向到第 1 步设置的 `redirect_uri`。JWT 会作为 URL 片段中的搜索参数出现，键为 `id_token`。按如下方式从 `window` 提取 JWT：
+
+        ```typescript
+        const parseJWTFromURL = (url: string): string | null => {
+          const urlObject = new URL(url);
+          const fragment = urlObject.hash.substring(1);
+          const params = new URLSearchParams(fragment);
+          return params.get('id_token');
+        };
+
+        // window.location.href = https://.../login/google/callback#id_token=...
+        const jwt = parseJWTFromURL(window.location.href)
+        ```
+
+     2. 解码 JWT，并从载荷中提取 nonce 值。
+
+        ```typescript
+        import { jwtDecode } from 'jwt-decode';
+
+        const payload = jwtDecode<{ nonce: string }>(jwt);
+        const jwtNonce = payload.nonce
+        ```
+
+     3. 获取第 1.2 步存储的 `EphemeralKeyPair`。务必验证 nonce 与解码的 nonce 相符，并且 `EphemeralKeyPair` 未过期。
+
+        ```typescript
+        const ekp = getLocalEphemeralKeyPair();
+
+        // Validate the EphemeralKeyPair
+        if (!ekp || ekp.nonce !== jwtNonce || ekp.isExpired() ) {
+          throw new Error("Ephemeral key pair not found or expired");
+        }
+        ```
+
+     4. 实例化用户的 `KeylessAccount`。
+
+        根据所使用的 Keyless 类型，遵循以下说明：
+
+        1. 普通 Keyless
+
+        ```tsx
+        import {Aptos, AptosConfig, Network} from '@aptos-labs/ts-sdk';
+
+        const aptos = new Aptos(new AptosConfig({ network: Network.DEVNET })); // Configure your network here
+        const keylessAccount = await aptos.deriveKeylessAccount({
+            jwt,
+            ephemeralKeyPair,
+        });
+        ```
+
+        2. 联邦 Keyless
+
+        ```tsx
+        import {Aptos, AptosConfig, Network} from '@aptos-labs/ts-sdk';
+
+        const aptos = new Aptos(new AptosConfig({ network: Network.DEVNET })); // Configure your network here
+        const keylessAccount = await aptos.deriveKeylessAccount({
+            jwt,
+            ephemeralKeyPair,
+            jwkAddress: jwkOwner.accountAddress
+        });
+        ```
+
+     #### 3. 将 KeylessAccount 存储到 local storage（可选）
+
+     1. 派生账户后，将 `KeylessAccount` 存储到 local storage。这样用户返回应用时无需再次验证。
+
+        ```typescript filename="keyless.ts"
+        export const storeKeylessAccount = (account: KeylessAccount): void =>
+          localStorage.setItem("@aptos/account", encodeKeylessAccount(account));
+
+        export const encodeKeylessAccount = (account: KeylessAccount): string =>
+          JSON.stringify(account, (_, e) => {
+            if (typeof e === "bigint") return { __type: "bigint", value: e.toString() };
+            if (e instanceof Uint8Array)
+              return { __type: "Uint8Array", value: Array.from(e) };
+            if (e instanceof KeylessAccount)
+              return { __type: "KeylessAccount", data: e.bcsToBytes() };
+            return e;
+          });
+        ```
+
+     2. 每当用户返回应用时，从 local storage 中获取 `KeylessAccount`，并用它签名交易。
+
+        ```typescript filename="keyless.ts"
+        export const getLocalKeylessAccount = (): KeylessAccount | undefined => {
+          try {
+            const encodedAccount = localStorage.getItem("@aptos/account");
+            return encodedAccount ? decodeKeylessAccount(encodedAccount) : undefined;
+          } catch (error) {
+            console.warn(
+              "Failed to decode account from localStorage",
+              error
+            );
+            return undefined;
+          }
+        };
+
+        export const decodeKeylessAccount = (encodedAccount: string): KeylessAccount =>
+          JSON.parse(encodedAccount, (_, e) => {
+            if (e && e.__type === "bigint") return BigInt(e.value);
+            if (e && e.__type === "Uint8Array") return new Uint8Array(e.value);
+            if (e && e.__type === "KeylessAccount")
+              return KeylessAccount.fromBytes(e.data);
+            return e;
+          });
+        ```
+
+     #### 4. 向 Aptos 区块链提交交易
+
+     1. 创建要提交的交易。以下是简单代币转账交易示例：
+
+        ```tsx
+        import {Account} from '@aptos-labs/ts-sdk';
+
+        const bob = Account.generate();
+        const transaction = await aptos.transferCoinTransaction({
+            sender: keylessAccount.accountAddress,
+            recipient: bob.accountAddress,
+            amount: 100,
+        });
+        ```
+
+     2. 签名并将交易提交到链上。
+
+        ```tsx
+        const committedTxn = await aptos.signAndSubmitTransaction({ signer: keylessAccount, transaction });
+        ```
+
+     3. 等待交易在链上处理。
+
+        ```tsx
+        const committedTransactionResponse = await aptos.waitForTransaction({ transactionHash: committedTxn.hash });
+        ```
+</Steps>

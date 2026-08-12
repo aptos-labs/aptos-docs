@@ -313,9 +313,10 @@ function middleware$2(request) {
   if ((langPathMatch ? langPathMatch[1] : DEFAULT_LANG) !== preferredLocale) {
     if (preferredLocale === DEFAULT_LANG)
       url.pathname = langPathMatch ? (langPathMatch[2] ?? "/") : pathname;
-    else if (NON_DEFAULT_LANGS.includes(preferredLocale))
+    else if (NON_DEFAULT_LANGS.includes(preferredLocale)) {
       if (!langPathMatch) url.pathname = `/${preferredLocale}${pathname}`;
       else url.pathname = `/${preferredLocale}${langPathMatch[2] ?? "/"}`;
+    }
     if (url.pathname !== pathname) return Response.redirect(url);
   }
 }

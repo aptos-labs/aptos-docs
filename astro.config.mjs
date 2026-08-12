@@ -117,6 +117,7 @@ const isClientViteBuild = (config) => !config.build?.ssr;
 const isServerViteBuild = (config) => Boolean(config.build?.ssr);
 
 // https://astro.build/config
+// @ts-expect-error TS2321 Astro 7.2 font-provider generics overflow TypeScript 6 in astro check.
 export default defineConfig({
   build: {
     inlineStylesheets: "never",
@@ -363,7 +364,7 @@ export default defineConfig({
       }),
   vite: {
     plugins: [
-      tailwindcss(),
+      ...tailwindcss(),
       ...codecovVitePlugin({
         enableBundleAnalysis: Boolean(process.env.CODECOV_TOKEN),
         bundleName: "aptos-docs-client",

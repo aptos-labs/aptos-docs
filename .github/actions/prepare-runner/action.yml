@@ -1,5 +1,10 @@
 name: "Setup runner"
-description: "It setups node, install pnpm packages and caches them"
+description: >
+  Install Node.js and pnpm, restore the pnpm store cache, wrap package
+  managers with Aikido Safe Chain, then install JS dependencies. Safe Chain
+  blocks malware and packages newer than 48 hours by default. Set
+  SAFE_CHAIN_MINIMUM_PACKAGE_AGE_HOURS=0 in the calling job's env to bypass
+  the age gate in an emergency.
 runs:
   using: composite
   steps:
@@ -23,6 +28,9 @@ runs:
         key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
         restore-keys: |
           ${{ runner.os }}-pnpm-store-
+
+    # Internal Aptos action; org policy leaves this unpinned on @main.
+    - uses: aptos-labs/actions/aikidosec-safe-chain@main
 
     - name: Install dependencies
       shell: bash

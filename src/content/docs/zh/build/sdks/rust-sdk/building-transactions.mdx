@@ -53,7 +53,7 @@ import { Aside, Steps } from '@astrojs/starlight/components';
 
      可通过设置 builder 字段来自定义交易执行方式。一些最常用的选项包括：
 
-     1. `max_gas_amount` - 限制你愿意为执行此交易支付的 Gas 数量。
+     1. `max_gas_amount` - 限制你愿意为执行此交易支付的 Gas 数量。SDK 默认值为 `2_000_000`。网络会从发送方（或手续费代付方）预留 `max_gas_amount * gas_unit_price`，因此提交前请至少从水龙头领取数个 APT。
      2. `gas_unit_price` - 可以指定高于最低值的每单位 Gas 价格，以便 Aptos 网络以更高优先级执行。
      3. `expiration_from_now` - 指定交易必须在此时间前执行，否则将被取消。
 
@@ -117,7 +117,9 @@ let result = aptos.sign_submit_and_wait(&alice, payload.into(), None).await?;
 ```rust filename="build_a_transaction.rs"
 use aptos_sdk::{Aptos, AptosConfig, account::Ed25519Account, transaction::EntryFunction};
 
-const FUND_AMOUNT: u64 = 100_000_000;
+// Default max_gas_amount is 2_000_000. At ~100 octas per gas unit that
+// reserves 0.2 APT, so fund well above the transfer amount.
+const FUND_AMOUNT: u64 = 1_000_000_000;
 const TRANSFER_AMOUNT: u64 = 1_000;
 
 #[tokio::main]

@@ -82,7 +82,7 @@ async fn main() -> anyhow::Result<()> {
     let secondary_signer = Ed25519Account::generate();
 
     aptos
-        .fund_account(primary_signer.address(), 100_000_000)
+        .fund_account(primary_signer.address(), 1_000_000_000)
         .await?;
     aptos
         .fund_account(secondary_signer.address(), 100_000_000)
@@ -112,8 +112,12 @@ async fn main() -> anyhow::Result<()> {
         &primary_signer,
         &[&secondary_signer as &dyn Account],
     )?;
-    let result = aptos.submit_and_wait(&signed_txn, None).await?;
-    println!("Submitted: {:?}", result.data.get("hash"));
+    match aptos.submit_and_wait(&signed_txn, None).await {
+        Ok(result) => println!("Submitted: {:?}", result.data.get("hash")),
+        Err(err) => {
+            println!("Expected without a multi-signer entry function: {err}");
+        }
+    }
 
     Ok(())
 }

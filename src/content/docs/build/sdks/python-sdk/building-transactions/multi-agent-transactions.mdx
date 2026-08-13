@@ -73,6 +73,7 @@ import asyncio
 
 from aptos_sdk.v2 import Account, Aptos, AptosConfig, Network
 from aptos_sdk.v2.bcs import Serializer
+from aptos_sdk.v2.errors import TransactionFailedError
 from aptos_sdk.v2.transactions import (
     Authenticator,
     EntryFunction,
@@ -120,8 +121,11 @@ async def main():
         )
 
         txn_hash = await aptos.transaction.submit(SignedTransaction(raw_txn, authenticator))
-        result = await aptos.transaction.wait_for_transaction(txn_hash)
-        print(f"Success: {result['success']}")
+        try:
+            result = await aptos.transaction.wait_for_transaction(txn_hash)
+            print(f"Success: {result['success']}")
+        except TransactionFailedError as err:
+            print(f"Expected without a multi-signer entry function: {err}")
 
 
 asyncio.run(main())

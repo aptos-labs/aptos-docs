@@ -45,18 +45,20 @@ result = await aptos.general.view(
 )
 ```
 
-对于 vector 或 option 等复杂参数类型，请使用 BCS 编码参数并调用 `view_bcs`：
+无参数的函数传入空字节即可。vector 等复杂值可先用 `Serializer` 编码；当每个参数都是字符串、数字或地址时，JSON `view` 更简单：
 
 ```python filename="fetch_data.py"
 from aptos_sdk.v2.bcs import Serializer
 
 ser = Serializer()
 ser.sequence([1, 2, 3], Serializer.u64)
-result_bytes = await aptos.general.view_bcs(
-    "0x1::some_module",
-    "some_function",
+vector_arg = ser.output()
+
+timestamp = await aptos.general.view_bcs(
+    "0x1::timestamp",
+    "now_seconds",
     [],
-    ser.output(),
+    b"",
 )
 ```
 

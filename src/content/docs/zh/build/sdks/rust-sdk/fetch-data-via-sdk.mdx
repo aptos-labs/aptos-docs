@@ -46,11 +46,23 @@ let balance = aptos
 
 启用 `indexer` 功能时（默认开启），`Aptos` 客户端既可查询来自
 [全节点](https://api.mainnet.aptoslabs.com/v1/spec#/) 的网络数据，也可查询
-[Indexer](https://cloud.hasura.io/public/graphiql?endpoint=https://api.mainnet.aptoslabs.com/v1/graphql)
+[Indexer](https://cloud.hasura.io/public/graphiql?endpoint=https://api.devnet.aptoslabs.com/v1/graphql)
 API 的数据。
 
+<Aside type="note">
+  `AptosConfig::devnet()` 默认使用 `indexer.devnet.aptoslabs.com`，该主机名无法解析。
+  请如下所示指向公开的 Indexer GraphQL 端点。测试网使用
+  `https://api.testnet.aptoslabs.com/v1/graphql`，主网使用
+  `https://api.mainnet.aptoslabs.com/v1/graphql`。
+</Aside>
+
 ```rust filename="fetch_data.rs"
-use aptos_sdk::types::AccountAddress;
+use aptos_sdk::{Aptos, AptosConfig, types::AccountAddress};
+
+let aptos = Aptos::new(
+    AptosConfig::devnet()
+        .with_indexer_url("https://api.devnet.aptoslabs.com/v1/graphql")?,
+)?;
 
 let indexer = aptos
     .indexer()

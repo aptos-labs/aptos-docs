@@ -1,32 +1,68 @@
 ---
 title: "Rust SDK"
-description: "用于 Aptos 区块链开发的官方 Rust SDK：轻量且高效，适用于 Rust 应用"
+description: "用于 Aptos 区块链开发的官方 Rust SDK，包含账户、数据获取和交易构建功能"
 sidebar:
-  label: "Rust SDK"
+  label: "Rust SDK 概览"
 ---
 
-## 安装
+import { Aside, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
-Aptos 在 [Aptos-core GitHub](https://github.com/aptos-labs/aptos-core/tree/main/sdk) 仓库中提供官方的轻度支持 Rust SDK。要使用 Rust SDK，请直接在 `Cargo.toml` 中添加以下 git 仓库依赖和补丁：
+## 安装 Rust SDK
+
+Aptos 在 [aptos-rust-sdk GitHub](https://github.com/aptos-labs/aptos-rust-sdk)
+仓库和 [crates.io](https://crates.io/crates/aptos-sdk) 上提供官方 Rust SDK。
+将其添加到 `Cargo.toml`：
 
 ```toml filename="Cargo.toml"
 [dependencies]
-aptos-sdk = { git = "https://github.com/aptos-labs/aptos-core", branch = "devnet" }
-
-[patch.crates-io]
-merlin = { git = "https://github.com/aptos-labs/merlin" }
-x25519-dalek = { git = "https://github.com/aptos-labs/x25519-dalek", branch = "zeroize_v1" }
+aptos-sdk = "0.7"
+tokio = { version = "1", features = ["full"] }
+anyhow = "1"
 ```
 
-您还必须创建包含以下内容的 `.cargo/config.toml` 文件：
+若要使用尚未发布的最新更改：
 
-```toml filename=".cargo/config.toml"
-[build]
-rustflags = ["--cfg", "tokio_unstable"]
+```toml filename="Cargo.toml"
+[dependencies]
+aptos-sdk = { git = "https://github.com/aptos-labs/aptos-rust-sdk", package = "aptos-sdk" }
 ```
 
-官方 Rust SDK 的源代码位于 [aptos-core GitHub 仓库](https://github.com/aptos-labs/aptos-core/tree/main/sdk)。
+该 SDK 需要 **Rust 1.95+**。与 `aptos-core` 中的旧版 crate 不同，此 SDK 不需要
+git 补丁，也不需要 `.cargo/config.toml` 中的 `tokio_unstable` 标志。
 
-## 使用 Rust SDK
+<Aside type="note">
+  如果此前依赖来自 `aptos-labs/aptos-core` 的 `aptos-sdk`，请参阅
+  [迁移指南](https://github.com/aptos-labs/aptos-rust-sdk/blob/main/MIGRATION.md)。
+  `LocalAccount` 现为 `Ed25519Account`，水龙头、Coin 和 REST 辅助方法均位于
+  同一个 `Aptos` 客户端上。
+</Aside>
 
-请参阅[开发者教程](/zh/build/guides)中的代码示例，了解如何使用 Rust SDK。
+### 功能标志
+
+| 功能          | 默认 | 说明                       |
+| ----------- | -- | ------------------------ |
+| `ed25519`   | 是  | Ed25519 签名方案             |
+| `secp256k1` | 是  | Secp256k1 ECDSA 签名       |
+| `secp256r1` | 是  | Secp256r1（P-256）ECDSA 签名 |
+| `mnemonic`  | 是  | BIP-39 助记词支持             |
+| `indexer`   | 是  | GraphQL Indexer 客户端      |
+| `faucet`    | 是  | 测试网水龙头集成                 |
+| `bls`       | 否  | BLS12-381 签名             |
+| `macros`    | 否  | 用于类型安全合约绑定的过程宏           |
+
+最小构建：
+
+```toml filename="Cargo.toml"
+[dependencies]
+aptos-sdk = { version = "0.7", default-features = false, features = ["ed25519"] }
+```
+
+## 使用方式
+
+<CardGrid>
+  <LinkCard href="/zh/build/sdks/rust-sdk/fetch-data-via-sdk" title="获取数据" description="了解如何使用 Rust SDK 获取数据" />
+
+  <LinkCard href="/zh/build/sdks/rust-sdk/building-transactions" title="提交交易" description="了解如何使用 Rust SDK 提交交易" />
+
+  <LinkCard href="/zh/build/sdks/rust-sdk/rust-examples" title="示例" description="浏览 SDK 提供的 Rust 示例" />
+</CardGrid>

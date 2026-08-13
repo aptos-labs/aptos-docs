@@ -1,0 +1,81 @@
+---
+title: "Rust SDK：创建和管理账户"
+description: "了解如何使用 Rust SDK 通过 Ed25519、Secp256k1 和助记词派生生成、注资和管理 Aptos 账户"
+sidebar:
+  label: "账户"
+---
+
+Rust SDK 提供多种生成账户凭据的方式，可使用：
+
+- `Ed25519Account::generate()`
+- `Secp256k1Account::generate()`
+- `Ed25519Account::from_private_key_hex(...)`
+- `Ed25519Account::from_mnemonic(...)`
+
+`Ed25519Account::generate()` 是最常用于为新账户创建密钥的方法。它默认使用 Ed25519，但也可指定其他签名方案：
+
+```rust
+use aptos_sdk::account::{Ed25519Account, Secp256k1Account};
+
+// Derive an Ed25519 account
+let account1 = Ed25519Account::generate();
+
+// Derive a Secp256k1 account (Ethereum-compatible)
+let account2 = Secp256k1Account::generate();
+```
+
+生成凭据后，**必须**为账户注资，网络才能识别其存在。
+
+在 Devnet 环境中，可通过水龙头完成：
+
+```rust filename="fund.rs"
+use aptos_sdk::{Aptos, AptosConfig, account::Ed25519Account};
+
+let aptos = Aptos::new(AptosConfig::devnet())?;
+let account1 = Ed25519Account::generate();
+
+// Fund an account with 1 Devnet APT
+aptos.fund_account(account1.address(), 100_000_000).await?;
+```
+
+在 Testnet 上，可在[铸造页面](/zh/network/faucet)领取代币。也可使用 `aptos.create_funded_account(amount)` 一步完成生成与注资。
+
+## 表示账户的其他方式
+
+如果拥有私钥、助记词或等效表示，可以创建账户类型，并在使用 Rust SDK 时管理这些凭据。
+
+### 从私钥派生账户
+
+```rust
+use aptos_sdk::account::Ed25519Account;
+
+let account = Ed25519Account::from_private_key_hex(&private_key_hex)?;
+let account = Ed25519Account::from_private_key_bytes(&bytes)?;
+```
+
+### 从助记词派生账户
+
+```rust
+use aptos_sdk::account::Ed25519Account;
+
+let (account, phrase) = Ed25519Account::generate_with_mnemonic()?;
+let restored = Ed25519Account::from_mnemonic(&phrase, 0)?;
+let account_1 = Ed25519Account::from_mnemonic(&phrase, 1)?;
+```
+
+### 多密钥账户
+
+使用混合签名方案创建 M-of-N 账户：
+
+```rust
+use aptos_sdk::account::{AnyPrivateKey, MultiKeyAccount};
+use aptos_sdk::crypto::{Ed25519PrivateKey, Secp256k1PrivateKey};
+
+let multi_key = MultiKeyAccount::new(
+    vec![
+        AnyPrivateKey::ed25519(Ed25519PrivateKey::generate()),
+        AnyPrivateKey::secp256k1(Secp256k1PrivateKey::generate()),
+    ],
+    2, // threshold
+)?;
+```

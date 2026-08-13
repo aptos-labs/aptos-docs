@@ -1,0 +1,123 @@
+---
+title: "Python SDK - Sponsoring Transactions"
+description: "Learn how to sponsor transactions on Aptos using the Python SDK, allowing one account to pay gas fees for another account's transactions"
+sidebar:
+  label: "Sponsoring Transactions"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+Normally, the account that is executing a transaction pays for the gas fees. You
+can allow another account to cover those charges by sponsoring a transaction.
+
+This can be used to help manage fees from a central account when working with
+complicated smart contracts.
+
+## How To Sponsor a Transaction
+
+<Steps>
+  1. Build a raw transaction for the sender, then wrap it in `FeePayerRawTransaction`.
+
+     ```python filename="sponsor.py"
+     raw_txn = await aptos.transaction.build(
+         sender=alice.address,
+         payload=TransactionPayload(payload),
+     )
+     fee_payer_txn = FeePayerRawTransaction(
+         raw_txn, secondary_signers=[], fee_payer=sponsor.address
+     )
+     ```
+
+  2. Sign the fee-payer transaction with BOTH the sender and the fee payer.
+
+     ```python filename="sponsor.py"
+     alice_auth = fee_payer_txn.sign(alice.private_key)
+     sponsor_auth = fee_payer_txn.sign(sponsor.private_key)
+     ```
+
+  3. Combine the signatures into a `FeePayerAuthenticator` and submit.
+
+     ```python filename="sponsor.py"
+     authenticator = Authenticator(
+         FeePayerAuthenticator(
+             sender=alice_auth,
+             secondary_signers=[],
+             fee_payer=(sponsor.address, sponsor_auth),
+         )
+     )
+     txn_hash = await aptos.transaction.submit(SignedTransaction(raw_txn, authenticator))
+     ```
+
+  4. Wait for the transaction to execute.
+
+     ```python filename="sponsor.py"
+     result = await aptos.transaction.wait_for_transaction(txn_hash)
+     ```
+</Steps>
+
+## Python Sponsored Transaction Code Sample
+
+```python filename="sponsor.py"
+import asyncio
+
+from aptos_sdk.v2 import Account, Aptos, AptosConfig, Network
+from aptos_sdk.v2.bcs import Serializer
+from aptos_sdk.v2.transactions import (
+    Authenticator,
+    EntryFunction,
+    FeePayerAuthenticator,
+    FeePayerRawTransaction,
+    SignedTransaction,
+    TransactionArgument,
+    TransactionPayload,
+)
+from aptos_sdk.v2.types import StructTag, TypeTag
+
+
+async def main():
+    async with Aptos(AptosConfig(network=Network.DEVNET)) as aptos:
+        alice = Account.generate()
+        bob = Account.generate()
+        sponsor = Account.generate()
+
+        await asyncio.gather(
+            aptos.faucet.fund_account(alice.address, 100_000_000),
+            aptos.faucet.fund_account(bob.address, 10_000_000),
+            aptos.faucet.fund_account(sponsor.address, 100_000_000),
+        )
+
+        payload = EntryFunction.natural(
+            "0x1::coin",
+            "transfer",
+            [TypeTag(StructTag.from_str("0x1::aptos_coin::AptosCoin"))],
+            [
+                TransactionArgument(bob.address, Serializer.struct),
+                TransactionArgument(10_000, Serializer.u64),
+            ],
+        )
+        raw_txn = await aptos.transaction.build(
+            sender=alice.address,
+            payload=TransactionPayload(payload),
+        )
+        fee_payer_txn = FeePayerRawTransaction(
+            raw_txn, secondary_signers=[], fee_payer=sponsor.address
+        )
+
+        alice_auth = fee_payer_txn.sign(alice.private_key)
+        sponsor_auth = fee_payer_txn.sign(sponsor.private_key)
+        authenticator = Authenticator(
+            FeePayerAuthenticator(
+                sender=alice_auth,
+                secondary_signers=[],
+                fee_payer=(sponsor.address, sponsor_auth),
+            )
+        )
+
+        txn_hash = await aptos.transaction.submit(SignedTransaction(raw_txn, authenticator))
+        result = await aptos.transaction.wait_for_transaction(txn_hash)
+        print(f"Success: {result['success']}")
+        print(f"Gas used: {result['gas_used']}")
+
+
+asyncio.run(main())
+```

@@ -1,0 +1,57 @@
+---
+title: "Python SDK：模拟交易"
+description: "使用 Python SDK 的交易模拟，在提交前预览交易成本和效果"
+sidebar:
+  label: "模拟交易"
+---
+
+模拟交易可在不支付费用的情况下预览提交交易的成本和效果。可用于估算费用、测试交易，或查看可能的输出。
+
+要模拟交易，请传入原始交易和发送方公钥：
+
+```python filename="simulate_a_transaction.py"
+import asyncio
+
+from aptos_sdk.v2 import Account, Aptos, AptosConfig, Network
+from aptos_sdk.v2.bcs import Serializer
+from aptos_sdk.v2.transactions import EntryFunction, TransactionArgument, TransactionPayload
+from aptos_sdk.v2.types import StructTag, TypeTag
+
+
+async def main():
+    async with Aptos(AptosConfig(network=Network.DEVNET)) as aptos:
+        alice = Account.generate()
+        bob = Account.generate()
+
+        await aptos.faucet.fund_account(alice.address, 100_000_000)
+        await aptos.faucet.fund_account(bob.address, 10_000_000)
+
+        payload = EntryFunction.natural(
+            "0x1::coin",
+            "transfer",
+            [TypeTag(StructTag.from_str("0x1::aptos_coin::AptosCoin"))],
+            [
+                TransactionArgument(bob.address, Serializer.struct),
+                TransactionArgument(50_000, Serializer.u64),
+            ],
+        )
+        raw_txn = await aptos.transaction.build(
+            sender=alice.address,
+            payload=TransactionPayload(payload),
+        )
+
+        simulation_result = await aptos.transaction.simulate(raw_txn, alice.public_key)
+        print(f"Success: {simulation_result[0]['success']}")
+        print(f"Gas used: {simulation_result[0]['gas_used']}")
+        print(f"VM status: {simulation_result[0]['vm_status']}")
+
+
+asyncio.run(main())
+```
+
+完整的构建、模拟和提交示例如下，见 [这里](/zh/build/sdks/python-sdk/building-transactions)。
+
+也可以通过以下指南了解如何模拟更高级的交易：
+
+- [Sponsored Transactions](/zh/build/sdks/python-sdk/building-transactions/sponsoring-transactions)
+- [Multi-Agent Transactions](/zh/build/sdks/python-sdk/building-transactions/multi-agent-transactions)

@@ -10,13 +10,13 @@ interface SidebarItemCommon {
   translations?: Record<string, string>;
   collapsed?: boolean;
   icon?: string; // Add icon property back
+  badge?: BadgeConfig;
 }
 
 // A link item in the sidebar
 type SidebarLinkItem = SidebarItemCommon & {
   link: string;
   attrs?: Record<string, string | number | boolean>;
-  badge?: BadgeConfig; // Added badge property
 };
 
 // Based on Starlight docs for badge config

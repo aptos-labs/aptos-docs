@@ -1,0 +1,73 @@
+---
+title: "Rust SDK - Fetch Data"
+description: "Learn how to retrieve on-chain data, account information, and resources using the Aptos Rust SDK"
+sidebar:
+  label: "Fetch Data"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+You can use the `Aptos` client to get on-chain data using a variety of helper
+functions. High-level helpers such as `ledger_info`, `get_balance`, and `view`
+sit on `Aptos`. Lower-level REST calls go through `aptos.fullnode()`.
+
+Here’s an example showing how to fetch common data you may need in your application:
+
+```rust filename="fetch_data.rs"
+use aptos_sdk::{Aptos, AptosConfig};
+
+let aptos = Aptos::new(AptosConfig::devnet())?;
+
+let ledger_info = aptos.ledger_info().await?;
+let balance = aptos.get_balance(address).await?;
+let account = aptos.fullnode().get_account(address).await?;
+let resources = aptos.fullnode().get_account_resources(address).await?;
+```
+
+## Using Move View Functions
+
+You can call view functions which return custom data from on-chain by using
+`aptos.view`.
+
+For example, you can look up the current timestamp or an APT coin balance:
+
+```rust filename="fetch_data.rs"
+let timestamp = aptos
+    .view("0x1::timestamp::now_seconds", vec![], vec![])
+    .await?;
+
+let balance = aptos
+    .view(
+        "0x1::coin::balance",
+        vec!["0x1::aptos_coin::AptosCoin".to_string()],
+        vec![serde_json::json!(address.to_string())],
+    )
+    .await?;
+```
+
+## Using Indexer Data
+
+The `Aptos` client can query both network data from
+[fullnodes](https://api.mainnet.aptoslabs.com/v1/spec#/) and the
+[Indexer](https://cloud.hasura.io/public/graphiql?endpoint=https://api.mainnet.aptoslabs.com/v1/graphql)
+API when the `indexer` feature is enabled (it is on by default).
+
+```rust filename="fetch_data.rs"
+use aptos_sdk::types::AccountAddress;
+
+let indexer = aptos
+    .indexer()
+    .ok_or_else(|| anyhow::anyhow!("Indexer client not available"))?;
+
+let balances = indexer
+    .get_fungible_asset_balances(AccountAddress::ONE)
+    .await?;
+
+let my_query = r#"query { ledger_infos { chain_id } }"#;
+let result: serde_json::Value = indexer.query(my_query, None).await?;
+```
+
+<Aside type="note">
+  Custom GraphQL queries use `indexer.query::<T>(query, variables)`. Pass a type
+  annotation so `T` is known.
+</Aside>

@@ -1,0 +1,124 @@
+---
+title: "Rust SDK：多代理交易"
+description: "使用 Rust SDK，通过协同签名让多个账户参与同一笔交易"
+sidebar:
+  label: "多代理交易"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+多代理交易允许多个账户参与 Move 合约的逻辑。
+
+这可用于要求多方在执行前同意交易，或使用来自多个账户的资源。
+
+## 编写多代理交易
+
+创建并执行多代理交易的流程与
+[常规交易流程](/zh/build/sdks/rust-sdk/building-transactions)类似，但有若干显著区别。
+
+<Steps>
+  1. 构建 the raw transaction, then wrap it in `MultiAgentRawTransaction` with each additional signer.
+
+     <Aside type="note">
+       请将下面的函数替换为实际需要多个签名人的入口函数。此处的 `aptos_account::transfer` 仅用于演示 API。
+     </Aside>
+
+     ```rust filename="multi_agent.rs"
+     let payload = TransactionPayload::EntryFunction(EntryFunction {
+         module: MoveModuleId::from_str_strict("0x1::aptos_account")?,
+         function: "transfer".to_string(),
+         type_args: vec![],
+         args: vec![
+             aptos_bcs::to_bytes(&secondary_signer.address())?,
+             aptos_bcs::to_bytes(&1000u64)?,
+         ],
+     });
+     let sequence_number = aptos.get_sequence_number(primary_signer.address()).await?;
+     let raw_txn = TransactionBuilder::new()
+         .sender(primary_signer.address())
+         .sequence_number(sequence_number)
+         .payload(payload)
+         .chain_id(aptos.chain_id())
+         .expiration_from_now(600)
+         .build()?;
+     let multi_agent_txn =
+         MultiAgentRawTransaction::new(raw_txn, vec![secondary_signer.address()]);
+     ```
+
+  2. 由主签名人和每个额外签名人签名。
+
+     ```rust filename="multi_agent.rs"
+     let signed_txn = sign_multi_agent_transaction(
+         &multi_agent_txn,
+         &primary_signer,
+         &[&secondary_signer as &dyn Account],
+     )?;
+     ```
+
+  3. 提交并等待交易。
+
+     ```rust filename="multi_agent.rs"
+     let result = aptos.submit_and_wait(&signed_txn, None).await?;
+     ```
+</Steps>
+
+## Rust 多代理代码示例
+
+```rust filename="multi_agent.rs"
+use aptos_sdk::{
+    Aptos, AptosConfig,
+    account::{Account, Ed25519Account},
+    transaction::{
+        EntryFunction, TransactionBuilder, TransactionPayload,
+        builder::sign_multi_agent_transaction, types::MultiAgentRawTransaction,
+    },
+    types::MoveModuleId,
+};
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let aptos = Aptos::new(AptosConfig::devnet())?;
+    let primary_signer = Ed25519Account::generate();
+    let secondary_signer = Ed25519Account::generate();
+
+    aptos
+        .fund_account(primary_signer.address(), 100_000_000)
+        .await?;
+    aptos
+        .fund_account(secondary_signer.address(), 100_000_000)
+        .await?;
+
+    let payload = TransactionPayload::EntryFunction(EntryFunction {
+        module: MoveModuleId::from_str_strict("0x1::aptos_account")?,
+        function: "transfer".to_string(),
+        type_args: vec![],
+        args: vec![
+            aptos_bcs::to_bytes(&secondary_signer.address())?,
+            aptos_bcs::to_bytes(&1000u64)?,
+        ],
+    });
+    let sequence_number = aptos.get_sequence_number(primary_signer.address()).await?;
+    let raw_txn = TransactionBuilder::new()
+        .sender(primary_signer.address())
+        .sequence_number(sequence_number)
+        .payload(payload)
+        .chain_id(aptos.chain_id())
+        .expiration_from_now(600)
+        .build()?;
+    let multi_agent_txn =
+        MultiAgentRawTransaction::new(raw_txn, vec![secondary_signer.address()]);
+    let signed_txn = sign_multi_agent_transaction(
+        &multi_agent_txn,
+        &primary_signer,
+        &[&secondary_signer as &dyn Account],
+    )?;
+    let result = aptos.submit_and_wait(&signed_txn, None).await?;
+    println!("Submitted: {:?}", result.data.get("hash"));
+
+    Ok(())
+}
+```
+
+## 常见错误
+
+`NUMBER_OF_SIGNER_ARGUMENTS_MISMATCH` - 当尝试为不需要该数量账户的函数进行多代理签名时会出现此错误。例如，若对 `0x1::aptos_account::transfer` 使用多个签名，该函数只期望一个地址，因此提供多个时会报错。

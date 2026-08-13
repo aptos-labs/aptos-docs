@@ -1,0 +1,128 @@
+---
+title: "Python SDK：多代理交易"
+description: "使用 Python SDK，通过协同签名让多个账户参与同一笔交易"
+sidebar:
+  label: "多代理交易"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+多代理交易允许多个账户参与 Move 合约的逻辑。
+
+这可用于要求多方在执行前同意交易，或使用来自多个账户的资源。
+
+## 编写多代理交易
+
+创建并执行多代理交易的流程与
+[常规交易流程](/zh/build/sdks/python-sdk/building-transactions)类似，但有若干显著区别。
+
+<Steps>
+  1. 构建 a raw transaction, then wrap it in `MultiAgentRawTransaction` with each additional signer.
+
+     <Aside type="note">
+       请将下面的函数替换为实际需要多个签名人的入口函数。此处的 `coin::transfer` 仅用于演示 API。
+     </Aside>
+
+     ```python filename="multi_agent.py"
+     raw_txn = await aptos.transaction.build(
+         sender=alice.address,
+         payload=TransactionPayload(payload),
+     )
+     multi_agent_txn = MultiAgentRawTransaction(raw_txn, [bob.address])
+     ```
+
+  2. 为每个签名人各签一次。
+
+     ```python filename="multi_agent.py"
+     alice_auth = multi_agent_txn.sign(alice.private_key)
+     bob_auth = multi_agent_txn.sign(bob.private_key)
+     ```
+
+  3. 使用 `MultiAgentAuthenticator` 组合签名。
+
+     ```python filename="multi_agent.py"
+     authenticator = Authenticator(
+         MultiAgentAuthenticator(
+             sender=alice_auth,
+             secondary_signers=[(bob.address, bob_auth)],
+         )
+     )
+     ```
+
+  4. 提交 the signed transaction.
+
+     ```python filename="multi_agent.py"
+     txn_hash = await aptos.transaction.submit(SignedTransaction(raw_txn, authenticator))
+     ```
+
+  5. 等待 for the transaction to resolve.
+
+     ```python filename="multi_agent.py"
+     result = await aptos.transaction.wait_for_transaction(txn_hash)
+     ```
+</Steps>
+
+## Python 多代理代码示例
+
+```python filename="multi_agent.py"
+import asyncio
+
+from aptos_sdk.v2 import Account, Aptos, AptosConfig, Network
+from aptos_sdk.v2.bcs import Serializer
+from aptos_sdk.v2.transactions import (
+    Authenticator,
+    EntryFunction,
+    MultiAgentAuthenticator,
+    MultiAgentRawTransaction,
+    SignedTransaction,
+    TransactionArgument,
+    TransactionPayload,
+)
+from aptos_sdk.v2.types import StructTag, TypeTag
+
+
+async def main():
+    async with Aptos(AptosConfig(network=Network.DEVNET)) as aptos:
+        alice = Account.generate()
+        bob = Account.generate()
+
+        await asyncio.gather(
+            aptos.faucet.fund_account(alice.address, 100_000_000),
+            aptos.faucet.fund_account(bob.address, 10_000_000),
+        )
+
+        payload = EntryFunction.natural(
+            "0x1::coin",
+            "transfer",
+            [TypeTag(StructTag.from_str("0x1::aptos_coin::AptosCoin"))],
+            [
+                TransactionArgument(bob.address, Serializer.struct),
+                TransactionArgument(5_000, Serializer.u64),
+            ],
+        )
+        raw_txn = await aptos.transaction.build(
+            sender=alice.address,
+            payload=TransactionPayload(payload),
+        )
+        multi_agent_txn = MultiAgentRawTransaction(raw_txn, [bob.address])
+
+        alice_auth = multi_agent_txn.sign(alice.private_key)
+        bob_auth = multi_agent_txn.sign(bob.private_key)
+        authenticator = Authenticator(
+            MultiAgentAuthenticator(
+                sender=alice_auth,
+                secondary_signers=[(bob.address, bob_auth)],
+            )
+        )
+
+        txn_hash = await aptos.transaction.submit(SignedTransaction(raw_txn, authenticator))
+        result = await aptos.transaction.wait_for_transaction(txn_hash)
+        print(f"Success: {result['success']}")
+
+
+asyncio.run(main())
+```
+
+## 常见错误
+
+`NUMBER_OF_SIGNER_ARGUMENTS_MISMATCH` - 当尝试为不需要该数量账户的函数进行多代理签名时会出现此错误。例如，若对 `0x1::aptos_account::transfer` 使用多个签名，该函数只期望一个地址，因此提供多个时会报错。

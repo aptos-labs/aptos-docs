@@ -1,0 +1,48 @@
+---
+title: "Rust SDK：模拟交易"
+description: "使用 Rust SDK 的交易模拟，在提交前预览交易成本和效果"
+sidebar:
+  label: "模拟交易"
+---
+
+模拟交易可在不支付费用的情况下预览提交交易的成本和效果。可用于估算费用、测试交易，或查看可能的输出。
+
+要模拟交易，请传入账户和 payload：
+
+```rust filename="simulate_a_transaction.rs"
+use aptos_sdk::{Aptos, AptosConfig, account::Ed25519Account, transaction::EntryFunction};
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let aptos = Aptos::new(AptosConfig::devnet())?;
+    let sender = Ed25519Account::generate();
+    let recipient = Ed25519Account::generate();
+
+    aptos.fund_account(sender.address(), 100_000_000).await?;
+
+    let payload = EntryFunction::apt_transfer(recipient.address(), 10_000_000)?;
+    let result = aptos.simulate(&sender, payload.into()).await?;
+
+    println!("Success: {}", result.success());
+    println!("Gas used: {}", result.gas_used());
+    println!("Gas unit price: {}", result.gas_unit_price());
+    println!("VM status: {}", result.vm_status());
+
+    Ok(())
+}
+```
+
+也可以带安全缓冲估算 Gas，或模拟已签名交易：
+
+```rust
+let estimated_gas = aptos.estimate_gas(&sender, payload.clone().into()).await?;
+let signed = aptos_sdk::transaction::builder::sign_transaction(&raw_txn, &sender)?;
+let result = aptos.simulate_signed(&signed).await?;
+```
+
+完整的构建、模拟和提交示例如下，见 [这里](/zh/build/sdks/rust-sdk/building-transactions)。
+
+也可以通过以下指南了解如何模拟更高级的交易：
+
+- [Sponsored Transactions](/zh/build/sdks/rust-sdk/building-transactions/sponsoring-transactions)
+- [Multi-Agent Transactions](/zh/build/sdks/rust-sdk/building-transactions/multi-agent-transactions)

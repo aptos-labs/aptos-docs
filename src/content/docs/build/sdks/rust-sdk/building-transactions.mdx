@@ -1,0 +1,196 @@
+---
+title: "Rust SDK - Building Transactions"
+description: "Comprehensive guide to building, simulating, signing, submitting, and executing transactions on Aptos using the Rust SDK"
+sidebar:
+  label: "Building Transactions"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+Transactions allow you to change on-chain data or trigger events. Generally,
+transactions follow 5 steps from building to executing on chain: building,
+simulating, signing, submitting, and waiting.
+
+<Aside type="note">
+  For these examples, `aptos` is an [`Aptos`](https://docs.rs/aptos-sdk/latest/aptos_sdk/struct.Aptos.html)
+  client created with `Aptos::new(AptosConfig::devnet())?`.
+</Aside>
+
+<Steps>
+  1. Build
+
+     Building a transaction is how you specify:
+
+     1. **The sender account.** <br />This account normally pays the gas fees for
+        this transaction. See [Sponsoring Transactions](/build/sdks/rust-sdk/building-transactions/sponsoring-transactions)
+        to learn how to have another account pay for transaction fees.
+     2. **The function being called on-chain.** <br />This is the identifier for
+        the smart contract entry function on-chain that will trigger when you execute
+        this transaction.
+     3. **Type arguments and arguments.** <br />This is any data the function needs to
+        run.
+
+     The SDK can fetch sequence number, gas price, and chain ID for you:
+
+     ```rust filename="build_a_transaction.rs"
+     use aptos_sdk::transaction::EntryFunction;
+
+     let payload = EntryFunction::apt_transfer(bob.address(), 1_000)?;
+     let raw_txn = aptos.build_transaction(&alice, payload.into()).await?;
+     ```
+
+     Or build the payload and transaction yourself:
+
+     ```rust filename="build_a_transaction.rs"
+     use aptos_sdk::transaction::{EntryFunction, TransactionBuilder};
+
+     let payload = EntryFunction::apt_transfer(bob.address(), 1_000)?;
+     let seq_num = aptos.get_sequence_number(alice.address()).await?;
+     let raw_txn = TransactionBuilder::new()
+         .sender(alice.address())
+         .sequence_number(seq_num)
+         .payload(payload.into())
+         .chain_id(aptos.chain_id())
+         .max_gas_amount(100_000)
+         .gas_unit_price(100)
+         .expiration_from_now(600)
+         .build()?;
+     ```
+
+     #### Building Options
+
+     You can customize the way your transaction executes by setting builder fields.
+     Some of the most commonly used options are:
+
+     1. `max_gas_amount` - This caps the amount of gas you are willing to pay to
+        execute this transaction.
+     2. `gas_unit_price` - You can specify a higher than minimum price per gas to be
+        executed with higher priority by the Aptos network.
+     3. `expiration_from_now` - This gives a concrete time the transaction must execute
+        by or it will be canceled.
+
+     `aptos.build_transaction` provides sensible defaults for these values if they
+     are not specified explicitly.
+
+  2. Simulate (Optional)
+
+     Every transaction on the Aptos chain has a gas fee associated with how much
+     work the network machines have to do when executing the transaction. In order
+     to estimate the cost associated with that, you can simulate transactions
+     before committing them.
+
+     You can execute the simulation by using `aptos.simulate` like so:
+
+     ```rust filename="build_a_transaction.rs"
+     let payload = EntryFunction::apt_transfer(bob.address(), 1_000)?;
+     let simulation_result = aptos.simulate(&alice, payload.into()).await?;
+     println!("Gas used: {}", simulation_result.gas_used());
+     println!("Status: {}", simulation_result.vm_status());
+     ```
+
+  3. Sign
+
+     Once the transaction is built and the fees seem reasonable, you can sign the
+     transaction. The signature must come from the sender account.
+
+     ```rust filename="build_a_transaction.rs"
+     use aptos_sdk::transaction::builder::sign_transaction;
+
+     let signed_txn = sign_transaction(&raw_txn, &alice)?;
+     ```
+
+  4. Submit
+
+     Now that the transaction is signed, you can submit it to the network using
+     `aptos.submit_transaction` like so:
+
+     ```rust filename="build_a_transaction.rs"
+     let pending = aptos.submit_transaction(&signed_txn).await?;
+     ```
+
+  5. Wait
+
+     Finally, you can wait for the result of the transaction. `submit_and_wait`
+     combines submit and wait:
+
+     ```rust filename="build_a_transaction.rs"
+     let result = aptos.submit_and_wait(&signed_txn, None).await?;
+     ```
+</Steps>
+
+For APT transfers, `aptos.transfer_apt` wraps build, sign, submit, and wait:
+
+```rust
+let result = aptos.transfer_apt(&alice, bob.address(), 1_000).await?;
+```
+
+You can also combine simulate-then-submit, or sign-submit-and-wait after a
+manual payload:
+
+```rust
+let payload = EntryFunction::apt_transfer(bob.address(), 1_000)?;
+let result = aptos.sign_submit_and_wait(&alice, payload.into(), None).await?;
+```
+
+## Full Rust Example
+
+```rust filename="build_a_transaction.rs"
+use aptos_sdk::{Aptos, AptosConfig, account::Ed25519Account, transaction::EntryFunction};
+
+const FUND_AMOUNT: u64 = 100_000_000;
+const TRANSFER_AMOUNT: u64 = 1_000;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let aptos = Aptos::new(AptosConfig::devnet())?;
+
+    let alice = Ed25519Account::generate();
+    let bob = Ed25519Account::generate();
+
+    println!("=== Addresses ===");
+    println!("Alice: {}", alice.address());
+    println!("Bob:   {}", bob.address());
+
+    aptos.fund_account(alice.address(), FUND_AMOUNT).await?;
+
+    println!("=== Initial Balances ===");
+    println!("Alice: {}", aptos.get_balance(alice.address()).await?);
+    println!("Bob:   {}", aptos.get_balance(bob.address()).await?);
+
+    let payload = EntryFunction::apt_transfer(bob.address(), TRANSFER_AMOUNT)?;
+    let simulation_result = aptos.simulate(&alice, payload.clone().into()).await?;
+    println!("=== Simulation ===");
+    println!("Gas used: {}", simulation_result.gas_used());
+    println!("Status:   {}", simulation_result.vm_status());
+
+    let result = aptos
+        .sign_submit_and_wait(&alice, payload.into(), None)
+        .await?;
+    println!("Submitted: {:?}", result.data.get("hash"));
+
+    println!("=== Final Balances ===");
+    println!("Alice: {}", aptos.get_balance(alice.address()).await?);
+    println!("Bob:   {}", aptos.get_balance(bob.address()).await?);
+
+    Ok(())
+}
+```
+
+## Summary
+
+Building and sending transactions on-chain involves the following 5 steps:
+
+1. **Build** the transaction.
+2. **Simulate** the cost. (Optional)
+3. **Sign** the transaction (if the simulated cost seems ok).
+4. **Submit** the transaction to the network.
+5. **Wait** for the chain to validate and update.
+
+## Explore Advanced Transaction Features
+
+Transactions have a couple of additional features which let them adapt to your needs which you can learn about here:
+
+1. [Multi-Agent Signatures](/build/sdks/rust-sdk/building-transactions/multi-agent-transactions) - Allowing multiple accounts to be used for a single contract.
+2. [Sponsoring Transactions](/build/sdks/rust-sdk/building-transactions/sponsoring-transactions) - Have another account pay gas fees for this transaction.
+3. [Batch Submit Transactions](/build/sdks/rust-sdk/building-transactions/batching-transactions) - How to send multiple transactions quickly from a single account.
+4. [Binary Canonical Serialization (BCS)](/build/sdks/rust-sdk/building-transactions/bcs-format) - The format used to serialize data for Aptos transactions.

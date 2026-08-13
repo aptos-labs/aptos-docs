@@ -1,0 +1,75 @@
+---
+title: "Python SDK - Fetch Data"
+description: "Learn how to retrieve on-chain data, account information, and resources using the Aptos Python SDK"
+sidebar:
+  label: "Fetch Data"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+You can use the `Aptos` client to get on-chain data using a variety of helper
+functions. Domain APIs hang off the client: `aptos.account`, `aptos.general`,
+`aptos.coin`, and `aptos.fungible_asset`.
+
+Here’s an example showing how to fetch common data you may need in your application:
+
+```python filename="fetch_data.py"
+from aptos_sdk.v2 import Account, Aptos, AptosConfig, Network
+
+async with Aptos(AptosConfig(network=Network.DEVNET)) as aptos:
+    alice = Account.generate()
+    await aptos.faucet.fund_account(alice.address, 100_000_000)
+
+    ledger = await aptos.general.get_ledger_info()
+    chain_id = await aptos.general.get_chain_id()
+    account_info = await aptos.account.get_info(alice.address)
+    resources = await aptos.account.get_resources(alice.address)
+    balance = await aptos.account.get_balance(alice.address)
+    coin_balance = await aptos.coin.balance(alice.address)
+```
+
+<Aside type="note">
+  `aptos.account.get_balance` uses the `/accounts/{address}/balance/{asset_type}`
+  endpoint, which works for both legacy coins and fungible assets. Prefer this
+  over looking up a `CoinStore` resource.
+</Aside>
+
+## Using Move View Functions
+
+You can call view functions which return custom data from on-chain by using
+`aptos.general.view`.
+
+For example, you can look up an APT coin balance with the `coin::balance` view
+function:
+
+```python filename="fetch_data.py"
+result = await aptos.general.view(
+    "0x1::coin",
+    "balance",
+    ["0x1::aptos_coin::AptosCoin"],
+    [str(alice.address)],
+)
+```
+
+For complex argument types such as vectors or options, encode arguments with
+BCS and call `view_bcs`:
+
+```python filename="fetch_data.py"
+from aptos_sdk.v2.bcs import Serializer
+
+ser = Serializer()
+ser.sequence([1, 2, 3], Serializer.u64)
+result_bytes = await aptos.general.view_bcs(
+    "0x1::some_module",
+    "some_function",
+    [],
+    ser.output(),
+)
+```
+
+## Indexer queries
+
+GraphQL indexer queries are available on the v1 `IndexerClient` in the same
+package. The v2 client talks to the fullnode REST API. If you need aggregated
+indexer data, use `aptos_sdk.async_client.IndexerClient` or query the
+[Indexer API](/build/indexer) directly.

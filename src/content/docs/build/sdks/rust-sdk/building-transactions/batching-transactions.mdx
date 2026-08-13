@@ -1,0 +1,52 @@
+---
+title: "Rust SDK - Batching Transactions"
+description: "Execute multiple transactions concurrently from a single account using the Rust SDK's built-in batching capabilities"
+sidebar:
+  label: "Batching Transactions"
+---
+
+The Rust SDK has a built-in way to send many transactions from the same account
+and wait for them together. This can be a convenient tool when trying to execute
+multiple transactions quickly from a single account.
+
+Use `aptos.batch_transfer_apt` for APT transfers, or `aptos.submit_batch_and_wait`
+for arbitrary payloads.
+
+## Full Rust Example
+
+```rust filename="batch.rs"
+use aptos_sdk::{Aptos, AptosConfig, account::Ed25519Account};
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let aptos = Aptos::new(AptosConfig::devnet())?;
+    let sender = Ed25519Account::generate();
+    let recipient_1 = Ed25519Account::generate();
+    let recipient_2 = Ed25519Account::generate();
+    aptos.fund_account(sender.address(), 100_000_000).await?;
+
+    let results = aptos
+        .batch_transfer_apt(
+            &sender,
+            vec![
+                (recipient_1.address(), 1_000_000),
+                (recipient_2.address(), 2_000_000),
+            ],
+        )
+        .await?;
+
+    for result in results {
+        println!("{result:?}");
+    }
+
+    Ok(())
+}
+```
+
+For arbitrary payloads:
+
+```rust
+let results = aptos
+    .submit_batch_and_wait(&sender, vec![payload1, payload2, payload3], None)
+    .await?;
+```

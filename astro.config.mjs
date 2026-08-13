@@ -234,7 +234,7 @@ export default defineConfig({
               return true;
             }
 
-            // Known `.well-known/` endpoints served from `public/` or via a Vercel
+            // Known static discovery files served from `public/` or via a Vercel
             // redirect. They are not doc routes, so starlight-links-validator can't
             // resolve them. List each one explicitly (rather than excluding the
             // whole `.well-known/` prefix) so a typo in a docs page is still caught.
@@ -246,6 +246,7 @@ export default defineConfig({
               "/.well-known/oauth-protected-resource",
               "/.well-known/openid-configuration",
               "/.well-known/oauth-authorization-server",
+              "/auth.md",
             ];
             if (knownWellKnown.some((path) => link.endsWith(path))) {
               return true;

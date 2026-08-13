@@ -60,12 +60,29 @@ npx skills add aptos-labs/aptos-agent-skills
 | [`/.well-known/api-catalog`](/.well-known/api-catalog)                               | 符合 [RFC 9727](https://www.rfc-editor.org/rfc/rfc9727) 的 linkset，指向 REST API 规范、文档、Indexer GraphQL 以及 LLMs.txt 文档源。                                                                        |
 | [`/.well-known/mcp/server-card.json`](/.well-known/mcp/server-card.json)             | 描述 [`@aptos-labs/aptos-mcp`](https://www.npmjs.com/package/@aptos-labs/aptos-mcp) 的 [MCP Server Card (SEP-2127)](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2127)。 |
 | [`/.well-known/agent-skills/index.json`](/.well-known/agent-skills/index.json)       | 基于 [Agent Skills Discovery](https://github.com/cloudflare/agent-skills-discovery-rfc) 的 [aptos-agent-skills](https://github.com/aptos-labs/aptos-agent-skills) 索引，包含每个技能的 SHA-256 摘要。     |
-| [`/.well-known/oauth-protected-resource`](/.well-known/oauth-protected-resource)     | 面向 Google 登录的 [Aptos 测试网水龙头](/zh/network/faucet) 的 [OAuth 2.0 受保护资源元数据（RFC 9728）](https://www.rfc-editor.org/rfc/rfc9728)，列出资源标识符、授权服务器以及支持的 scopes。                                      |
+| [`/.well-known/oauth-protected-resource`](/.well-known/oauth-protected-resource)     | 面向 `https://aptos.dev` 的 [OAuth 2.0 受保护资源元数据（RFC 9728）](https://www.rfc-editor.org/rfc/rfc9728)，列出资源标识符、[Aptos 测试网水龙头](/zh/network/faucet) 使用的 Firebase + Google 授权服务器以及支持的 scopes。       |
 | [`/.well-known/openid-configuration`](/.well-known/openid-configuration)             | [OpenID Connect Discovery 1.0](https://openid.net/specs/openid-connect-discovery-1_0.html) 文档，描述 [Aptos 测试网水龙头](/zh/network/faucet) 登录所使用的 issuer、授权与令牌端点、JWKS URI 与支持的授权类型。              |
 | [`/.well-known/oauth-authorization-server`](/.well-known/oauth-authorization-server) | 面向偏好纯 OAuth 2.0 端点名称的客户端的 [OAuth 2.0 授权服务器元数据（RFC 8414）](https://www.rfc-editor.org/rfc/rfc8414) 副本，与上面的 OIDC 发现文档内容一致。                                                                   |
+| [`/auth.md`](/auth.md)                                                               | [auth.md](https://workos.com/auth-md) 智能体认证说明。写明 `aptos.dev` 为公开文档（不提供智能体注册），测试网水龙头使用人类 Google OIDC 登录。                                                                                   |
 | [`/robots.txt`](/robots.txt)                                                         | 包含 [Content Signals](https://contentsignals.org/)（`ai-train=yes, search=yes, ai-input=yes`），表明 Aptos 文档允许 AI 使用。                                                                          |
 
-OAuth / OIDC 发现文档仅适用于 [Aptos 测试网水龙头](/zh/network/faucet)；`aptos.dev` 的其余部分都是公开的、无需鉴权的文档。需要为测试网账户充值的智能体可以调用 `/.well-known/oauth-protected-resource` 获取水龙头的资源标识符以及它在 `Authorization: Bearer …` 头中接受的 OIDC issuer（Firebase + Google）。
+源站级 RFC 9728 文档将资源标识符设为 `https://aptos.dev`，以便要求 `resource` 与本主机一致的客户端能够接受该文档。本主机上的文档无需鉴权。列出的授权服务器（Firebase + Google）签发 [Aptos 测试网水龙头](/zh/network/faucet) 在 `Authorization: Bearer …` 头中接受的令牌；水龙头 API 本身位于 `https://faucet.testnet.aptoslabs.com`。[`/auth.md`](/auth.md) 是对应的说明文档：本站没有智能体注册端点。
+
+### DNS for AI Discovery（DNS-AID）
+
+[DNS-AID](https://datatracker.ietf.org/doc/draft-mozleywilliams-dnsop-dnsaid/) 记录无法从本仓库发布。`aptos.dev` 托管在 Google Cloud DNS 上（`ns-cloud-c1.googledomains.com` 至 `ns-cloud-c4.googledomains.com`）。要通过基于 DNS 的智能体发现，运维需要在组织索引处添加 ServiceMode [HTTPS](https://www.rfc-editor.org/rfc/rfc9460) 记录，并保持 DNSSEC 可验证（该区域已有 `DNSKEY` 记录；还需要在 `.dev` 父域发布 `DS` 记录）：
+
+```dns
+_index._agents.aptos.dev. 3600 IN HTTPS 1 aptos.dev. alpn="h2,h3" port=443
+```
+
+该记录将智能体指向 `https://aptos.dev`，此处已托管 MCP Server Card、API catalog 以及其他 well-known 文档。在 Aptos 通过 HTTPS 提供这些协议之前，不要发布 `_a2a._agents` 或 `_mcp._agents`——MCP 服务器是 stdio（`npx @aptos-labs/aptos-mcp`），不是远程 MCP 端点。
+
+发布后可用以下命令确认：
+
+```bash
+dig +short HTTPS _index._agents.aptos.dev
+```
 
 ### Markdown 内容协商
 

@@ -49,11 +49,23 @@ let balance = aptos
 
 The `Aptos` client can query both network data from
 [fullnodes](https://api.mainnet.aptoslabs.com/v1/spec#/) and the
-[Indexer](https://cloud.hasura.io/public/graphiql?endpoint=https://api.mainnet.aptoslabs.com/v1/graphql)
+[Indexer](https://cloud.hasura.io/public/graphiql?endpoint=https://api.devnet.aptoslabs.com/v1/graphql)
 API when the `indexer` feature is enabled (it is on by default).
 
+<Aside type="note">
+  `AptosConfig::devnet()` defaults to `indexer.devnet.aptoslabs.com`, which does
+  not resolve. Point the client at the public Indexer GraphQL endpoint as shown
+  below. Use `https://api.testnet.aptoslabs.com/v1/graphql` on testnet and
+  `https://api.mainnet.aptoslabs.com/v1/graphql` on mainnet.
+</Aside>
+
 ```rust filename="fetch_data.rs"
-use aptos_sdk::types::AccountAddress;
+use aptos_sdk::{Aptos, AptosConfig, types::AccountAddress};
+
+let aptos = Aptos::new(
+    AptosConfig::devnet()
+        .with_indexer_url("https://api.devnet.aptoslabs.com/v1/graphql")?,
+)?;
 
 let indexer = aptos
     .indexer()

@@ -63,7 +63,9 @@ simulating, signing, submitting, and waiting.
      Some of the most commonly used options are:
 
      1. `max_gas_amount` - This caps the amount of gas you are willing to pay to
-        execute this transaction.
+        execute this transaction. The SDK default is `2_000_000`. The network
+        reserves `max_gas_amount * gas_unit_price` from the sender (or fee
+        payer), so faucet at least a few APT before submitting.
      2. `gas_unit_price` - You can specify a higher than minimum price per gas to be
         executed with higher priority by the Aptos network.
      3. `expiration_from_now` - This gives a concrete time the transaction must execute
@@ -137,7 +139,9 @@ let result = aptos.sign_submit_and_wait(&alice, payload.into(), None).await?;
 ```rust filename="build_a_transaction.rs"
 use aptos_sdk::{Aptos, AptosConfig, account::Ed25519Account, transaction::EntryFunction};
 
-const FUND_AMOUNT: u64 = 100_000_000;
+// Default max_gas_amount is 2_000_000. At ~100 octas per gas unit that
+// reserves 0.2 APT, so fund well above the transfer amount.
+const FUND_AMOUNT: u64 = 1_000_000_000;
 const TRANSFER_AMOUNT: u64 = 1_000;
 
 #[tokio::main]

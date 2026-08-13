@@ -1,37 +1,70 @@
 ---
 title: "Rust SDK"
-description: "Official Rust SDK for Aptos blockchain development - lightweight and efficient for Rust applications"
+description: "Official Rust SDK for Aptos blockchain development with accounts, data fetching, and transaction building"
 sidebar:
-  label: "Rust SDK"
+  label: "Rust SDK Overview"
 ---
 
-## Installation
+import { Aside, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
-Aptos provides an official lightly supported Rust SDK in the
-[Aptos-core GitHub](https://github.com/aptos-labs/aptos-core/tree/main/sdk)
-repository. To use the Rust SDK, add the following dependency and patches on the
-git repo directly in your `Cargo.toml`, like this:
+## Installing the Rust SDK
+
+Aptos provides an official Rust SDK in the
+[aptos-rust-sdk GitHub](https://github.com/aptos-labs/aptos-rust-sdk) repository
+and on [crates.io](https://crates.io/crates/aptos-sdk). Add it to your
+`Cargo.toml`:
 
 ```toml filename="Cargo.toml"
 [dependencies]
-aptos-sdk = { git = "https://github.com/aptos-labs/aptos-core", branch = "devnet" }
-
-[patch.crates-io]
-merlin = { git = "https://github.com/aptos-labs/merlin" }
-x25519-dalek = { git = "https://github.com/aptos-labs/x25519-dalek", branch = "zeroize_v1" }
+aptos-sdk = "0.7"
+tokio = { version = "1", features = ["full"] }
+anyhow = "1"
 ```
 
-You must also create a `.cargo/config.toml` file with this content:
+To use the latest unreleased changes:
 
-```toml filename=".cargo/config.toml"
-[build]
-rustflags = ["--cfg", "tokio_unstable"]
+```toml filename="Cargo.toml"
+[dependencies]
+aptos-sdk = { git = "https://github.com/aptos-labs/aptos-rust-sdk", package = "aptos-sdk" }
 ```
 
-The source code for the official Rust SDK is available in the
-[aptos-core GitHub repository](https://github.com/aptos-labs/aptos-core/tree/main/sdk).
+The SDK requires **Rust 1.95+**. Unlike the legacy crate in `aptos-core`, this
+SDK does not need git patches or a `.cargo/config.toml` `tokio_unstable` flag.
 
-## Using Rust SDK
+<Aside type="note">
+  If you previously depended on `aptos-sdk` from `aptos-labs/aptos-core`, see
+  the
+  [migration guide](https://github.com/aptos-labs/aptos-rust-sdk/blob/main/MIGRATION.md).
+  `LocalAccount` is now `Ed25519Account`, and faucet, coin, and REST helpers
+  live on a single `Aptos` client.
+</Aside>
 
-See the [Developer Tutorials](/build/guides) for code examples showing how to
-use the Rust SDK.
+### Feature flags
+
+| Feature     | Default | Description                                 |
+| ----------- | ------- | ------------------------------------------- |
+| `ed25519`   | Yes     | Ed25519 signature scheme                    |
+| `secp256k1` | Yes     | Secp256k1 ECDSA signatures                  |
+| `secp256r1` | Yes     | Secp256r1 (P-256) ECDSA signatures          |
+| `mnemonic`  | Yes     | BIP-39 mnemonic phrase support              |
+| `indexer`   | Yes     | GraphQL indexer client                      |
+| `faucet`    | Yes     | Faucet integration for testnets             |
+| `bls`       | No      | BLS12-381 signatures                        |
+| `macros`    | No      | Proc macros for type-safe contract bindings |
+
+Minimal build:
+
+```toml filename="Cargo.toml"
+[dependencies]
+aptos-sdk = { version = "0.7", default-features = false, features = ["ed25519"] }
+```
+
+## Usage
+
+<CardGrid>
+  <LinkCard href="/build/sdks/rust-sdk/fetch-data-via-sdk" title="Fetching Data" description="Learn how to fetch data with the Rust SDK" />
+
+  <LinkCard href="/build/sdks/rust-sdk/building-transactions" title="Submitting Transactions" description="Learn how to submit transactions with the Rust SDK" />
+
+  <LinkCard href="/build/sdks/rust-sdk/rust-examples" title="Examples" description="Explore Rust examples provided in the SDK" />
+</CardGrid>

@@ -1,0 +1,74 @@
+---
+title: "Python SDK：批量交易"
+description: "使用 Python SDK 的无序交易，从同一账户并发执行多笔交易"
+sidebar:
+  label: "批量交易"
+---
+
+Python SDK 可通过[无序交易](/zh/build/guides/orderless-transactions)从同一账户并发提交多笔交易。每笔交易携带唯一的重放保护 nonce，而不是序列号，因此无需在本地协调序列号。
+
+向 `aptos.transaction.build` 传入 `replay_protection_nonce`。无序交易必须在 60 秒内过期。
+
+## 完整 Python 示例
+
+```python filename="batch.py"
+import asyncio
+import random
+import time
+
+from aptos_sdk.v2 import Account, Aptos, AptosConfig, Network
+from aptos_sdk.v2.bcs import Serializer
+from aptos_sdk.v2.transactions import EntryFunction, TransactionArgument, TransactionPayload
+from aptos_sdk.v2.types import StructTag, TypeTag
+
+BATCH_SIZE = 5
+AMOUNT_PER_TXN = 100
+
+
+async def main():
+    async with Aptos(AptosConfig(network=Network.DEVNET)) as aptos:
+        alice = Account.generate()
+        bob = Account.generate()
+
+        await asyncio.gather(
+            aptos.faucet.fund_account(alice.address, 100_000_000),
+            aptos.faucet.fund_account(bob.address, 10_000_000),
+        )
+
+        expiration = int(time.time()) + 60
+        raw_txns = []
+        for _ in range(BATCH_SIZE):
+            payload = EntryFunction.natural(
+                "0x1::coin",
+                "transfer",
+                [TypeTag(StructTag.from_str("0x1::aptos_coin::AptosCoin"))],
+                [
+                    TransactionArgument(bob.address, Serializer.struct),
+                    TransactionArgument(AMOUNT_PER_TXN, Serializer.u64),
+                ],
+            )
+            raw_txns.append(
+                await aptos.transaction.build(
+                    sender=alice.address,
+                    payload=TransactionPayload(payload),
+                    replay_protection_nonce=random.randint(0, 2**64 - 1),
+                    expiration_timestamps_secs=expiration,
+                )
+            )
+
+        signed_txns = [aptos.transaction.sign(txn, alice) for txn in raw_txns]
+        hashes = await asyncio.gather(
+            *[aptos.transaction.submit(signed) for signed in signed_txns]
+        )
+        results = await asyncio.gather(
+            *[aptos.transaction.wait_for_transaction(txn_hash) for txn_hash in hashes]
+        )
+
+        for i, result in enumerate(results):
+            print(f"Transaction {i + 1}: success={result['success']}")
+
+
+asyncio.run(main())
+```
+
+v1 API 还包含用于序列号批处理的 `TransactionWorker`。新项目应使用上面的 v2 无序流程。

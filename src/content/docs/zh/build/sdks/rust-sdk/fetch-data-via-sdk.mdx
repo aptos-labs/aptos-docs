@@ -1,0 +1,69 @@
+---
+title: "Rust SDK：获取数据"
+description: "了解如何使用 Aptos Rust SDK 检索链上数据、账户信息和资源"
+sidebar:
+  label: "获取数据"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+可以使用 `Aptos` 客户端通过多种辅助函数获取链上数据。`ledger_info`、`get_balance` 和 `view` 等高层次辅助方法位于 `Aptos` 上。更底层的 REST 调用通过 `aptos.fullnode()` 进行。
+
+以下示例展示如何获取应用中常用的数据：
+
+```rust filename="fetch_data.rs"
+use aptos_sdk::{Aptos, AptosConfig};
+
+let aptos = Aptos::new(AptosConfig::devnet())?;
+
+let ledger_info = aptos.ledger_info().await?;
+let balance = aptos.get_balance(address).await?;
+let account = aptos.fullnode().get_account(address).await?;
+let resources = aptos.fullnode().get_account_resources(address).await?;
+```
+
+## 使用 Move View 函数
+
+可以使用 `aptos.view` 调用返回链上自定义数据的 View 函数。
+
+例如，可以查询当前时间戳或 APT Coin 余额：
+
+```rust filename="fetch_data.rs"
+let timestamp = aptos
+    .view("0x1::timestamp::now_seconds", vec![], vec![])
+    .await?;
+
+let balance = aptos
+    .view(
+        "0x1::coin::balance",
+        vec!["0x1::aptos_coin::AptosCoin".to_string()],
+        vec![serde_json::json!(address.to_string())],
+    )
+    .await?;
+```
+
+## 使用 Indexer 数据
+
+启用 `indexer` 功能时（默认开启），`Aptos` 客户端既可查询来自
+[全节点](https://api.mainnet.aptoslabs.com/v1/spec#/) 的网络数据，也可查询
+[Indexer](https://cloud.hasura.io/public/graphiql?endpoint=https://api.mainnet.aptoslabs.com/v1/graphql)
+API 的数据。
+
+```rust filename="fetch_data.rs"
+use aptos_sdk::types::AccountAddress;
+
+let indexer = aptos
+    .indexer()
+    .ok_or_else(|| anyhow::anyhow!("Indexer client not available"))?;
+
+let balances = indexer
+    .get_fungible_asset_balances(AccountAddress::ONE)
+    .await?;
+
+let my_query = r#"query { ledger_infos { chain_id } }"#;
+let result: serde_json::Value = indexer.query(my_query, None).await?;
+```
+
+<Aside type="note">
+  自定义 GraphQL 查询使用 `indexer.query::<T>(query, variables)`。请传入类型注解，以便确定 `T`。
+</Aside>

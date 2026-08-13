@@ -1,0 +1,176 @@
+---
+title: "Rust SDK：构建交易"
+description: "使用 Rust SDK 在 Aptos 上构建、模拟、签名、提交和执行交易的完整指南"
+sidebar:
+  label: "构建交易"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+交易可用于更改链上数据或触发事件。通常，交易从构建到链上执行分为五个步骤：构建、模拟、签名、提交和等待。
+
+<Aside type="note">
+  在这些示例中，`aptos` 是使用 `Aptos::new(AptosConfig::devnet())?` 创建的 [`Aptos`](https://docs.rs/aptos-sdk/latest/aptos_sdk/struct.Aptos.html) 客户端。
+</Aside>
+
+<Steps>
+  1. 构建
+
+     构建交易时需要指定：
+
+     1. **发送方账户。**<br />此账户通常支付交易的 Gas 费用。有关由另一账户支付交易费用的信息，请参阅[赞助交易](/zh/build/sdks/rust-sdk/building-transactions/sponsoring-transactions)。
+     2. **链上调用的函数。**<br />这是执行交易时将触发的链上智能合约入口函数标识符。
+     3. **类型参数和参数。**<br />函数运行所需的任何数据。
+
+     SDK 可以为你获取序列号、Gas 价格和 Chain ID：
+
+     ```rust filename="build_a_transaction.rs"
+     use aptos_sdk::transaction::EntryFunction;
+
+     let payload = EntryFunction::apt_transfer(bob.address(), 1_000)?;
+     let raw_txn = aptos.build_transaction(&alice, payload.into()).await?;
+     ```
+
+     也可以自行构建 payload 和交易：
+
+     ```rust filename="build_a_transaction.rs"
+     use aptos_sdk::transaction::{EntryFunction, TransactionBuilder};
+
+     let payload = EntryFunction::apt_transfer(bob.address(), 1_000)?;
+     let seq_num = aptos.get_sequence_number(alice.address()).await?;
+     let raw_txn = TransactionBuilder::new()
+         .sender(alice.address())
+         .sequence_number(seq_num)
+         .payload(payload.into())
+         .chain_id(aptos.chain_id())
+         .max_gas_amount(100_000)
+         .gas_unit_price(100)
+         .expiration_from_now(600)
+         .build()?;
+     ```
+
+     #### 构建选项
+
+     可通过设置 builder 字段来自定义交易执行方式。一些最常用的选项包括：
+
+     1. `max_gas_amount` - 限制你愿意为执行此交易支付的 Gas 数量。
+     2. `gas_unit_price` - 可以指定高于最低值的每单位 Gas 价格，以便 Aptos 网络以更高优先级执行。
+     3. `expiration_from_now` - 指定交易必须在此时间前执行，否则将被取消。
+
+     若未显式指定，`aptos.build_transaction` 会为这些值提供合理默认值。
+
+  2. 模拟（可选）
+
+     Aptos 链上的每笔交易都会根据网络机器执行该交易所需的工作量收取 Gas 费用。为估算相关成本，可以在提交前模拟交易。
+
+     可使用 `aptos.simulate` 执行模拟，如下所示：
+
+     ```rust filename="build_a_transaction.rs"
+     let payload = EntryFunction::apt_transfer(bob.address(), 1_000)?;
+     let simulation_result = aptos.simulate(&alice, payload.into()).await?;
+     println!("Gas used: {}", simulation_result.gas_used());
+     println!("Status: {}", simulation_result.vm_status());
+     ```
+
+  3. 签名
+
+     交易构建完成且费用看起来合理后，即可签名。签名必须来自发送方账户。
+
+     ```rust filename="build_a_transaction.rs"
+     use aptos_sdk::transaction::builder::sign_transaction;
+
+     let signed_txn = sign_transaction(&raw_txn, &alice)?;
+     ```
+
+  4. 提交
+
+     交易签名后，可使用 `aptos.submit_transaction` 提交到网络，如下所示：
+
+     ```rust filename="build_a_transaction.rs"
+     let pending = aptos.submit_transaction(&signed_txn).await?;
+     ```
+
+  5. 等待
+
+     最后，可以等待交易结果。`submit_and_wait` 会合并提交与等待：
+
+     ```rust filename="build_a_transaction.rs"
+     let result = aptos.submit_and_wait(&signed_txn, None).await?;
+     ```
+</Steps>
+
+对于 APT 转账，`aptos.transfer_apt` 会封装构建、签名、提交和等待：
+
+```rust
+let result = aptos.transfer_apt(&alice, bob.address(), 1_000).await?;
+```
+
+也可以在手动构造 payload 后合并“先模拟再提交”，或“签名、提交并等待”：
+
+```rust
+let payload = EntryFunction::apt_transfer(bob.address(), 1_000)?;
+let result = aptos.sign_submit_and_wait(&alice, payload.into(), None).await?;
+```
+
+## 完整 Rust 示例
+
+```rust filename="build_a_transaction.rs"
+use aptos_sdk::{Aptos, AptosConfig, account::Ed25519Account, transaction::EntryFunction};
+
+const FUND_AMOUNT: u64 = 100_000_000;
+const TRANSFER_AMOUNT: u64 = 1_000;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let aptos = Aptos::new(AptosConfig::devnet())?;
+
+    let alice = Ed25519Account::generate();
+    let bob = Ed25519Account::generate();
+
+    println!("=== Addresses ===");
+    println!("Alice: {}", alice.address());
+    println!("Bob:   {}", bob.address());
+
+    aptos.fund_account(alice.address(), FUND_AMOUNT).await?;
+
+    println!("=== Initial Balances ===");
+    println!("Alice: {}", aptos.get_balance(alice.address()).await?);
+    println!("Bob:   {}", aptos.get_balance(bob.address()).await?);
+
+    let payload = EntryFunction::apt_transfer(bob.address(), TRANSFER_AMOUNT)?;
+    let simulation_result = aptos.simulate(&alice, payload.clone().into()).await?;
+    println!("=== Simulation ===");
+    println!("Gas used: {}", simulation_result.gas_used());
+    println!("Status:   {}", simulation_result.vm_status());
+
+    let result = aptos
+        .sign_submit_and_wait(&alice, payload.into(), None)
+        .await?;
+    println!("Submitted: {:?}", result.data.get("hash"));
+
+    println!("=== Final Balances ===");
+    println!("Alice: {}", aptos.get_balance(alice.address()).await?);
+    println!("Bob:   {}", aptos.get_balance(bob.address()).await?);
+
+    Ok(())
+}
+```
+
+## 总结
+
+在链上构建并发送交易包含以下 5 个步骤：
+
+1. **构建**交易。
+2. **模拟**成本。（可选）
+3. **签名**交易（如果模拟成本看起来合理）。
+4. **提交**交易到网络。
+5. **等待**链验证并更新。
+
+## 探索高级交易功能
+
+交易还有一些额外功能，可按需使用：
+
+1. [多代理签名](/zh/build/sdks/rust-sdk/building-transactions/multi-agent-transactions) - 允许将多个账户用于单个合约。
+2. [赞助交易](/zh/build/sdks/rust-sdk/building-transactions/sponsoring-transactions) - 由另一账户支付此交易的 Gas 费用。
+3. [批量提交交易](/zh/build/sdks/rust-sdk/building-transactions/batching-transactions) - 如何从同一账户快速发送多笔交易。
+4. [二进制规范序列化（BCS）](/zh/build/sdks/rust-sdk/building-transactions/bcs-format) - 用于序列化 Aptos 交易数据的格式。

@@ -1,0 +1,121 @@
+---
+title: "Python SDK：赞助交易"
+description: "了解如何使用 Python SDK 在 Aptos 上赞助交易，让一个账户为另一账户的交易支付 Gas 费用"
+sidebar:
+  label: "赞助交易"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+通常，执行交易的账户支付 Gas 费用。可以通过赞助交易，让另一账户承担这些费用。
+
+在处理复杂智能合约时，这可用于从中心账户管理费用。
+
+## 如何赞助交易
+
+<Steps>
+  1. 构建 a raw transaction for the sender, then wrap it in `FeePayerRawTransaction`.
+
+     ```python filename="sponsor.py"
+     raw_txn = await aptos.transaction.build(
+         sender=alice.address,
+         payload=TransactionPayload(payload),
+     )
+     fee_payer_txn = FeePayerRawTransaction(
+         raw_txn, secondary_signers=[], fee_payer=sponsor.address
+     )
+     ```
+
+  2. 由发送方和费用支付方同时为该费用支付方交易签名。
+
+     ```python filename="sponsor.py"
+     alice_auth = fee_payer_txn.sign(alice.private_key)
+     sponsor_auth = fee_payer_txn.sign(sponsor.private_key)
+     ```
+
+  3. 将签名组合成 `FeePayerAuthenticator` 并提交。
+
+     ```python filename="sponsor.py"
+     authenticator = Authenticator(
+         FeePayerAuthenticator(
+             sender=alice_auth,
+             secondary_signers=[],
+             fee_payer=(sponsor.address, sponsor_auth),
+         )
+     )
+     txn_hash = await aptos.transaction.submit(SignedTransaction(raw_txn, authenticator))
+     ```
+
+  4. 等待交易执行。
+
+     ```python filename="sponsor.py"
+     result = await aptos.transaction.wait_for_transaction(txn_hash)
+     ```
+</Steps>
+
+## Python 赞助交易代码示例
+
+```python filename="sponsor.py"
+import asyncio
+
+from aptos_sdk.v2 import Account, Aptos, AptosConfig, Network
+from aptos_sdk.v2.bcs import Serializer
+from aptos_sdk.v2.transactions import (
+    Authenticator,
+    EntryFunction,
+    FeePayerAuthenticator,
+    FeePayerRawTransaction,
+    SignedTransaction,
+    TransactionArgument,
+    TransactionPayload,
+)
+from aptos_sdk.v2.types import StructTag, TypeTag
+
+
+async def main():
+    async with Aptos(AptosConfig(network=Network.DEVNET)) as aptos:
+        alice = Account.generate()
+        bob = Account.generate()
+        sponsor = Account.generate()
+
+        await asyncio.gather(
+            aptos.faucet.fund_account(alice.address, 100_000_000),
+            aptos.faucet.fund_account(bob.address, 10_000_000),
+            aptos.faucet.fund_account(sponsor.address, 100_000_000),
+        )
+
+        payload = EntryFunction.natural(
+            "0x1::coin",
+            "transfer",
+            [TypeTag(StructTag.from_str("0x1::aptos_coin::AptosCoin"))],
+            [
+                TransactionArgument(bob.address, Serializer.struct),
+                TransactionArgument(10_000, Serializer.u64),
+            ],
+        )
+        raw_txn = await aptos.transaction.build(
+            sender=alice.address,
+            payload=TransactionPayload(payload),
+        )
+        fee_payer_txn = FeePayerRawTransaction(
+            raw_txn, secondary_signers=[], fee_payer=sponsor.address
+        )
+
+        alice_auth = fee_payer_txn.sign(alice.private_key)
+        sponsor_auth = fee_payer_txn.sign(sponsor.private_key)
+        authenticator = Authenticator(
+            FeePayerAuthenticator(
+                sender=alice_auth,
+                secondary_signers=[],
+                fee_payer=(sponsor.address, sponsor_auth),
+            )
+        )
+
+        txn_hash = await aptos.transaction.submit(SignedTransaction(raw_txn, authenticator))
+        result = await aptos.transaction.wait_for_transaction(txn_hash)
+        print(f"Success: {result['success']}")
+        print(f"Gas used: {result['gas_used']}")
+
+
+asyncio.run(main())
+```

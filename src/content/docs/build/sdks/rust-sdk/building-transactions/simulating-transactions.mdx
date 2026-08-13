@@ -1,0 +1,51 @@
+---
+title: "Rust SDK - Simulating Transactions"
+description: "Preview transaction costs and effects before submission using transaction simulation with the Rust SDK"
+sidebar:
+  label: "Simulating Transactions"
+---
+
+Simulating transactions allows you to preview the cost and effect of submitting
+a transaction without paying fees. You can use this to estimate fees, test a
+transaction, or to check what the output might be.
+
+To simulate a transaction, pass in an account and a payload:
+
+```rust filename="simulate_a_transaction.rs"
+use aptos_sdk::{Aptos, AptosConfig, account::Ed25519Account, transaction::EntryFunction};
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let aptos = Aptos::new(AptosConfig::devnet())?;
+    let sender = Ed25519Account::generate();
+    let recipient = Ed25519Account::generate();
+
+    aptos.fund_account(sender.address(), 100_000_000).await?;
+
+    let payload = EntryFunction::apt_transfer(recipient.address(), 10_000_000)?;
+    let result = aptos.simulate(&sender, payload.into()).await?;
+
+    println!("Success: {}", result.success());
+    println!("Gas used: {}", result.gas_used());
+    println!("Gas unit price: {}", result.gas_unit_price());
+    println!("VM status: {}", result.vm_status());
+
+    Ok(())
+}
+```
+
+You can also estimate gas with a safety buffer, or simulate a signed
+transaction:
+
+```rust
+let estimated_gas = aptos.estimate_gas(&sender, payload.clone().into()).await?;
+let signed = aptos_sdk::transaction::builder::sign_transaction(&raw_txn, &sender)?;
+let result = aptos.simulate_signed(&signed).await?;
+```
+
+Look [here](/build/sdks/rust-sdk/building-transactions) to see the full example of how to build, simulate, and submit a transaction.
+
+You can also learn how to simulate more advanced transactions by looking at the following guides:
+
+- [Sponsored Transactions](/build/sdks/rust-sdk/building-transactions/sponsoring-transactions)
+- [Multi-Agent Transactions](/build/sdks/rust-sdk/building-transactions/multi-agent-transactions)

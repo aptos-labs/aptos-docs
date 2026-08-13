@@ -1,0 +1,54 @@
+---
+title: "Python SDK - Binary Canonical Serialization (BCS) Format"
+description: "Learn how to use Binary Canonical Serialization (BCS) format for transaction parameters with the Python SDK"
+sidebar:
+  label: "BCS Format"
+---
+
+Transaction arguments for the Aptos Python SDK are encoded with Binary Canonical
+Serialization (BCS). This is the format the Aptos chain recognizes, with specific
+types such as `u64` or `u128` instead of a generic integer.
+
+Wrap each argument in `TransactionArgument` with the matching serializer:
+
+```python filename="example.py"
+from aptos_sdk.v2.bcs import Serializer
+from aptos_sdk.v2.transactions import EntryFunction, TransactionArgument, TransactionPayload
+from aptos_sdk.v2.types import StructTag, TypeTag
+
+payload = EntryFunction.natural(
+    "0x1::aptos_account",
+    "transfer_coins",
+    [TypeTag(StructTag.from_str("0x1::aptos_coin::AptosCoin"))],
+    [
+        TransactionArgument(bob.address, Serializer.struct),
+        TransactionArgument(1_000, Serializer.u64),
+    ],
+)
+raw_txn = await aptos.transaction.build(
+    sender=alice.address,
+    payload=TransactionPayload(payload),
+)
+```
+
+Common serializer methods include `Serializer.struct`, `Serializer.u8`,
+`Serializer.u16`, `Serializer.u32`, `Serializer.u64`, `Serializer.u128`,
+`Serializer.u256`, `Serializer.bool`, `Serializer.str`, and
+`Serializer.to_bytes`. Signed integers (`i8` through `i256`) are also supported.
+
+You can also serialize values directly:
+
+```python
+from aptos_sdk.v2.bcs import Serializer, Deserializer
+
+ser = Serializer()
+ser.u64(1_000)
+ser.bool(True)
+data = ser.output()
+
+deser = Deserializer(data)
+assert deser.u64() == 1_000
+assert deser.bool() is True
+```
+
+You can learn more about BCS by exploring the [BCS GitHub repo](https://github.com/aptos-labs/bcs).

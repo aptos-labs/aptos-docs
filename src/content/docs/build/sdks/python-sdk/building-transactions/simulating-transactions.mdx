@@ -1,0 +1,60 @@
+---
+title: "Python SDK - Simulating Transactions"
+description: "Preview transaction costs and effects before submission using transaction simulation with the Python SDK"
+sidebar:
+  label: "Simulating Transactions"
+---
+
+Simulating transactions allows you to preview the cost and effect of submitting
+a transaction without paying fees. You can use this to estimate fees, test a
+transaction, or to check what the output might be.
+
+To simulate a transaction, pass in a raw transaction and the sender's public
+key:
+
+```python filename="simulate_a_transaction.py"
+import asyncio
+
+from aptos_sdk.v2 import Account, Aptos, AptosConfig, Network
+from aptos_sdk.v2.bcs import Serializer
+from aptos_sdk.v2.transactions import EntryFunction, TransactionArgument, TransactionPayload
+from aptos_sdk.v2.types import StructTag, TypeTag
+
+
+async def main():
+    async with Aptos(AptosConfig(network=Network.DEVNET)) as aptos:
+        alice = Account.generate()
+        bob = Account.generate()
+
+        await aptos.faucet.fund_account(alice.address, 100_000_000)
+        await aptos.faucet.fund_account(bob.address, 10_000_000)
+
+        payload = EntryFunction.natural(
+            "0x1::coin",
+            "transfer",
+            [TypeTag(StructTag.from_str("0x1::aptos_coin::AptosCoin"))],
+            [
+                TransactionArgument(bob.address, Serializer.struct),
+                TransactionArgument(50_000, Serializer.u64),
+            ],
+        )
+        raw_txn = await aptos.transaction.build(
+            sender=alice.address,
+            payload=TransactionPayload(payload),
+        )
+
+        simulation_result = await aptos.transaction.simulate(raw_txn, alice.public_key)
+        print(f"Success: {simulation_result[0]['success']}")
+        print(f"Gas used: {simulation_result[0]['gas_used']}")
+        print(f"VM status: {simulation_result[0]['vm_status']}")
+
+
+asyncio.run(main())
+```
+
+Look [here](/build/sdks/python-sdk/building-transactions) to see the full example of how to build, simulate, and submit a transaction.
+
+You can also learn how to simulate more advanced transactions by looking at the following guides:
+
+- [Sponsored Transactions](/build/sdks/python-sdk/building-transactions/sponsoring-transactions)
+- [Multi-Agent Transactions](/build/sdks/python-sdk/building-transactions/multi-agent-transactions)

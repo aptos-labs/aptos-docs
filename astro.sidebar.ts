@@ -227,6 +227,7 @@ export const sidebar = [
           }),
           group("build.group.sdks.dotnet-sdk", {
             collapsed: true,
+            badge: { text: "DEPRECATED", variant: "danger" },
             items: [
               "build/sdks/dotnet-sdk",
               "build/sdks/dotnet-sdk/dotnet-examples",
@@ -254,14 +255,58 @@ export const sidebar = [
               }),
             ],
           }),
-          // Python SDK (no subpages found)
-          "build/sdks/python-sdk",
-          // Unity SDK (no subpages found)
-          "build/sdks/unity-sdk",
-          // C++ SDK (no subpages found)
-          "build/sdks/cpp-sdk",
-          // Rust SDK (no subpages found)
-          "build/sdks/rust-sdk",
+          group("build.group.sdks.python-sdk", {
+            collapsed: true,
+            items: [
+              "build/sdks/python-sdk",
+              "build/sdks/python-sdk/account",
+              "build/sdks/python-sdk/fetch-data-via-sdk",
+              "build/sdks/python-sdk/python-examples",
+              group("build.group.sdks.python-sdk.building-transactions", {
+                collapsed: true,
+                items: [
+                  "build/sdks/python-sdk/building-transactions",
+                  "build/sdks/python-sdk/building-transactions/batching-transactions",
+                  "build/sdks/python-sdk/building-transactions/simulating-transactions",
+                  "build/sdks/python-sdk/building-transactions/bcs-format",
+                  "build/sdks/python-sdk/building-transactions/multi-agent-transactions",
+                  "build/sdks/python-sdk/building-transactions/sponsoring-transactions",
+                ],
+              }),
+            ],
+          }),
+          {
+            label: "Unity SDK",
+            translations: { zh: "Unity SDK" },
+            link: "build/sdks/unity-sdk",
+            badge: { text: "DEPRECATED", variant: "danger" },
+          },
+          {
+            label: "C++ SDK",
+            translations: { zh: "C++ SDK" },
+            link: "build/sdks/cpp-sdk",
+            badge: { text: "DEPRECATED", variant: "danger" },
+          },
+          group("build.group.sdks.rust-sdk", {
+            collapsed: true,
+            items: [
+              "build/sdks/rust-sdk",
+              "build/sdks/rust-sdk/account",
+              "build/sdks/rust-sdk/fetch-data-via-sdk",
+              "build/sdks/rust-sdk/rust-examples",
+              group("build.group.sdks.rust-sdk.building-transactions", {
+                collapsed: true,
+                items: [
+                  "build/sdks/rust-sdk/building-transactions",
+                  "build/sdks/rust-sdk/building-transactions/batching-transactions",
+                  "build/sdks/rust-sdk/building-transactions/simulating-transactions",
+                  "build/sdks/rust-sdk/building-transactions/bcs-format",
+                  "build/sdks/rust-sdk/building-transactions/multi-agent-transactions",
+                  "build/sdks/rust-sdk/building-transactions/sponsoring-transactions",
+                ],
+              }),
+            ],
+          }),
           group("build.group.sdks.wallet-adapter", {
             collapsed: true,
             items: [
@@ -309,8 +354,18 @@ export const sidebar = [
                   }),
                 ],
               }),
-              "build/sdks/community-sdks/swift-sdk",
-              "build/sdks/community-sdks/unity-opendive-sdk",
+              {
+                label: "Swift SDK",
+                translations: { zh: "Swift SDK" },
+                link: "build/sdks/community-sdks/swift-sdk",
+                badge: { text: "DEPRECATED", variant: "danger" },
+              },
+              {
+                label: "Unity OpenDive SDK",
+                translations: { zh: "Unity OpenDive SDK" },
+                link: "build/sdks/community-sdks/unity-opendive-sdk",
+                badge: { text: "DEPRECATED", variant: "danger" },
+              },
             ],
           }),
         ],

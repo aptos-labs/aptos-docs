@@ -11,7 +11,7 @@ import { Aside } from '@astrojs/starlight/components';
 
 The **Confidential Asset (CA)** standard allows any fungible asset (FA) type to be wrapped into a variant with certain **confidentiality** features.
 
-Specifically, it allows users to establish a **confidential (encrypted) balance** and later **confidentially-transfer** <u>hidden</u> amounts from their confidential balance to another user's confidential balance.
+Namely, it allows users to establish a **confidential balance** and later **confidentially-transfer** <u>hidden</u> amounts from their confidential balance to another user's confidential balance.
 Importantly, such confidential transfers completely hide the transferred amount from everyone, including from Aptos validators.
 By design, a key limitation of CAs is that they do **not** hide the sender and recipient addresses.
 
@@ -28,14 +28,14 @@ CAs leverage **zero-knowledge proofs (ZKPs)** to enable Aptos validators to veri
   Cryptographic and mathematical details are explained superficially.
 </Aside>
 
-## Confidential Store
+## Confidential store
 
 Users can establish a confidential balance for an asset type by **registering** a `ConfidentialStore` for that asset type.
 
 Specifically, they generate a unique keypair:
 
-- An encryption key (EK) for that asset type that will be stored in its `ConfidentialStore`.
-- A decryption key (DK) to be securely managed by the user.
+- An **encryption key (EK)** for that asset type that will be stored in its `ConfidentialStore`.
+- A **decryption key (DK)** to be securely managed by the user.
 
 <Aside type="danger">
   These keys are standalone and should not be confused with the user's Aptos account (signing) keys.
@@ -43,8 +43,8 @@ Specifically, they generate a unique keypair:
 
 Each confidential balance is split into two parts:
 
-- `pending_balance` - accumulates all incoming transactions.
-- `available_balance` - used exclusively for outgoing transactions.
+- **pending balance** - accumulates all incoming transactions.
+- **available balance** - used exclusively for outgoing transactions.
 
 Both balances are encrypted with the same user's EK, ensuring underlying amounts remain private.
 
@@ -73,18 +73,18 @@ enum ConfidentialStore has key {
 
 We discuss the `auditor_hint` field [later on](#auditors).
 
-## Confidential Balance
+## Confidential balance
 
-Confidential balances handle token amounts by splitting them into smaller units called chunks.
+Confidential balances handle token amounts by splitting them into smaller units called **chunks**.
 Each chunk represents a portion of the total amount and is encrypted individually using the user's EK.
-Each encrypted chunk consists of two curve points `(P, R)` forming a Twisted ElGamal ciphertext.
+Each encrypted chunk consists of two elliptic curve points $(P, R)$ forming a **Twisted ElGamal ciphertext**.
 
 ### Chunks
 
-| Balance type        | Purpose                                  | Chunks     | Max chunk size | Max encoded value |
-| ------------------- | ---------------------------------------- | ---------- | -------------- | ----------------- |
-| `pending_balance`   | receives incoming confidential transfers | 4 × 16-bit | 32 bits        | $2^{64} - 1$      |
-| `available_balance` | sends outgoing confidential transfers    | 8 × 16-bit | 32 bits        | $2^{128} - 1$     |
+| Confidential balance type | Purpose                     | Chunks     | Max chunk size | Max encoded value |
+| ------------------------- | --------------------------- | ---------- | -------------- | ----------------- |
+| pending                   | receives incoming transfers | 4 × 16-bit | 32 bits        | $2^{64} - 1$      |
+| available                 | funds outgoing transfers    | 8 × 16-bit | 32 bits        | $2^{128} - 1$     |
 
 A user's _available balance_ is the source of funds for sending outgoing confidential transfers.
 
@@ -118,14 +118,20 @@ enum CompressedBalance<phantom T> has store, drop, copy {
   pending `R_aud` is empty.
 </Aside>
 
-### Encryption and Decryption
+### Encryption and decryption
 
-Encryption involves:
+Without going deep into the details, encryption involves:
 
-- Splitting the total amount into 16-bit chunks.
-- Applying the user's EK to encrypt each chunk individually as a Twisted ElGamal ciphertext `(P, R)`.
+- Splitting the transferred amount into 16-bit chunks.
+- Applying the user's EK to encrypt each chunk individually as a Twisted ElGamal ciphertext.
 
-Decryption involves:
+<Aside type="note">
+  Our protocol uses Twisted ElGamal additively-homomorphic encryption, allowing some arithmetic operations on confidential balances without needing to decrypt them.
+  This is essential for updating the receiver's pending balance during transfers.
+  It is also essential for rollovers, where the user's pending balance is added to their available one.
+</Aside>
+
+Similarly, decryption involves:
 
 - Applying the user's DK to decrypt each chunk.
 - Solving a discrete logarithm (DL) problem for each chunk to recover the original values.
@@ -133,18 +139,18 @@ Decryption involves:
 
 ### Normalization
 
-Normalization ensures chunks are always reduced to manageable sizes (16 bits).
-Without normalization, chunks can grow too large, making the decryption process (solving DL) significantly slower or even impractical.
+Normalization ensures available balance chunks are always reduced to manageable sizes (16-bits), to ensure decryption is as fast as possible and to allow for further rollovers.
+
+Without normalization, chunks can grow too large, making the decryption process (i.e., solving DL) significantly slower or even impractical.
+
 Transfers and withdrawals update the available balance in a way that leaves it normalized automatically.
-Users need to normalize the available balance [manually](#normalize) only when it is not already normalized and they want to call
-[`rollover_pending_balance`](#rollover-pending-balance) (including `rollover_pending_balance_and_pause`), which requires a normalized available balance first.
+Users only need to normalize their available balance [manually](#normalize) if both conditions hold:
+
+1. It is not already normalized
+2. They need to call
+   [`rollover_pending_balance`](#rollover-pending-balance) (or `rollover_pending_balance_and_pause`), which requires a normalized available balance first.
+
 The [TypeScript SDK](/build/sdks/ts-sdk/confidential-asset) can submit a normalization transaction automatically when a decryption key is provided.
-
-### Homomorphic Encryption
-
-The protocol utilizes Homomorphic encryption, allowing arithmetic operations on confidential balances without their decryption.
-This capability is essential for updating the receiver's pending balance during transfers and for rollovers,
-where the user's pending balance is added to the available one.
 
 ## Architecture
 
@@ -187,10 +193,10 @@ delegates to:
   `sigma_protocol_key_rotation`, plus shared helpers in `sigma_protocol_utils`) that verify
   knowledge / consistency proofs accompanying each entry function.
 
-Under the hood, all curve operations route through `aptos_std::ristretto255` (Ristretto255 group ops)
-and `aptos_std::ristretto255_bulletproofs` (range-proof verification natives).
+Under the hood, all elliptic curve cryptography is based on Ristretto255 and is implemented on top of the `aptos_std::ristretto255`
+and `aptos_std::ristretto255_bulletproofs` Move modules.
 
-## Entry Functions
+## Entry functions
 
 <Aside type="note">
   Entry functions with the `_raw` suffix accept serialized cryptographic data as `vector<u8>` or `vector<vector<u8>>`.

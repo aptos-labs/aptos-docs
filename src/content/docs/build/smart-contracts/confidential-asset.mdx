@@ -581,71 +581,147 @@ constructing transactions.
 
 ## View functions
 
+#### Protocol status
+
+Whether governance has engaged the [emergency pause](#emergency-pause).
+
 ```move filename="confidential_asset.move"
 #[view]
 public fun is_emergency_paused(): bool
+```
 
-#[view]
-public fun has_confidential_store(
-    user: address, asset_type: Object<fungible_asset::Metadata>
-): bool
+Whether the [allow list](#allow-listing) is enabled.
 
+```move filename="confidential_asset.move"
 #[view]
 public fun is_allow_listing_required(): bool
+```
 
+Whether the asset type is allow-listed for confidential use.
+
+```move filename="confidential_asset.move"
 #[view]
 public fun is_confidentiality_enabled_for_asset_type(
     asset_type: Object<fungible_asset::Metadata>
 ): bool
+```
 
+#### Confidential store queries
+
+Whether a confidential store exists for `(user, asset_type)`.
+
+```move filename="confidential_asset.move"
 #[view]
-public fun get_pending_balance(
-    owner: address, asset_type: Object<fungible_asset::Metadata>
-): CompressedBalance<Pending>
+public fun has_confidential_store(
+    user: address,
+    asset_type: Object<fungible_asset::Metadata>
+): bool
+```
 
-#[view]
-public fun get_available_balance(
-    owner: address, asset_type: Object<fungible_asset::Metadata>
-): CompressedBalance<Available>
+User's current encryption key for an asset type.
 
+```move filename="confidential_asset.move"
 #[view]
 public fun get_encryption_key(
-    user: address, asset_type: Object<fungible_asset::Metadata>
+    user: address,
+    asset_type: Object<fungible_asset::Metadata>
 ): CompressedRistretto
+```
 
+Whether the available balance is in 16-bit normal form.
+
+```move filename="confidential_asset.move"
 #[view]
 public fun is_normalized(
-    user: address, asset_type: Object<fungible_asset::Metadata>
+    user: address,
+    asset_type: Object<fungible_asset::Metadata>
 ): bool
+```
 
+Whether incoming transfers are paused.
+
+```move filename="confidential_asset.move"
 #[view]
 public fun incoming_transfers_paused(
-    user: address, asset_type: Object<fungible_asset::Metadata>
-): bool
-
-#[view]
-public fun get_effective_auditor_hint(
-    user: address, asset_type: Object<fungible_asset::Metadata>
-): Option<EffectiveAuditorHint>
-
-#[view]
-public fun get_effective_auditor_config(
+    user: address,
     asset_type: Object<fungible_asset::Metadata>
-): EffectiveAuditorConfig
+): bool
+```
 
+Number of pending transfers since last rollover.
+
+```move filename="confidential_asset.move"
+#[view]
+public fun get_num_transfers_received(
+    user: address,
+    asset_type: Object<fungible_asset::Metadata>
+): u64
+```
+
+#### Balance queries
+
+Encrypted pending balance.
+
+```move filename="confidential_asset.move"
+#[view]
+public fun get_pending_balance(
+    owner: address,
+    asset_type: Object<fungible_asset::Metadata>
+): CompressedBalance<Pending>
+```
+
+Encrypted available balance.
+
+```move filename="confidential_asset.move"
+#[view]
+public fun get_available_balance(
+    owner: address,
+    asset_type: Object<fungible_asset::Metadata>
+): CompressedBalance<Available>
+```
+
+Total tokens currently locked in all confidential stores for this asset type.
+
+```move filename="confidential_asset.move"
 #[view]
 public fun get_total_confidential_supply(
     asset_type: Object<fungible_asset::Metadata>
 ): u64
+```
 
+#### Auditor queries
+
+Which [auditor](#auditors) (global/asset-specific) and epoch the user's balance ciphertext is encrypted for.
+
+```move filename="confidential_asset.move"
 #[view]
-public fun get_num_transfers_received(
-    user: address, asset_type: Object<fungible_asset::Metadata>
-): u64
+public fun get_effective_auditor_hint(
+    user: address,
+    asset_type: Object<fungible_asset::Metadata>
+): Option<EffectiveAuditorHint>
+```
 
+The effective auditor config (asset-specific if set, otherwise global).
+
+```move filename="confidential_asset.move"
+#[view]
+public fun get_effective_auditor_config(
+    asset_type: Object<fungible_asset::Metadata>
+): EffectiveAuditorConfig
+```
+
+#### Constants
+
+Maximum pending transfers before rollover is enforced (65,536).
+
+```move filename="confidential_asset.move"
 #[view]
 public fun get_max_transfers_before_rollover(): u64
+```
 
+Maximum memo length in bytes (256).
+
+```move filename="confidential_asset.move"
 #[view]
 public fun get_max_memo_bytes(): u64
 ```

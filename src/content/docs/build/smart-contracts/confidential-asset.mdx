@@ -28,73 +28,32 @@ CAs leverage **zero-knowledge proofs (ZKPs)** to enable Aptos validators to veri
   Cryptographic and mathematical details are explained superficially.
 </Aside>
 
-## Confidential store
-
-Users can establish a confidential balance for an asset type by **registering** a `ConfidentialStore` for that asset type.
-
-Specifically, they generate a unique keypair:
-
-- An **encryption key (EK)** for that asset type that will be stored in its `ConfidentialStore`.
-- A **decryption key (DK)** to be securely managed by the user.
-
-<Aside type="danger">
-  These keys are standalone and should not be confused with the user's Aptos account (signing) keys.
-</Aside>
+## Confidential balance
 
 Each confidential balance is split into two parts:
 
-- **pending balance** - accumulates all incoming transactions.
-- **available balance** - used exclusively for outgoing transactions.
+- **pending balance** — the received balance, accumulates all incoming deposits and confidential transfers.
 
-Both balances are encrypted with the same user's EK, ensuring underlying amounts remain private.
+- **available balance** — the spendable balance, used exclusively for sending outgoing transfers and withdrawing.
+
+Both balances are encrypted with the user's **encryption key (EK)**, ensuring underlying amounts remain private.
 
 <Aside type="note">
-  This separation protects against "front-running" attacks.
-  Specifically, if there was a single balance, an attacker could revert a user's transaction by sending a small payment,
-  altering the balance and, consequently, invalidating the user's ZKP.
+  This two-balance design protects against "front-running" attacks.
+  If there were a single balance, an attacker could invalidate a user's in-flight ZKP by sending a small payment
+  that changes the balance before the transaction lands.
 </Aside>
 
-The confidential balance, encryption key, and related state are stored in the `ConfidentialStore` resource.
-The `ConfidentialStore` is instantiated for each asset type the user has registered for and is managed by the `confidential_asset` module:
-
-```move filename="confidential_asset.move"
-enum ConfidentialStore has key {
-    V1 {
-        pause_incoming: bool,
-        normalized: bool,
-        transfers_received: u64,
-        pending_balance: CompressedBalance<Pending>,
-        available_balance: CompressedBalance<Available>,
-        ek: CompressedRistretto,
-        auditor_hint: Option<EffectiveAuditorHint>,
-    }
-}
-```
-
-We discuss the `auditor_hint` field [later on](#auditors).
-
-## Confidential balance
+### Chunks
 
 Confidential balances handle token amounts by splitting them into smaller units called **chunks**.
 Each chunk represents a portion of the total amount and is encrypted individually using the user's EK.
 Each encrypted chunk consists of two elliptic curve points $(P, R)$ forming a **Twisted ElGamal ciphertext**.
 
-### Chunks
-
-| Confidential balance type | Purpose                     | Chunks     | Max chunk size | Max encoded value |
-| ------------------------- | --------------------------- | ---------- | -------------- | ----------------- |
-| pending                   | receives incoming transfers | 4 × 16-bit | 32 bits        | $2^{64} - 1$      |
-| available                 | funds outgoing transfers    | 8 × 16-bit | 32 bits        | $2^{128} - 1$     |
-
-A user's _available balance_ is the source of funds for sending outgoing confidential transfers.
-
-In contrast, a user's _pending balance_ is where all incoming confidential transfers accumulate in.
-The pending balance can accumulate up to $2^{16}$ transfers before requiring a **rollover** into the available balance.
-At such a point, pending balance chunks can grow up to 32 bits each.
-Our design ensures that after rolling over such large chunks into the available balance, the resulting available balance chunks also remain 32-bit.
-
-After a rollover, the available balance will have to be [normalized](#normalization) to support further rollovers: i.e., its potentially-large ($\le 32$-bit) chunks must be _converted_ back to 16-bit chunks.
-In general, frequent normalization maintains very efficient decryption, although at a certain additional cost in gas.
+| Confidential balance type | Chunks     | Max chunk size | Max encoded value |
+| ------------------------- | ---------- | -------------- | ----------------- |
+| pending                   | 4 × 16-bit | 32 bits        | $2^{64} - 1$      |
+| available                 | 8 × 16-bit | 32 bits        | $2^{128} - 1$     |
 
 Both balance types share a single `CompressedBalance<T>` struct, parameterized by a phantom marker (`Pending` or `Available`):
 
@@ -112,17 +71,45 @@ enum CompressedBalance<phantom T> has store, drop, copy {
 ```
 
 <Aside type="note">
-  The `R_aud` field stores the [effective auditor](#auditors)'s R components, enabling the auditor
+  The `R_aud` field stores the [effective auditor](#auditors)'s $R$-components, enabling the auditor
   (if one is configured) to decrypt the encrypted balance. It is left empty when no effective auditor is set.
-  Pending balances do not require auditor access (only the recipient sees incoming transfer ciphertexts), so
-  pending `R_aud` is empty.
+  Pending balances do not support auditor access, so their `R_aud` field is empty.
 </Aside>
+
+### Rollover
+
+The pending balance can only accumulate up to $2^{16}$ transfers before requiring a **rollover** into the available balance.
+Note that, by that point, pending balance chunks can reach up to 32 bits each.
+Crucially, our design ensures that after rolling over into the available balance, the resulting available balance chunks also remain 32-bit.
+This ensures decryption times are fast.
+
+<Aside type="note">
+  Rollovers are an artifact of our cryptographic design due to the choice of Twisted ElGamal as our encryption scheme.
+  Although artificial, this constraint is one that Move developers must be aware of when building with confidential assets (CA).
+</Aside>
+
+### Normalization
+
+After a rollover, the available balance must be **normalized** before further rollovers can occur.
+Normalization re-packs available balance chunks that may have reached 32 bits back to 16-bit chunks.
+
+Normalization serves two purposes:
+
+1. **Keeps decryption efficient** — smaller chunks means faster decryption.
+2. **Enables further rollovers** — rollovers require a normalized available balance. (Otherwise, available balance chunks would exceed 32 bits after a rollover.)
+
+Transfers and withdrawals implicitly normalize the available balance.
+Users only need to normalize their available balance [manually](#normalize) if the following conditions _all_ hold:
+
+1. It is _not_ already normalized.
+2. They need to call
+   [`rollover_pending_balance`](#rollover-pending-balance) (or `rollover_pending_balance_and_pause`), which requires a normalized available balance first.
 
 ### Encryption and decryption
 
-Without going deep into the details, encryption involves:
+As hinted in the [Chunks](#chunks) section, encryption involves:
 
-- Splitting the transferred amount into 16-bit chunks.
+- Splitting the the encrypted value into 16-bit chunks.
 - Applying the user's EK to encrypt each chunk individually as a Twisted ElGamal ciphertext.
 
 <Aside type="note">
@@ -137,20 +124,39 @@ Similarly, decryption involves:
 - Solving a discrete logarithm (DL) problem for each chunk to recover the original values.
 - Combining the recovered values to reconstruct the total amount.
 
-### Normalization
+## Confidential store
 
-Normalization ensures available balance chunks are always reduced to manageable sizes (16-bits), to ensure decryption is as fast as possible and to allow for further rollovers.
+To use confidential balances, a user must first **register** a `ConfidentialStore` for that asset type (e.g., APT, USDC).
 
-Without normalization, chunks can grow too large, making the decryption process (i.e., solving DL) significantly slower or even impractical.
+Registration requires generating a standalone keypair:
 
-Transfers and withdrawals update the available balance in a way that leaves it normalized automatically.
-Users only need to normalize their available balance [manually](#normalize) if both conditions hold:
+- An **encryption key (EK)** — stored on-chain in the `ConfidentialStore`; used by others to encrypt amounts for this user.
+- A **decryption key (DK)** — kept securely by the user; used to decrypt balances and generate spend proofs.
 
-1. It is not already normalized
-2. They need to call
-   [`rollover_pending_balance`](#rollover-pending-balance) (or `rollover_pending_balance_and_pause`), which requires a normalized available balance first.
+<Aside type="danger">
+  These keys are standalone and should not be confused with the user's Aptos account (signing) keys.
+</Aside>
 
-The [TypeScript SDK](/build/sdks/ts-sdk/confidential-asset) can submit a normalization transaction automatically when a decryption key is provided.
+The `ConfidentialStore` is instantiated per `(user, asset_type)` pair and managed by the `confidential_asset` module.
+By this point, all of its fields should be familiar:
+
+```move filename="confidential_asset.move"
+enum ConfidentialStore has key {
+    V1 {
+        pause_incoming: bool,
+        normalized: bool,
+        transfers_received: u64,
+        pending_balance: CompressedBalance<Pending>,
+        available_balance: CompressedBalance<Available>,
+        ek: CompressedRistretto,
+        auditor_hint: Option<EffectiveAuditorHint>,
+    }
+}
+```
+
+The `transfers_received` field counts the amount of incoming transfers so as to enforce rollovers when necessary.
+The `pause_incoming` field allows a user to pause receiving payments, which in turn allows that user to rotate their EK/DK keypair.
+The `auditor_hint` field is discussed [later on](#auditors).
 
 ## Architecture
 
@@ -217,10 +223,17 @@ public entry fun register_raw(
 
 Users must register a `ConfidentialStore` for each asset type they intend to transact with.
 As part of this process, users generate a keypair (EK and DK) on their end and submit
-a sigma protocol proof (proving knowledge of the DK corresponding to the given EK).
+a $\Sigma$-protocol proof of knowledge of the DK corresponding to the given EK.
 
-When a `ConfidentialStore` is first registered, the confidential balance is set to zero,
-represented as zero ciphertexts for both the `pending_balance` and `available_balance`.
+<Aside type="note">
+  The proof of knowledge is meant to prevent registering with an EK whose underlying DK the caller does not actually know, which would leave that caller locked out of their confidential assets.
+  As a result, the encryption key _cannot_ be the identity (zero) point.
+
+  {/* $EK = dk^{-1} H$ ==> if $EK$ = identity (i.e., $0 \cdot H$) then there is no dk such that $dk \cdot EK = H$ */}
+</Aside>
+
+When a `ConfidentialStore` is first registered, the confidential balance is set to zero for both the `pending_balance` and `available_balance`.
+This is done by the contract encrypting the value zero and storing it.
 
 <Aside type="note">
   Although it is recommended to generate a unique keypair for each asset type to enhance security,
@@ -228,15 +241,14 @@ represented as zero ciphertexts for both the `pending_balance` and `available_ba
 </Aside>
 
 <Aside type="caution">
-  This operation is expensive as it initializes a new storage and storage fees far exceed execution fees.
-  However, users call it only once per asset type.
+  Registration is expensive as it allocates new storage slots, which is more expensive that the verification of the $\Sigma$-protocol proof.
+  Luckily, users need only register once per asset type.
 </Aside>
 
-<Aside type="caution">
-  The encryption key may not be the identity (zero) point.
-  On mainnet and testnet, the asset type must be [allow-listed](#allow-list--asset-config) for confidential transfers,
-  and registration is rejected during an [emergency pause](#emergency-pause).
-</Aside>
+On mainnet and testnet, the registered asset type must first be [allow-listed](#allow-list--asset-config) for confidential transfers by Aptos governance.
+Currently, only APT is allow-listed.
+
+Lastly, registration is rejected during an [emergency pause](#emergency-pause).
 
 ### Deposit
 
@@ -248,11 +260,11 @@ public entry fun deposit(
 )
 ```
 
-The `deposit` function brings tokens into the protocol, transferring the passed amount
-from the primary FA store of the depositor to their own pending balance.
+The `deposit` function brings tokens into the protocol: it converts fungible assets into confidential assets by transferring the passed amount from the user's primary FA store to their own pending balance.
+This function can only be called _after_ the user has set up their confidential store via [`register`](#register).
 
-The amount in this function is publicly visible, as adding new tokens to the protocol requires a normal transfer.
-However, tokens within the protocol become obfuscated through confidential transfers, ensuring privacy in subsequent transactions.
+Note that the `amount` in this function is publicly visible, as adding new tokens to the protocol requires a normal FA transfer.
+However, balances within the protocol become obfuscated through confidential transfers, ensuring privacy in subsequent transactions.
 
 <Aside type="note">
   If you want to have a hidden amount from the beginning, use the `confidential_transfer_raw` function instead.
@@ -260,11 +272,11 @@ However, tokens within the protocol become obfuscated through confidential trans
 
 <Aside type="caution">
   Zero-value deposits are rejected (they would pointlessly increment the recipient's `transfers_received` counter).
-  "Dispatchable" fungible asset types — those with custom `withdraw`/`deposit`/`balance`/`supply` hooks — are also
+  "Dispatchable" fungible asset types -- those with custom `withdraw`/`deposit`/`balance`/`supply` hooks -- are also
   rejected, since their dynamic behavior cannot be safely composed with encrypted balances.
 </Aside>
 
-### Rollover Pending Balance
+### Roll over
 
 ```move filename="confidential_asset.move"
 public entry fun rollover_pending_balance(
@@ -281,7 +293,8 @@ public entry fun rollover_pending_balance_and_pause(
 ```
 
 The `rollover_pending_balance` function adds the pending balance to the available one, resetting the pending balance to zero.
-It works with no additional proofs as this function utilizes properties of the [Homomorphic encryption](#homomorphic-encryption) used in the protocol.
+This is necessary to do if the user has received too many incoming transfers, including [deposits](#deposit).
+Rollover works without any cryptographic proofs by leveraging properties of our [homomorphic encryption scheme](#encryption-and-decryption).
 
 The `rollover_pending_balance_and_pause` variant additionally pauses incoming transfers after the rollover,
 which is useful when preparing for a [key rotation](#rotate-encryption-key).
@@ -299,7 +312,7 @@ which is useful when preparing for a [key rotation](#rotate-encryption-key).
   Calling the `rollover_pending_balance` function in a separate transaction is crucial for preventing "front-running" attacks.
 </Aside>
 
-### Confidential Transfer
+### Confidentially transfer
 
 ```move filename="confidential_asset.move"
 public entry fun confidential_transfer_raw(
@@ -323,20 +336,27 @@ public entry fun confidential_transfer_raw(
 )
 ```
 
-The `confidential_transfer_raw` function transfers tokens from the sender's available balance to the recipient's
-pending balance. The sender encrypts the transferred amount under the recipient's encryption key, enabling the recipient's
-confidential balance to be updated [homomorphically](#homomorphic-encryption).
+The `confidential_transfer_raw` function is the most complex function in the confidential asset module.
+It transfers tokens from the sender's available balance to the recipient's pending balance, without leaking the transferred amount.
+Namely, the sender encrypts the transferred amount under the recipient's encryption key, enabling the recipient's confidential balance to be updated [homomorphically](#homomorphic-encryption).
 
 The transfer amount is also encrypted under the sender's key (for the sender's records) and under any auditor keys.
 
-The function requires:
+The function requires many parameters:
 
 - **New balance ciphertexts** (`new_balance_P`, `new_balance_R`, `new_balance_R_eff_aud`): the sender's updated available balance after the transfer.
 - **Amount ciphertexts** (`amount_P`, `amount_R_sender`, `amount_R_recip`, `amount_R_eff_aud`): the transfer amount encrypted under the sender's, recipient's, and auditor's keys.
 - **Voluntary auditor keys and ciphertexts** (`ek_volun_auds`, `amount_R_volun_auds`): optional additional auditor encryption keys and amount ciphertexts.
 - **Range proofs** (`zkrp_new_balance`, `zkrp_amount`): proving the new balance and transfer amount are non-negative and within range.
-- **Sigma protocol proof** (`sigma_proto_comm`, `sigma_proto_resp`): proving the correctness of the transfer.
-- **Memo** (`memo`): an opaque byte string emitted in the `Transferred` event. Limited to `get_max_memo_bytes()` (256 bytes); pass an empty vector for no memo. The memo is stored on-chain in plaintext, so encrypt it client-side if it is sensitive.
+- **$\Sigma$-protocol proof** (`sigma_proto_comm`, `sigma_proto_resp`): proving the correctness of the transfer.
+
+<Aside type="caution">
+  Creating transactions that call `confidential_transfer_raw` can be cumbersome due to the many necessary ciphertext and proof parameters.
+  Developers should use the [TypeScript SDK](/build/sdks/ts-sdk/confidential-asset) for this, which will generate all theses on the user's behalf.
+</Aside>
+
+Optionally, the sender can specify a **memo** (`memo`): an opaque byte string emitted in the `Transferred` event, limited to `get_max_memo_bytes()` (256 bytes)
+The memo is stored on-chain in plaintext, so the sender may want to encrypt it client-side if it is sensitive.
 
 <Aside type="note">
   Once a user has participated in at least one transfer, their balance becomes "hidden".
@@ -344,8 +364,7 @@ The function requires:
 </Aside>
 
 <Aside type="caution">
-  Self-transfers (sender == recipient) are rejected. To rebalance your own pending and available balances,
-  use [`rollover_pending_balance`](#rollover-pending-balance) instead.
+  Self-transfers (where the sender is the recipient) are rejected.
 </Aside>
 
 ### Withdraw
@@ -372,10 +391,10 @@ This function enables users to release tokens while not revealing their remainin
 The withdrawn amount itself is publicly visible (as a `u64`), but the sender's remaining balance stays hidden.
 
 <Aside type="caution">
-  Attempting to withdraw more tokens than available will cause an error.
+  Attempting to withdraw more tokens than available will make this function abort.
 </Aside>
 
-### Rotate Encryption Key
+### Rotate encryption key
 
 ```move filename="confidential_asset.move"
 public entry fun rotate_encryption_key_raw(
@@ -389,12 +408,12 @@ public entry fun rotate_encryption_key_raw(
 )
 ```
 
-The `rotate_encryption_key_raw` function modifies the user's EK and re-encrypts the available balance R components with the new EK.
+The `rotate_encryption_key_raw` function modifies the user's EK and re-encrypts the available balance $R$-components with the new EK.
 The `resume_incoming_transfers` parameter controls whether incoming transfers are unpaused after the rotation.
 
 To facilitate the rotation process:
 
-1. The pending balance must first be rolled over and incoming transfers paused by calling `rollover_pending_balance_and_pause`.
+1. The pending balance must first be rolled over and [incoming transfers paused by calling `rollover_pending_balance_and_pause`](#unpause-incoming-transfers).
    This prevents new transfers from altering the pending balance during the key rotation.
 2. Then the EK can be rotated using `rotate_encryption_key_raw`, optionally resuming incoming transfers.
 
@@ -427,10 +446,10 @@ All other functions, such as `withdraw_to_raw` or `confidential_transfer_raw`, h
 </Aside>
 
 <Aside type="caution">
-  Calling a `rollover_pending_balance` when the available balance is not normalized will cause an error.
+  Calling `rollover_pending_balance` when the available balance is not normalized will lead to an abort.
 </Aside>
 
-### Pause/Unpause Incoming Transfers
+### (Un)pause incoming transfers
 
 ```move filename="confidential_asset.move"
 public entry fun set_incoming_transfers_paused(
@@ -452,14 +471,14 @@ The following protocol-wide settings are controlled by Aptos governance (via an 
 
 | Setting                                 | Effect                                                              |
 | --------------------------------------- | ------------------------------------------------------------------- |
-| [Allow list](#allow-list--asset-config) | Only allow-listed FA types can use CA; withdrawals always permitted |
-| [Emergency pause](#emergency-pause)     | Halts all user operations                                           |
 | [Global auditor](#auditors)             | Mandatory auditor for all assets without an asset-specific override |
 | [Asset-specific auditor](#auditors)     | Per-token mandatory auditor; overrides the global auditor           |
+| [Allow list](#allow-list--asset-config) | Only allow-listed FA types can use CA; withdrawals always permitted |
+| [Emergency pause](#emergency-pause)     | Halts all user operations                                           |
 
 Details for each setting are in the sections below.
 
-## Auditors
+### Auditors
 
 There are three types of auditors:
 
@@ -508,21 +527,50 @@ Each `ConfidentialStore` records an `EffectiveAuditorHint` alongside its `availa
 can compare `(is_global, epoch)` against the current effective auditor config and tell whether their copy
 of a balance ciphertext is stale.
 
-## Allow list & asset config
+### Allow listing
 
-On mainnet and testnet, the protocol enforces an asset-type allow list: only asset types explicitly
+On mainnet and testnet, the protocol enforces an asset-type **allow list**: only asset types explicitly
 allow-listed by governance can be registered, deposited, transferred, or rolled over confidentially.
 Withdrawals are always permitted — even when an asset is removed from the allow list — so users can
 recover funds.
 
-Allow-listing and per-asset configuration are managed by governance via these (non-`entry`) functions:
+Allow-listing and per-asset configuration are managed by governance via the following (non-`entry`) functions:
 
-- `set_allow_listing(aptos_framework, enabled)` — enables or disables the allow list globally.
-- `set_confidentiality_for_asset_type(aptos_framework, asset_type, allowed)` — enables or disables
-  a specific asset type. Only meaningful when the allow list is enabled.
-- `set_confidentiality_for_apt(aptos_framework, allowed)` — convenience wrapper for the APT token.
+#### set\_allow\_listing
 
-## Emergency pause
+Enables or disables the allow list globally.
+
+```move filename="confidential_asset.move"
+public fun set_allow_listing(
+    aptos_framework: &signer,
+    enabled: bool
+)
+```
+
+#### set\_confidentiality\_for\_asset\_type
+
+Enables or disables confidential transfers for a specific asset type. Only meaningful when the allow list is enabled.
+
+```move filename="confidential_asset.move"
+public fun set_confidentiality_for_asset_type(
+    aptos_framework: &signer,
+    asset_type: Object<fungible_asset::Metadata>,
+    allowed: bool
+)
+```
+
+#### set\_confidentiality\_for\_apt
+
+Convenience wrapper that calls `set_confidentiality_for_asset_type` for the APT token.
+
+```move filename="confidential_asset.move"
+public fun set_confidentiality_for_apt(
+    aptos_framework: &signer,
+    allowed: bool
+)
+```
+
+### Emergency pause
 
 Governance can pause **all** user-facing operations (`register`, `deposit`, `withdraw`, `confidential_transfer`,
 `normalize`, `rollover_pending_balance`, `rotate_encryption_key`, `set_incoming_transfers_paused`) via:
@@ -535,7 +583,7 @@ While paused, every user operation aborts with `E_EMERGENCY_PAUSED`. Use the
 [`is_emergency_paused`](#view-functions) view function to check the current state before
 constructing transactions.
 
-## View Functions
+## View functions
 
 ```move filename="confidential_asset.move"
 #[view]
@@ -612,6 +660,6 @@ public fun get_max_memo_bytes(): u64
 - **Addresses are public.** Sender and recipient addresses appear in plaintext in every transaction. Only the transferred amounts and balances are hidden.
 - **Total supply is public.** The total number of tokens currently locked across all confidential stores for an asset type is queryable via `get_total_confidential_supply`.
 
-## Useful Resources
+## Useful resources
 
 - [Confidential Asset SDK](/build/sdks/ts-sdk/confidential-asset)

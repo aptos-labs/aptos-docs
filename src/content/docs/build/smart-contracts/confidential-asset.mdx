@@ -78,7 +78,7 @@ enum CompressedBalance<phantom T> has store, drop, copy {
 
 ### Rollover
 
-The pending balance can only accumulate up to $2^{16}$ transfers before requiring a **rollover** into the available balance.
+Funds in the pending balance cannot be spent directly — they must be **rolled over** into the available balance first. Additionally, the pending balance can only accumulate up to $2^{16}$ transfers before a rollover is enforced by the protocol.
 Note that, by that point, pending balance chunks can reach up to 32 bits each.
 Crucially, our design ensures that after rolling over into the available balance, the resulting available balance chunks also remain 32-bit.
 This ensures decryption times are fast.
@@ -109,7 +109,7 @@ Users only need to normalize their available balance [manually](#normalize) if t
 
 As hinted in the [Chunks](#chunks) section, encryption involves:
 
-- Splitting the the encrypted value into 16-bit chunks.
+- Splitting the encrypted value into 16-bit chunks.
 - Applying the user's EK to encrypt each chunk individually as a Twisted ElGamal ciphertext.
 
 <Aside type="note">
@@ -293,7 +293,7 @@ public entry fun rollover_pending_balance_and_pause(
 ```
 
 The `rollover_pending_balance` function adds the pending balance to the available one, resetting the pending balance to zero.
-This is necessary to do if the user has received too many incoming transfers, including [deposits](#deposit).
+Rollover is required whenever a user wants to spend their pending funds. It is also enforced when the pending balance has accumulated $2^{16}$ transfers.
 Rollover works without any cryptographic proofs by leveraging properties of our [homomorphic encryption scheme](#encryption-and-decryption).
 
 The `rollover_pending_balance_and_pause` variant additionally pauses incoming transfers after the rollover,
@@ -352,10 +352,10 @@ The function requires many parameters:
 
 <Aside type="caution">
   Creating transactions that call `confidential_transfer_raw` can be cumbersome due to the many necessary ciphertext and proof parameters.
-  Developers should use the [TypeScript SDK](/build/sdks/ts-sdk/confidential-asset) for this, which will generate all theses on the user's behalf.
+  Developers should use the [TypeScript SDK](/build/sdks/ts-sdk/confidential-asset) for this, which will generate all these on the user's behalf.
 </Aside>
 
-Optionally, the sender can specify a **memo** (`memo`): an opaque byte string emitted in the `Transferred` event, limited to `get_max_memo_bytes()` (256 bytes)
+Optionally, the sender can specify a **memo** (`memo`): an opaque byte string emitted in the `Transferred` event, limited to `get_max_memo_bytes()` (256 bytes).
 The memo is stored on-chain in plaintext, so the sender may want to encrypt it client-side if it is sensitive.
 
 <Aside type="note">
@@ -440,10 +440,6 @@ The `normalize_raw` function ensures that the available balance is reduced to 16
 This is necessary only before the `rollover_pending_balance` operation, which requires the available balance to be normalized beforehand.
 
 All other functions, such as `withdraw_to_raw` or `confidential_transfer_raw`, handle normalization implicitly, making manual normalization unnecessary in those cases.
-
-<Aside type="note">
-  All functions except `rollover_pending_balance` perform implicit normalization.
-</Aside>
 
 <Aside type="caution">
   Calling `rollover_pending_balance` when the available balance is not normalized will lead to an abort.

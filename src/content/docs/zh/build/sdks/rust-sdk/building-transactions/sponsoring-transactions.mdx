@@ -1,0 +1,92 @@
+---
+title: "Rust SDK：赞助交易"
+description: "了解如何使用 Rust SDK 在 Aptos 上赞助交易，让一个账户为另一账户的交易支付 Gas 费用"
+sidebar:
+  label: "赞助交易"
+---
+
+import { Steps } from '@astrojs/starlight/components';
+
+通常，执行交易的账户支付 Gas 费用。可以通过赞助交易，让另一账户承担这些费用。
+
+在处理复杂智能合约时，这可用于从中心账户管理费用。
+
+## 如何赞助交易
+
+<Steps>
+  1. 构建 the raw transaction, then wrap it with `FeePayerRawTransaction`.
+
+     ```rust filename="sponsor.rs"
+     let payload = EntryFunction::apt_transfer(recipient.address(), 5_000_000)?;
+     let sequence_number = aptos.get_sequence_number(sender.address()).await?;
+     let raw_txn = TransactionBuilder::new()
+         .sender(sender.address())
+         .sequence_number(sequence_number)
+         .payload(payload.into())
+         .chain_id(aptos.chain_id())
+         .expiration_from_now(600)
+         .build()?;
+     let fee_payer_txn = FeePayerRawTransaction::new_simple(raw_txn, fee_payer.address());
+     ```
+
+  2. 由发送方和费用支付方同时签名。
+
+     ```rust filename="sponsor.rs"
+     let signed_txn = sign_fee_payer_transaction(
+         &fee_payer_txn,
+         &sender,
+         &[], // secondary signers
+         &fee_payer,
+     )?;
+     ```
+
+  3. 提交并等待交易。
+
+     ```rust filename="sponsor.rs"
+     let result = aptos.submit_and_wait(&signed_txn, None).await?;
+     ```
+</Steps>
+
+## Rust 赞助交易代码示例
+
+```rust filename="sponsor.rs"
+use aptos_sdk::{
+    Aptos, AptosConfig,
+    account::Ed25519Account,
+    transaction::{
+        EntryFunction, TransactionBuilder, builder::sign_fee_payer_transaction,
+        types::FeePayerRawTransaction,
+    },
+};
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let aptos = Aptos::new(AptosConfig::devnet())?;
+
+    let sender = Ed25519Account::generate();
+    let recipient = Ed25519Account::generate();
+    let fee_payer = Ed25519Account::generate();
+
+    aptos
+        .fund_account(fee_payer.address(), 1_000_000_000)
+        .await?;
+    aptos.fund_account(sender.address(), 10_000_000).await?;
+
+    let payload = EntryFunction::apt_transfer(recipient.address(), 5_000_000)?;
+    let sequence_number = aptos.get_sequence_number(sender.address()).await?;
+    let raw_txn = TransactionBuilder::new()
+        .sender(sender.address())
+        .sequence_number(sequence_number)
+        .payload(payload.into())
+        .chain_id(aptos.chain_id())
+        .expiration_from_now(600)
+        .build()?;
+
+    let fee_payer_txn = FeePayerRawTransaction::new_simple(raw_txn, fee_payer.address());
+    let signed_txn = sign_fee_payer_transaction(&fee_payer_txn, &sender, &[], &fee_payer)?;
+    let result = aptos.submit_and_wait(&signed_txn, None).await?;
+    println!("Submitted: {:?}", result.data.get("hash"));
+
+    Ok(())
+}
+```

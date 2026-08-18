@@ -1,0 +1,51 @@
+---
+title: "文档"
+description: "Aptos Indexer SDK 架构、处理器开发和自定义数据管道实现的完整文档"
+sidebar:
+  label: "文档"
+---
+
+import { ThemedImage } from '~/components/ThemedImage';
+
+## Indexer SDK 的架构
+
+在 Aptos 索引堆栈中，处理器会从区块链索引特定数据子集，并将数据写入外部数据库。
+
+每个处理器遵循以下通用流程：
+
+1. 从[交易流](/zh/build/indexer/txn-stream)接收交易流
+2. 从交易中提取相关数据，并将其转换为标准化架构
+3. 将转换后的数据存储到数据库
+4. 跟踪已处理的交易版本
+
+Indexer SDK 允许您将处理器编写为独立步骤的有向图。每个 `Step` 都有输入和输出；每个 `Step` 的输出通过 [Kanal channel](https://github.com/fereidani/kanal) 连接到下一个 `Step` 的输入。
+
+<center>
+  <ThemedImage
+    alt="Indexer SDK 自定义处理器架构"
+    sources={{
+light: '~/images/indexer-custom-processor-light.svg',
+dark: '~/images/indexer-custom-processor-dark.svg',
+}}
+  />
+</center>
+
+## 何时使用 Indexer SDK
+
+当您希望为自定义合约建立索引，或发现需要 [Indexer API](/zh/build/indexer/indexer-api) 未提供的新型数据时，Indexer SDK 很有用。
+
+使用 Indexer SDK 编写自定义处理器的通用流程如下：
+
+1. 定义数据库架构
+2. 创建新处理器
+3. 创建 `Step`，将数据提取并转换为存储架构
+4. 通过添加并连接步骤来定制处理器
+5. 运行处理器，并查看写入数据库的索引数据
+
+## Indexer SDK 的优势
+
+Indexer SDK 的架构从以下几个方面简化了自定义处理器的编写：
+
+1. 可在处理器之间复用 `Step` 实现，从而减少通用数据提取逻辑的重复。
+2. SDK 会为每个 `Step` 收集已处理交易数量等基础性能指标，从而可以观测处理器的子组件。
+3. 每个 `Step` 均独立，因此可以安全地定制处理器的部分内容而不破坏其他部分。例如，您可以添加额外 `Step` 来预处理或后处理数据，或批量写入数据。每个 `Step` 也可以脱离处理器其余部分进行独立测试。

@@ -1,0 +1,45 @@
+---
+title: "连接步骤"
+description: "在 Aptos Indexer SDK 中连接处理步骤，通过步骤串联和流程控制构建完整数据管道"
+sidebar:
+  label: "连接步骤"
+---
+
+## 前置条件
+
+此时，您应已完成[创建处理器](/zh/build/indexer/indexer-sdk/documentation/create-processor)和[创建步骤](/zh/build/indexer/indexer-sdk/documentation/steps)指南。下一步是将这两部分组合起来，在处理器中连接步骤。
+
+## 如何连接步骤
+
+创建步骤后，您可以将其连接至其他步骤。为此，我们使用名为 ProcessorBuilder 的构建器类来指定构成处理器的步骤序列。
+
+1. 实例化步骤后，需将其转换为 [RunnableStep](https://github.com/aptos-labs/aptos-indexer-processor-sdk/blob/main/aptos-indexer-processors-sdk/sdk/src/traits/runnable_step.rs#L6)。RunnableStep 是封装步骤的 trait。它提供馈入步骤所需的输入和输出通道，并允许在任务中生成该步骤。SDK 提供辅助函数 [.into\_runnable\_step](https://github.com/aptos-labs/aptos-indexer-processor-sdk/blob/main/aptos-indexer-processors-sdk/sdk/src/traits/into_runnable_step.rs#L13)，用于将步骤转换为 RunnableStep。
+2. 使用 [ProcessorBuilder::new\_with\_inputless\_first\_step](https://github.com/aptos-labs/aptos-indexer-processor-sdk/blob/main/aptos-indexer-processors-sdk/sdk/src/builder/processor_builder.rs#L222) 设置第一个步骤。几乎所有情况下，第一个步骤都应为 TransactionStreamStep。{/* <!-- Add link --> */}
+3. 使用 [.connect\_to](https://github.com/aptos-labs/aptos-indexer-processor-sdk/blob/main/aptos-indexer-processors-sdk/sdk/src/builder/processor_builder.rs#L303) 将前一步连接至下一步。connect\_to 使用 trait bound，确保前一步的输出类型在编译时与下一步的输入类型匹配。调用 .connect\_to 时，会创建大小为 channel\_size 的通道以连接前后两个步骤；同时生成一个任务，持续循环执行前一步：从输入通道读取数据，处理数据，并将输出发送至输出通道。
+4. 对处理器中的每一步重复第 3 步。
+5. 要结束 ProcessorBuilder，请使用 [.end\_and\_return\_output\_receiver](https://github.com/aptos-labs/aptos-indexer-processor-sdk/blob/main/aptos-indexer-processors-sdk/sdk/src/builder/processor_builder.rs#L400)。此方法返回 [InstrumentedAsyncReceiver](https://github.com/aptos-labs/aptos-indexer-processor-sdk/blob/main/aptos-indexer-processor-sdk/instrumented-channel/src/lib.rs#L88)，可用于处理图中最后一个步骤的输出。
+
+以下是连接两个步骤的简单示例：
+
+```rust
+let (processor_builder, buffer_receiver) = ProcessorBuilder::new_with_inputless_first_step(
+      transaction_stream_step.into_runnable_step(),
+  )
+  .connect_to(extractor_step.into_runnable_step(), 10)
+  .end_and_return_output_receiver(10);
+```
+
+请参阅 aptos-indexer-processor-example 中的[完整示例](https://github.com/aptos-labs/aptos-indexer-processor-example/blob/main/aptos-indexer-processor-example/src/processors/events/events_processor.rs#L75)。
+
+{/* <!-- Add link to common SDK steps --> */}
+
+## 可视化处理器
+
+连接步骤时，ProcessorBuilder 会在后台使用 [petgraph](https://docs.rs/petgraph/latest/petgraph/) 构建处理器步骤的图形表示。调用以下代码即可查看图的可视化表示：
+
+```rust
+let dot = processor_builder.graph.dot();
+println!("{}", dot);
+```
+
+该代码会输出 [DOT 语言](https://graphviz.gitlab.io/_pages/doc/info/lang.html)的图，您可以使用 [Graphviz](https://graphviz.org/) 等工具将其可视化。

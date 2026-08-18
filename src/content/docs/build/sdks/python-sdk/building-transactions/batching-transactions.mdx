@@ -1,0 +1,79 @@
+---
+title: "Python SDK - Batching Transactions"
+description: "Execute multiple transactions concurrently from a single account using orderless transactions in the Python SDK"
+sidebar:
+  label: "Batching Transactions"
+---
+
+The Python SDK can submit many transactions concurrently from the same account
+by using [orderless transactions](/build/guides/orderless-transactions). Each
+transaction carries a unique replay-protection nonce instead of a sequence
+number, so you do not need to coordinate sequence numbers locally.
+
+Pass `replay_protection_nonce` to `aptos.transaction.build`. Orderless
+transactions must expire within 60 seconds.
+
+## Full Python Example
+
+```python filename="batch.py"
+import asyncio
+import random
+import time
+
+from aptos_sdk.v2 import Account, Aptos, AptosConfig, Network
+from aptos_sdk.v2.bcs import Serializer
+from aptos_sdk.v2.transactions import EntryFunction, TransactionArgument, TransactionPayload
+from aptos_sdk.v2.types import StructTag, TypeTag
+
+BATCH_SIZE = 5
+AMOUNT_PER_TXN = 100
+
+
+async def main():
+    async with Aptos(AptosConfig(network=Network.DEVNET)) as aptos:
+        alice = Account.generate()
+        bob = Account.generate()
+
+        await asyncio.gather(
+            aptos.faucet.fund_account(alice.address, 100_000_000),
+            aptos.faucet.fund_account(bob.address, 10_000_000),
+        )
+
+        expiration = int(time.time()) + 60
+        raw_txns = []
+        for _ in range(BATCH_SIZE):
+            payload = EntryFunction.natural(
+                "0x1::coin",
+                "transfer",
+                [TypeTag(StructTag.from_str("0x1::aptos_coin::AptosCoin"))],
+                [
+                    TransactionArgument(bob.address, Serializer.struct),
+                    TransactionArgument(AMOUNT_PER_TXN, Serializer.u64),
+                ],
+            )
+            raw_txns.append(
+                await aptos.transaction.build(
+                    sender=alice.address,
+                    payload=TransactionPayload(payload),
+                    replay_protection_nonce=random.randint(0, 2**64 - 1),
+                    expiration_timestamps_secs=expiration,
+                )
+            )
+
+        signed_txns = [aptos.transaction.sign(txn, alice) for txn in raw_txns]
+        hashes = await asyncio.gather(
+            *[aptos.transaction.submit(signed) for signed in signed_txns]
+        )
+        results = await asyncio.gather(
+            *[aptos.transaction.wait_for_transaction(txn_hash) for txn_hash in hashes]
+        )
+
+        for i, result in enumerate(results):
+            print(f"Transaction {i + 1}: success={result['success']}")
+
+
+asyncio.run(main())
+```
+
+The v1 API also includes `TransactionWorker` for sequence-number batching. New
+projects should use the v2 orderless flow above.

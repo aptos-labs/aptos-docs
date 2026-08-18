@@ -1,0 +1,55 @@
+---
+title: "运行处理器"
+description: "通过 config.yaml 设置、数据库连接和生产部署指南配置并运行自定义处理器"
+sidebar:
+  label: "运行处理器"
+---
+
+## 前置条件
+
+请先阅读[创建处理器](/zh/build/indexer/indexer-sdk/documentation/create-processor)、[创建步骤](/zh/build/indexer/indexer-sdk/documentation/steps)和[连接步骤](/zh/build/indexer/indexer-sdk/documentation/connect-steps)，这些指南将帮助您设置处理器并连接处理器步骤。
+
+## 如何设置 config.yaml
+
+要运行处理器，需要创建 `config.yaml` 文件。`config.yaml` 文件格式应遵循您在 `IndexerProcessorConfig` 中定义的格式。例如，如果使用 [aptos-indexer-processor-example](https://github.com/aptos-labs/aptos-indexer-processor-example/blob/main/aptos-indexer-processor-example/src/config/indexer_processor_config.rs) 中的 `IndexerProcessorConfig`，基本的 `config.yaml` 如下：
+
+```yaml
+health_check_port: 8085
+server_config:
+  processor_config:
+    type: "events_processor"
+  transaction_stream_config:
+    indexer_grpc_data_service_address: "https://grpc.mainnet.aptoslabs.com:443"
+    starting_version: 0
+    auth_token: "{AUTH_TOKEN}"
+    request_name_header: "events-processor"
+  db_config:
+    postgres_connection_string: postgresql://postgres:@localhost:5432/example
+```
+
+`processor_config` 字段应与 `IndexerProcessorConfig` 中 `ProcessorConfig` 的定义相匹配，`db_config` 和 `DbConfig` 也是如此。
+
+`TransactionStreamConfig` 是 `transaction-stream` crate 提供的配置。它要求设置 `indexer_grpc_data_service_address`、`auth_token` 和 `request_name_header`。要获取 `indexer_grpc_data_service_address` 和 `auth_token`，请遵循[此指南](/zh/build/indexer/txn-stream/aptos-hosted-txn-stream)。
+
+`TransactionStreamConfig` 还支持更多可选字段来调整与[交易流](/zh/build/indexer/txn-stream)的连接；详情请参阅[这里](https://github.com/aptos-labs/aptos-indexer-processor-sdk/tree/main/aptos-indexer-processors-sdk/transaction-stream)。
+
+## 运行处理器
+
+设置好 `config.yaml` 后，可通过以下命令运行处理器：
+
+```shellscript
+cd /path/to/your/processor/crate
+cargo run --release -- -c config.yaml
+```
+
+终端中应开始显示如下日志：
+
+```shellscript
+{"timestamp":"2025-01-13T21:23:21.785452Z","level":"INFO","message":"[Transaction Stream] Successfully connected to GRPC stream","stream_address":"https://grpc.mainnet.aptoslabs.com/","connection_id":"ec67ecc4-e041-4f17-a2e2-441e7ff21487","start_version":2186504987,"filename":"/Users/reneetso/.cargo/git/checkouts/aptos-indexer-processor-sdk-2f3940a333c8389d/e6867c5/aptos-indexer-processors-sdk/transaction-stream/src/transaction_stream.rs","line_number":349,"threadName":"tokio-runtime-worker","threadId":"ThreadId(4)"}
+{"timestamp":"2025-01-13T21:23:21.785664Z","level":"INFO","message":"Spawning polling task","step_name":"TransactionStreamStep","filename":"/Users/reneetso/.cargo/git/checkouts/aptos-indexer-processor-sdk-2f3940a333c8389d/e6867c5/aptos-indexer-processors-sdk/sdk/src/traits/pollable_async_step.rs","line_number":112,"threadName":"tokio-runtime-worker","threadId":"ThreadId(23)"}
+{"timestamp":"2025-01-13T21:23:21.785693Z","level":"INFO","message":"Spawning processing task","step_name":"TransactionStreamStep","filename":"/Users/reneetso/.cargo/git/checkouts/aptos-indexer-processor-sdk-2f3940a333c8389d/e6867c5/aptos-indexer-processors-sdk/sdk/src/traits/pollable_async_step.rs","line_number":204,"threadName":"tokio-runtime-worker","threadId":"ThreadId(23)"}
+{"timestamp":"2025-01-13T21:23:21.785710Z","level":"INFO","message":"Spawning processing task","step_name":"FungibleAssetExtractor","filename":"/Users/reneetso/.cargo/git/checkouts/aptos-indexer-processor-sdk-2f3940a333c8389d/e6867c5/aptos-indexer-processors-sdk/sdk/src/traits/async_step.rs","line_number":87,"threadName":"tokio-runtime-worker","threadId":"ThreadId(4)"}
+{"timestamp":"2025-01-13T21:23:21.785912Z","level":"INFO","message":"Spawning processing task","step_name":"FungibleAssetStorer","filename":"/Users/reneetso/.cargo/git/checkouts/aptos-indexer-processor-sdk-2f3940a333c8389d/e6867c5/aptos-indexer-processors-sdk/sdk/src/traits/async_step.rs","line_number":87,"threadName":"tokio-runtime-worker","threadId":"ThreadId(4)"}
+{"timestamp":"2025-01-13T21:23:21.785978Z","level":"INFO","message":"Spawning polling task","step_name":"VersionTrackerStep: ()","filename":"/Users/reneetso/.cargo/git/checkouts/aptos-indexer-processor-sdk-2f3940a333c8389d/e6867c5/aptos-indexer-processors-sdk/sdk/src/traits/pollable_async_step.rs","line_number":112,"threadName":"tokio-runtime-worker","threadId":"ThreadId(14)"}
+{"timestamp":"2025-01-13T21:23:21.786018Z","level":"INFO","message":"Spawning processing task","step_name":"VersionTrackerStep: ()","filename":"/Users/reneetso/.cargo/git/checkouts/aptos-indexer-processor-sdk-2f3940a333c8389d/e6867c5/aptos-indexer-processors-sdk/sdk/src/traits/pollable_async_step.rs","line_number":204,"threadName":"tokio-runtime-worker","threadId":"ThreadId(14)"}
+```

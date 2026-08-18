@@ -1,0 +1,51 @@
+---
+title: "Rust SDK：批量交易"
+description: "使用 Rust SDK 内置的批量能力，从同一账户并发执行多笔交易"
+sidebar:
+  label: "批量交易"
+---
+
+Rust SDK 内置了从同一账户发送多笔交易并一起等待的方式。当需要从单个账户快速执行多笔交易时，这会很方便。
+
+APT 转账使用 `aptos.batch_transfer_apt`；任意 payload 使用 `aptos.submit_batch_and_wait`。
+
+## 完整 Rust 示例
+
+```rust filename="batch.rs"
+use aptos_sdk::{Aptos, AptosConfig, account::Ed25519Account};
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let aptos = Aptos::new(AptosConfig::devnet())?;
+    let sender = Ed25519Account::generate();
+    let recipient_1 = Ed25519Account::generate();
+    let recipient_2 = Ed25519Account::generate();
+    aptos
+        .fund_account(sender.address(), 1_000_000_000)
+        .await?;
+
+    let results = aptos
+        .batch_transfer_apt(
+            &sender,
+            vec![
+                (recipient_1.address(), 1_000_000),
+                (recipient_2.address(), 2_000_000),
+            ],
+        )
+        .await?;
+
+    for result in results {
+        println!("{result:?}");
+    }
+
+    Ok(())
+}
+```
+
+对于任意 payload：
+
+```rust
+let results = aptos
+    .submit_batch_and_wait(&sender, vec![payload1, payload2, payload3], None)
+    .await?;
+```

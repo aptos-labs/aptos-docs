@@ -1,0 +1,67 @@
+---
+title: "Python SDK：获取数据"
+description: "了解如何使用 Aptos Python SDK 检索链上数据、账户信息和资源"
+sidebar:
+  label: "获取数据"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+可以使用 `Aptos` 客户端通过多种辅助函数获取链上数据。领域 API 挂在客户端上：`aptos.account`、`aptos.general`、`aptos.coin` 和 `aptos.fungible_asset`。
+
+以下示例展示如何获取应用中常用的数据：
+
+```python filename="fetch_data.py"
+from aptos_sdk.v2 import Account, Aptos, AptosConfig, Network
+
+async with Aptos(AptosConfig(network=Network.DEVNET)) as aptos:
+    alice = Account.generate()
+    await aptos.faucet.fund_account(alice.address, 100_000_000)
+
+    ledger = await aptos.general.get_ledger_info()
+    chain_id = await aptos.general.get_chain_id()
+    account_info = await aptos.account.get_info(alice.address)
+    resources = await aptos.account.get_resources(alice.address)
+    balance = await aptos.account.get_balance(alice.address)
+    coin_balance = await aptos.coin.balance(alice.address)
+```
+
+<Aside type="note">
+  `aptos.account.get_balance` 使用 `/accounts/{address}/balance/{asset_type}` 端点，同时适用于旧版 Coin 和同质化资产。请优先使用它，而不是查找 `CoinStore` 资源。
+</Aside>
+
+## 使用 Move View 函数
+
+可以使用 `aptos.general.view` 调用返回链上自定义数据的 View 函数。
+
+例如，可以使用 `coin::balance` View 函数查询 APT Coin 余额：
+
+```python filename="fetch_data.py"
+result = await aptos.general.view(
+    "0x1::coin",
+    "balance",
+    ["0x1::aptos_coin::AptosCoin"],
+    [str(alice.address)],
+)
+```
+
+无参数的函数传入空字节即可。vector 等复杂值可先用 `Serializer` 编码；当每个参数都是字符串、数字或地址时，JSON `view` 更简单：
+
+```python filename="fetch_data.py"
+from aptos_sdk.v2.bcs import Serializer
+
+ser = Serializer()
+ser.sequence([1, 2, 3], Serializer.u64)
+vector_arg = ser.output()
+
+timestamp = await aptos.general.view_bcs(
+    "0x1::timestamp",
+    "now_seconds",
+    [],
+    b"",
+)
+```
+
+## Indexer 查询
+
+同一软件包中的 v1 `IndexerClient` 支持 GraphQL Indexer 查询。v2 客户端与全节点 REST API 通信。如果需要聚合后的 Indexer 数据，请使用 `aptos_sdk.async_client.IndexerClient`，或直接查询 [Indexer API](/zh/build/indexer)。

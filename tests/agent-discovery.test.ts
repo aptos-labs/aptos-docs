@@ -158,11 +158,13 @@ describe("OAuth Protected Resource Metadata (RFC 9728)", () => {
     resource_documentation?: string;
   }>("public/.well-known/oauth-protected-resource");
 
-  it("declares the faucet's resource identifier and authorization servers", () => {
-    // Only the Aptos Testnet Faucet is OAuth-protected; the rest of aptos.dev
-    // is unauthenticated public docs. Keep the resource pinned to the faucet
-    // host so RFC 9728 validation (Section 3.3) succeeds.
-    expect(metadata.resource, "resource").toBe("https://faucet.testnet.aptoslabs.com");
+  it("declares this origin as the resource identifier and lists faucet authorization servers", () => {
+    // RFC 9728 clients (and the Is It Agent Ready? scanner) require `resource`
+    // to share an origin with the well-known document. Documentation on this
+    // host is public; the listed issuers mint Google ID tokens for the
+    // Aptos Testnet Faucet API on faucet.testnet.aptoslabs.com.
+    expect(metadata.resource, "resource").toBe("https://aptos.dev");
+    expect(new URL(metadata.resource ?? "").origin).toBe("https://aptos.dev");
     expect(metadata.authorization_servers, "authorization_servers").toEqual(
       expect.arrayContaining(["https://securetoken.google.com/aptos-api-gateway-prod"]),
     );
@@ -178,8 +180,47 @@ describe("OAuth Protected Resource Metadata (RFC 9728)", () => {
     expect(metadata.scopes_supported, "scopes_supported").toEqual(
       expect.arrayContaining(["openid"]),
     );
-    expect(metadata.resource_name, "resource_name").toBeTruthy();
+    expect(metadata.resource_name, "resource_name").toBe("Aptos Developer Documentation");
     expect(metadata.resource_documentation, "resource_documentation").toMatch(/^https:\/\//);
+  });
+});
+
+describe("auth.md agent authentication", () => {
+  const body = readText("public/auth.md");
+
+  it("is served from the site root with an H1 that contains auth.md", () => {
+    expect(body).toMatch(/^# auth\.md\b/m);
+  });
+
+  it("points at the origin-level OAuth discovery documents with absolute URLs", () => {
+    expect(body).toContain("https://aptos.dev/.well-known/oauth-protected-resource");
+    expect(body).toContain("https://aptos.dev/.well-known/oauth-authorization-server");
+    expect(body).toMatch(
+      /\[https:\/\/aptos\.dev\/\.well-known\/oauth-protected-resource\]\(https:\/\/aptos\.dev\/\.well-known\/oauth-protected-resource\)/,
+    );
+    expect(body).toMatch(
+      /\[https:\/\/aptos\.dev\/\.well-known\/oauth-authorization-server\]\(https:\/\/aptos\.dev\/\.well-known\/oauth-authorization-server\)/,
+    );
+  });
+
+  it("does not advertise a fake agent-registration endpoint", () => {
+    expect(body.toLowerCase()).toMatch(/does not offer agent registration/);
+    expect(body).not.toMatch(/https:\/\/aptos\.dev\/agent\//);
+    expect(body).not.toMatch(/"register_uri"\s*:/);
+  });
+});
+
+describe("DNS-AID operator documentation", () => {
+  it("documents the Google Cloud DNS HTTPS index record in English and Chinese", () => {
+    // DNS-AID records cannot be published from this repo; the docs must stay
+    // the source of truth for the record operators need to add.
+    const english = readText("src/content/docs/build/ai.mdx");
+    const chinese = readText("src/content/docs/zh/build/ai.mdx");
+    for (const body of [english, chinese]) {
+      expect(body).toContain("_index._agents.aptos.dev");
+      expect(body).toContain('alpn="h2,h3"');
+      expect(body).toContain("DNS-AID");
+    }
   });
 });
 
@@ -221,6 +262,14 @@ describe("OpenID Connect Discovery 1.0 / OAuth Authorization Server Metadata (RF
       oidc.token_endpoint,
     );
     expect(authServer.jwks_uri, "oauth-authorization-server jwks_uri").toBe(oidc.jwks_uri);
+  });
+
+  it("does not claim Google's authorization server supports agent registration", () => {
+    // These files mirror Firebase/Google OIDC metadata. Adding an agent_auth
+    // register_uri here would send agents to an endpoint that does not exist.
+    // Registration instructions live in public/auth.md instead.
+    expect(oidc).not.toHaveProperty("agent_auth");
+    expect(authServer).not.toHaveProperty("agent_auth");
   });
 
   it("OIDC issuer matches the faucet resource metadata authorization_servers", () => {
@@ -304,6 +353,7 @@ describe("Head.astro in-page discovery links", () => {
       { href: "/.well-known/oauth-protected-resource", rel: "describedby" },
       { href: "/.well-known/openid-configuration", rel: "describedby" },
       { href: "/.well-known/oauth-authorization-server", rel: "describedby" },
+      { href: "/auth.md", rel: "describedby" },
     ];
     for (const { href, rel } of expectedHrefs) {
       expect(hasLinkRel(href, rel), `Head.astro missing <link rel="${rel}" href="${href}">`).toBe(
@@ -324,7 +374,7 @@ describe("Head.astro in-page discovery links", () => {
       { href: "/.well-known/agent-skills/index.json", title: "Aptos Agent Skills index" },
       {
         href: "/.well-known/oauth-protected-resource",
-        title: "Aptos Faucet OAuth Protected Resource Metadata",
+        title: "Aptos OAuth Protected Resource Metadata",
       },
       {
         href: "/.well-known/openid-configuration",
@@ -333,6 +383,10 @@ describe("Head.astro in-page discovery links", () => {
       {
         href: "/.well-known/oauth-authorization-server",
         title: "Aptos Faucet OAuth 2.0 Authorization Server Metadata",
+      },
+      {
+        href: "/auth.md",
+        title: "Aptos auth.md agent authentication",
       },
     ];
     for (const { href, title } of expectedTitles) {
@@ -436,6 +490,7 @@ describe("vercel.json Link response header", () => {
     expect(linkHeader).toContain("/.well-known/oauth-protected-resource");
     expect(linkHeader).toContain("/.well-known/openid-configuration");
     expect(linkHeader).toContain("/.well-known/oauth-authorization-server");
+    expect(linkHeader).toContain("/auth.md");
     expect(linkHeader).toMatch(/rel="api-catalog"/);
     expect(linkHeader).toMatch(/rel="service-desc"/);
     expect(linkHeader).toMatch(/rel="service-doc"/);
@@ -449,6 +504,7 @@ describe("vercel.json Link response header", () => {
       ["/.well-known/oauth-protected-resource", /^application\/json/],
       ["/.well-known/openid-configuration", /^application\/json/],
       ["/.well-known/oauth-authorization-server", /^application\/json/],
+      ["/auth.md", /^text\/markdown/],
     ];
     for (const [source, expected] of pairs) {
       const entry = vercel.headers?.find((item) => item.source === source);

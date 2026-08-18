@@ -1,0 +1,94 @@
+---
+title: "Go SDK：创建和管理账户"
+description: "了解如何使用 Go SDK 通过不同签名方案生成、注资和管理 Aptos 账户。"
+sidebar:
+  label: "账户"
+---
+
+Go SDK 提供多种生成账户凭据的方式，可使用：
+
+- `aptos.NewEd25519Account()`
+- `aptos.NewSecp256k1Account()`
+- `aptos.NewEd25519SingleSenderAccount()`
+- `aptos.NewAccountFromSigner()`
+
+`Account.NewEd25519Account()` 是最常用于为新账户创建密钥的方法。它默认使用 `ED25519` 密钥类型，但也可按以下方式指定所需的签名方案：
+
+```go
+// To derive an ed25519 account
+account1 := aptos.NewEd25519Account()
+
+// To derive a secp256k1 account
+account2 := aptos.NewSecp256k1Account()
+```
+
+生成凭据后，**必须**为账户注资，网络才能识别其存在。
+
+在 Devnet 环境中，可通过 faucet 使用以下命令完成：
+
+```go filename="fund.go"
+client, err = aptos.NewClient(aptos.DevnetConfig)
+if err != nil {
+  panic("Failed to create client:" + err.Error())
+}
+
+// Fund an account with 1 Devnet APT
+client.Fund(account1.Address, 100_000_000)
+```
+
+在 Testnet 上，可在[铸造页面](/zh/network/faucet)领取代币。
+
+## 表示账户的其他方式
+
+如果拥有私钥或等效表示，可以用它创建 `Account` 结构体，并在使用 Go SDK 时管理这些凭据。
+
+以下示例展示如何通过特定编码方案实现此目的。
+
+### 从私钥派生账户
+
+SDK 支持使用 `NewAccountFromSigner()` 方法从私钥派生账户。
+此外，该方法支持根据私钥和账户地址派生账户。
+此方法使用本地计算，因此用于派生尚未轮换认证密钥的 `Account`。
+
+```go
+// to derive an account with a Ed25519 key scheme
+privateKey := &aptos.Ed25519PrivateKey{}
+err := privateKey.FromHex(privateKeyHex)
+if err != nil {
+  panic("Failed to parse private key:" + err.Error())
+}
+account := aptos.NewAccountFromSigner(privateKey)
+
+// to derive an account with a Single Sender Ed25519 key scheme
+privateKey := &aptos.Ed25519PrivateKey{}
+err := privateKey.FromHex(privateKeyHex)
+if err != nil {
+  panic("Failed to parse private key:" + err.Error())
+}
+singleSigner := &crypto.SingleSigner{Signer: privateKey}
+account := aptos.NewAccountFromSigner(singleSigner)
+
+// to derive an account with a Single Sender Secp256k1 key scheme
+privateKey := &aptos.Secp256k1PrivateKey{}
+err := privateKey.FromHex(privateKeyHex)
+if err != nil {
+  panic("Failed to parse private key:" + err.Error())
+}
+singleSigner := &crypto.SingleSigner{Signer: privateKey}
+account := aptos.NewAccountFromSigner(singleSigner)
+
+// to derive an account with a private key and account address
+address := &aptos.AccountAddress{}
+err := address.ParseStringRelaxed(addressHex)
+if err != nil {
+  panic("Failed to parse address:" + err.Error())
+}
+privateKey := &aptos.Ed25519PrivateKey{}
+err := privateKey.FromHex(privateKeyHex)
+if err != nil {
+  panic("Failed to parse private key:" + err.Error())
+}
+account := aptos.NewAccountFromSigner(privateKey, address.AuthKey())
+```
+
+{/* TODO: Once derivation path is supported ### Derive an account from derivation path */}

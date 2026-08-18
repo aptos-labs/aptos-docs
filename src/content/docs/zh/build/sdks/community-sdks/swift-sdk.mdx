@@ -1,0 +1,125 @@
+---
+title: "Swift SDK"
+description: "已弃用的社区 Swift SDK。请改用 AptosKit 或官方 SDK。"
+sidebar:
+  label: "Swift SDK"
+  badge:
+    text: 已弃用
+    variant: danger
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="danger" title="已弃用">
+  此社区 Swift SDK 已弃用且不再维护。iOS 开发请使用
+  [Kotlin Multiplatform SDK 中的 AptosKit](/zh/build/sdks/community-sdks/kotlin-sdk/for-ios-devs/getting-started)，
+  或官方 SDK：[TypeScript](/zh/build/sdks/ts-sdk)、
+  [Python](/zh/build/sdks/python-sdk)、[Go](/zh/build/sdks/go-sdk) 或
+  [Rust](/zh/build/sdks/rust-sdk)。
+</Aside>
+
+Alcove 为 Aptos 构建了 Swift SDK，见[此处](https://github.com/ALCOVE-LAB/aptos-swift-sdk)。
+
+## 安装 Swift SDK
+
+```swift
+.package(url: "https://github.com/ALCOVE-LAB/aptos-swift-sdk.git", branch: "main")
+```
+
+## 使用 Swift SDK
+
+### 创建客户端
+
+可以导入 aptos-swift-sdk 并创建 `Client`：
+
+```swift
+import Aptos
+
+let client = Aptos(aptosConfig: .devnet)
+
+```
+
+可通过 AptosConfig.Network 配置网络，或使用已有的 AptosConfig.devnet、AptosConfig.testnet 或 AptosConfig.mainnet。
+
+### 创建私钥
+
+可调用 Account.generate() 创建新的 Ed25519 账户私钥。
+
+```swift
+let account = Account.generate()
+```
+
+从私钥派生：
+
+```swift
+
+let privateKey = try Ed25519PrivateKey("myEd25519privatekeystring")
+// or
+let singleKeyPrivateKey = try Secp256k1PrivateKey(Secp256k1.privateKey)
+
+let newAccount: Account.Ed25519Account = try Account.fromPrivateKey(privateKey)
+let singleKeyAccount: Account.SingleKeyAccount = try Account.fromPrivateKey(singleKeyPrivateKey)
+```
+
+从路径派生：
+
+```swift
+let path = "m/44'/637'/0'/0'/1"
+let mnemonic = "various float stumble..."
+let newAccount = try Account.fromDerivationPath(Wallet.path, mnemonic: Wallet.mnemonic)
+```
+
+### 为账户注资
+
+可通过 Devnet faucet 创建并注资账户：
+
+```swift
+let account = Account.generate()
+let txn = try await client.faucet.fundAccount(accountAddress: account.accountAddress, amount: 100_000_000)
+```
+
+在 Testnet 上，可以在[铸造页面](/zh/network/faucet)领取代币。
+
+### 发送交易
+
+可以通过交易发送 AptosCoin：
+
+```swift
+let txn: TransactionResponse
+let senderAccount = Account.generate()
+_ = try await aptos.faucet.fundAccount(accountAddress: senderAccount.accountAddress, amount: 100_000_000)
+let bob = Account.generate()
+// Build transaction
+let rawTxn = try await aptos.transaction.build.simple(
+    sender: senderAccount.accountAddress,
+    data: InputEntryFunctionData(
+        function: "0x1::aptos_account::transfer",
+        functionArguments: [bob.accountAddress, 100]
+    )
+)
+// Sign
+let authenticator = try await aptos.transaction.sign.transaction(
+    signer: senderAccount,
+    transaction: rawTxn
+)
+// Submit
+let response = try await aptos.transaction.submit.simple(
+    transaction: rawTxn,
+    senderAuthenticator: authenticator
+)
+// Wait
+txn = try await aptos.transaction.waitForTransaction(transactionHash: response.hash)
+// Read
+let transaction = try await aptos.transaction.getTransactionByHash(txn.hash)
+
+```
+
+### 测试
+
+要运行 SDK 测试，只需在该仓库根目录执行：
+
+> 注意：为获得更好体验，请确保没有 aptos 本地节点进程正在运行（可检查端口 8080 上是否有进程）。
+
+```swift
+swift test
+```

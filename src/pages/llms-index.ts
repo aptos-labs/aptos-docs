@@ -58,6 +58,8 @@ export const GET: APIRoute = async () => {
     "- [Aptos MCP on npm](https://www.npmjs.com/package/@aptos-labs/aptos-mcp): run `npx @aptos-labs/aptos-mcp` to give IDEs on-chain queries, REST helpers, and Move tooling.",
     "- [Aptos Agent Skills](https://github.com/aptos-labs/aptos-agent-skills): installable skills for Move, TypeScript SDK, and dApp scaffolding.",
     `- [AI tools hub](${markdownUrl(SITE_URL, "build/ai")}): MCP setup, Agent Skills, and LLMs.txt usage on one page (Markdown).`,
+    `- [auth.md](${SITE_URL}/auth.md): agent authentication for aptos.dev (public docs; Testnet Faucet uses human Google OIDC).`,
+    `- [OAuth Protected Resource Metadata](${SITE_URL}/.well-known/oauth-protected-resource): RFC 9728 document for this origin.`,
     "- [Aptos Labs on GitHub](https://github.com/aptos-labs): official SDKs, tools, and sample code.",
     "- [Aptos Explorer](https://explorer.aptoslabs.com/): look up accounts, transactions, validators, and network health.",
     `- [Aptos standards (AIPs)](${markdownUrl(SITE_URL, "build/smart-contracts/aptos-standards")}): tokens, naming, and other Aptos Improvement Proposal standards.`,

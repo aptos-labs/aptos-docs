@@ -1,0 +1,141 @@
+---
+title: "委托质押"
+description: "了解 Aptos 上的委托质押、委托池、所有者-运营者-投票者-委托者模型，以及如何无需运行验证者即可参与质押。"
+sidebar:
+  label: "委托质押"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="note">
+  强烈建议先阅读[质押](/zh/network/blockchain/staking)。
+</Aside>
+
+委托质押是质押协议的扩展。委托池将质押所有者抽象为一个实体，它可以从委托者收集质押，并代表委托者将其加入附加到验证者的原生质押池。这使多个实体能够组成满足验证者加入验证者集合最低要求的质押池。委托者可向未激活的池添加质押，但委托池在激活前不会产生奖励。
+
+<Aside type="caution">
+  委托池无需许可，任何人都可以添加质押。创建后，委托池无法变更为质押池，反之亦然；但它可以从验证者集合移除并提取资产。有关质押池的完整详细信息，请参阅[质押](/zh/network/blockchain/staking)。
+</Aside>
+
+完整的委托池智能合约请参阅 [delegation\_pool.move](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/delegation_pool.move)。
+
+与质押池不同，委托池可在零质押下初始化。初始化后，委托质押池通过资源账户间接拥有。该账户会代表委托者管理底层质押池的质押，转发其质押管理操作（添加、解锁、重新激活、提取）；资源账户无法被直接访问，也不能由外部拥有。
+
+请查看完整的[委托池操作列表](/zh/network/nodes/validator-node/connect-nodes/delegation-pool-operations)。
+
+![委托质押](~/images/delegated-staking/delegated-staking.png)
+
+共有五种实体类型：
+
+- 所有者
+- 运营者
+- 投票者
+- 委托者
+- 受益人
+
+使用此模型，所有者无需在 Aptos 区块链上自行质押即可运行验证者。
+
+[Aptos 区块链上的验证如何运作](/zh/network/blockchain/staking#validation-on-the-aptos-blockchain)
+
+### 所有者
+
+委托池所有者具有以下能力：
+
+1. 创建委托池
+2. 为委托池指定运营者
+3. 设置委托池的运营者佣金比例
+4. 为委托池指定投票者
+
+### 运营者
+
+节点运营者由池所有者指定，用于运行验证者节点。运营者具有以下能力：
+
+1. 委托池达到 100 万 APT 后，加入或离开验证者集合
+2. 执行验证功能
+3. 更改共识密钥和网络地址。共识密钥用于参与验证者共识流程，即投票和提议区块。若该密钥泄露，运营者可更改（“轮换”）该密钥。
+
+每个 epoch 结束时，运营者自动获得分配的佣金作为奖励。
+
+### 投票者
+
+所有者可以指定投票者。这使投票者能够参与治理。投票者将在交易中使用投票密钥签署治理投票。
+
+<Aside type="note">
+  本文档介绍质押。有关如何使用所有者-投票者模型参与 Aptos 链上治理，请参阅[治理](/zh/network/blockchain/governance)。
+</Aside>
+
+### 委托者
+
+委托者是指在委托池中拥有质押的任何人。委托者将获得其质押的奖励，扣除运营者佣金。委托者可执行以下操作：
+
+1. 添加质押
+2. 解锁质押
+3. 重新激活质押
+4. 提取质押
+
+### 受益人
+
+受益人是由运营者指定、用于接收运营者佣金奖励的地址。受益人角色的要点如下：
+
+1. 每个运营者在其所有委托池中只能设置一个受益人地址
+2. 受益人可以对已赚取的佣金执行解锁和提取等操作
+3. 更改受益人时，任何未支付的佣金奖励都会转给新的受益人
+4. 运营者可使用 `set_beneficiary_for_operator` 函数设置或更改受益人
+
+## 验证者流程
+
+<Aside type="note">
+  有关以下流程中命令的正确执行顺序，请参阅[委托池操作](/zh/network/nodes/validator-node/connect-nodes/delegation-pool-operations)。
+</Aside>
+
+1. [运营者部署验证者节点](/zh/network/nodes/validator-node)
+2. [运行命令获取委托池地址](/zh/network/nodes/validator-node/connect-nodes/delegation-pool-operations#prerequisites)
+3. [运营者使用第 2 步派生的池地址连接网络](/zh/network/nodes/validator-node/connect-nodes/connect-to-aptos-network)
+4. [所有者初始化委托池并设置运营者](/zh/network/nodes/validator-node/connect-nodes/delegation-pool-operations#initialize-a-delegation-pool)
+5. 委托者可随时添加质押
+6. 委托池达到 100 万 APT 时，运营者可调用 aptos node join-validator-set 加入活跃验证者集合。变更会在下一个 epoch 生效。
+7. 验证者执行验证（作为主验证者提议区块）并获得奖励。奖励按质押金额比例分配给委托者。质押将自动锁定固定期限（由治理设定），并在到期后自动续期。
+8. 运营者如需更新共识密钥或验证者网络地址，可随时调用 aptos node update-consensus-key 或 aptos node update-validator-network-addresses。与质押变更类似，共识密钥或验证者网络地址的变更仅在下一个 epoch 生效。
+9. 委托者可随时请求解锁质押；但只有在委托池锁定期到期后才能提取质押。
+10. 验证者可通过调用 aptos node leave-validator-set 明确离开验证者集合；若其质押低于最低要求，也会在 epoch 结束时被移除。
+
+## 加入验证者集合
+
+作为 Aptos 网络上的委托验证者节点参与流程如下：
+
+1. 运营者运行验证者节点，配置链上验证者网络地址并轮换共识密钥。
+2. 所有者初始化委托池。
+3. 委托池激活前，验证者节点无法同步。委托池达到 100 万 APT 后激活。
+4. 运营者进行验证并获得奖励。
+5. 质押池将自动锁定固定期限（由 Aptos 治理设定），并在到期后自动续期。佣金会自动分配给运营者作为奖励。运营者可随时解锁质押，但在委托池锁定期到期前不能提取。
+6. 运营者必须等到新 epoch 开始后，其验证者才会激活。
+
+<Aside type="note">
+  有关加入验证者集合的分步说明，请参阅：[加入验证者集合](/zh/network/nodes/validator-node/connect-nodes/connect-to-aptos-network#join-the-validator-set)。
+</Aside>
+
+### 自动锁定期限
+
+运营者加入验证者集合后，委托池的质押将自动锁定固定期限，该期限由 Aptos 治理设定。委托者将遵循委托池的锁定周期。
+
+### 自动续期
+
+锁定期到期后将自动续期，使验证者能够继续验证并获得奖励。
+
+### 解锁质押
+
+委托者可随时解锁质押。但只有在委托池锁定期到期后才能提取质押。已解锁的质押在可提取前会继续获得奖励。
+
+### 重置锁定期
+
+锁定期无法重置。
+
+## 奖励
+
+委托质押奖励使用以下因素计算：
+
+1. `rewards_rate`，即年化收益率（APY）；奖励会按当前质押金额以复利累积。
+2. 委托者质押
+3. [验证者奖励表现](/zh/network/blockchain/staking#rewards-formula)
+
+请参阅[计算委托池奖励](/zh/network/nodes/validator-node/connect-nodes/delegation-pool-operations#compute-delegation-pool-rewards-earned)。

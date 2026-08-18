@@ -1,0 +1,94 @@
+---
+title: "Rust SDK - Sponsoring Transactions"
+description: "Learn how to sponsor transactions on Aptos using the Rust SDK, allowing one account to pay gas fees for another account's transactions"
+sidebar:
+  label: "Sponsoring Transactions"
+---
+
+import { Steps } from '@astrojs/starlight/components';
+
+Normally, the account that is executing a transaction pays for the gas fees. You
+can allow another account to cover those charges by sponsoring a transaction.
+
+This can be used to help manage fees from a central account when working with
+complicated smart contracts.
+
+## How To Sponsor a Transaction
+
+<Steps>
+  1. Build the raw transaction, then wrap it with `FeePayerRawTransaction`.
+
+     ```rust filename="sponsor.rs"
+     let payload = EntryFunction::apt_transfer(recipient.address(), 5_000_000)?;
+     let sequence_number = aptos.get_sequence_number(sender.address()).await?;
+     let raw_txn = TransactionBuilder::new()
+         .sender(sender.address())
+         .sequence_number(sequence_number)
+         .payload(payload.into())
+         .chain_id(aptos.chain_id())
+         .expiration_from_now(600)
+         .build()?;
+     let fee_payer_txn = FeePayerRawTransaction::new_simple(raw_txn, fee_payer.address());
+     ```
+
+  2. Sign with BOTH the sender and the fee payer.
+
+     ```rust filename="sponsor.rs"
+     let signed_txn = sign_fee_payer_transaction(
+         &fee_payer_txn,
+         &sender,
+         &[], // secondary signers
+         &fee_payer,
+     )?;
+     ```
+
+  3. Submit and wait for the transaction.
+
+     ```rust filename="sponsor.rs"
+     let result = aptos.submit_and_wait(&signed_txn, None).await?;
+     ```
+</Steps>
+
+## Rust Sponsored Transaction Code Sample
+
+```rust filename="sponsor.rs"
+use aptos_sdk::{
+    Aptos, AptosConfig,
+    account::Ed25519Account,
+    transaction::{
+        EntryFunction, TransactionBuilder, builder::sign_fee_payer_transaction,
+        types::FeePayerRawTransaction,
+    },
+};
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let aptos = Aptos::new(AptosConfig::devnet())?;
+
+    let sender = Ed25519Account::generate();
+    let recipient = Ed25519Account::generate();
+    let fee_payer = Ed25519Account::generate();
+
+    aptos
+        .fund_account(fee_payer.address(), 1_000_000_000)
+        .await?;
+    aptos.fund_account(sender.address(), 10_000_000).await?;
+
+    let payload = EntryFunction::apt_transfer(recipient.address(), 5_000_000)?;
+    let sequence_number = aptos.get_sequence_number(sender.address()).await?;
+    let raw_txn = TransactionBuilder::new()
+        .sender(sender.address())
+        .sequence_number(sequence_number)
+        .payload(payload.into())
+        .chain_id(aptos.chain_id())
+        .expiration_from_now(600)
+        .build()?;
+
+    let fee_payer_txn = FeePayerRawTransaction::new_simple(raw_txn, fee_payer.address());
+    let signed_txn = sign_fee_payer_transaction(&fee_payer_txn, &sender, &[], &fee_payer)?;
+    let result = aptos.submit_and_wait(&signed_txn, None).await?;
+    println!("Submitted: {:?}", result.data.get("hash"));
+
+    Ok(())
+}
+```

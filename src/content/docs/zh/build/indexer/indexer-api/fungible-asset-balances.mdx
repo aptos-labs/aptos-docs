@@ -1,0 +1,49 @@
+---
+title: "获取同质化资产余额"
+description: "查询账户当前的同质化资产余额，提供实时持仓数据并向后兼容 Coin"
+sidebar:
+  label: "资产余额"
+---
+
+import { GraphQLEditor } from '~/components/react/GraphQLEditor';
+
+import { Aside } from '@astrojs/starlight/components';
+
+`GetFungibleAssetBalances` 会检索与指定账户地址关联的各种同质化资产类型的当前余额。这对于需要实时了解账户资产持仓的平台至关重要，也向后兼容查询 `Coin`。
+
+<Aside type="note">
+  亲自试用！在编辑器中调整下方查询变量，可获取不同地址的数据。
+</Aside>
+
+<GraphQLEditor
+  query={`query GetFungibleAssetBalances(
+  $address: String
+  $offset: Int
+  $token_standard: String
+) {
+  current_fungible_asset_balances(
+    where: {
+      owner_address: { _eq: $address }
+      token_standard: { _eq: $token_standard }
+    }
+    offset: $offset
+    limit: 100
+    order_by: { amount: desc }
+  ) {
+    asset_type
+    amount
+    __typename
+  }
+}`}
+  variables={`{
+  "address": "0x0000000000000000000000000000000000000000000000000000000000000001",
+  "token_standard": "v1",
+  "offset": 0
+}`}
+/>
+
+#### 变量：
+
+- `$address`：**String** — 要获取同质化资产余额的账户地址。例如：`"0x0000000000000000000000000000000000000000000000000000000000000001"`。
+- `token_standard`：**String** — 资产的代币标准：`"v1"` 是先前的代币标准，`"v2"` 是新标准。
+- `$offset`：**Integer**（可选）— 开始获取余额的分页偏移量。默认值：`0`。

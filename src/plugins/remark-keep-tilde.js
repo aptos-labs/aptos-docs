@@ -43,7 +43,7 @@ function pruneUnsafe(target) {
 }
 
 function isNotGfmTildeRule(rule) {
-  if (!rule || rule.character !== "~") {
+  if (rule?.character !== "~") {
     return true;
   }
 

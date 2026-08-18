@@ -1,0 +1,117 @@
+---
+title: "Unity SDK"
+description: "已弃用的 Aptos Unity SDK。请改用 TypeScript、Python、Go 或 Rust。"
+sidebar:
+  label: "Unity SDK"
+  badge:
+    text: 已弃用
+    variant: danger
+---
+
+import { Aside, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+<Aside type="danger" title="已弃用">
+  Aptos Unity SDK 已弃用且不再维护。新项目请使用
+  [TypeScript SDK](/zh/build/sdks/ts-sdk)、
+  [Python SDK](/zh/build/sdks/python-sdk)、[Go SDK](/zh/build/sdks/go-sdk)
+  或 [Rust SDK](/zh/build/sdks/rust-sdk)。
+</Aside>
+
+将 Aptos Web3 功能集成到 Unity 应用中。此 SDK 的目标是为开发者提供一组工具，以使用 Unity 游戏引擎构建 Web3 游戏。
+
+**支持的功能**
+
+- 支持 [Aptos .NET SDK](/zh/build/sdks/dotnet-sdk)
+
+  > - Binary Canonical Serialization (BCS) 编码和解码
+  > - Ed25519、SingleKey、MultiKey 和 Keyless 签名者支持
+  > - 用于构建、签署和提交交易的实用工具
+  > - 对 Aptos Fullnode 和 Indexer API 的抽象
+  > - 支持解析和查询 Aptos Names (ANS)
+
+**兼容性**
+
+| .NET 版本           | 支持 |
+| ----------------- | -- |
+| .NET Standard 2.1 | ✅  |
+
+## 安装
+
+### 通过 Unity Package Manager（UPM）安装
+
+1. 打开 Unity Package Manager（Window > Package Manager）。
+2. 点击 + 按钮，然后选择 Add package from git URL...。
+3. 输入此仓库中 Aptos Unity SDK 路径的 URL：
+
+```shellscript
+https://github.com/aptos-labs/unity-sdk.git?path=/Packages/com.aptoslabs.aptos-unity-sdk
+```
+
+### 通过 unitypackage 安装
+
+1. 前往 [aptos-labs/unity-sdk Releases](https://github.com/aptos-labs/unity-sdk/releases)，下载最新版本。
+2. 将 .unitypackage 文件拖放到 Unity 项目中。
+
+## 使用
+
+添加 Aptos 命名空间并实例化 AptosUnityClient，以设置 Aptos 客户端。可以使用 Networks 中的预定义配置，也可以自行配置。
+
+```csharp {2-2,8-8,11-15}
+using UnityEngine;
+using Aptos;
+
+class Example : MonoBehaviour
+{
+    public void Start()
+    {
+        PrintLedgerInfo();
+    }
+
+    async void PrintLedgerInfo() {
+        var client = new AptosUnityClient(Networks.Mainnet);
+        var ledgerInfo = await client.Block.GetLedgerInfo();
+        Debug.Log(ledgerInfo.BlockHeight);
+    }
+
+}
+```
+
+要与区块链交互，需要创建签名者并构建交易。
+
+```csharp filename="Program.cs" {10-11,13-21,23-24,26-27}
+using UnityEngine;
+using Aptos;
+
+class Example : MonoBehaviour
+{
+    public async void Start()
+    {
+        var client = new AptosUnityClient(Networks.Mainnet);
+
+        // 1. Create a signer
+        var signer = Account.Generate();
+
+        // 2. Build the transaction
+        var transaction = await client.Transaction.Build(
+            sender: account,
+            data: new GenerateEntryFunctionPayloadData(
+                function: "0x1::aptos_account::transfer_coins",
+                typeArguments: ["0x1::aptos_coin::AptosCoin"],
+                functionArguments: [account.Address, "100000"]
+            )
+        );
+
+        // 3. Sign and submit the transaction
+        var pendingTransaction = client.Transaction.SignAndSubmitTransaction(account, transaction);
+
+        // 4. (Optional) Wait for the transaction to be committed
+        var committedTransaction = await client.Transaction.WaitForTransaction(pendingTransaction);
+    }
+}
+```
+
+## 资源
+
+<CardGrid>
+  <LinkCard href="https://github.com/aptos-labs/aptos-unity-starter" title="Aptos Wallet Starter" description="集成 Aptos Unity SDK 的 Unity 项目示例。" target="_blank" />
+</CardGrid>

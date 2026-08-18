@@ -1,0 +1,74 @@
+---
+title: "联邦 Keyless 集成指南"
+description: "将联邦 Keyless 与 Auth0、AWS Cognito 等 IAM 提供商集成的分步指南。"
+sidebar:
+  label: "集成指南"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+<Steps>
+  1. 第 1 步：设置 IAM 提供商
+
+     使用 IAM 设置项目，使其符合所需账户结构。
+
+     - [AWS Cognito 入门](https://aws.amazon.com/cognito/getting-started/)
+     - [Auth0 入门](https://auth0.com/docs/get-started)
+
+  2. 第 2 步：在链上注册 JSON Web Key Set（JWKS）
+
+     联邦 Keyless 账户要求在链上注册 JWKS。
+
+     要注册 JWKS，请使用一个 Aptos 账户调用 `0x1::jwks::update_federated_jwk_set` entry 函数。该账户将存储用于验证联邦 Keyless 账户签名交易的 JWK。
+
+     <Aside type="caution">
+       **失去对 JWK 所有者账户的访问会危及使用其创建的联邦 Keyless 账户**
+
+       JWK 所有者账户是唯一可以更新 JWKS 的账户。若失去对该账户的访问，您将无法更新 JWKS；发生密钥轮换时，使用它创建的联邦 Keyless 账户将停止工作。用户将无法验证其 JWT，因为 JWT 由新密钥签名，而该密钥的公钥未注册在 Aptos 区块链上。
+     </Aside>
+
+     JWK 集地址如下：
+
+     AWS Cognito：`https://cognito-idp.<region>.amazonaws.com/<userPoolId>/.well-known/jwks.json`
+     Auth0：`https://<yourDomain>/.well-known/jwks.json`
+
+     TypeScript SDK 提供功能来简化此过程：给定 IAM 提供商设置的发行方（用户 JWT 中的 `iss` claim 值）和用于进行更新的账户即可。
+
+     ```tsx
+     import {Aptos} from '@aptos-labs/ts-sdk'; // Requires version v1.29.1 or later
+
+     const aptos = new Aptos(new AptosConfig({ network: Network.DEVNET })); // Configure your network here
+     const alice = // Derive your Aptos account here
+     const jwkTxn = await aptos.updateFederatedKeylessJwkSetTransaction({ sender: alice, iss });
+     await aptos.signAndSubmitTransaction({ signer: alice, transaction: jwkTxn });
+     ```
+
+     可使用 SDK 提供的交互式示例，在 Devnet 或 Testnet 上轻松为 IAM 提供商注册 JWKS。该示例会使用 Google Keyless 账户设置 JWK 所有者账户。
+
+     ```shellscript
+     git clone https://github.com/aptos-labs/aptos-ts-sdk
+     cd aptos-ts-sdk
+     pnpm install && pnpm build
+     cd examples/typescript
+     pnpm install
+     pnpm jwk_update
+     ```
+
+     要在 Mainnet 上设置 JWK 所有者账户，需要创建账户并使用它注册 JWKS。
+
+     请保存用于注册 JWKS 的账户地址，因为下一步需要使用它。
+
+     有关 `0x1::jwks::update_federated_jwk_set` entry 函数的更多信息，请参阅[参考文档](https://aptos-labs.github.io/framework-book/aptos-framework/jwks.html#function-update_federated_jwk_set)。
+
+     <Aside type="caution">
+       **处理密钥轮换**
+
+       每当 JWKS 发生密钥轮换时，务必及时更新链上注册的 JWKS，以避免联邦 Keyless 账户失去访问权限。详情请参阅[这里](/zh/build/guides/aptos-keyless/federated-keyless/key-considerations)。
+     </Aside>
+
+  3. 第 3 步：遵循 Aptos Keyless 集成指南
+
+     注册 JWKS 后，可以从第 2 步开始遵循 Aptos Keyless 集成指南。派生 `KeylessAccount` 时，请务必将 `jwkAddress` 设置为用于注册 JWKS 的账户地址。
+
+     [Aptos Keyless 集成指南 - 第 2 步](/zh/build/guides/aptos-keyless/integration-guide#第-2-步安装-aptos-typescript-sdk)
+</Steps>

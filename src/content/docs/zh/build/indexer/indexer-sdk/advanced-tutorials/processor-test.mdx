@@ -1,0 +1,281 @@
+---
+title: "测试处理器"
+description: "Aptos 处理器的综合测试策略，包括验证、转换测试和数据准确性验证"
+sidebar:
+  label: "测试处理器"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+### 什么是处理器？
+
+处理器是 Aptos Indexer 的核心组件，负责处理区块链交易。它会验证、转换并将交易存储到数据库中，使分析、索引和查询等下游应用成为可能。测试处理器可确保所有交易都得到正确处理，维护数据准确性和一致性。
+
+### 使用它测试什么？
+
+- **交易正确性**：确保每笔交易均被准确处理和存储。
+- **模式一致性**：验证数据库模式是否正确设置并在测试期间得到维护。
+
+### 处理器测试的一般流程
+
+1. 指定要测试的交易。
+2. 测试框架 SDK 启动一个模拟 gRPC 服务，在处理器请求交易时返回指定的交易。
+3. 处理器处理交易并将输出写入数据库。
+4. 可选择生成预期数据库输出以进行验证。
+
+支持的场景类型：
+
+1. 单笔交易
+2. 单个包含多笔交易的批次
+   输入 \[A, B, C]
+   1. 处理器处理 A、B 和 C
+3. 连续的多个交易批次：
+   输入 \[A, B, C]
+   1. 处理器处理 A 和 B
+   2. 处理器处理 C
+
+## 前置条件
+
+1. 确保 Docker Desktop 正在运行，以支持 PostgreSQL 容器。
+   - **安装 Docker Desktop**：按照机器上的[本指南](https://docs.docker.com/desktop/)安装 Docker Desktop。
+   - 如果 Docker Desktop 未运行，请启动它。
+2. 确定要测试的交易。
+   - 使用导入的交易，或编写自己的自定义 Move 脚本生成测试交易。详细说明请参阅[导入交易指南](/zh/build/indexer/indexer-sdk/advanced-tutorials/txn-importer)和[使用 Move 脚本生成交易指南](/zh/build/indexer/indexer-sdk/advanced-tutorials/txn-script)。
+3. 将 aptos-indexer-testing-framework 导入 Cargo.toml。
+
+<Aside type="note"> - 本教程假定使用 Postgres 作为数据库。 </Aside>
+
+- **适配其他数据库**：
+  - 将 PostgreSQL 特定代码替换为计划使用的相关数据库代码（例如 MySQL）。
+  - 更新模式初始化和查询方法。
+- **处理器测试参考**：
+  - 示例：[事件处理器测试](https://github.com/aptos-labs/aptos-indexer-processors/blob/main/rust/integration-tests/src/sdk_tests/events_processor_tests.rs#L139)。
+
+## 编写测试的步骤
+
+### 1. 设置测试环境
+
+设置测试环境前，了解本步骤中使用的配置很重要：
+
+**这些配置是什么？**
+
+`generate_file_flag`
+
+- 若 `generate_file_flag` 为 true，测试将覆盖此前测试运行保存的任何数据库输出。若为 false，测试只会将实际数据库输出与预期数据库输出比较，并记录差异。
+
+`custom_output_path`
+
+- 可选配置，用于指定存储预期数据库输出的自定义路径。若未提供，测试将使用 DEFAULT\_OUTPUT\_FOLDER 定义的默认路径。
+
+`DEFAULT_OUTPUT_FOLDER`
+
+- 此常量定义系统存储测试输出文件的默认文件夹。例如：`sdk_expected_db_output_files`。若希望使用其他默认目录，请在配置中修改该值。
+
+```rust
+let (generate_file_flag, custom_output_path) = get_test_config();
+let output_path = custom_output_path.unwrap_or_else(|| format!("{}/imported_mainnet_txns", DEFAULT_OUTPUT_FOLDER));
+
+// Setup DB and replace as needed
+let mut db = PostgresTestDatabase::new();
+db.setup().await.unwrap();
+
+let mut test_context = SdkTestContext::new(&[CONST_VARIABLE_OF_YOUR_TEST_TRANSACTION]); // Replace with your test transaction
+if test_context.init_mock_grpc().await.is_err() {
+    panic!("Failed to initialize mock grpc");
+};
+```
+
+**各组件说明：**
+
+`get_test_config():`
+
+此函数获取测试的配置（diff\_flag 和 custom\_output\_path）。如需支持额外的自定义标志或配置，请修改或扩展该函数。
+output\_path：
+
+若未指定 custom\_output\_path，则将 DEFAULT\_OUTPUT\_FOLDER 与子文件夹 imported\_mainnet\_txns 组合。
+这可确保所有输出文件都存储在可预测的位置。
+
+`PostgresTestDatabase::new():`
+
+创建新的 PostgreSQL 数据库实例以供测试。该数据库是隔离的，确保不会干扰生产环境或其他测试环境。
+
+`SdkTestContext::new():`
+
+使用要测试的交易初始化测试上下文。请将 CONST\_VARIABLE\_OF\_YOUR\_TEST\_TRANSACTION 替换为表示待测试交易的相应变量或常量。
+
+`init_mock_grpc():`
+
+为测试初始化模拟 gRPC 服务。这样处理器便可模拟交易，而无需与实时区块链数据交互。
+
+### 2. 配置处理器
+
+<Aside type="note">
+  - 每个测试都使用 PostgreSQL 容器在隔离环境中运行，以防止干扰。
+</Aside>
+
+```rust
+let db_url = db.get_db_url();
+let transaction_stream_config = test_context.create_transaction_stream_config();
+let postgres_config = PostgresConfig {
+    connection_string: db_url.to_string(),
+    db_pool_size: 100,
+};
+
+let db_config = DbConfig::PostgresConfig(postgres_config);
+let default_processor_config = DefaultProcessorConfig {
+    per_table_chunk_sizes: AHashMap::new(),
+    channel_size: 100,
+    deprecated_tables: HashSet::new(),
+};
+
+let processor_config = ProcessorConfig::DefaultProcessor(default_processor_config);
+let processor_name = processor_config.name();
+```
+
+### 3. 创建处理器
+
+```rust
+let processor = DefaultProcessor::new(indexer_processor_config)
+    .await
+    .expect("Failed to create processor");
+```
+
+注意：请将 `DefaultProcessor` 替换为正在测试的处理器。
+
+### 4. 设置查询
+
+设置查询以从本地数据库加载数据并将其与预期结果比较，请参阅[示例加载函数](https://github.com/aptos-labs/aptos-indexer-processors/blob/a8f9c5915f4e3f1f596ed3412b8eb01feca1aa7b/rust/integration-tests/src/diff_test_helper/default_processor.rs#L45)。
+
+### 5. 设置测试上下文运行函数
+
+使用 test\_context.run() 函数执行处理器，使用查询验证输出，并可选择生成数据库输出文件：
+
+<Aside type="note">
+  关键注意事项：
+
+  - 每个测试都使用 PostgreSQL 容器在隔离环境中运行，以防止干扰。
+  - 正确处理版本可确保交易按正确顺序处理和验证。
+  - 验证逻辑必须通过将处理器输出与预期基线比较来检测变更或问题。
+</Aside>
+
+```rust
+    let txn_versions: Vec<i64> = test_context
+        .get_test_transaction_versions()
+        .into_iter()
+        .map(|v| v as i64)
+        .collect();
+
+    let db_values = test_context
+        .run(
+            &processor,
+            generate_file_flag,
+            output_path.clone(),
+            custom_file_name,
+            move || {
+                let mut conn = PgConnection::establish(&db_url).unwrap_or_else(|e| {
+                    eprintln!("[ERROR] Failed to establish DB connection: {:?}", e);
+                    panic!("Failed to establish DB connection: {:?}", e);
+                });
+
+                let db_values = match load_data(&mut conn, txn_versions.clone()) {
+                    Ok(db_data) => db_data,
+                    Err(e) => {
+                        eprintln!("[ERROR] Failed to load data {}", e);
+                        return Err(e);
+                    },
+                };
+
+                if db_values.is_empty() {
+                    eprintln!("[WARNING] No data found for versions: {:?}", txn_versions);
+                }
+
+                Ok(db_values)
+            },
+        )
+```
+
+### 6. 运行处理器测试
+
+准备好测试后，运行以下命令生成用于验证的预期输出：
+
+```shellscript
+cargo test sdk_tests -- generate-output
+```
+
+参数：
+generate-output：若要生成或覆盖保存的数据库输出，请设为 true；若要在差异模式中比较数据库输出，请设为 false。
+output-path：用于指定数据库输出路径的可选参数。
+
+预期数据库输出将保存到指定的 output\_path；默认保存到 `sdk_expected_db_output_files`。
+
+***
+
+## 常见问题
+
+### 支持哪些测试类型？
+
+- 测试框架允许编写比较处理器数据库输出的测试。它可帮助在更新或开发处理器时发现数据库输出的变更。
+
+### 什么是 `TestContext`？
+
+`TestContext` 是管理以下内容的结构体：
+
+- `transaction_batches`：交易批次集合。
+- `postgres_container`：用于测试隔离的 PostgreSQL 容器。
+
+它会初始化和管理测试的数据库与交易上下文。
+
+#### `TestContext.run` 的作用是什么？
+
+该函数执行处理器、应用验证逻辑，并可选择生成输出文件。
+
+#### 核心功能：
+
+- 灵活验证：接受用户提供的验证函数。
+- 多表支持：处理跨多个表的数据。
+- 重试：使用指数退避和超时进行重试。
+- 可选文件生成：由标志控制。
+
+#### 使用示例：
+
+```rust
+pub async fn run<F>(
+    &mut self,
+    processor: &impl ProcessorTrait,
+    txn_version: u64,
+    generate_files: bool,             // Flag to control file generation
+    output_path: String,              // Output path
+    custom_file_name: Option<String>, // Custom file name
+    verification_f: F,                // Verification function
+) -> anyhow::Result<HashMap<String, Value>>
+where
+```
+
+### 如何生成预期 DB 输出？
+
+运行以下命令：
+
+```shellscript
+cargo test sdk_tests -- --nocapture generate-output
+```
+
+支持的测试参数：
+
+1. `generate-output`
+2. `output_path`
+
+***
+
+## 故障排除和提示
+
+1. **隔离测试**：使用 Docker 容器进行数据库隔离。
+2. **处理非确定性字段**：使用 `remove_inserted_at` 等辅助函数，在验证前清理时间戳。
+3. **启用调试**：使用 `eprintln!` 记录详细错误日志。
+
+#### 如何调试测试失败？
+
+运行以下命令获取详细日志：
+
+```shellscript
+cargo test sdk_tests -- --nocapture
+```

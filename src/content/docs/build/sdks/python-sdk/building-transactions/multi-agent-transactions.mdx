@@ -1,0 +1,140 @@
+---
+title: "Python SDK - Multi-Agent Transactions"
+description: "Enable multiple accounts to participate in a single transaction with coordinated signatures using the Python SDK"
+sidebar:
+  label: "Multi-Agent Transactions"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+Multi-agent transactions allow multiple accounts to participate in the logic of
+a Move contract.
+
+This can be used to require multiple parties agree to a transaction before
+executing or to use resources from multiple accounts.
+
+## Writing Multi-Agent Transactions
+
+Creating and executing a multi-agent transaction follows a similar flow to the
+[regular transaction flow](/build/sdks/python-sdk/building-transactions), but with several
+notable differences.
+
+<Steps>
+  1. Build a raw transaction, then wrap it in `MultiAgentRawTransaction` with each additional signer.
+
+     <Aside type="note">
+       Replace the function below with an entry function that actually requires
+       multiple signers. `coin::transfer` is shown only to demonstrate the API.
+     </Aside>
+
+     ```python filename="multi_agent.py"
+     raw_txn = await aptos.transaction.build(
+         sender=alice.address,
+         payload=TransactionPayload(payload),
+     )
+     multi_agent_txn = MultiAgentRawTransaction(raw_txn, [bob.address])
+     ```
+
+  2. Sign once for each signer.
+
+     ```python filename="multi_agent.py"
+     alice_auth = multi_agent_txn.sign(alice.private_key)
+     bob_auth = multi_agent_txn.sign(bob.private_key)
+     ```
+
+  3. Combine the signatures with a `MultiAgentAuthenticator`.
+
+     ```python filename="multi_agent.py"
+     authenticator = Authenticator(
+         MultiAgentAuthenticator(
+             sender=alice_auth,
+             secondary_signers=[(bob.address, bob_auth)],
+         )
+     )
+     ```
+
+  4. Submit the signed transaction.
+
+     ```python filename="multi_agent.py"
+     txn_hash = await aptos.transaction.submit(SignedTransaction(raw_txn, authenticator))
+     ```
+
+  5. Wait for the transaction to resolve.
+
+     ```python filename="multi_agent.py"
+     result = await aptos.transaction.wait_for_transaction(txn_hash)
+     ```
+</Steps>
+
+## Python Multi-Agent Code Sample
+
+```python filename="multi_agent.py"
+import asyncio
+
+from aptos_sdk.v2 import Account, Aptos, AptosConfig, Network
+from aptos_sdk.v2.bcs import Serializer
+from aptos_sdk.v2.errors import TransactionFailedError
+from aptos_sdk.v2.transactions import (
+    Authenticator,
+    EntryFunction,
+    MultiAgentAuthenticator,
+    MultiAgentRawTransaction,
+    SignedTransaction,
+    TransactionArgument,
+    TransactionPayload,
+)
+from aptos_sdk.v2.types import StructTag, TypeTag
+
+
+async def main():
+    async with Aptos(AptosConfig(network=Network.DEVNET)) as aptos:
+        alice = Account.generate()
+        bob = Account.generate()
+
+        await asyncio.gather(
+            aptos.faucet.fund_account(alice.address, 100_000_000),
+            aptos.faucet.fund_account(bob.address, 10_000_000),
+        )
+
+        payload = EntryFunction.natural(
+            "0x1::coin",
+            "transfer",
+            [TypeTag(StructTag.from_str("0x1::aptos_coin::AptosCoin"))],
+            [
+                TransactionArgument(bob.address, Serializer.struct),
+                TransactionArgument(5_000, Serializer.u64),
+            ],
+        )
+        raw_txn = await aptos.transaction.build(
+            sender=alice.address,
+            payload=TransactionPayload(payload),
+        )
+        multi_agent_txn = MultiAgentRawTransaction(raw_txn, [bob.address])
+
+        alice_auth = multi_agent_txn.sign(alice.private_key)
+        bob_auth = multi_agent_txn.sign(bob.private_key)
+        authenticator = Authenticator(
+            MultiAgentAuthenticator(
+                sender=alice_auth,
+                secondary_signers=[(bob.address, bob_auth)],
+            )
+        )
+
+        txn_hash = await aptos.transaction.submit(SignedTransaction(raw_txn, authenticator))
+        try:
+            result = await aptos.transaction.wait_for_transaction(txn_hash)
+            print(f"Success: {result['success']}")
+        except TransactionFailedError as err:
+            print(f"Expected without a multi-signer entry function: {err}")
+
+
+asyncio.run(main())
+```
+
+## Common Errors
+
+`NUMBER_OF_SIGNER_ARGUMENTS_MISMATCH` - This happens when you are attempting to
+do multi-agent signing for a function which does not require that number of
+accounts. For example, if you try using multiple signatures for a
+`0x1::aptos_account::transfer` function - it only expects one address, and so
+produces an error when more than one is provided.

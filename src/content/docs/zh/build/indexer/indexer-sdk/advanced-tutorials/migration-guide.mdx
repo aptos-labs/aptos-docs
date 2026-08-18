@@ -1,0 +1,318 @@
+---
+title: "迁移到 Indexer SDK"
+description: "从旧版自定义处理器迁移到现代 Aptos Indexer SDK 的分步指南，包含代码示例和最佳实践"
+sidebar:
+  label: "迁移指南"
+---
+
+本指南说明如何将使用[旧方式](https://github.com/aptos-labs/aptos-indexer-processors/blob/aptos-indexer-processors-v1.20.0/rust/processor/src/processors/events_processor.rs)编写的旧版自定义处理器迁移到 Indexer SDK。
+
+## 1. 克隆示例仓库
+
+以 `aptos-indexer-processor-example` 中的事件处理器示例作为迁移起点。
+
+```shellscript
+git clone https://github.com/aptos-labs/aptos-indexer-processor-example.git
+```
+
+## 2. 迁移处理器配置
+
+此前需要创建 `aptos-indexer-processors` 分支并更新处理器配置以包含自定义处理器。这种旧方法使升级处理器非常困难。为此，SDK 不再依赖 `aptos-indexer-processors`。因此，需要自行定义 `IndexerProcessorConfig` 和 `ProcessorConfig` 结构体。
+
+`IndexerProcessorConfig` 定义要运行的所有处理器的基础配置。`ProcessorConfig` 是包含各个处理器配置的枚举。
+
+更新项目中的以下文件：
+
+- [`ProcessorConfig`](https://github.com/aptos-labs/aptos-indexer-processor-example/blob/main/aptos-indexer-processor-example/src/config/processor_config.rs)：用处理器替换 `EventsProcessor`。
+- [`IndexerProcessorConfig`](https://github.com/aptos-labs/aptos-indexer-processor-example/blob/main/aptos-indexer-processor-example/src/config/indexer_processor_config.rs)：更新 `.run()` 方法以包含处理器。
+
+若要进一步了解 SDK 中的配置，请查看[创建处理器](/zh/build/indexer/indexer-sdk/documentation/create-processor)指南。
+
+## 3. 将处理逻辑迁移到步骤
+
+旧方式中，需要实现 `ProcessorTrait` 的 `process_transactions` 方法以定义处理器逻辑。
+
+使用旧方式编写的事件处理器示例：
+
+```rust
+#[async_trait]
+impl ProcessorTrait for EventsProcessor {
+    async fn process_transactions(
+        ...
+    ) -> anyhow::Result<ProcessingResult> {
+        // Extract events from transactions
+        let events: Vec<EventModel> = process_events(transactions);
+
+        // Store the events in the database
+        let tx_result = insert_to_db(
+            self.get_pool(),
+            self.name(),
+            start_version,
+            end_version,
+            &events,
+            &self.per_table_chunk_sizes,
+        )
+        .await;
+
+        return tx_result;
+    }
+}
+
+async fn insert_to_db(
+    conn: ArcDbPool,
+    name: &'static str,
+    start_version: u64,
+    end_version: u64,
+    events: &[EventModel],
+    per_table_chunk_sizes: &AHashMap<String, usize>,
+) -> Result<(), diesel::result::Error> {
+    tracing::trace!(
+        name = name,
+        start_version = start_version,
+        end_version = end_version,
+        "Inserting to db",
+    );
+    execute_in_chunks(
+        conn,
+        insert_events_query,
+        events,
+        get_config_table_chunk_size::<EventModel>("events", per_table_chunk_sizes),
+    )
+    .await?;
+    Ok(())
+}
+```
+
+SDK 引入了步骤（step）概念，它们表示独立的处理逻辑单元。对于 `EventsProcessor` 示例，可将提取事件和将其存储到数据库分解为两个步骤。
+
+要将处理器迁移到 SDK，需要在处理器中定义这些步骤。可使用示例中的 `EventsExtractor` 和 `EventsStorer` 步骤作为定义自己步骤的起点。
+
+对 [`events_extractor.rs`](https://github.com/aptos-labs/aptos-indexer-processor-example/blob/main/aptos-indexer-processor-example/src/processors/events/events_extractor.rs) 做以下更改：
+
+```rust
+// TODO: Update the step name
+pub struct EventsExtractor
+where
+    Self: Sized + Send + 'static, {}
+
+#[async_trait]
+impl Processable for EventsExtractor {
+    type Input = Vec<Transaction>;
+    // TODO: Update the output type
+    // This should be the data model you're extracting from the transactions
+    type Output = Vec<EventModel>;
+    type RunType = AsyncRunType;
+
+    async fn process(
+        &mut self,
+        item: TransactionContext<Vec<Transaction>>,
+    ) -> Result<Option<TransactionContext<Vec<EventModel>>>, ProcessorError> {
+        // TODO: Update extraction logic.
+        // This should be the same as the extraction logic in the old `process_transactions` method
+        let events = item
+            .data
+            .par_iter()
+            .map(|txn| {
+                process_events(txn)
+            })
+            .flatten()
+            .collect::<Vec<EventModel>>();
+
+        Ok(Some(TransactionContext {
+            data: events,
+            metadata: item.metadata,
+        }))
+    }
+}
+```
+
+对 [`events_storer.rs`](https://github.com/aptos-labs/aptos-indexer-processor-example/blob/main/aptos-indexer-processor-example/src/processors/events/events_processor.rs) 做以下更改：
+
+```rust
+pub struct EventsStorer
+where
+    Self: Sized + Send + 'static,
+{
+    conn_pool: ArcDbPool,
+    processor_config: DefaultProcessorConfig,
+}
+
+impl EventsStorer {
+    pub fn new(conn_pool: ArcDbPool, processor_config: DefaultProcessorConfig) -> Self {
+        Self {
+            conn_pool,
+            processor_config,
+        }
+    }
+}
+
+#[async_trait]
+// TODO: Update step name
+impl Processable for EventsStorer {
+    // TODO: Update input type for the step.
+    // The input type should match the output type of the extractor step.
+    type Input = Vec<EventModel>;
+    type Output = ();
+    type RunType = AsyncRunType;
+
+    async fn process(
+        &mut self,
+        events: TransactionContext<Vec<EventModel>>,
+    ) -> Result<Option<TransactionContext<()>>, ProcessorError> {
+        let per_table_chunk_sizes: AHashMap<String, usize> = AHashMap::new();
+        let execute_res = execute_in_chunks(
+            self.conn_pool.clone(),
+            // TODO: Update this to the insertion query of your old processor
+            insert_events_query,
+            &events.data,
+            get_config_table_chunk_size::<EventModel>("events", &per_table_chunk_sizes),
+        )
+        .await;
+        match execute_res {
+            Ok(_) => {
+                Ok(Some(TransactionContext {
+                    data: (),
+                    metadata: events.metadata,
+                }))
+            },
+            Err(e) => Err(ProcessorError::DBStoreError {
+                message: format!(
+                    "Failed to store events versions {} to {}: {:?}",
+                    events.metadata.start_version, events.metadata.end_version, e,
+                ),
+                query: None,
+            }),
+        }
+    }
+}
+
+impl AsyncStep for EventsStorer {}
+
+impl NamedStep for EventsStorer {
+    fn name(&self) -> String {
+        "EventsStorer".to_string()
+    }
+}
+```
+
+## 4. 迁移处理器
+
+处理逻辑迁移为步骤后，还需迁移处理器以实例化步骤并将它们连接起来。在 [`events_processor.rs`](https://github.com/aptos-labs/aptos-indexer-processor-example/blob/main/aptos-indexer-processor-example/src/processors/events/events_processor.rs) 中做以下更改：
+
+```rust
+// TODO: Update processor name
+pub struct EventsProcessor {
+    pub config: IndexerProcessorConfig,
+    pub db_pool: ArcDbPool,
+    // If you have any other fields in your processor, add them here
+    // You can instantiate them accordingly in the processor's `new` method
+}
+```
+
+在 `run_processor` 方法中，更新代码以使用在[第 3 步](#3-将处理逻辑迁移到步骤)创建的步骤。
+
+```rust
+pub async fn run_processor(self) -> Result<()> {
+    {...}
+
+    // Define processor steps
+    let transaction_stream_config = self.config.transaction_stream_config.clone();
+    let transaction_stream = TransactionStreamStep::new(TransactionStreamConfig {
+        starting_version: Some(starting_version),
+        ..transaction_stream_config
+    })
+    .await?;
+    // TODO: Replace the next 2 lines with your steps
+    let events_extractor = EventsExtractor {};
+    let events_storer = EventsStorer::new(self.db_pool.clone());
+
+    let version_tracker = VersionTrackerStep::new(
+        get_processor_status_saver(self.db_pool.clone(), self.config.clone()),
+        DEFAULT_UPDATE_PROCESSOR_STATUS_SECS,
+    );
+
+    // Connect processor steps together
+    let (_, buffer_receiver) = ProcessorBuilder::new_with_inputless_first_step(
+        transaction_stream.into_runnable_step(),
+    )
+    // TODO: Replace the next 2 lines with your steps
+    .connect_to(events_extractor.into_runnable_step(), 10)
+    .connect_to(events_storer.into_runnable_step(), 10)
+    .connect_to(version_tracker.into_runnable_step(), 10)
+    .end_and_return_output_receiver(10);
+
+    {...}
+}
+```
+
+## 5. 更新 `config.yaml`
+
+`IndexerProcessorConfig` 重构了 `config.yaml` 文件格式。请使用示例 [`config.yaml`](https://github.com/aptos-labs/aptos-indexer-processor-example/blob/main/aptos-indexer-processor-example/config.yaml)。
+
+```yaml
+health_check_port: 8085
+server_config:
+  processor_config:
+    # TODO: Update with processor type
+    type: "events_processor"
+  transaction_stream_config:
+    indexer_grpc_data_service_address: "https://grpc.testnet.aptoslabs.com:443"
+    # TODO: Update auth token
+    auth_token: "AUTH_TOKEN"
+    # TODO: Update with processor name
+    request_name_header: "events-processor"
+  db_config:
+    # TODO: Update with your database connection string
+    postgres_connection_string: postgresql://postgres:@localhost:5432/example
+  # backfill_config:
+  #   backfill_alias: "events_processor_backfill_1"
+```
+
+## 6. 运行迁移后的处理器
+
+```shellscript
+cd ~/{DIRECTORY_OF_PROJECT}/aptos-indexer-processor-example
+cargo run --release -- -c config.yaml
+```
+
+终端中应开始看到如下日志：
+
+```shellscript
+{"timestamp":"2025-01-13T21:23:21.785452Z","level":"INFO","message":"[Transaction Stream] Successfully connected to GRPC stream","stream_address":"https://grpc.mainnet.aptoslabs.com/","connection_id":"ec67ecc4-e041-4f17-a2e2-441e7ff21487","start_version":2186504987,"filename":"/Users/reneetso/.cargo/git/checkouts/aptos-indexer-processor-sdk-2f3940a333c8389d/e6867c5/aptos-indexer-processors-sdk/transaction-stream/src/transaction_stream.rs","line_number":349,"threadName":"tokio-runtime-worker","threadId":"ThreadId(4)"}
+{"timestamp":"2025-01-13T21:23:21.785664Z","level":"INFO","message":"Spawning polling task","step_name":"TransactionStreamStep","filename":"/Users/reneetso/.cargo/git/checkouts/aptos-indexer-processor-sdk-2f3940a333c8389d/e6867c5/aptos-indexer-processors-sdk/sdk/src/traits/pollable_async_step.rs","line_number":112,"threadName":"tokio-runtime-worker","threadId":"ThreadId(23)"}
+{"timestamp":"2025-01-13T21:23:21.785693Z","level":"INFO","message":"Spawning processing task","step_name":"TransactionStreamStep","filename":"/Users/reneetso/.cargo/git/checkouts/aptos-indexer-processor-sdk-2f3940a333c8389d/e6867c5/aptos-indexer-processors-sdk/sdk/src/traits/pollable_async_step.rs","line_number":204,"threadName":"tokio-runtime-worker","threadId":"ThreadId(23)"}
+{"timestamp":"2025-01-13T21:23:21.785710Z","level":"INFO","message":"Spawning processing task","step_name":"FungibleAssetExtractor","filename":"/Users/reneetso/.cargo/git/checkouts/aptos-indexer-processor-sdk-2f3940a333c8389d/e6867c5/aptos-indexer-processors-sdk/sdk/src/traits/async_step.rs","line_number":87,"threadName":"tokio-runtime-worker","threadId":"ThreadId(4)"}
+{"timestamp":"2025-01-13T21:23:21.785912Z","level":"INFO","message":"Spawning processing task","step_name":"FungibleAssetStorer","filename":"/Users/reneetso/.cargo/git/checkouts/aptos-indexer-processor-sdk-2f3940a333c8389d/e6867c5/aptos-indexer-processors-sdk/sdk/src/traits/async_step.rs","line_number":87,"threadName":"tokio-runtime-worker","threadId":"ThreadId(4)"}
+{"timestamp":"2025-01-13T21:23:21.785978Z","level":"INFO","message":"Spawning polling task","step_name":"VersionTrackerStep: ()","filename":"/Users/reneetso/.cargo/git/checkouts/aptos-indexer-processor-sdk-2f3940a333c8389d/e6867c5/aptos-indexer-processors-sdk/sdk/src/traits/pollable_async_step.rs","line_number":112,"threadName":"tokio-runtime-worker","threadId":"ThreadId(14)"}
+{"timestamp":"2025-01-13T21:23:21.786018Z","level":"INFO","message":"Spawning processing task","step_name":"VersionTrackerStep: ()","filename":"/Users/reneetso/.cargo/git/checkouts/aptos-indexer-processor-sdk-2f3940a333c8389d/e6867c5/aptos-indexer-processors-sdk/sdk/src/traits/pollable_async_step.rs","line_number":204,"threadName":"tokio-runtime-worker","threadId":"ThreadId(14)"}
+```
+
+## 7. 使用 SDK 回填
+
+SDK 对回填流程进行了一些改进。回填有两个选项：
+
+1. 可继续使用旧回填方式：运行处理器的第二个实例，并将 `starting_version` 更新为回填版本。
+2. SDK 引入改进：可跟踪回填进度，并根据需要启动和停止回填。
+   若要使用新回填流程，请按如下方式更新 `config.yaml`：
+
+```yaml
+health_check_port: 8085
+server_config:
+  processor_config:
+    # TODO: Update with processor type
+    type: "events_processor"
+  transaction_stream_config:
+    indexer_grpc_data_service_address: "https://grpc.testnet.aptoslabs.com:443"
+    # TODO: Update with backfill version
+    starting_version: {backfill version}
+    # TODO: Update auth token
+    auth_token: "AUTH_TOKEN"
+    # TODO: Update with processor name
+    request_name_header: "events-processor"
+  db_config:
+    # TODO: Update with your database connection string
+    postgres_connection_string: postgresql://postgres:@localhost:5432/example
+  backfill_config:
+    # TODO: Update with your backfill alias. This should be unique for each backfill
+    backfill_alias: "events_processor_backfill_1"
+```

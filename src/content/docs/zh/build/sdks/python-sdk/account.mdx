@@ -1,0 +1,80 @@
+---
+title: "Python SDK：创建和管理账户"
+description: "了解如何使用 Python SDK 通过 Ed25519、Secp256k1 和助记词派生生成、注资和管理 Aptos 账户"
+sidebar:
+  label: "账户"
+---
+
+Python SDK 提供多种生成账户凭据的方式，可使用：
+
+- `Account.generate()` 用于新的 Ed25519 账户
+- `Account.generate_secp256k1()` 用于新的 Secp256k1 账户
+- `Account.from_private_key(...)` 从现有密钥恢复
+- `Account.from_mnemonic(...)` 从 BIP-39 助记词派生
+
+`Account.generate()` 是最常用于为新账户创建密钥的方法。它默认使用 Ed25519，但也可指定 Secp256k1：
+
+```python
+from aptos_sdk.v2 import Account
+
+# Derive an Ed25519 account
+account1 = Account.generate()
+
+# Derive a Secp256k1 account
+account2 = Account.generate_secp256k1()
+```
+
+生成凭据后，**必须**为账户注资，网络才能识别其存在。
+
+在 Devnet 环境中，可通过水龙头完成：
+
+```python filename="fund.py"
+from aptos_sdk.v2 import Account, Aptos, AptosConfig, Network
+
+async with Aptos(AptosConfig(network=Network.DEVNET)) as aptos:
+    account1 = Account.generate()
+    # Fund an account with 1 Devnet APT
+    await aptos.faucet.fund_account(account1.address, 100_000_000)
+```
+
+在 Testnet 上，可在[铸造页面](/zh/network/faucet)领取代币。
+
+## 表示账户的其他方式
+
+如果拥有私钥、助记词或等效表示，可以创建 `Account`，并在使用 Python SDK 时管理这些凭据。
+
+### 从私钥派生账户
+
+```python
+from aptos_sdk.v2 import Account
+from aptos_sdk.v2.crypto import Ed25519PrivateKey, Secp256k1PrivateKey
+
+# Ed25519 from hex (also accepts AIP-80, for example ed25519-priv-0x...)
+private_key = Ed25519PrivateKey.from_str(private_key_hex)
+account = Account.from_private_key(private_key)
+
+# Secp256k1 from hex
+secp_key = Secp256k1PrivateKey.from_str(secp_private_key_hex)
+secp_account = Account.from_private_key(secp_key)
+```
+
+### 从助记词派生账户
+
+```python
+from aptos_sdk.v2 import Account
+from aptos_sdk.v2.crypto import generate_mnemonic, validate_mnemonic
+
+phrase = generate_mnemonic()  # 12 words by default; pass 24 for extra entropy
+assert validate_mnemonic(phrase)
+
+# Default: Ed25519 at m/44'/637'/0'/0'/0'
+account = Account.from_mnemonic(phrase)
+
+# Secp256k1 from the same phrase
+secp_account = Account.from_mnemonic(phrase, secp256k1=True)
+
+# Additional accounts from the same seed
+account_1 = Account.from_mnemonic(phrase, path="m/44'/637'/1'/0'/0'")
+```
+
+账户字段是属性而非方法：请使用 `account.address`、`account.public_key` 和 `account.private_key`。

@@ -1,0 +1,290 @@
+---
+title: "计算交易 Gas"
+description: "深入了解 Aptos 的 Gas 计算，包括指令 Gas、存储费用、载荷成本和降低交易成本的优化策略。"
+sidebar:
+  label: "计算 Gas"
+---
+
+Aptos 交易默认会收取基础 Gas 费，不受市场状况影响。每笔交易的“基础 Gas”取决于三项因素：
+
+1. 指令。
+2. 存储。
+3. 载荷。
+
+交易需要的函数调用、条件分支等越多，指令 Gas 越高；对全局存储的读取和写入越多，存储 Gas 越高；交易载荷中的字节数越多，成本也越高。
+
+如[优化原则](#优化原则)所述，存储 Gas 对基础 Gas 的影响远大于其他部分。有关 Aptos Gas 模型的背景，请参阅 [The Making of the Aptos Gas Schedule](https://aptoslabs.medium.com/the-making-of-the-aptos-gas-schedule-508d5686a350)。
+
+## 指令 Gas
+
+基础指令 Gas 参数定义于 [instr.rs](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/aptos-gas-schedule/src/gas_schedule/instr.rs)，包括以下指令类型。
+
+### 空操作
+
+| 参数  | 含义  |
+| --- | --- |
+| nop | 空操作 |
+
+### 控制流
+
+| 参数        | 含义        |
+| --------- | --------- |
+| ret       | 返回        |
+| abort     | 中止        |
+| br\_true  | 执行条件为真的分支 |
+| br\_false | 执行条件为假的分支 |
+| branch    | 跳转        |
+
+### 栈
+
+| 参数                   | 含义           |
+| -------------------- | ------------ |
+| pop                  | 从栈中弹出        |
+| ld\_u8               | 加载 u8        |
+| ld\_u16              | 加载 u16       |
+| ld\_u32              | 加载 u32       |
+| ld\_u64              | 加载 u64       |
+| ld\_u128             | 加载 u128      |
+| ld\_256              | 加载 u256      |
+| ld\_true             | 加载 true      |
+| ld\_false            | 加载 false     |
+| ld\_const\_base      | 加载常量的基础成本    |
+| ld\_const\_per\_byte | 按字节计算的常量加载成本 |
+
+### 局部作用域
+
+| 参数                             | 含义            |
+| ------------------------------ | ------------- |
+| imm\_borrow\_loc               | 不可变借用         |
+| mut\_borrow\_loc               | 可变借用          |
+| imm\_borrow\_field             | 不可变借用字段       |
+| mut\_borrow\_field             | 可变借用字段        |
+| imm\_borrow\_field\_generic    | 泛型字段的不可变借用    |
+| mut\_borrow\_field\_generic    | 泛型字段的可变借用     |
+| copy\_loc\_base                | 复制的基础成本       |
+| copy\_loc\_per\_abs\_val\_unit | 按抽象值单元计算的复制成本 |
+| move\_loc\_base                | 移动            |
+| st\_loc\_base                  | 存储到局部位置       |
+
+### 调用
+
+| 参数                          | 含义          |
+| --------------------------- | ----------- |
+| call\_base                  | 函数调用的基础成本   |
+| call\_per\_arg              | 每个函数参数的成本   |
+| call\_per\_local            | 每个局部参数的成本   |
+| call\_generic\_base         | 泛型调用基础成本    |
+| call\_generic\_per\_ty\_arg | 每个类型参数的成本   |
+| call\_generic\_per\_arg     | 每个泛型参数的成本   |
+| call\_generic\_per\_local   | 每个泛型局部参数的成本 |
+
+### 结构体
+
+| 参数                          | 含义              |
+| --------------------------- | --------------- |
+| pack\_base                  | 打包 struct 的基础成本 |
+| pack\_per\_field            | 每个字段的打包成本       |
+| pack\_generic\_base         | 泛型打包基础成本        |
+| pack\_generic\_per\_field   | 每个泛型字段的打包成本     |
+| unpack\_base                | 解包 struct 的基础成本 |
+| unpack\_per\_field          | 每个字段的解包成本       |
+| unpack\_generic\_base       | 泛型解包基础成本        |
+| unpack\_generic\_per\_field | 每个泛型字段的解包成本     |
+
+### 引用
+
+| 参数                             | 含义            |
+| ------------------------------ | ------------- |
+| read\_ref\_base                | 从引用读取的基础成本    |
+| read\_ref\_per\_abs\_val\_unit | 按抽象值单元计算的读取成本 |
+| write\_ref\_base               | 写入引用的基础成本     |
+| freeze\_ref                    | 冻结引用          |
+
+### 类型转换
+
+| 参数         | 含义       |
+| ---------- | -------- |
+| cast\_u8   | 转换为 u8   |
+| cast\_u16  | 转换为 u16  |
+| cast\_u32  | 转换为 u32  |
+| cast\_u64  | 转换为 u64  |
+| cast\_u128 | 转换为 u128 |
+| cast\_u256 | 转换为 u256 |
+
+### 算术
+
+| 参数    | 含义 |
+| ----- | -- |
+| add   | 加  |
+| sub   | 减  |
+| mul   | 乘  |
+| mod\_ | 取模 |
+| div   | 除  |
+
+### 位运算
+
+| 参数       | 含义      |
+| -------- | ------- |
+| bit\_or  | OR：\|   |
+| bit\_and | AND：&   |
+| xor      | XOR：^   |
+| shl      | 左移：\<\< |
+| shr      | 右移：>>   |
+
+### 布尔运算
+
+| 参数  | 含义      |
+| --- | ------- |
+| or  | OR：\|\| |
+| and | AND：&&  |
+| not | NOT：!   |
+
+### 比较
+
+| 参数                       | 含义               |
+| ------------------------ | ---------------- |
+| lt                       | 小于：\<            |
+| gt                       | 大于：>             |
+| le                       | 小于或等于：\<=        |
+| ge                       | 大于或等于：>=         |
+| eq\_base                 | 相等比较基础成本：==      |
+| eq\_per\_abs\_val\_unit  | 按抽象值单元计算的相等比较成本  |
+| neq\_base                | 不相等比较基础成本：!=     |
+| neq\_per\_abs\_val\_unit | 按抽象值单元计算的不相等比较成本 |
+
+### 全局存储
+
+| 参数                                 | 含义                                     |
+| ---------------------------------- | -------------------------------------- |
+| imm\_borrow\_global\_base          | 不可变全局借用 borrow\_global\<T>() 的基础成本     |
+| imm\_borrow\_global\_generic\_base | 泛型不可变全局借用基础成本                          |
+| mut\_borrow\_global\_base          | 可变全局借用 borrow\_global\_mut\<T>() 的基础成本 |
+| mut\_borrow\_global\_generic\_base | 泛型可变全局借用基础成本                           |
+| exists\_base                       | 检查 exists\<T>() 的基础成本                  |
+| exists\_generic\_base              | 泛型存在性检查基础成本                            |
+| move\_from\_base                   | move\_from\<T>() 的基础成本                 |
+| move\_from\_generic\_base          | 泛型 move\_from 基础成本                     |
+| move\_to\_base                     | move\_to\<T>() 的基础成本                   |
+| move\_to\_generic\_base            | 泛型 move\_to 基础成本                       |
+
+### 向量
+
+| 参数                               | 含义          |
+| -------------------------------- | ----------- |
+| vec\_len\_base                   | 向量长度        |
+| vec\_imm\_borrow\_base           | 不可变借用元素     |
+| vec\_mut\_borrow\_base           | 可变借用元素      |
+| vec\_push\_back\_base            | 在尾部追加       |
+| vec\_pop\_back\_base             | 从尾部弹出       |
+| vec\_swap\_base                  | 交换元素        |
+| vec\_pack\_base                  | 打包向量的基础成本   |
+| vec\_pack\_per\_elem             | 每个元素的向量打包成本 |
+| vec\_unpack\_base                | 解包向量的基础成本   |
+| vec\_unpack\_per\_expected\_elem | 每个元素的向量解包成本 |
+
+其他存储 Gas 参数定义于 [table.rs](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/aptos-gas-schedule/src/gas_schedule/table.rs)、[move\_stdlib.rs](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/aptos-gas-schedule/src/gas_schedule/move_stdlib.rs) 以及 [aptos-gas-schedule/src/](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/aptos-gas-schedule/src) 下的其他源文件。
+
+## IO 和存储费用
+
+下列 Gas 参数用于表示临时存储设备资源（包括磁盘 IOPS 和带宽）的成本：
+
+在 Move 中可以从全局状态读取数据：
+
+| 参数                                  | 含义             |
+| ----------------------------------- | -------------- |
+| storage\_io\_per\_state\_slot\_read | 每个从全局状态加载的条目收费 |
+| storage\_io\_per\_state\_byte\_read | 每个从全局状态加载的字节收费 |
+
+对于已提交交易，会有多项内容写入账本历史。账本历史可被裁剪，并不占用永久磁盘空间，因此不会收取存储费用。
+
+| 参数                                         | 含义                       |
+| ------------------------------------------ | ------------------------ |
+| storage\_io\_per\_state\_slot\_write       | 按交易输出中的每次状态写操作收费         |
+| storage\_io\_per\_state\_byte\_write       | 按交易输出中所有状态写操作的每个字节收费     |
+| storage\_io\_per\_event\_byte\_write       | 按交易输出中所有事件的每个字节收费        |
+| storage\_io\_per\_transaction\_byte\_write | 按交易本身（也是账本历史的一部分）的每个字节收费 |
+
+下列存储费参数以绝对 APT 数额收取，用于表示使用 [Aptos 已认证数据结构](/zh/network/glossary#merkle-trees)在链上存储条目所产生的磁盘空间和结构成本。
+
+| 参数                                     | 含义                                                                                                                                   |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| storage\_fee\_per\_state\_slot\_create | 通过 move\_to()、table::add() 等分配状态槽                                                                                                    |
+| storage\_fee\_per\_state\_byte         | 每次槽位大小增长都会收费，而不仅在分配时收费；为简化处理，退款只在删除时发生。详见 [AIP-65](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-65.md#specification)。 |
+
+### 向量
+
+向量也按字节收取费用。它消耗 $\sum\_{i = 0}^{n - 1} e\_i + b(n)$ 字节，其中：
+
+- $n$ 是向量中的元素数量。
+- $e\_i$ 是元素 $i$ 的大小。
+- $b(n)$ 是 $n$ 的函数，即“基础大小”。
+
+有关向量基础大小（技术上为 ULEB128），请参阅 [BCS 序列规范](https://github.com/diem/bcs#fixed-and-variable-length-sequences)。在实践中它通常只占一个字节，因此包含 100 个 u8 元素的向量占用 $100 + 1 = 101$ 字节；按前述逐项读取方法，读取最后一个元素会被视为读取 101 字节。
+
+## 载荷 Gas
+
+载荷 Gas 定义于 [transaction.rs](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/aptos-gas-schedule/src/gas_schedule/transaction.rs)，它将存储 Gas 与若干载荷和定价参数结合：
+
+| 参数                                | 含义                                               |
+| --------------------------------- | ------------------------------------------------ |
+| min\_transaction\_gas\_units      | 交易的最小内部 Gas 单位数，在执行开始时收取                         |
+| large\_transaction\_cutoff        | 超过该字节数后，交易按每字节收取额外费用                             |
+| intrinsic\_gas\_per\_byte         | 载荷超过 large\_transaction\_cutoff 后每字节收取的内部 Gas 单位 |
+| maximum\_number\_of\_gas\_units   | 一笔交易可使用的外部 Gas 单位上限                              |
+| min\_price\_per\_gas\_unit        | 交易允许的最低 Gas 单价                                   |
+| max\_price\_per\_gas\_unit        | 交易允许的最高 Gas 单价                                   |
+| max\_transaction\_size\_in\_bytes | 最大交易载荷大小（字节）                                     |
+| gas\_unit\_scaling\_factor        | 内部 Gas 单位和外部 Gas 单位的换算因子                         |
+
+“内部 Gas 单位”由 instr.rs、storage\_gas.move 等源文件定义；其粒度相对于“外部 Gas 单位”高 gas\_unit\_scaling\_factor 倍。将内部单位除以 gas\_unit\_scaling\_factor 即可得到外部单位；再乘以 Gas 价格（每单位外部 Gas 对应的 octa 数）即可换算为 [octa](/zh/network/glossary#octa)。
+
+## 优化原则
+
+### 单位和定价常量
+
+在撰写本文时，transaction.rs 中的 min\_price\_per\_gas\_unit 定义为 aptos\_global\_constants::GAS\_UNIT\_PRICE（即 100）。其他值得注意的常量如下：
+
+| 常量                         | 值              |
+| -------------------------- | -------------- |
+| min\_price\_per\_gas\_unit | 100            |
+| max\_price\_per\_gas\_unit | 10,000,000,000 |
+| gas\_unit\_scaling\_factor | 1,000,000      |
+
+这些常量的含义见[载荷 Gas](#载荷-gas)。
+
+### 存储费用
+
+网络负载较低时，Gas 单价通常较低，交易的大多数成本都会更可负担；但存储费是例外，因为它按绝对 APT 价值定价。交易创建状态槽、写入较大状态项、发出大量或很大的事件、或自身载荷很大时，存储费通常是总成本的主要部分；这些因素都会消耗 Aptos 节点磁盘空间并相应收费。
+
+存储退款会激励删除不再使用的状态项以释放状态槽。释放槽位时会全额退还状态槽费用，但超出的状态字节费用不可退还。将来会通过区分永久字节（全局状态中的字节）和相对短暂字节（经过账本历史的字节）来调整这一机制。
+
+关于存储费的优化策略：
+
+1. 尽量少创建状态项。
+2. 尽量少发出事件。
+3. 避免大型状态项、事件和交易。
+4. 清理不再使用的状态项。
+5. 若两个字段总是一起更新，将它们放入同一资源或资源组。
+6. 若结构体很大但只有少数字段频繁更新，将这些字段移至独立资源或资源组。
+
+### 指令 Gas
+
+在撰写本文时，meter.rs 中定义的 EXECUTION\_GAS\_MULTIPLIER 为 20，所有指令 Gas 操作都会乘以该值。以下代表性操作的成本假定为：先将内部 Gas 除以缩放因子，再乘以最低 Gas 单价。
+
+| 操作                 | 最低 [octa](/zh/network/glossary#octa) |
+| ------------------ | ------------------------------------ |
+| 添加、借用或移除 Table box | 240                                  |
+| 函数调用               | 200                                  |
+| 加载常量               | 130                                  |
+| 全局借用               | 100                                  |
+| 读写引用               | 40                                   |
+| 在栈上加载 u128         | 16                                   |
+| 每字节的 Table box 操作  | 2                                    |
+
+按字节计算的 Table box 指令 Gas 不包含单独计收的存储 Gas。作为对比，在最低价格下，读取 100 字节项目的成本为 $r\_i + 100 \* r\_b = 3000 + 100 \* 3 = 3300$ [octa](/zh/network/glossary#octa)，约为函数调用的 16.5 倍；总体而言，存储 Gas 通常远高于指令 Gas。
+
+从技术上说，减少函数调用仍有激励，但工程工作更应着力于编写模块化、分解良好的代码来降低存储 Gas，而不是用重复代码块减少嵌套函数调用。极端情况下，例如循环数学函数需要 10,000 次迭代才收敛，指令 Gas 可能远高于存储 Gas；但对大多数应用，存储 Gas 影响更大。
+
+### 载荷 Gas
+
+在撰写本文时，transaction/mod.rs 将每笔交易的最小内部 Gas 定义为 1,500,000 单位（最低为 15,000 [octa](/zh/network/glossary#octa)）。当载荷超过 600 字节时，每额外字节增加 2,000 内部 Gas 单位（最低 20 octa）；交易允许的最大字节数为 65536。因此，实践中载荷 Gas 通常无需特别担忧。

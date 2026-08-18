@@ -1,0 +1,137 @@
+---
+title: "Rust SDK - Multi-Agent Transactions"
+description: "Enable multiple accounts to participate in a single transaction with coordinated signatures using the Rust SDK"
+sidebar:
+  label: "Multi-Agent Transactions"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+Multi-agent transactions allow multiple accounts to participate in the logic of
+a Move contract.
+
+This can be used to require multiple parties agree to a transaction before
+executing or to use resources from multiple accounts.
+
+## Writing Multi-Agent Transactions
+
+Creating and executing a multi-agent transaction follows a similar flow to the
+[regular transaction flow](/build/sdks/rust-sdk/building-transactions), but with several
+notable differences.
+
+<Steps>
+  1. Build the raw transaction, then wrap it in `MultiAgentRawTransaction` with each additional signer.
+
+     <Aside type="note">
+       Replace the function below with an entry function that actually requires
+       multiple signers. `aptos_account::transfer` is shown only to demonstrate
+       the API.
+     </Aside>
+
+     ```rust filename="multi_agent.rs"
+     let payload = TransactionPayload::EntryFunction(EntryFunction {
+         module: MoveModuleId::from_str_strict("0x1::aptos_account")?,
+         function: "transfer".to_string(),
+         type_args: vec![],
+         args: vec![
+             aptos_bcs::to_bytes(&secondary_signer.address())?,
+             aptos_bcs::to_bytes(&1000u64)?,
+         ],
+     });
+     let sequence_number = aptos.get_sequence_number(primary_signer.address()).await?;
+     let raw_txn = TransactionBuilder::new()
+         .sender(primary_signer.address())
+         .sequence_number(sequence_number)
+         .payload(payload)
+         .chain_id(aptos.chain_id())
+         .expiration_from_now(600)
+         .build()?;
+     let multi_agent_txn =
+         MultiAgentRawTransaction::new(raw_txn, vec![secondary_signer.address()]);
+     ```
+
+  2. Sign with the primary signer and each additional signer.
+
+     ```rust filename="multi_agent.rs"
+     let signed_txn = sign_multi_agent_transaction(
+         &multi_agent_txn,
+         &primary_signer,
+         &[&secondary_signer as &dyn Account],
+     )?;
+     ```
+
+  3. Submit and wait for the transaction.
+
+     ```rust filename="multi_agent.rs"
+     let result = aptos.submit_and_wait(&signed_txn, None).await?;
+     ```
+</Steps>
+
+## Rust Multi-Agent Code Sample
+
+```rust filename="multi_agent.rs"
+use aptos_sdk::{
+    Aptos, AptosConfig,
+    account::{Account, Ed25519Account},
+    transaction::{
+        EntryFunction, TransactionBuilder, TransactionPayload,
+        builder::sign_multi_agent_transaction, types::MultiAgentRawTransaction,
+    },
+    types::MoveModuleId,
+};
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let aptos = Aptos::new(AptosConfig::devnet())?;
+    let primary_signer = Ed25519Account::generate();
+    let secondary_signer = Ed25519Account::generate();
+
+    aptos
+        .fund_account(primary_signer.address(), 1_000_000_000)
+        .await?;
+    aptos
+        .fund_account(secondary_signer.address(), 100_000_000)
+        .await?;
+
+    let payload = TransactionPayload::EntryFunction(EntryFunction {
+        module: MoveModuleId::from_str_strict("0x1::aptos_account")?,
+        function: "transfer".to_string(),
+        type_args: vec![],
+        args: vec![
+            aptos_bcs::to_bytes(&secondary_signer.address())?,
+            aptos_bcs::to_bytes(&1000u64)?,
+        ],
+    });
+    let sequence_number = aptos.get_sequence_number(primary_signer.address()).await?;
+    let raw_txn = TransactionBuilder::new()
+        .sender(primary_signer.address())
+        .sequence_number(sequence_number)
+        .payload(payload)
+        .chain_id(aptos.chain_id())
+        .expiration_from_now(600)
+        .build()?;
+    let multi_agent_txn =
+        MultiAgentRawTransaction::new(raw_txn, vec![secondary_signer.address()]);
+    let signed_txn = sign_multi_agent_transaction(
+        &multi_agent_txn,
+        &primary_signer,
+        &[&secondary_signer as &dyn Account],
+    )?;
+    match aptos.submit_and_wait(&signed_txn, None).await {
+        Ok(result) => println!("Submitted: {:?}", result.data.get("hash")),
+        Err(err) => {
+            println!("Expected without a multi-signer entry function: {err}");
+        }
+    }
+
+    Ok(())
+}
+```
+
+## Common Errors
+
+`NUMBER_OF_SIGNER_ARGUMENTS_MISMATCH` - This happens when you are attempting to
+do multi-agent signing for a function which does not require that number of
+accounts. For example, if you try using multiple signatures for a
+`0x1::aptos_account::transfer` function - it only expects one address, and so
+produces an error when more than one is provided.

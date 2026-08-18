@@ -117,6 +117,7 @@ const isClientViteBuild = (config) => !config.build?.ssr;
 const isServerViteBuild = (config) => Boolean(config.build?.ssr);
 
 // https://astro.build/config
+// @ts-expect-error TS2321 Astro 7.2 font-provider generics overflow TypeScript 6 in astro check.
 export default defineConfig({
   build: {
     inlineStylesheets: "never",
@@ -233,7 +234,7 @@ export default defineConfig({
               return true;
             }
 
-            // Known `.well-known/` endpoints served from `public/` or via a Vercel
+            // Known static discovery files served from `public/` or via a Vercel
             // redirect. They are not doc routes, so starlight-links-validator can't
             // resolve them. List each one explicitly (rather than excluding the
             // whole `.well-known/` prefix) so a typo in a docs page is still caught.
@@ -245,6 +246,7 @@ export default defineConfig({
               "/.well-known/oauth-protected-resource",
               "/.well-known/openid-configuration",
               "/.well-known/oauth-authorization-server",
+              "/auth.md",
             ];
             if (knownWellKnown.some((path) => link.endsWith(path))) {
               return true;
@@ -363,7 +365,7 @@ export default defineConfig({
       }),
   vite: {
     plugins: [
-      tailwindcss(),
+      ...tailwindcss(),
       ...codecovVitePlugin({
         enableBundleAnalysis: Boolean(process.env.CODECOV_TOKEN),
         bundleName: "aptos-docs-client",

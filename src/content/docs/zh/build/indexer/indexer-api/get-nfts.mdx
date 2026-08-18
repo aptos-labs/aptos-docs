@@ -1,0 +1,53 @@
+---
+title: "获取账户拥有的 NFT"
+description: "使用 GraphQL API 查询账户拥有的 NFT，提供完整代币详情、集合元数据和所有权信息"
+sidebar:
+  label: "获取 NFT"
+---
+
+import { GraphQLEditor } from '~/components/react/GraphQLEditor';
+
+import { Aside } from '@astrojs/starlight/components';
+
+`GetAccountNfts` 会检索指定账户地址拥有的 NFT 列表。该查询提供每个代币的全面详情，包括集合详情、描述和唯一标识符。它非常适合需要展示用户 NFT 投资组合，或提供 NFT 市场持仓洞察的平台。
+
+<Aside type="note">
+  亲自试用！您可以在编辑器底部自定义变量。
+</Aside>
+
+<GraphQLEditor
+  query={`query GetAccountNfts($address: String) {
+  current_token_ownerships_v2(
+    where: { owner_address: { _eq: $address }, amount: { _gt: "0" } }
+  ) {
+    current_token_data {
+      collection_id
+      largest_property_version_v1
+      current_collection {
+        collection_id
+        collection_name
+        description
+        creator_address
+        uri
+        __typename
+      }
+      description
+      token_name
+      token_data_id
+      token_standard
+      token_uri
+      __typename
+    }
+    owner_address
+    amount
+    __typename
+  }
+}`}
+  variables={`{
+  "address": "0x8824ebb6e0d60656f6d4d5bbc408805d9ca6b984aad78b16f42b1dae545d6762"
+}`}
+/>
+
+#### 变量：
+
+- `$address`：**String** — 要查询 NFT 数据的 Aptos 账户地址。例如：`"0x8824ebb6e0d60656f6d4d5bbc408805d9ca6b984aad78b16f42b1dae545d6762"`

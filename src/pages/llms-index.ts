@@ -42,7 +42,7 @@ export const GET: APIRoute = async () => {
     "> Developer documentation for the Aptos blockchain — Move smart contracts, SDKs, APIs, indexer, node operations, and AI tools.",
     "",
     `Canonical site: ${SITE_URL}`,
-    `Sitemap: ${SITE_URL}/sitemap-index.xml`,
+    `Sitemap: ${SITE_URL}/sitemap.xml`,
     "",
     "This file is a compact router for LLMs and coding agents. It highlights the most useful Aptos docs first, while the full corpus remains available separately.",
     "",

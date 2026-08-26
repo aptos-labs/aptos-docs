@@ -16,13 +16,13 @@ description: >-
 - **Index copy**: User-facing explanations live in `src/content/docs/llms-txt.mdx`, `src/content/docs/build/ai.mdx`, and the Chinese `zh/` counterparts—keep URLs and feed names aligned with `src/pages/llms-index.ts`.
 - **HTML → Markdown**: Shared logic is `src/lib/llms-html-sanitize.ts`. When minifying for `llms-small.txt`, collapse **spaces/tabs only**—never all `\s` (newlines must survive for fenced code and Markdown structure).
 - **Route wiring**: Custom handlers are swapped in via `src/integrations/llms-txt-index.ts`; endpoint implementations live under `src/pages/llms-index.ts`, `src/pages/llms-small.txt.ts`, `src/pages/llms-full.txt.ts`.
-- **Robots**: `public/robots.txt` should stay consistent with sitemap URL and, when feeds change, the commented LLMs.txt pointers at the bottom. Keep the `Content-Signal` line intact so AI crawlers see the same preferences the rest of the ecosystem uses.
-- **Agent discovery surface**: `.well-known/api-catalog`, `.well-known/mcp/server-card.json`, `.well-known/agent-skills/index.json`, the global `Link` header in `vercel.json`, and the Head override's `<link rel="…">` tags must advertise the same URLs. Re-run `pnpm test tests/agent-discovery.test.ts` after any change and see the **Agent discovery & readiness** section of `CLAUDE.md` for the full checklist.
+- **Robots**: `public/robots.txt` should stay consistent with the sitemap URL (`https://aptos.dev/sitemap.xml`) and, when feeds change, the commented LLMs.txt pointers at the bottom. Keep the `Content-Signal` line intact so AI crawlers see the same preferences the rest of the ecosystem uses. Keep the `Agentmap:` line pointing at `/.well-known/ai-catalog.json`.
+- **Agent discovery surface**: `.well-known/api-catalog`, `.well-known/mcp/server-card.json`, `.well-known/agent-skills/index.json`, `.well-known/ai-catalog.json`, the global `Link` header in `vercel.json`, and the Head override's `<link rel="…">` tags must advertise the same URLs. Re-run `pnpm test tests/agent-discovery.test.ts` after any change and see the **Agent discovery & readiness** section of `CLAUDE.md` for the full checklist.
 
 ## SEO
 
 - **Per-page metadata**: Starlight frontmatter `title` / `description` feed OG, Twitter, and schema in `src/starlight-overrides/Head.astro`—avoid empty or placeholder descriptions on public pages.
-- **Sitemap**: Produced by `@astrojs/sitemap` in `astro.config.mjs`; ensure new top-level routes or major URL changes still make sense for indexing.
+- **Sitemap**: Produced by `@astrojs/sitemap` in `astro.config.mjs` as `sitemap-0.xml` + `sitemap-index.xml`. `src/integrations/sitemap-xml-alias.ts` copies the urlset to `/sitemap.xml` on build, and `vercel.json` rewrites `/sitemap.xml` → `/sitemap-0.xml` as a fallback. Keep `robots.txt` pointing at `/sitemap.xml`.
 - **Hreflang / alternates**: Head override builds language alternates from `SUPPORTED_LANGUAGES`—new locales need config updates, not only content folders.
 - **Draft / hidden content**: Do not rely on curated LLM ids or public sitemap for content that must stay off production; follow existing draft filtering in the `.md` pipeline and curation tests.
 
@@ -49,7 +49,7 @@ For full coverage: `pnpm test` and a production `pnpm build` when touching route
 | User docs | `src/content/docs/llms-txt.mdx`, `build/ai.mdx`, `zh/` |
 | SEO head | `src/starlight-overrides/Head.astro` |
 | Crawlers / sitemap hint | `public/robots.txt` |
-| Agent discovery — well-known | `public/.well-known/api-catalog`, `public/.well-known/mcp/server-card.json`, `public/.well-known/agent-skills/index.json`, `public/.well-known/oauth-protected-resource`, `public/.well-known/openid-configuration`, `public/.well-known/oauth-authorization-server`, `public/auth.md` |
+| Agent discovery — well-known | `public/.well-known/api-catalog`, `public/.well-known/mcp/server-card.json`, `public/.well-known/agent-skills/index.json`, `public/.well-known/ai-catalog.json`, `public/.well-known/oauth-protected-resource`, `public/.well-known/openid-configuration`, `public/.well-known/oauth-authorization-server`, `public/auth.md` |
 | Agent discovery — Link header | `vercel.json` (global `/(.*)` entry) |
 | Markdown negotiation + WebMCP | `src/middlewares/markdown-negotiation.ts`, `src/scripts/webmcp-register.ts`, `src/types/webmcp.d.ts` |
 | Agent discovery regression tests | `tests/agent-discovery.test.ts` |

@@ -112,6 +112,11 @@ describe("ARD / AI Catalog (/.well-known/ai-catalog.json)", () => {
       ]),
     );
   });
+
+  it("uses unique urn:air identifiers", () => {
+    const ids = (catalog.entries ?? []).map((entry) => entry.identifier);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
 });
 
 describe("well-known API catalog (RFC 9727)", () => {
@@ -474,7 +479,7 @@ describe("Head.astro in-page discovery links", () => {
     ];
     for (const { href, title } of expectedTitles) {
       const hrefLiteral = href.replace(/[/.]/g, "\\$&");
-      const titleLiteral = title.replace(/[/.\s]/g, "\\$&");
+      const titleLiteral = title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const pattern = new RegExp(
         `<link\\b[^>]*?(?:href="${hrefLiteral}"[^>]*?title="${titleLiteral}"|title="${titleLiteral}"[^>]*?href="${hrefLiteral}")`,
         "s",
@@ -619,5 +624,20 @@ describe("vercel.json sitemap.xml rewrite", () => {
   it("serves /sitemap.xml from the generated urlset when the alias file is absent", () => {
     const rewrite = vercel.rewrites?.find((entry) => entry.source === "/sitemap.xml");
     expect(rewrite?.destination).toBe("/sitemap-0.xml");
+  });
+});
+
+describe("sitemap.xml alias wiring", () => {
+  it("registers sitemapXmlAlias immediately after @astrojs/sitemap", () => {
+    const config = readText("astro.config.mjs");
+    const sitemapCall = config.search(/sitemap\(\s*\{/);
+    const aliasCall = config.indexOf("sitemapXmlAlias()");
+    expect(sitemapCall, "sitemap({...}) in astro.config.mjs").toBeGreaterThan(-1);
+    expect(aliasCall, "sitemapXmlAlias() in astro.config.mjs").toBeGreaterThan(sitemapCall);
+  });
+
+  it("advertises the AI Catalog from the WebMCP list-llms-feeds tool", () => {
+    const source = readText("src/scripts/webmcp-register.ts");
+    expect(source).toContain("/.well-known/ai-catalog.json");
   });
 });

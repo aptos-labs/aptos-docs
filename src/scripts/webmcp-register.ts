@@ -56,6 +56,7 @@ interface DiscoveryEndpoints {
   apiCatalog: string;
   mcpServerCard: string;
   agentSkills: string;
+  aiCatalog: string;
 }
 
 interface FetchMarkdownResult {
@@ -225,7 +226,7 @@ function listFeedsTool(): ModelContextToolDefinition<
     name: "aptos-docs.list-llms-feeds",
     title: "List Aptos LLMs.txt and agent discovery feeds",
     description:
-      "Return the URLs of the Aptos documentation LLMs.txt feeds (index, condensed, full) plus the agent discovery endpoints (api-catalog, MCP server card, agent-skills index).",
+      "Return the URLs of the Aptos documentation LLMs.txt feeds (index, condensed, full) plus the agent discovery endpoints (api-catalog, MCP server card, agent-skills index, AI Catalog).",
     inputSchema: { type: "object", properties: {} },
     annotations: { readOnlyHint: true },
     execute: () => ({
@@ -242,6 +243,10 @@ function listFeedsTool(): ModelContextToolDefinition<
       ).toString(),
       agentSkills: new URL(
         "/.well-known/agent-skills/index.json",
+        location.origin,
+      ).toString(),
+      aiCatalog: new URL(
+        "/.well-known/ai-catalog.json",
         location.origin,
       ).toString(),
     }),

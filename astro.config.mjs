@@ -75,6 +75,7 @@ import { firebaseIntegration } from "./src/integrations/firebase";
 import { llmsTxtIndex } from "./src/integrations/llms-txt-index";
 import { monacoEditorIntegration } from "./src/integrations/monacoEditor";
 import { ogImagesIntegration } from "./src/integrations/ogImages";
+import { sitemapXmlAlias } from "./src/integrations/sitemap-xml-alias";
 import { ENV } from "./src/lib/env";
 
 const ALGOLIA_APP_ID = ENV.ALGOLIA_APP_ID;
@@ -247,6 +248,7 @@ export default defineConfig({
               "/.well-known/openid-configuration",
               "/.well-known/oauth-authorization-server",
               "/auth.md",
+              "/.well-known/ai-catalog.json",
             ];
             if (knownWellKnown.some((path) => link.endsWith(path))) {
               return true;
@@ -306,6 +308,8 @@ export default defineConfig({
         locales: Object.fromEntries(SUPPORTED_LANGUAGES.map(({ code }) => [code, code])),
       },
     }),
+    // After @astrojs/sitemap so astro:build:done can copy sitemap-0.xml → sitemap.xml.
+    sitemapXmlAlias(),
     partytown({
       config: {
         forward: ["dataLayer.push", "gtag"],

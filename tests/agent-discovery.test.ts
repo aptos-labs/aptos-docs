@@ -44,6 +44,76 @@ interface LinksetEntry {
   describedby?: { href: string }[];
 }
 
+describe("ARD / AI Catalog (/.well-known/ai-catalog.json)", () => {
+  const catalog = readJson<{
+    specVersion?: string;
+    host?: { displayName?: string; identifier?: string; documentationUrl?: string };
+    entries?: {
+      identifier?: string;
+      displayName?: string;
+      type?: string;
+      url?: string;
+      data?: unknown;
+      representativeQueries?: string[];
+    }[];
+  }>("public/.well-known/ai-catalog.json");
+
+  it("declares specVersion, host identity, and a non-empty entries array", () => {
+    expect(catalog.specVersion, "specVersion").toMatch(/^\d+\.\d+$/);
+    expect(catalog.host?.displayName, "host.displayName").toBeTruthy();
+    expect(catalog.host?.identifier, "host.identifier").toMatch(/^(did:web:|urn:air:)/);
+    expect(Array.isArray(catalog.entries), "entries").toBe(true);
+    expect(catalog.entries?.length, "entries length").toBeGreaterThan(0);
+  });
+
+  it("gives every entry a urn:air identifier, displayName, type, and exactly one of url or data", () => {
+    for (const entry of catalog.entries ?? []) {
+      expect(entry.identifier, "identifier").toMatch(/^urn:air:aptos\.dev:[a-z0-9-]+:[a-z0-9-]+$/);
+      expect(entry.displayName, `${entry.identifier} displayName`).toBeTruthy();
+      expect(entry.type, `${entry.identifier} type`).toMatch(
+        /^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/i,
+      );
+      const hasUrl = typeof entry.url === "string" && entry.url.length > 0;
+      const hasData = entry.data !== undefined;
+      expect(hasUrl !== hasData, `${entry.identifier} must have exactly one of url or data`).toBe(
+        true,
+      );
+      if (hasUrl) {
+        expect(entry.url).toMatch(/^https:\/\/aptos\.dev\//);
+      }
+    }
+  });
+
+  it("includes 2–5 representativeQueries on every entry", () => {
+    for (const entry of catalog.entries ?? []) {
+      const queries = entry.representativeQueries ?? [];
+      expect(
+        queries.length,
+        `${entry.identifier} representativeQueries length`,
+      ).toBeGreaterThanOrEqual(2);
+      expect(
+        queries.length,
+        `${entry.identifier} representativeQueries length`,
+      ).toBeLessThanOrEqual(5);
+      for (const query of queries) {
+        expect(query.trim().length, `${entry.identifier} empty query`).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("points at the MCP Server Card, Agent Skills index, OpenAPI spec, and RFC 9727 catalog", () => {
+    const urls = (catalog.entries ?? []).map((entry) => entry.url);
+    expect(urls).toEqual(
+      expect.arrayContaining([
+        "https://aptos.dev/.well-known/mcp/server-card.json",
+        "https://aptos.dev/.well-known/agent-skills/index.json",
+        "https://aptos.dev/aptos-spec.json",
+        "https://aptos.dev/.well-known/api-catalog",
+      ]),
+    );
+  });
+});
+
 describe("well-known API catalog (RFC 9727)", () => {
   const catalog = readJson<{ linkset: LinksetEntry[] }>("public/.well-known/api-catalog");
 
@@ -220,6 +290,9 @@ describe("DNS-AID operator documentation", () => {
       expect(body).toContain("_index._agents.aptos.dev");
       expect(body).toContain('alpn="h2,h3"');
       expect(body).toContain("DNS-AID");
+      expect(body).toContain("DS");
+      expect(body).toContain("_catalog._agents.aptos.dev");
+      expect(body).toContain("/.well-known/ai-catalog.json");
     }
   });
 });
@@ -305,6 +378,11 @@ describe("robots.txt content signals", () => {
     return groups;
   }
 
+  it("advertises /sitemap.xml and the ARD Agentmap", () => {
+    expect(body).toMatch(/^Sitemap:\s*https:\/\/aptos\.dev\/sitemap\.xml\s*$/m);
+    expect(body).toMatch(/^Agentmap:\s*https:\/\/aptos\.dev\/\.well-known\/ai-catalog\.json\s*$/m);
+  });
+
   it("declares Content-Signal inside every User-agent block", () => {
     // `Content-Signal:` is scoped to the most recently declared `User-agent:`
     // group (draft-romm-aipref-contentsignals), so a single directive under
@@ -354,6 +432,7 @@ describe("Head.astro in-page discovery links", () => {
       { href: "/.well-known/openid-configuration", rel: "describedby" },
       { href: "/.well-known/oauth-authorization-server", rel: "describedby" },
       { href: "/auth.md", rel: "describedby" },
+      { href: "/.well-known/ai-catalog.json", rel: "ai-catalog" },
     ];
     for (const { href, rel } of expectedHrefs) {
       expect(hasLinkRel(href, rel), `Head.astro missing <link rel="${rel}" href="${href}">`).toBe(
@@ -387,6 +466,10 @@ describe("Head.astro in-page discovery links", () => {
       {
         href: "/auth.md",
         title: "Aptos auth.md agent authentication",
+      },
+      {
+        href: "/.well-known/ai-catalog.json",
+        title: "Aptos AI Catalog (ARD)",
       },
     ];
     for (const { href, title } of expectedTitles) {
@@ -491,9 +574,11 @@ describe("vercel.json Link response header", () => {
     expect(linkHeader).toContain("/.well-known/openid-configuration");
     expect(linkHeader).toContain("/.well-known/oauth-authorization-server");
     expect(linkHeader).toContain("/auth.md");
+    expect(linkHeader).toContain("/.well-known/ai-catalog.json");
     expect(linkHeader).toMatch(/rel="api-catalog"/);
     expect(linkHeader).toMatch(/rel="service-desc"/);
     expect(linkHeader).toMatch(/rel="service-doc"/);
+    expect(linkHeader).toMatch(/rel="ai-catalog"/);
   });
 
   it("pins the correct Content-Type on every well-known endpoint", () => {
@@ -505,6 +590,7 @@ describe("vercel.json Link response header", () => {
       ["/.well-known/openid-configuration", /^application\/json/],
       ["/.well-known/oauth-authorization-server", /^application\/json/],
       ["/auth.md", /^text\/markdown/],
+      ["/.well-known/ai-catalog.json", /^application\/json/],
     ];
     for (const [source, expected] of pairs) {
       const entry = vercel.headers?.find((item) => item.source === source);
@@ -514,5 +600,24 @@ describe("vercel.json Link response header", () => {
       )?.value;
       expect(contentType, `Content-Type for ${source}`).toMatch(expected);
     }
+  });
+
+  it("allows cross-origin reads of the ARD catalog", () => {
+    const entry = vercel.headers?.find((item) => item.source === "/.well-known/ai-catalog.json");
+    const cors = entry?.headers.find(
+      (header) => header.key.toLowerCase() === "access-control-allow-origin",
+    )?.value;
+    expect(cors, "Access-Control-Allow-Origin for ai-catalog.json").toBe("*");
+  });
+});
+
+describe("vercel.json sitemap.xml rewrite", () => {
+  const vercel = readJson<{
+    rewrites?: { source: string; destination: string }[];
+  }>("vercel.json");
+
+  it("serves /sitemap.xml from the generated urlset when the alias file is absent", () => {
+    const rewrite = vercel.rewrites?.find((entry) => entry.source === "/sitemap.xml");
+    expect(rewrite?.destination).toBe("/sitemap-0.xml");
   });
 });

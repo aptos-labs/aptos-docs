@@ -469,7 +469,7 @@ describe("Head.astro in-page discovery links", () => {
       },
       {
         href: "/.well-known/ai-catalog.json",
-        title: "Aptos AI Catalog (ARD)",
+        title: "Aptos AI Catalog",
       },
     ];
     for (const { href, title } of expectedTitles) {

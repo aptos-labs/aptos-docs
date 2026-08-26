@@ -33,8 +33,9 @@ export function sitemapXmlAlias(): AstroIntegration {
       "astro:build:done": ({ dir, logger }) => {
         const sourceName = aliasSitemapXml(fileURLToPath(dir));
         if (!sourceName) {
-          logger.warn("sitemap.xml alias skipped: no sitemap-*.xml or sitemap-index.xml in output");
-          return;
+          throw new Error(
+            "sitemap.xml alias failed: expected sitemap-0.xml (or sitemap-index.xml) in the build output",
+          );
         }
         logger.info(`Copied ${sourceName} to sitemap.xml`);
       },

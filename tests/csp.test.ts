@@ -53,7 +53,7 @@ describe("built CSP header", () => {
       };
       const csp = json.routes?.find((route) => route.headers?.["content-security-policy"])
         ?.headers?.["content-security-policy"];
-      expect(csp, "global-csp integration should collapse CSP into one route header").toBeTruthy();
+      expect(csp, "Vercel static headers should include a CSP").toBeTruthy();
 
       const scriptElem = /script-src-elem ([^;]*)/.exec(csp ?? "")?.[1] ?? "";
       const styleElem = /style-src-elem ([^;]*)/.exec(csp ?? "")?.[1] ?? "";

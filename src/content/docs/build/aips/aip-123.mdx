@@ -51,13 +51,15 @@ they rotate a key. Key rotation creates the `Account` resource.
 ### How should I choose the nonce?
 
 Pick a random `u64`. After a transaction with `(address, nonce, expiration T)`
-commits, do not reuse the same `(address, nonce)` with an expiration at or
-before about `T + 130` seconds.
+commits, the same pair cannot be reused until it is garbage-collected. The
+on-chain overlap interval is 100 seconds, so do not reuse that pair with a new
+expiration at or before `T + 100` seconds. Prefer a fresh random nonce for every
+transaction.
 
 ### What is the expiration limit?
 
 Orderless transactions must expire no more than **60 seconds** in the future.
-A longer expiration is discarded with
+Keep expiration within that window. A longer expiration is discarded with
 `TRANSACTION_EXPIRATION_TOO_FAR_IN_FUTURE`. Sequence-number transactions do not
 have this 60-second cap.
 

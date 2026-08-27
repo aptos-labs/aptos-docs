@@ -910,17 +910,20 @@ export const sidebar = [
       "build/ai",
       group("ai.group.aptos-mcp", {
         collapsed: true,
-        items: ["build/ai/aptos-mcp", "build/ai/aptos-mcp/claude", "build/ai/aptos-mcp/cursor"],
+        items: [
+          "build/ai/aptos-mcp",
+          "build/ai/aptos-mcp/claude",
+          "build/ai/aptos-mcp/cursor",
+          "build/ai/aptos-mcp/codex",
+        ],
       }),
       {
         label: "Agent Skills",
         link: "build/ai/aptos-agent-skills",
-        badge: { text: "NEW", variant: "tip" },
       },
       {
         label: "LLMs.txt",
         link: "llms-txt",
-        badge: { text: "NEW", variant: "tip" },
       },
     ],
   }),

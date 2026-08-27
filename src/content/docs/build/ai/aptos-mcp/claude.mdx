@@ -5,52 +5,58 @@ sidebar:
   label: "Claude Code"
 ---
 
-1. Install the `claude-code` package
+1. Install [Claude Code](https://code.claude.com/docs/en/quickstart). The npm package still works:
 
 ```bash
 npm install -g @anthropic-ai/claude-code
 ```
 
-2. Locate where Claude Code stores its configuration, usually on Mac it is at `~/.claude.json`
-3. Edit the `mcpServers` object in the `json` file with
+2. Obtain your `APTOS_BOT_KEY` from [Geomi](https://geomi.dev/) (**Bot Keys** in the account menu). See [Aptos MCP](/build/ai/aptos-mcp) for the full steps.
 
-```json
-{
-  "mcpServers": {
-    "aptos-mcp": {
-      "command": "npx",
-      "args": ["-y", "@aptos-labs/aptos-mcp"],
-      "type": "stdio",
-      "env": {
-        "APTOS_BOT_KEY": "<bot_api_key>"
-      }
-    }
-  }
-}
-```
-
-4. Obtain your `APTOS_BOT_KEY`:
-
-- Visit [Geomi](https://geomi.dev/) and log in with your account.
-- Navigate to the API Keys section and create a new key.
-- Copy the generated key for use in the next step.
-
-5. Make sure to update the `APTOS_BOT_KEY` with the key you generated in the previous step.
-
-6. Navigate to your project
+3. Navigate to your project:
 
 ```bash
 cd your-awesome-project
 ```
 
-7. In a new terminal window type:
+4. Add the Aptos MCP server with the Claude CLI. Put Claude's own flags before the server name, and put the launch command after `--`:
+
+```bash
+claude mcp add --scope local --env APTOS_BOT_KEY=<your_bot_key> --transport stdio aptos-mcp -- npx -y @aptos-labs/aptos-mcp
+```
+
+Replace `<your_bot_key>` with the key from step 2.
+
+`--scope local` stores the server for this project only. Use `--scope user` for every project on this machine, or `--scope project` to write a shareable `.mcp.json` (do not commit the Bot Key).
+
+See the [Claude Code MCP documentation](https://code.claude.com/docs/en/mcp) for transport, scope, and `--env` syntax.
+
+5. Confirm the server is registered:
+
+```bash
+claude mcp list
+```
+
+You should see `aptos-mcp` in the list.
+
+6. Start Claude Code:
 
 ```bash
 claude
 ```
 
-8. You can now use Claude Code to interact with the Aptos MCP. Prompt the agent with `what aptos mcp version are you using?` to verify the connection. The agent should reply with something like:
+7. Prompt the agent with `what aptos mcp version are you using?` to verify the connection. It should report the currently published `@aptos-labs/aptos-mcp` version from the [MCP Server Card](/.well-known/mcp/server-card.json).
 
-```text
-I'm using Aptos MCP version 0.0.2.
+## Alternative: JSON configuration
+
+If the CLI command fails, add the same stdio server as JSON:
+
+```bash
+claude mcp add-json aptos-mcp '{"command": "npx", "args": ["-y", "@aptos-labs/aptos-mcp"], "type": "stdio", "env": {"APTOS_BOT_KEY": "<your_bot_key>"}}'
 ```
+
+## Troubleshooting
+
+- Quit and restart Claude Code after changing MCP config so it reloads the server list.
+- Run `claude mcp list` if the Aptos tools do not appear.
+- Confirm `APTOS_BOT_KEY` is a valid Geomi Bot Key.

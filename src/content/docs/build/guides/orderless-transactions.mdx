@@ -5,36 +5,47 @@ sidebar:
   label: "Orderless Transactions"
 ---
 
-As outlined
-in [AIP-123](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-123-orderless-transactions.md)
-([FAQ](/build/aips/aip-123)),
-orderless transactions allow for transactions to be executed out of order, which
-is particularly useful in scenarios where multiple machines need to sign for a
-single sending account, but the order in which they sign does not affect the
-outcome of the transaction or matter to the creator.  Replay is protected by a
-nonce, which is a unique identifier for a transaction.  This allows for the
-transaction to be executed at any time within the expiration time, regardless of
-the order in which the machines sign the transaction, but not be able to be
-replayed after the nonce has expired.  The maximum expiration time is 60 seconds
-for orderless transactions, which is not the same for sequence number
-transactions.
+import { Aside } from "@astrojs/starlight/components";
+
+As outlined in [AIP-123](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-123-orderless-transactions.md) ([FAQ](/build/aips/aip-123)), orderless transactions execute without a sequence number. This is useful when multiple machines submit from a single sending account and the order of submission does not matter.
+
+Replay is protected by a nonce. The blockchain stores `(sender, nonce)` pairs for committed orderless transactions from the last 60 seconds. A transaction executes only if that pair is unused, and orderless transactions expire after at most 60 seconds — shorter than sequence-number transactions.
+
+Both accounts with an on-chain `0x1::account::Account` resource and [stateless accounts](/build/aips/aip-115) can send orderless transactions.
 
 ## Process Overview
 
-Orderless transactions are dependent on the transaction payload specified in
-[AIP-129](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-129-add-extra-information-in-transaction-payload.md).
-The process for building and executing an orderless transaction is as follows:
+Orderless transactions use the extra payload fields specified in [AIP-129](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-129-add-extra-information-in-transaction-payload.md).
 
-1. Build a transaction with a `replayProtectionNonce` and a `TransactionPayload::TransactionPayloadPayload` that defines the operation to be executed.
-2. Sign and submit the transaction as any other transaction, but with the
-   `replayProtectionNonce` set.  Ideally, the nonce should be a random u64 value.
+1. Build a transaction with a unique `replayProtectionNonce` (a random `u64`) and the Move entry function you want to call.
+2. Sign and submit the transaction as usual. The nonce replaces the sequence number for replay protection.
 
-Note, that the behavior of the `replayProtectionNonce` is similar to a sequence
-number, but it does not guarantee ordered execution of transactions. Instead, it
-ensures that the transaction is unique and cannot be replayed (executed twice)
-with the same nonce.
+The nonce does **not** order transactions. It only ensures a transaction cannot execute twice with the same nonce before it expires.
 
-## SDK Support
+<Aside type="note">
+  Sequence-number transactions remain the default in most SDK builders. Use orderless transactions when you need parallel submission from multiple machines — for example exchange hot wallets. See [Transaction Management](/build/guides/transaction-management) for the sequence-number model.
+</Aside>
+
+## TypeScript example
+
+Pass `replayProtectionNonce` in the transaction `options`:
+
+```typescript filename="orderless-transfer.ts"
+const transaction = await aptos.transaction.build.simple({
+  sender: sender.accountAddress,
+  data: {
+    function: "0x1::aptos_account::transfer",
+    functionArguments: [destination.accountAddress, 100],
+  },
+  options: {
+    replayProtectionNonce: 12345n,
+  },
+});
+```
+
+You can combine orderless replay protection with [sponsored transactions](/build/guides/sponsored-transactions) and [encrypted pending transactions](/build/guides/encrypted-pending-transactions).
+
+## SDK support
 
 Each official SDK documents orderless transactions and ships a tested example:
 

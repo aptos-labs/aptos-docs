@@ -47,99 +47,44 @@ aptos move publish --named-addresses example_addr=default
   发布模块前，不要忘记使用水龙头为账户注资。
 </Aside>
 
-## 第 3 步：启动示例
+## 第 3 步：理解链上流程
 
-```shellscript filename="Terminal"
-cd ~/aptos-core/ecosystem/typescript/sdk/examples/typescript
-```
+原先位于 `aptos-core/ecosystem/typescript/sdk` 的 TypeScript 示例已随 SDK 迁出而移除。请使用刚刚发布的 Move 包，再用当前 SDK 的多签 API 驱动同一流程。
 
-运行 `multisig_managed_coin` 示例：
-
-```shellscript filename="Terminal"
-MODULE_ADDR=${DEFAULT_ACCOUNT_ADDRESS} pnpm run multisig_managed_coin
-```
+- Move：[`managed_fungible_asset`](https://github.com/aptos-labs/aptos-core/tree/main/aptos-move/move-examples/fungible_asset/managed_fungible_asset) 和 [`multisig_managed_coin`](https://github.com/aptos-labs/aptos-core/tree/main/aptos-move/move-examples/fungible_asset/multisig_managed_coin)
+- TypeScript SDK 多签（创建、提案、批准、执行）：[`examples/typescript-esm/multisig_v2.ts`](https://github.com/aptos-labs/aptos-ts-sdk/blob/main/examples/typescript-esm/multisig_v2.ts)
+- 入门教程：[您的第一个多签](/zh/build/guides/first-multisig)
 
 <Aside type="note">
-  该示例使用 Aptos devnet；历史上它会在每周四重置。
-  运行示例时请确保 devnet 正在运行！如果使用带水龙头的 localnet，可改为运行以下命令：
-
-  ```shellscript filename="Terminal"
-  export APTOS_NODE_URL=http://0.0.0.0:8080
-  export APTOS_FAUCET_URL=http://0.0.0.0:8081
-  export MODULE_ADDR=${DEFAULT_ACCOUNT_ADDRESS}
-  pnpm run multisig_managed_coin
-  ```
+  如果使用带水龙头的 localnet，提交交易前请设置 `APTOS_NODE_URL` 和 `APTOS_FAUCET_URL`（例如 `http://127.0.0.1:8080` 和 `http://127.0.0.1:8081`）。
 </Aside>
 
-示例脚本应能顺利执行且不出现错误。随后可在 Aptos Explorer 中搜索控制台打印的 `owner1` 和 `owner2` 地址，查看其执行的操作。
-
-下面跟随脚本了解其功能：
+预期流程如下：
 
 ### 生成单签账户
 
-首先生成三个单签账户 owner1、owner2 和 owner3，它们将共同拥有一个 Aptos 框架多签账户。
+生成三个账户 owner1、owner2 和 owner3，它们将共同拥有一个 Aptos 框架多签账户。
 
-{/* TODO Code snippet
-  typescript title=Generate 3 single signers"
-  /sdks/typescript/examples/typescript/multisig_managed_coin.ts
-  section_1
-  */}
+### 创建管理同质化资产的框架多签
 
-### 创建带有受管同质化资产的 Aptos 框架多签账户
-
-接下来，让 owner1 调用 `multisig_managed_coin.move` 中定义的 `initialize()` 函数。它首先创建由 owner1 所有的 Aptos 框架多签账户，并将 owner2 和 owner3 添加为所有者；随后创建名为“meme coin”的同质化资产，使用参数列表中指定的自定义设置，并让多签账户成为该资产的管理员。每项提案至少需要 2 个批准才能执行。
-
-{/* TODO Code snippet
-  typescript title=Query the multisig account and then call the initialize function"
-  /sdks/typescript/examples/typescript/multisig_managed_coin.ts
-  section_2
-  */}
+让 owner1 调用 `multisig_managed_coin.move` 中的 `initialize()`。该函数会创建由 owner1 拥有的框架多签，加入 owner2 和 owner3，按参数列表创建设置好的同质化资产（“meme coin”），并让多签成为资产管理员。每项提案至少需要两个批准。
 
 ### 铸造
 
-然后分别向 owner2 和 owner3 铸造 1000 和 2000 个 meme coin。该提案交易由 owner2 提交，并获得 owner3 的额外批准。
-
-{/* TODO Code snippet
-  typescript title="Mint 1000 to owner2 and 2000 to owner3"
-  /sdks/typescript/examples/typescript/multisig_managed_coin.ts
-  section_3
-  */}
+向 owner2 铸造 1000、向 owner3 铸造 2000。owner2 提交提案，owner3 批准后执行。
 
 ### 冻结
 
-铸造后，该示例展示如何冻结账户 owner1。该提案交易同样由 owner2 提交，并额外由 owner3 批准。
-
-{/* TODO Code snippet
-  typescript title=""Freeze owner1"
-  /sdks/typescript/examples/typescript/multisig_managed_coin.ts
-  section_4
-  */}
-
-<Aside type="note">
-  解冻操作相似，只需将 `set_primary_stores_frozen_status` 函数的最后一个参数替换为 `false`。
-</Aside>
+冻结 owner1 的主存储。owner2 提交，owner3 批准。解冻是同一个调用，最后一个参数设为 `false`。
 
 ### 强制转移
 
-owner1 被冻结时，普通转账无法从该账户取出或向该账户存入资产。但作为“meme coin”的管理员，多签账户具有执行这些操作的能力。
-接下来，Owner2 提出交易，强制将 1000 个 meme coin 从 owner3 转移到 owner1。这次由 owner1 批准。
-
-{/* TODO Code snippet
-  typescript title=""Force transfer 1000 meme coins from owner3 to owner1"
-  /sdks/typescript/examples/typescript/multisig_managed_coin.ts
-  section_5
-  */}
+owner1 被冻结时，普通转账无法从该账户取出或向该账户存入。多签作为管理员仍可强制将 1000 从 owner3 转到 owner1。owner2 提案，owner1 批准。
 
 ### 销毁
 
-最后，三个所有者各自拥有 1000 个 meme coin。让我们销毁所有代币！Owner2 提出交易，owner1 批准。
-
-{/* TODO Code snippet
-  typescript title="Burn 1000 meme coins from all the three owners' accounts"
-  /sdks/typescript/examples/typescript/multisig_managed_coin.ts
-  section_6
-  */}
+从每位所有者销毁 1000。owner2 提案，owner1 批准。
 
 ## 总结
 
-本教程展示了使用 Aptos 框架多签账户管理同质化资产的端到端流程。同样地，你可以创建自己的模块，并利用功能强大的 SDK 创建满足自身需求的管理方案。
+本教程展示了使用 Aptos 框架多签账户管理同质化资产的端到端流程。你可以发布自己的模块，并用当前 SDK 构建适合自身需求的管理方案。

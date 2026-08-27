@@ -51,9 +51,13 @@ and Aptos Names, see our page on [Accounts](/network/blockchain/accounts).
 
 ## Account Standards
 
-Accounts must exist prior to sending a transaction to the blockchain.  This is done by creating an account resource, which can
-be created by simply calling `0x1::aptos_account::transfer` with a zero amount to the account you want to create.  Optionally,
-`0x1::aptos_account::create_account` can be used to create an account with a zero balance.
+[AIP-115](/build/aips/aip-115) treats every 32-byte address as a valid account. You do **not** need to create an `0x1::account::Account` resource before sending funds or submitting a transaction.
+
+The resource is created on demand when a sequence-number transaction (or another feature that needs it) first requires it. `0x1::aptos_account::transfer` still funds the recipient and will create the resource if needed. `0x1::aptos_account::create_account` remains available if you want to create the resource explicitly.
+
+Do not treat a missing `0x1::account::Account` resource as "this address does not exist." Check balances and on-chain activity instead. See [Application Integration](/build/guides/application-integration) for the same guidance.
+
+For hot wallets that submit from many machines without coordinating sequence numbers, use [orderless transactions](/build/guides/orderless-transactions).
 
 ```typescript filename="example.ts"
 import { Aptos, Ed25519Account, Ed25519PrivateKey } from "@aptos-labs/ts-sdk";

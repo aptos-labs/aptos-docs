@@ -5,7 +5,7 @@ sidebar:
   label: "赞助交易"
 ---
 
-如 [AIP-39](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-39.md) 所述，赞助交易允许一个账户为另一账户执行交易所产生的费用付款，实质上设置了一个费用支付者。赞助交易让应用可以承担与 Aptos 区块链交互的全部相关费用，从而简化用户接入流程。以下是两个例子：
+如 [AIP-39](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-039-sponsored-transactions.md) 所述，赞助交易允许一个账户为另一账户执行交易所产生的费用付款，实质上设置了一个费用支付者。赞助交易让应用可以承担与 Aptos 区块链交互的全部相关费用，从而简化用户接入流程。以下是两个例子：
 
 - [MerkleTrade](https://merkle.trade/) 通过为 Ethereum 钱包用户创建 Aptos 钱包并承担所有交易费用，提供低成本交易；用户无需获取 Aptos 实用代币。
 - [Graffio](https://medium.com/aptoslabs/graffio-web3s-overnight-sensation-81a6cf18b626) 等社区互动应用曾为托管账户承担交易费用，以支持没有钱包的用户使用协作绘图应用。
@@ -20,7 +20,7 @@ sidebar:
   - 在 framework 1.8 发布后，地址可选地设为 `0x0`。
 - （可选）发送者收集其他签名者的签名。
 - 发送者可将已签名交易转发给费用支付者，由其签名并转发至区块链。
-- 交易执行后，发送方账户的序列号递增，全部 Gas 费用从 Gas 费用支付者扣除，所有退款均发送给 Gas 费用支付者。
+- 交易执行后，Gas 费用从费用支付者扣除，退款也返回给费用支付者。序列号交易还会递增发送方的序列号；[无序](/zh/build/guides/orderless-transactions)赞助交易则使用 nonce。
 
 或者，如果费用支付者知道操作和所有相关签名者，费用支付者可以生成并签署交易，再将其发回给其他签名者签名。
 
@@ -55,9 +55,7 @@ pub enum TransactionAuthenticator {
 }
 ```
 
-要为一个账户准备赞助交易，该账户必须先在链上存在。这项要求将在 framework 1.8 发布时移除。
-
-自 framework 1.8 发布起，账户无需在链上存在。但是，一个账户的首笔交易需要有足够 Gas，不仅要执行交易，也要支付创建账户的成本，即使该账户已存在也是如此。账户模型未来的改进旨在消除此要求。
+自 framework 1.8 和 [AIP-115](/zh/build/aips/aip-115) 无状态账户起，发送方无需预先创建 `0x1::account::Account` 资源。首笔会创建该资源的交易仍需有足够 Gas 覆盖创建成本和执行费用。
 
 交易签名期间，各方会对以下内容签名：
 
@@ -75,6 +73,8 @@ pub enum RawTransactionWithData {
 在 framework 1.8 发布前，所有签名者都必须在签名之前知道实际费用支付者地址。自 framework 1.8 发布起，签名者可以将地址设为 `0x0`；只有费用支付者必须在设置其地址后签名。
 
 ## SDK 支持
+
+使用 `withFeePayer: true` 构建赞助交易，然后让发送方调用 `.sign`，赞助方调用 `.signAsFeePayer`。完整流程见 [TypeScript SDK 赞助交易指南](/zh/build/sdks/ts-sdk/building-transactions/sponsoring-transactions)。
 
 每个官方 SDK 都记录了赞助交易，并提供已测试示例：
 

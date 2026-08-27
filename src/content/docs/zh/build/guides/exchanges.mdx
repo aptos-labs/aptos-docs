@@ -31,7 +31,13 @@ address.toStringLong(); // 0x00000000000000000000000000000001
 
 ## 账户标准
 
-账户由地址、认证密钥和公钥组成。账户可在首次收款时自动创建；不要把认证密钥当作不变的公钥标识。
+[AIP-115](/zh/build/aips/aip-115) 将每个 32 字节地址视为有效账户。向地址发送资金或提交交易前，**不必**先创建 `0x1::account::Account` 资源。
+
+该资源会在序列号交易（或其他需要它的功能）首次需要时按需创建。`0x1::aptos_account::transfer` 仍会为收款方注资，并在需要时创建该资源。若要显式创建资源，仍可调用 `0x1::aptos_account::create_account`。
+
+不要把缺少 `0x1::account::Account` 资源理解为“该地址不存在”；应检查余额和链上活动。同样的说明见[应用集成](/zh/build/guides/application-integration)。
+
+热钱包若需从多台机器提交且不协调序列号，请使用[无序交易](/zh/build/guides/orderless-transactions)。
 
 以下示例创建账户、构造转账并等待交易提交完成：
 

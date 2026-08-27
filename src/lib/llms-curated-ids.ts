@@ -40,6 +40,7 @@ export const LLMS_INDEX_SECTIONS: LlmsSection[] = [
     ids: [
       "build/apis",
       "build/apis/fullnode-rest-api",
+      "build/apis/faucet-api",
       "build/guides/exchanges",
       "build/indexer/indexer-api",
       "build/indexer/indexer-api/indexer-reference",

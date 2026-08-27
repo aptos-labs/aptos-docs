@@ -249,6 +249,7 @@ export default defineConfig({
               "/.well-known/oauth-authorization-server",
               "/auth.md",
               "/.well-known/ai-catalog.json",
+              "/aptos-spec.json",
             ];
             if (knownWellKnown.some((path) => link.endsWith(path))) {
               return true;

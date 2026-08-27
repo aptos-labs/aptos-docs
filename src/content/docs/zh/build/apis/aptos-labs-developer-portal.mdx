@@ -1,16 +1,47 @@
 ---
-title: "Aptos Labs API Gateway"
-description: "通过 Aptos Labs API Gateway 访问 API、gas 代付服务和无代码索引功能"
+title: "Aptos Labs Geomi"
+description: "通过 Geomi 开发者门户访问 Aptos Labs API、gas 代付服务和无代码索引"
 sidebar:
-  label: "API Gateway"
+  label: "Geomi"
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
+[Geomi](https://geomi.dev) 是 Aptos Labs 的开发者门户，提供托管的节点 API、Indexer GraphQL、Transaction Stream、gas 代付以及无代码索引。创建账户即可获得 API 密钥、更高的速率限制和使用指标。
+
 <Aside type="note">
-  API Gateway 目前处于测试阶段.如果您遇到任何问题,请在aptos-core存储库中创建一个问题报告 [issue](https://github.com/aptos-labs/aptos-core/issues/new?assignees=@geekflyer,@dport,@blakezimmerman\&labels=api-gateway\&projects=\&template=dev_portal_issue.md\&title=%5BDev+Portal%5D).
+  Geomi 目前处于测试阶段。如遇问题，请在 [aptos-core](https://github.com/aptos-labs/aptos-core/issues/new) 中提交 issue。旧的 `developers.aptoslabs.com` 网址会重定向到 Geomi。
 </Aside>
 
-[API Gateway](https://developers.aptoslabs.com) 是 Aptos Labs 提供的 API 的入口,为您的 dapp 提供快速,简便的支持.它由一个门户(UI)和由 Aptos Labs 运营的一组 API 网关组成.
+## API 密钥
 
-在专门的 [API Gateway 文档网站](https://developers.aptoslabs.com/docs) 上了解更多关于 API Gateway 的信息.
+Labs 托管 API 允许匿名请求，但按 IP 限额较低。将 Geomi API 密钥作为 bearer token 附加即可获得更高限额：
+
+```shellscript filename="Terminal"
+curl "https://api.mainnet.aptoslabs.com/v1" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```typescript filename="index.ts"
+import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
+
+const aptos = new Aptos(
+  new AptosConfig({
+    network: Network.MAINNET,
+    clientConfig: { API_KEY: process.env.APTOS_API_KEY },
+  }),
+);
+```
+
+**服务端密钥**（前缀 `aptoslabs_`）应保留在后端。**客户端密钥**（前缀 `AG-`）用于浏览器、移动应用和扩展；创建时请配置允许的来源和每 IP 限额。详见 [API 密钥](https://geomi.dev/docs/api-keys) 和[入门指南](https://geomi.dev/docs/start)。
+
+## Geomi 托管的服务
+
+| 服务                                        | 文档                                                   |
+| ----------------------------------------- | ---------------------------------------------------- |
+| 节点 API、Indexer GraphQL、Transaction Stream | [Geomi API 参考](https://geomi.dev/docs/api-reference) |
+| 速率限制与计算单元计费                               | [计费](https://geomi.dev/docs/admin/billing)           |
+| Gas Station                               | [Gas Stations](https://geomi.dev/docs/gas-stations)  |
+| 无代码索引                                     | [无代码索引](https://geomi.dev/docs/no-code-indexing)     |
+
+官方网络 URL 见 [Aptos APIs](/zh/build/apis) 和[网络](/zh/network/nodes/networks)。

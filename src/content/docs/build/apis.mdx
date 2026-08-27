@@ -1,64 +1,96 @@
 ---
 title: "Aptos APIs"
-description: "Access the Aptos blockchain through various APIs including REST API, GraphQL, and specialized endpoints for different use cases"
+description: "Access the Aptos blockchain through the Fullnode REST API, Indexer GraphQL, Transaction Stream gRPC, faucet, and Geomi-hosted endpoints"
 sidebar:
   label: "APIs Overview"
 ---
 
-import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+import { Aside, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
-The Aptos Blockchain network can be accessed by several APIs, depending on your use-case.
+Use these APIs to read chain state, submit transactions, index historical data, and fund test accounts. Most application code should go through an [official SDK](/build/sdks); the HTTP, GraphQL, and gRPC endpoints below are the underlying services those SDKs call.
 
-## Aptos Fullnode
+## Choose an API
 
-This API - embedded into Fullnodes - provides a simple, low latency, yet low-level way of _reading_ state and
-_submitting_ transactions to the Aptos Blockchain. It also supports transaction simulation.
+| You need                                                        | Use                                                    |
+| --------------------------------------------------------------- | ------------------------------------------------------ |
+| Latest on-chain state, transaction submission, or simulation    | [Fullnode REST API](/build/apis/fullnode-rest-api)     |
+| NFTs, objects, historical activity, or aggregated tables        | [Indexer GraphQL API](/build/indexer)                  |
+| A real-time or historical transaction feed for a custom indexer | [Transaction Stream (gRPC)](/build/indexer/txn-stream) |
+| Test APT on Devnet or Testnet                                   | [Faucet API](/build/apis/faucet-api)                   |
+| SQL, dashboards, or third-party RPC                             | [Data providers](/build/apis/data-providers)           |
+
+## Official Aptos Labs endpoints
+
+[Aptos Labs](https://aptoslabs.com) operates these deployments for each [Aptos network](/network/nodes/networks) on behalf of the [Aptos Foundation](https://aptosnetwork.com/foundation). `fullnode.{network}.aptoslabs.com` is an alias of `api.{network}.aptoslabs.com`; prefer the `api.` hostnames.
+
+| Network | REST API (`/v1`)                       | Indexer GraphQL                                | Transaction Stream gRPC          | Faucet                                                                                   |
+| ------- | -------------------------------------- | ---------------------------------------------- | -------------------------------- | ---------------------------------------------------------------------------------------- |
+| Mainnet | `https://api.mainnet.aptoslabs.com/v1` | `https://api.mainnet.aptoslabs.com/v1/graphql` | `grpc.mainnet.aptoslabs.com:443` | —                                                                                        |
+| Testnet | `https://api.testnet.aptoslabs.com/v1` | `https://api.testnet.aptoslabs.com/v1/graphql` | `grpc.testnet.aptoslabs.com:443` | [Mint page](/network/faucet) and `https://faucet.testnet.aptoslabs.com` (Google sign-in) |
+| Devnet  | `https://api.devnet.aptoslabs.com/v1`  | `https://api.devnet.aptoslabs.com/v1/graphql`  | `grpc.devnet.aptoslabs.com:443`  | `https://faucet.devnet.aptoslabs.com` (programmatic)                                     |
+
+The Node API spec is published on this site as [OpenAPI JSON](/aptos-spec.json) and a browsable [REST API reference](/rest-api). Live Swagger UIs also run on each fullnode at `/v1/spec`.
+
+## Fullnode REST API
+
+This API ships with every fullnode. It is the low-latency path for reading state, submitting transactions, and simulating transactions.
 
 <CardGrid>
-  <LinkCard href="/build/apis/fullnode-rest-api?network=mainnet" title="Aptos Fullnode REST API (Mainnet)" description="Mainnet API playground for Aptos Fullnode REST API" />
+  <LinkCard href="/rest-api" title="REST API reference" description="Browsable docs generated from the Aptos Node API OpenAPI spec" />
 
-  <LinkCard href="/build/apis/fullnode-rest-api?network=testnet" title="Aptos Fullnode REST API (Testnet)" description="Testnet API playground for Aptos Fullnode REST API" />
+  <LinkCard href="/build/apis/fullnode-rest-api" title="REST API guide" description="Rate limits, pruning, view functions, and how to query state" />
 
-  <LinkCard href="/build/apis/fullnode-rest-api?network=devnet" title="Aptos Fullnode REST API (Devnet)" description="Devnet API playground for Aptos Fullnode REST API" />
+  <LinkCard href="https://api.mainnet.aptoslabs.com/v1/spec#/" title="Mainnet explorer" description="Live Swagger UI against api.mainnet.aptoslabs.com" target="_blank" />
+
+  <LinkCard href="https://api.testnet.aptoslabs.com/v1/spec#/" title="Testnet explorer" description="Live Swagger UI against api.testnet.aptoslabs.com" target="_blank" />
+
+  <LinkCard href="https://api.devnet.aptoslabs.com/v1/spec#/" title="Devnet explorer" description="Live Swagger UI against api.devnet.aptoslabs.com" target="_blank" />
 </CardGrid>
 
 ## Indexer
 
 <CardGrid>
-  <LinkCard
-    href="/build/indexer"
-    title="Indexer GraphQL API"
-    description="This GraphQL API offers a high-level, opinionated GraphQL interface to read state from the Aptos Blockchain.
-It's ideal for interacting with NFTs, Aptos Objects, or custom Move contracts.
-Learn more about the Indexer-powered GraphQL API here."
-  />
+  <LinkCard href="/build/indexer" title="Indexer GraphQL API" description="High-level GraphQL for NFTs, Aptos Objects, fungible assets, and custom contract data" />
 
-  <LinkCard
-    href="/build/indexer/txn-stream"
-    title="Transaction Stream API"
-    description="This GRPC API streams historical and real-time transaction data to an indexing processor.
-It's used by Aptos Core Indexing and can also support custom app-specific indexing processors
-for real-time blockchain data processing. Learn more here."
-  />
+  <LinkCard href="/build/indexer/txn-stream" title="Transaction Stream API" description="gRPC stream of historical and real-time transactions for Aptos Core Indexing and app-specific processors" />
 </CardGrid>
 
-## Faucet (Only Testnet/Devnet)
+## Faucet (Devnet and Testnet)
 
 <CardGrid>
-  <LinkCard
-    href="/build/apis/faucet-api"
-    title="Faucet API"
-    description="This API provides the ability to receive test tokens on devnet. Its primary purpose is the development
-and testing of applications and Move contracts before deploying them to mainnet. On testnet you can mint at the mint page."
-  />
+  <LinkCard href="/build/apis/faucet-api" title="Faucet API" description="Mint test APT on Devnet programmatically, or on Testnet through Google sign-in / the mint page" />
 </CardGrid>
 
-The code of each of the above-mentioned APIs is open-sourced on [GitHub](https://github.com/aptos-labs/aptos-core). As
-such anyone can operate these APIs and many independent operators and builders worldwide choose to do so.
+## Geomi and data providers
 
-### Aptos Labs operated API Deployments
+<CardGrid>
+  <LinkCard href="/build/apis/aptos-labs-developer-portal" title="Geomi" description="API keys, higher rate limits, gas station, and no-code indexing for Aptos Labs hosted APIs" />
 
-[Aptos Labs](https://aptoslabs.com) operates a deployment of these APIs on behalf of [Aptos Foundation](https://aptosnetwork.com/foundation)
-for each [Aptos Network](/network/nodes/networks) and makes them available for public consumption.
+  <LinkCard href="/build/apis/data-providers" title="Data providers" description="SQL datasets, analytics dashboards, and third-party RPC endpoints" />
+</CardGrid>
 
-These APIs allow for limited access on a per-IP basis without an API key (anonymous access). To get much higher rate limits you can sign up for an [Geomi](https://geomi.dev/) account.
+The Node API, Indexer, Transaction Stream, and faucet implementations are open source in [aptos-core](https://github.com/aptos-labs/aptos-core). Anyone can run them; independent operators and builders do so worldwide. Additional RPC vendors are listed in the [Aptos ecosystem directory](https://aptosnetwork.com/ecosystem/directory/category/rpc).
+
+## Authentication and rate limits
+
+Labs-hosted Node, Indexer, and Transaction Stream APIs allow **anonymous** access with a low per-IP rate limit. For higher limits and usage metrics, create a [Geomi](https://geomi.dev/) API key and send it as a bearer token.
+
+```shellscript filename="Terminal"
+curl "https://api.mainnet.aptoslabs.com/v1" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```typescript filename="index.ts"
+import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
+
+const aptos = new Aptos(
+  new AptosConfig({
+    network: Network.MAINNET,
+    clientConfig: { API_KEY: process.env.APTOS_API_KEY },
+  }),
+);
+```
+
+<Aside type="note">
+  Usage is metered in compute units (CUs), and organizations also have HTTP rate limits. See the [Geomi billing docs](https://geomi.dev/docs/admin/billing) for current limits and pricing. Create a key from the [Geomi getting started guide](https://geomi.dev/docs/start).
+</Aside>

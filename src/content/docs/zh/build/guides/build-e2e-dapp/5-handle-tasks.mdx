@@ -70,8 +70,8 @@ const fetchList = async () => {
 任务存储在表中（这是合约的构建方式）。要获取表项（即任务），需要该任务的表句柄。还需要资源中的 `task_counter`，以便遍历并获取 `task_id` 与 `task_counter` 匹配的任务。
 
 ```typescript filename="App.tsx"
-const tableHandle = (TodoListResource as any).data.tasks.handle;
-const taskCounter = (TodoListResource as any).data.task_counter;
+const tableHandle = (todoListResource as any).tasks.handle;
+const taskCounter = (todoListResource as any).task_counter;
 ```
 
 现在已有任务表句柄和 `task_counter` 变量，可以遍历 `taskCounter`。定义 `counter` 并设为 1，因为 task\_counter/task\_id 永远不小于 1。
@@ -87,7 +87,7 @@ while (counter <= taskCounter) {
     value_type: `${moduleAddress}::todolist::Task`,
     key: `${counter}`,
   };
-  const task = await aptosClient().getTableItem(tableHandle, tableItem);
+  const task = await aptosClient().getTableItem<Task>({handle:tableHandle, data:tableItem});
   tasks.push(task);
   counter++;
 }

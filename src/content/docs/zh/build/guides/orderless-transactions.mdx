@@ -5,16 +5,45 @@ sidebar:
   label: "无序交易"
 ---
 
-如 [AIP-123](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-123-orderless-transactions.md)（[常见问题](/zh/build/aips/aip-123)）所述，无序交易允许交易不按顺序执行。这尤其适用于多个机器需要为同一个发送账户签名、但签名顺序既不影响交易结果也不影响创建者的场景。重放由 nonce 保护；nonce 是交易的唯一标识符。它允许交易在过期时间内的任意时刻执行，不受机器签名顺序影响，同时在 nonce 过期后不能被重放。无序交易的最大过期时间为 60 秒，这与序列号交易不同。
+import { Aside } from "@astrojs/starlight/components";
+
+如 [AIP-123](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-123-orderless-transactions.md)（[常见问题](/zh/build/aips/aip-123)）所述，无序交易不使用序列号即可执行。这尤其适用于多台机器从同一发送账户提交交易、且提交顺序无关紧要的场景。
+
+重放由 nonce 保护。区块链会保存最近 60 秒内已提交无序交易的 `(sender, nonce)` 对。只有该对尚未使用时交易才会执行，且无序交易最多 60 秒后过期——短于序列号交易。
+
+带有链上 `0x1::account::Account` 资源的账户和[无状态账户](/zh/build/aips/aip-115)都可以发送无序交易。
 
 ## 流程概览
 
-无序交易依赖 [AIP-129](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-129-add-extra-information-in-transaction-payload.md) 中指定的交易负载。构建和执行无序交易的流程如下：
+无序交易使用 [AIP-129](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-129-add-extra-information-in-transaction-payload.md) 中指定的额外负载字段。
 
-1. 使用定义待执行操作的 `replayProtectionNonce` 和 `TransactionPayload::TransactionPayloadPayload` 构建交易。
-2. 与其他交易一样签名并提交交易，但需设置 `replayProtectionNonce`。理想情况下，nonce 应为随机的 u64 值。
+1. 使用唯一的 `replayProtectionNonce`（随机 `u64`）以及要调用的 Move entry 函数构建交易。
+2. 像普通交易一样签名并提交。nonce 取代序列号来提供重放保护。
 
-请注意，`replayProtectionNonce` 的行为类似序列号，但不保证交易按顺序执行；它确保交易唯一，且不能使用相同 nonce 重放（执行两次）。
+nonce **不会**为交易排序。它只确保在过期前，同一 nonce 不能执行两次。
+
+<Aside type="note">
+  大多数 SDK 构建器仍默认使用序列号交易。当你需要从多台机器并行提交时（例如交易所热钱包），请使用无序交易。序列号模型见[交易管理](/zh/build/guides/transaction-management)。
+</Aside>
+
+## TypeScript 示例
+
+在交易 `options` 中传入 `replayProtectionNonce`：
+
+```typescript filename="orderless-transfer.ts"
+const transaction = await aptos.transaction.build.simple({
+  sender: sender.accountAddress,
+  data: {
+    function: "0x1::aptos_account::transfer",
+    functionArguments: [destination.accountAddress, 100],
+  },
+  options: {
+    replayProtectionNonce: 12345n,
+  },
+});
+```
+
+你可以将无序重放保护与[赞助交易](/zh/build/guides/sponsored-transactions)和[加密待处理交易](/zh/build/guides/encrypted-pending-transactions)组合使用。
 
 ## SDK 支持
 

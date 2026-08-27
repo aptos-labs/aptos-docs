@@ -6,7 +6,7 @@ sidebar:
 ---
 
 As outlined
-in [AIP-39](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-39.md),
+in [AIP-39](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-039-sponsored-transactions.md),
 sponsored transactions allow one account to pay the fees associated with
 executing a transaction for another account, essentially setting up a fee payer.
 Sponsored transactions simplify the process for onboarding users into applications
@@ -36,9 +36,10 @@ The process for sending a sponsored transaction follows:
 - (Optionally) the sender aggregates signatures from other signers.
 - The sender can forward the signed transaction to the fee payer to sign and
   forward it to the blockchain.
-- Upon execution of the transaction, the sequence number of the sender account
-  is incremented, all gas fees are deducted from the gas fee payer, and all
-  refunds are sent to the gas fee payer.
+- Upon execution of the transaction, gas fees are deducted from the fee payer
+  and refunds return to the fee payer. Sequence-number transactions also
+  increment the sender's sequence number; [orderless](/build/guides/orderless-transactions)
+  sponsored transactions use a nonce instead.
 
 Alternatively, if the fee payer knows the operation and all signers involved,
 the fee payer could generate and sign the transaction and send it back to the
@@ -78,15 +79,10 @@ pub enum TransactionAuthenticator {
 }
 ```
 
-To prepare a sponsored transaction for an account, the account must first exist
-on-chain. This is a requirement that is being removed with the 1.8 framework
-release.
-
-As of the 1.8 framework release, an account does not need to exist on-chain.
-However, the first transaction for an account requires enough gas to not only
-execute the transaction and cover the costs associated with account creation,
-even if an account already exists. Future improvements to the account model
-intend to eliminate this requirement.
+As of framework 1.8 and [AIP-115](/build/aips/aip-115) stateless accounts, the
+sender does not need a pre-created `0x1::account::Account` resource. The first
+transaction that creates that resource still needs enough gas to cover creation
+in addition to execution.
 
 During signing of the transaction, all parties sign the following:
 
@@ -107,6 +103,11 @@ optionally set the address to `0x0` and only the fee payer must sign with their
 address set.
 
 ## SDK Support
+
+Build sponsored transactions with `withFeePayer: true`, then have the sender
+`.sign` and the sponsor `.signAsFeePayer`. See the
+[TypeScript SDK sponsoring guide](/build/sdks/ts-sdk/building-transactions/sponsoring-transactions)
+for a full walkthrough.
 
 Each official SDK documents sponsored transactions and ships a tested example:
 

@@ -61,120 +61,63 @@ published.
   Do not forget to fund the account with faucet before publishing modules.
 </Aside>
 
-## Step 3: Start The example
+## Step 3: Understand the on-chain flow
 
-```shellscript filename="Terminal"
-cd ~/aptos-core/ecosystem/typescript/sdk/examples/typescript
-```
+The TypeScript example that used to live under
+`aptos-core/ecosystem/typescript/sdk` was removed when the SDK moved to
+[`aptos-ts-sdk`](https://github.com/aptos-labs/aptos-ts-sdk). Use the Move
+packages you just published, then drive the same flow with the current SDK
+multisig APIs.
 
-Run the `multisig_managed_coin` example:
-
-```shellscript filename="Terminal"
-MODULE_ADDR=${DEFAULT_ACCOUNT_ADDRESS} pnpm run multisig_managed_coin
-```
+- Move: [`managed_fungible_asset`](https://github.com/aptos-labs/aptos-core/tree/main/aptos-move/move-examples/fungible_asset/managed_fungible_asset)
+  and [`multisig_managed_coin`](https://github.com/aptos-labs/aptos-core/tree/main/aptos-move/move-examples/fungible_asset/multisig_managed_coin)
+- TypeScript SDK multisig (create, propose, approve, execute):
+  [`examples/typescript-esm/multisig_v2.ts`](https://github.com/aptos-labs/aptos-ts-sdk/blob/main/examples/typescript-esm/multisig_v2.ts)
+- Beginner walkthrough: [Your First Multisig](/build/guides/first-multisig)
 
 <Aside type="note">
-  This example uses the Aptos devnet, which has historically been reset each
-  Thursday.
-  Make sure devnet is live when you try running the example! If you are running
-  localnet with faucet, you can run the following command instead:
-
-  ```shellscript filename="Terminal"
-  export APTOS_NODE_URL=http://0.0.0.0:8080
-  export APTOS_FAUCET_URL=http://0.0.0.0:8081
-  export MODULE_ADDR=${DEFAULT_ACCOUNT_ADDRESS}
-  pnpm run multisig_managed_coin
-  ```
+  If you run a localnet with a faucet, set `APTOS_NODE_URL` and
+  `APTOS_FAUCET_URL` (for example `http://127.0.0.1:8080` and
+  `http://127.0.0.1:8081`) before submitting transactions.
 </Aside>
 
-The example script should execute successfully without any errors. Then you are
-able to see what it did by searching the `owner1` and `owner2` addresses printed
-to the console on Aptos explorer.
+The intended flow is:
 
-Let's follow the script to understand what it does:
+### Generate single-signer accounts
 
-### Generate single signer accounts
+Generate three accounts — owner1, owner2, and owner3 — that will co-own an
+Aptos framework multisig account.
 
-First, we will generate three single signer accounts, owner1, owner2 and owner3
-who will co-own an Aptos framework multisig account.
+### Create a framework multisig that administers a fungible asset
 
-{/* TODO Code snippet
-  typescript title=Generate 3 single signers"
-  /sdks/typescript/examples/typescript/multisig_managed_coin.ts
-  section_1
-  */}
-
-### Create an Aptos framework multisig account with a managed fungible asset
-
-Next, let owner1 call the `initialize()` function defined
-in `multisig_managed_coin.move`, which first create an Aptos framework multisig
-account owned by owner1 and add both owner2 and owner3 as owners. Also, it
-creates a fungible asset called "meme coin" with customized settings denoted in
-the argument list and make the multisig account the admin of the fungible asset.
-Also, each proposal needs at least 2 approvals to execute.
-
-{/* TODO Code snippet
-  typescript title=Query the multisig account and then call the initialize function"
-  /sdks/typescript/examples/typescript/multisig_managed_coin.ts
-  section_2
-  */}
+Have owner1 call `initialize()` in `multisig_managed_coin.move`. That function
+creates a framework multisig owned by owner1, adds owner2 and owner3, creates a
+fungible asset ("meme coin") with the settings in the argument list, and makes
+the multisig the asset admin. Each proposal needs at least two approvals.
 
 ### Mint
 
-Then we mint 1000 and 2000 meme coin to owner2 and owner3, respectively. The
-proposed transaction is submitted by owner2 and gets an additional approval from
-owner3.
-
-{/* TODO Code snippet
-  typescript title="Mint 1000 to owner2 and 2000 to owner3"
-  /sdks/typescript/examples/typescript/multisig_managed_coin.ts
-  section_3
-  */}
+Mint 1000 units to owner2 and 2000 to owner3. Owner2 submits the proposal;
+owner3 approves it; then execute.
 
 ### Freeze
 
-After minting, the example shows how to freeze account owner1. The proposed
-transaction is again submitted by owner2 and approved by owner3 in addition.
-
-{/* TODO Code snippet
-  typescript title=""Freeze owner1"
-  /sdks/typescript/examples/typescript/multisig_managed_coin.ts
-  section_4
-  */}
-
-<Aside type="note">
-  Unfreeze is similar that just replace the last argument of
-  `set_primary_stores_frozen_status` function to `false`.
-</Aside>
+Freeze owner1's primary store. Owner2 submits; owner3 approves. Unfreeze is the
+same call with the last argument set to `false`.
 
 ### Force transfer
 
-When owner1 is frozen, normal transfer cannot withdraw from or deposit to that
-account. But as the admin of "meme coin", the multisig account has the
-capability to do that.
-Next, Owner2 proposed a transaction to force transfer 1000 meme coins from
-owner3 to owner1. This time, owner1 approves it.
-
-{/* TODO Code snippet
-  typescript title=""Force transfer 1000 meme coins from owner3 to owner1"
-  /sdks/typescript/examples/typescript/multisig_managed_coin.ts
-  section_5
-  */}
+While owner1 is frozen, a normal transfer cannot withdraw from or deposit to
+that account. The multisig, as admin, can still force-transfer 1000 units from
+owner3 to owner1. Owner2 proposes; owner1 approves.
 
 ### Burn
 
-Finally, all the three owners have 1000 meme coins. Let's burn all the coins!
-Owner2 makes the proposal and owner1 approves it.
-
-{/* TODO Code snippet
-  typescript title="Burn 1000 meme coins from all the three owners' accounts"
-  /sdks/typescript/examples/typescript/multisig_managed_coin.ts
-  section_6
-  */}
+Burn 1000 units from each owner. Owner2 proposes; owner1 approves.
 
 ## Conclusion
 
-This tutorial shows an e2e flow of using Aptos framework multisig account to
-administrate fungible asset. Similarly, you can create your own module and
-leverage our powerful SDK to create the administration schema that fits your
-needs.
+This tutorial shows an end-to-end flow of using an Aptos framework
+multisig account to administer a fungible asset. You can publish your own
+module and use the current SDK to build an administration scheme that fits
+your needs.

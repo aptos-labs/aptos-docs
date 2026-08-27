@@ -36,7 +36,7 @@ Aptos Move 账户拥有公开地址、认证密钥、公钥和私钥。公开地
 
 该表是认证密钥到账户地址的反向查询表，每个认证密钥只允许一个条目。签名证明可防止恶意方将账户认证密钥轮换到表中已有的密钥，从而阻止对先前获授权原始地址的有效查询。
 
-该表只在密钥轮换时更新，不在普通账户生成时更新。因此，理论上一个私钥可同时认证最多两个账户：由该私钥正常生成的未轮换账户，以及认证密钥被轮换为该私钥的任意第二地址。最佳实践仍是一个私钥只认证一个账户。新建账户后，可运行 `account::set_originating_address` 来确保这一点。
+该表只在密钥轮换时更新，不在普通账户生成时更新。因此，理论上一个私钥可同时认证最多两个账户：由该私钥正常生成的未轮换账户，以及认证密钥被轮换为该私钥的任意第二地址。最佳实践仍是一个私钥只认证一个账户。已证明的轮换会更新 `account::OriginatingAddress`。**不要**在新建账户后调用 `account::set_originating_address`：该入口当前会始终失败（见下文）。
 
 ### 未证明的密钥轮换
 
@@ -46,7 +46,11 @@ Aptos Move 账户拥有公开地址、认证密钥、公钥和私钥。公开地
   `account::rotate_authentication_key_call` 用于支持 passkey 等非标准密钥算法；这些算法无法在轮换操作期间提供知识证明。
 </Aside>
 
-尽管未证明轮换在技术上可让同一认证密钥认证任意数量的账户，但它无法确保一对一映射，不是最佳实践。执行未证明轮换后，建议使用 `account::set_originating_address`，以便能从认证密钥方便地查询原始账户地址。
+尽管未证明轮换在技术上可让同一认证密钥认证任意数量的账户，但它无法确保一对一映射，不是最佳实践。当前没有受支持的链上后续步骤来写入 `account::OriginatingAddress`：`account::set_originating_address` 已被禁用。请改用链下方式（例如 Indexer）跟踪认证密钥映射，而不要调用该入口。
+
+<Aside type="caution" title="`set_originating_address` 当前已禁用">
+  `0x1::account::set_originating_address` 目前会始终以 `ESET_ORIGINATING_ADDRESS_DISABLED` 中止，以避免账户抽象带来的投毒风险。已证明的轮换仍会更新 `OriginatingAddress`。详见 [aptos-core#16900](https://github.com/aptos-labs/aptos-core/pull/16900)。
+</Aside>
 
 ## 使用 Aptos CLI 轮换密钥
 
@@ -282,11 +286,15 @@ Aptos Move 账户拥有公开地址、认证密钥、公钥和私钥。公开地
 预期输出：
 
 ```shellscript filename="Terminal"
-     aptos move run \
-         --assume-yes \
-         --function-id 0x1::account::set_originating_address \
-         --profile test-profile-1
+     aptos move view \
+         --args address:$AUTH_KEY_A \
+         --function-id 0x1::account::originating_address \
+         --url http://localhost:8080
 ```
+
+<Aside type="caution">
+  **不要**运行 `0x1::account::set_originating_address`。该入口当前会始终以 `ESET_ORIGINATING_ADDRESS_DISABLED` 中止。跳过该步骤继续教程；之后已证明的轮换仍会更新该表。
+</Aside>
 
 运行命令：
 
@@ -665,7 +673,8 @@ Aptos Move 账户拥有公开地址、认证密钥、公钥和私钥。公开地
 ### 进入 TypeScript SDK 目录、安装依赖并运行
 
 ```shellscript filename="Terminal"
-cd ~/aptos-core/ecosystem/typescript/sdk/examples/typescript-esm
+git clone https://github.com/aptos-labs/aptos-ts-sdk.git
+cd aptos-ts-sdk/examples/typescript
 pnpm install && pnpm rotate_key
 ```
 
@@ -690,8 +699,10 @@ Bob 0x1c06...ac3bb3 0x1c06...ac3bb3 0xf2be...9486aa 0xbbc1...abb808
 ### 进入 Python SDK 目录、安装依赖并运行
 
 ```shellscript filename="Terminal"
-cd aptos-core/ecosystem/python/sdk
-poetry install && poetry run python -m examples.rotate-key
+git clone https://github.com/aptos-labs/aptos-python-sdk
+cd aptos-python-sdk
+pip install .
+python -m examples.rotate_key
 ```
 
 ### `rotate_key.py` 输出
@@ -708,12 +719,12 @@ Alice 0x213d...031013 '0x1c06...ac3bb3' '0xf2be...9486aa' '0xbbc1...abb808'
 Bob 0x1c06...ac3bb3 0x1c06...ac3bb3 0xf2be...9486aa 0xbbc1...abb808
 ```
 
-[`account::rotate_authentication_key`]: https://github.com/aptos-labs/aptos-core/blob/acb6c891cd42a63b3af96561a1aca164b800c7ee/aptos-move/framework/aptos-framework/sources/account.move#L326
+[`account::rotate_authentication_key`]: https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/account/account.move
 
-[`account::rotate_authentication_key_call`]: https://github.com/aptos-labs/aptos-core/blob/acb6c891cd42a63b3af96561a1aca164b800c7ee/aptos-move/framework/aptos-framework/sources/account.move#L294
+[`account::rotate_authentication_key_call`]: https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/account/account.move
 
-[`account::RotationProofChallenge`]: https://github.com/aptos-labs/aptos-core/blob/acb6c891cd42a63b3af96561a1aca164b800c7ee/aptos-move/framework/aptos-framework/sources/account.move#L79
+[`account::RotationProofChallenge`]: https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/account/account.move
 
-[`account::OriginatingAddress`]: https://github.com/aptos-labs/aptos-core/blob/acb6c891cd42a63b3af96561a1aca164b800c7ee/aptos-move/framework/aptos-framework/sources/account.move#L70
+[`account::OriginatingAddress`]: https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/account/account.move
 
-[`account::set_originating_address`]: https://github.com/alnoki/aptos-core/blob/5ba4a8d1344b0bb6e22665525a96e787b9a44e55/aptos-move/framework/aptos-framework/sources/account.move#L528
+[`account::set_originating_address`]: https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/account/account.move

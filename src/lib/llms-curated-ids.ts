@@ -18,6 +18,7 @@ export const LLMS_INDEX_SECTIONS: LlmsSection[] = [
     title: "Start Here",
     ids: [
       "build/get-started",
+      "build/guides",
       "build/get-started/ethereum-cheatsheet",
       "build/guides/first-transaction",
       "build/guides/first-move-module",
@@ -104,6 +105,7 @@ export const LLMS_SMALL_DOC_IDS = [
 export const FULL_PRIORITY_DOC_IDS = [
   "index",
   "build/get-started",
+  "build/guides",
   "build/get-started/ethereum-cheatsheet",
   "build/guides/first-transaction",
   "build/guides/first-move-module",

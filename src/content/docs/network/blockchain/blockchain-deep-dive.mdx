@@ -252,17 +252,17 @@ Mempool is a shared buffer that holds the transactions that are "waiting" to be 
 ### 1. REST Service → Mempool
 
 - After receiving a transaction from the client, the REST service sends the transaction to its own mempool, which then shares the transaction with the mempool of a validator fullnode. The mempool on the validator fullnode then shares the transaction with the mempool of a validator.
-- The mempool for validator node V<sub>X</sub> accepts transaction T<sub>N</sub> for the sender's account only if the sequence number of T<sub>N</sub> is greater than or equal to the current sequence number of the sender's account.
+- The mempool for validator node V<sub>X</sub> accepts a sequenced transaction T<sub>N</sub> only if its sequence number is greater than or equal to the sender's current sequence number. [Orderless transactions](/build/guides/orderless-transactions) skip that contiguous-sequence check and use a nonce instead.
 
 ### 2. Mempool → Other validator nodes
 
-- The mempool of validator node V<sub>X</sub> shares transaction T<sub>N</sub> with the other validators on the same network.
-- Other validators share the transactions in their respective mempools with V<sub>X</sub>’s mempool.
+- Shared mempool forwards user transactions from fullnodes toward the validator set.
+- Inside the validator set, [Quorum Store](/network/glossary#quorum-store) disseminates those transactions in certified batches. Validators do not flood raw mempool contents at each other as the primary data path.
 
 ### 3. Consensus → Mempool
 
-- When the transaction is forwarded to a validator node and once the validator node becomes the leader, its consensus component will pull a block of transactions from its mempool and replicate the proposed block to other validators. It does this to arrive at a consensus on the ordering of transactions and the execution results of the transactions in the proposed block.
-- Note that just because a transaction T<sub>N</sub> was included in a proposed consensus block, it does not guarantee that T<sub>N </sub>will eventually be persisted in the distributed database of the Aptos blockchain.
+- When a validator becomes the leader, consensus pulls certified batches from Quorum Store and forms a proposed block. Mempool still holds the waiting transactions that Quorum Store batched.
+- Inclusion in a proposed block does not guarantee that T<sub>N</sub> will persist. The block still has to collect a quorum of votes and commit.
 
 ### 4. Mempool → VM
 
@@ -285,7 +285,7 @@ The consensus component is responsible for ordering blocks of transactions and a
 
 ### 1. Consensus → Mempool
 
-When validator V<sub>X</sub> is a leader/proposer, the consensus component of V<sub>X</sub> pulls a block of transactions from its mempool via: `Mempool::get_batch()`, and forms a proposed block of transactions.
+When validator V<sub>X</sub> is a leader/proposer, consensus pulls certified batches from [Quorum Store](/network/glossary#quorum-store) and forms a proposed block of transactions. Mempool is the buffer those batches were built from, not the proposal payload itself.
 
 ### 2. Consensus → Other Validators
 

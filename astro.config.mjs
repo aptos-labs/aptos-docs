@@ -65,6 +65,7 @@ function starlightLinksValidator(options) {
 
 import starlightOpenAPI from "starlight-openapi";
 import { sidebar } from "./astro.sidebar.ts";
+import { createCspConfig } from "./src/config/csp";
 import { SITE_TITLES, SUPPORTED_LANGUAGES } from "./src/config/i18n";
 import { markdownProcessor } from "./src/config/markdown";
 import { resolveSearchProvider } from "./src/config/search";
@@ -354,10 +355,11 @@ export default defineConfig({
   ],
   adapter: process.env.VERCEL
     ? vercel({
-        // One CSP header is set globally in vercel.json. Per-path static
-        // headers bloat `.vercel/output/config.json` and have failed preview
-        // deploys (Vercel "Body exceeded 3300kb limit").
-        staticHeaders: false,
+        // The patched adapter collapses Astro CSP into one catch-all route
+        // (`patches/@astrojs__vercel.patch`). Per-path static headers bloat
+        // `.vercel/output/config.json` and have failed preview deploys
+        // (Vercel "Body exceeded 3300kb limit").
+        staticHeaders: { cspMode: "global" },
         edgeMiddleware: false,
         imageService: true,
         imagesConfig: {
@@ -470,10 +472,9 @@ export default defineConfig({
     validateSecrets: true,
   },
   security: {
-    // Astro 7.2.0 hashes inline scripts and styles, which makes browsers ignore
-    // `'unsafe-inline'`. The HTTP policy is the hash-free header in vercel.json
-    // (`serializeCspHeader`), not Astro's per-page CSP.
-    csp: false,
+    // Stay on Astro 7.2.0. `patches/astro.patch` ports the 7.2.5 behavior:
+    // omit auto hashes when `'unsafe-inline'` is present so browsers honor it.
+    csp: createCspConfig(searchResolution.provider),
   },
   fonts: [
     {

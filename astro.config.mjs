@@ -65,7 +65,6 @@ function starlightLinksValidator(options) {
 
 import starlightOpenAPI from "starlight-openapi";
 import { sidebar } from "./astro.sidebar.ts";
-import { collapseCspConfigFile } from "./scripts/collapse-csp.mjs";
 import { createCspConfig } from "./src/config/csp";
 import { SITE_TITLES, SUPPORTED_LANGUAGES } from "./src/config/i18n";
 import { markdownProcessor } from "./src/config/markdown";
@@ -78,30 +77,6 @@ import { monacoEditorIntegration } from "./src/integrations/monacoEditor";
 import { ogImagesIntegration } from "./src/integrations/ogImages";
 import { sitemapXmlAlias } from "./src/integrations/sitemap-xml-alias";
 import { ENV } from "./src/lib/env";
-
-/**
- * `@astrojs/vercel` writes `.vercel/output/config.json` in its own
- * `astro:build:done`. A separate integration cannot wait for that file — user
- * hooks run first, so polling deadlocks. Wrapping the adapter runs collapse
- * after the file exists, including when Vercel uses the Astro preset's
- * default `astro build` (which does not run `pnpm build:collapse-csp`).
- *
- * @param {import("astro").AstroIntegration} integration
- * @returns {import("astro").AstroIntegration}
- */
-function withCollapsedCsp(integration) {
-  const originalDone = integration.hooks["astro:build:done"];
-  return {
-    ...integration,
-    hooks: {
-      ...integration.hooks,
-      "astro:build:done": async (context) => {
-        await originalDone?.call(integration, context);
-        collapseCspConfigFile();
-      },
-    },
-  };
-}
 
 const ALGOLIA_APP_ID = ENV.ALGOLIA_APP_ID;
 const ALGOLIA_SEARCH_API_KEY = ENV.ALGOLIA_SEARCH_API_KEY;
@@ -379,22 +354,19 @@ export default defineConfig({
     }),
   ],
   adapter: process.env.VERCEL
-    ? withCollapsedCsp(
-        vercel({
-          // Per-path CSP routes are collapsed in the adapter's `astro:build:done`
-          // (and again by `pnpm build:collapse-csp`). Leaving `staticHeaders` on
-          // is what makes the adapter emit the header; the Astro 7 adapter no
-          // longer has the patched `cspMode: "global"` option.
-          staticHeaders: true,
-          edgeMiddleware: false,
-          imageService: true,
-          imagesConfig: {
-            domains: [],
-            sizes: [320, 640, 1280],
-            formats: ["image/avif", "image/webp"],
-          },
-        }),
-      )
+    ? vercel({
+        // One CSP header is set globally in vercel.json. Per-path static
+        // headers bloat `.vercel/output/config.json` and have failed preview
+        // deploys (Vercel "Body exceeded 3300kb limit").
+        staticHeaders: false,
+        edgeMiddleware: false,
+        imageService: true,
+        imagesConfig: {
+          domains: [],
+          sizes: [320, 640, 1280],
+          formats: ["image/avif", "image/webp"],
+        },
+      })
     : node({
         mode: "standalone",
         staticHeaders: true,

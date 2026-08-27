@@ -36,16 +36,18 @@ const FIGMA_HOSTS = withHttps("embed.figma.com");
 const GOOGLE_FONTS_HOSTS = withHttps(["fonts.googleapis.com", "fonts.gstatic.com"]);
 
 /**
- * Hash of the `is:inline` script in Starlight's Pagefind search component, which
- * reveals the ⌘K hint in the search button and swaps the modifier key on Apple
- * devices. Astro does not hash `is:inline` scripts, so without this the hint
- * stays hidden. `tests/search-provider.test.ts` recomputes it from the installed
- * Starlight package so a version bump that edits the script fails loudly.
- */
-const STARLIGHT_SEARCH_SHORTCUT_HASH = "sha256-f/zAUE74ucc3JYp4r4QQvkJofoQdkOIhHYK+jeZ6eko=";
-
-/**
  * Content Security Policy configuration for Astro.
+ *
+ * Several first-party scripts and styles have to run inline:
+ * - Starlight ships `is:inline` scripts (theme, sidebar restore, search
+ *   shortcut) that Astro does not hash.
+ * - astro-mermaid injects a `<style>` element at runtime on every page.
+ *
+ * Browsers ignore `'unsafe-inline'` when a hash is present in the same
+ * directive. Astro 7.2.5+ therefore omits auto-generated hashes for any
+ * directive that lists `'unsafe-inline'`. Do not add `scriptDirective.hashes`
+ * or `styleDirective.hashes` here — they would disable that fallback and block
+ * Starlight's sidebar restore, gtag, and Mermaid.
  *
  * Pagefind searches inside a WebAssembly module running in a Web Worker created
  * from a blob URL, both of which a strict policy blocks by default. The failure
@@ -88,16 +90,6 @@ export function createCspConfig(searchProvider: SearchProvider = "algolia") {
         { resource: GOOGLE_HOSTS, kind: "element" },
         { resource: GTM_HOST, kind: "element" },
         { resource: VERCEL_HOSTS, kind: "element" },
-      ],
-      // Astro 7.1.1 does not automatically include these two virtual Starlight
-      // scripts in its generated CSP. Keep their exact hashes here so the theme
-      // provider and picker remain functional while retaining a strict policy.
-      hashes: [
-        { hash: "sha256-VWo5Wp4aqSj6nSgMpeAp9cKieaoIfwFUAunAVugI5gA=", kind: "element" },
-        { hash: "sha256-GkZBRnvSuhtx/cvzvukVkX2JJZW+DdPlVr7BX8Tefqo=", kind: "element" },
-        ...(usesPagefind
-          ? ([{ hash: STARLIGHT_SEARCH_SHORTCUT_HASH, kind: "element" }] as const)
-          : []),
       ],
     },
   } satisfies CspConfig;

@@ -5,24 +5,22 @@ import SpeedInsights from "@vercel/speed-insights/astro";
 
 const isProduction = import.meta.env.VERCEL_ENV === "production";
 const isVercel = import.meta.env.VERCEL;
+const gtagId = GTAG_ID?.trim();
+const gtagInit =
+  gtagId && /^G-[A-Z0-9]+$/i.test(gtagId)
+    ? `window.dataLayer=window.dataLayer||[];function gtag(){window.dataLayer.push(arguments);}gtag("js",new Date());gtag("config",${JSON.stringify(gtagId)});`
+    : undefined;
 ---
 
 {
-  isProduction && (
+  isProduction && gtagId && gtagInit && (
     <>
       <script
         is:inline
         type="text/partytown"
-        src={`https://www.googletagmanager.com/gtag/js?id=${GTAG_ID}`}
+        src={`https://www.googletagmanager.com/gtag/js?id=${gtagId}`}
       />
-      <script is:inline type="text/partytown" is:raw define:vars={{ GTAG_ID }}>
-        window.dataLayer = window.dataLayer || []; function gtag()
-        {
-          // eslint-disable-next-line prefer-rest-params
-          window.dataLayer.push(arguments)
-        }
-        gtag("js", new Date()); gtag("config", GTAG_ID);
-      </script>
+      <script is:inline type="text/partytown" set:html={gtagInit} />
     </>
   )
 }

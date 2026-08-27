@@ -118,7 +118,6 @@ const isClientViteBuild = (config) => !config.build?.ssr;
 const isServerViteBuild = (config) => Boolean(config.build?.ssr);
 
 // https://astro.build/config
-// @ts-expect-error TS2321 Astro 7.2 font-provider generics overflow TypeScript 6 in astro check.
 export default defineConfig({
   build: {
     inlineStylesheets: "never",
@@ -136,8 +135,9 @@ export default defineConfig({
     monacoEditorIntegration(),
     // Custom client directive for on-demand loading
     onDemandDirective(),
-    // Mermaid diagram support
-    mermaid(),
+    // Mermaid diagram support. Logging is off because the client script loads on
+    // every page, including those without diagrams.
+    mermaid({ enableLog: false }),
     // Only include devServerFileWatcher in development mode
     ...(process.env.NODE_ENV === "development" || !process.env.VERCEL
       ? [

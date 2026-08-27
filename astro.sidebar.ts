@@ -209,6 +209,7 @@ export const sidebar = [
             collapsed: true,
             items: [
               "build/sdks/go-sdk",
+              "build/sdks/go-sdk/quickstart",
               "build/sdks/go-sdk/account",
               "build/sdks/go-sdk/fetch-data-via-sdk",
               "build/sdks/go-sdk/go-examples",
@@ -220,6 +221,7 @@ export const sidebar = [
                   "build/sdks/go-sdk/building-transactions/simulating-transactions",
                   "build/sdks/go-sdk/building-transactions/bcs-format",
                   "build/sdks/go-sdk/building-transactions/multi-agent-transactions",
+                  "build/sdks/go-sdk/building-transactions/orderless-transactions",
                   "build/sdks/go-sdk/building-transactions/sponsoring-transactions",
                 ],
               }),
@@ -259,6 +261,7 @@ export const sidebar = [
             collapsed: true,
             items: [
               "build/sdks/python-sdk",
+              "build/sdks/python-sdk/quickstart",
               "build/sdks/python-sdk/account",
               "build/sdks/python-sdk/fetch-data-via-sdk",
               "build/sdks/python-sdk/python-examples",
@@ -270,6 +273,7 @@ export const sidebar = [
                   "build/sdks/python-sdk/building-transactions/simulating-transactions",
                   "build/sdks/python-sdk/building-transactions/bcs-format",
                   "build/sdks/python-sdk/building-transactions/multi-agent-transactions",
+                  "build/sdks/python-sdk/building-transactions/orderless-transactions",
                   "build/sdks/python-sdk/building-transactions/sponsoring-transactions",
                 ],
               }),
@@ -291,6 +295,7 @@ export const sidebar = [
             collapsed: true,
             items: [
               "build/sdks/rust-sdk",
+              "build/sdks/rust-sdk/quickstart",
               "build/sdks/rust-sdk/account",
               "build/sdks/rust-sdk/fetch-data-via-sdk",
               "build/sdks/rust-sdk/rust-examples",
@@ -302,6 +307,7 @@ export const sidebar = [
                   "build/sdks/rust-sdk/building-transactions/simulating-transactions",
                   "build/sdks/rust-sdk/building-transactions/bcs-format",
                   "build/sdks/rust-sdk/building-transactions/multi-agent-transactions",
+                  "build/sdks/rust-sdk/building-transactions/orderless-transactions",
                   "build/sdks/rust-sdk/building-transactions/sponsoring-transactions",
                 ],
               }),

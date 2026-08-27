@@ -11,15 +11,23 @@ Go SDK 提供多种生成账户凭据的方式，可使用：
 - `aptos.NewSecp256k1Account()`
 - `aptos.NewEd25519SingleSenderAccount()`
 - `aptos.NewAccountFromSigner()`
+- `aptos.NewEd25519AccountFromMnemonic()`
+- `aptos.NewEd25519AccountFromDerivationPath()`
 
-`Account.NewEd25519Account()` 是最常用于为新账户创建密钥的方法。它默认使用 `ED25519` 密钥类型，但也可按以下方式指定所需的签名方案：
+`NewEd25519Account()` 是最常用于为新账户创建密钥的方法。它默认使用 `ED25519` 密钥类型，但也可按以下方式指定所需的签名方案：
 
 ```go
 // To derive an ed25519 account
-account1 := aptos.NewEd25519Account()
+account1, err := aptos.NewEd25519Account()
+if err != nil {
+  panic("Failed to create account:" + err.Error())
+}
 
 // To derive a secp256k1 account
-account2 := aptos.NewSecp256k1Account()
+account2, err := aptos.NewSecp256k1Account()
+if err != nil {
+  panic("Failed to create account:" + err.Error())
+}
 ```
 
 生成凭据后，**必须**为账户注资，网络才能识别其存在。
@@ -27,13 +35,16 @@ account2 := aptos.NewSecp256k1Account()
 在 Devnet 环境中，可通过 faucet 使用以下命令完成：
 
 ```go filename="fund.go"
-client, err = aptos.NewClient(aptos.DevnetConfig)
+client, err := aptos.NewClient(aptos.DevnetConfig)
 if err != nil {
   panic("Failed to create client:" + err.Error())
 }
 
 // Fund an account with 1 Devnet APT
-client.Fund(account1.Address, 100_000_000)
+err = client.Fund(account1.Address, 100_000_000)
+if err != nil {
+  panic("Failed to fund account:" + err.Error())
+}
 ```
 
 在 Testnet 上，可在[铸造页面](/zh/network/faucet)领取代币。
@@ -57,7 +68,10 @@ err := privateKey.FromHex(privateKeyHex)
 if err != nil {
   panic("Failed to parse private key:" + err.Error())
 }
-account := aptos.NewAccountFromSigner(privateKey)
+account, err := aptos.NewAccountFromSigner(privateKey)
+if err != nil {
+  panic("Failed to derive account:" + err.Error())
+}
 
 // to derive an account with a Single Sender Ed25519 key scheme
 privateKey := &aptos.Ed25519PrivateKey{}
@@ -66,7 +80,10 @@ if err != nil {
   panic("Failed to parse private key:" + err.Error())
 }
 singleSigner := &crypto.SingleSigner{Signer: privateKey}
-account := aptos.NewAccountFromSigner(singleSigner)
+account, err = aptos.NewAccountFromSigner(singleSigner)
+if err != nil {
+  panic("Failed to derive account:" + err.Error())
+}
 
 // to derive an account with a Single Sender Secp256k1 key scheme
 privateKey := &aptos.Secp256k1PrivateKey{}
@@ -75,20 +92,38 @@ if err != nil {
   panic("Failed to parse private key:" + err.Error())
 }
 singleSigner := &crypto.SingleSigner{Signer: privateKey}
-account := aptos.NewAccountFromSigner(singleSigner)
+account, err = aptos.NewAccountFromSigner(singleSigner)
+if err != nil {
+  panic("Failed to derive account:" + err.Error())
+}
 
 // to derive an account with a private key and account address
-address := &aptos.AccountAddress{}
-err := address.ParseStringRelaxed(addressHex)
+var address aptos.AccountAddress
+err = address.ParseStringRelaxed(addressHex)
 if err != nil {
   panic("Failed to parse address:" + err.Error())
 }
 privateKey := &aptos.Ed25519PrivateKey{}
-err := privateKey.FromHex(privateKeyHex)
+err = privateKey.FromHex(privateKeyHex)
 if err != nil {
   panic("Failed to parse private key:" + err.Error())
 }
-account := aptos.NewAccountFromSigner(privateKey, address.AuthKey())
+account, err = aptos.NewAccountFromSigner(privateKey, address)
+if err != nil {
+  panic("Failed to derive account:" + err.Error())
+}
 ```
 
-{/* TODO: Once derivation path is supported ### Derive an account from derivation path */}
+### 从助记词派生账户
+
+```go
+account, err := aptos.NewEd25519AccountFromMnemonic(mnemonic)
+if err != nil {
+  panic("Failed to derive account:" + err.Error())
+}
+
+account, err = aptos.NewEd25519AccountFromDerivationPath(mnemonic, "m/44'/637'/0'/0'/0'")
+if err != nil {
+  panic("Failed to derive account:" + err.Error())
+}
+```

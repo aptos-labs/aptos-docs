@@ -1,0 +1,76 @@
+---
+title: "Python SDK - Orderless Transactions"
+description: "Create transactions that can be executed in any order using replay-protection nonces with the Python SDK"
+sidebar:
+  label: "Orderless Transactions"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Orderless transactions allow you to create transactions that do not specify an
+order of execution between them. This is useful when multiple machines need to
+sign or submit for the same sending account, but the order does not affect the
+outcome.
+
+See [Orderless Transactions](/build/guides/orderless-transactions) for the
+protocol overview ([AIP-123](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-123.md)
+and [AIP-129](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-129.md)).
+
+## Building Orderless Transactions
+
+Creating and executing an orderless transaction follows the same flow as the
+[simple transaction flow](/build/sdks/python-sdk/building-transactions). Pass
+`replay_protection_nonce` to `aptos.transaction.build` instead of relying on a
+sequence number.
+
+<Aside type="note">
+  The nonce must be unique for each transaction. Orderless transactions expire
+  at most 60 seconds after submission. If the transaction is not executed in
+  that window, it expires and will not execute.
+</Aside>
+
+```python filename="orderless.py"
+import random
+import time
+
+from aptos_sdk.v2.bcs import Serializer
+from aptos_sdk.v2.transactions import EntryFunction, TransactionArgument, TransactionPayload
+from aptos_sdk.v2.types import StructTag, TypeTag
+
+payload = EntryFunction.natural(
+    "0x1::coin",
+    "transfer",
+    [TypeTag(StructTag.from_str("0x1::aptos_coin::AptosCoin"))],
+    [
+        TransactionArgument(bob.address, Serializer.struct),
+        TransactionArgument(1_000, Serializer.u64),
+    ],
+)
+raw_txn = await aptos.transaction.build(
+    sender=alice.address,
+    payload=TransactionPayload(payload),
+    replay_protection_nonce=random.randint(0, 2**64 - 1),
+    expiration_timestamps_secs=int(time.time()) + 60,
+)
+result = await aptos.transaction.sign_submit_and_wait(raw_txn, alice)
+```
+
+After that, follow the same steps as a simple transaction:
+
+1. [**Simulate** the transaction (optional)](/build/sdks/python-sdk/building-transactions/simulating-transactions).
+2. **Sign** the transaction.
+3. **Submit** the transaction to the network.
+4. **Wait** for the transaction to be executed.
+
+To send many orderless transfers in parallel, see
+[Batching Transactions](/build/sdks/python-sdk/building-transactions/batching-transactions).
+
+## Tested example
+
+The SDK repository includes runnable examples that follow this API:
+
+- [`orderless_transfer.py`](https://github.com/aptos-labs/aptos-python-sdk/blob/main/v2/examples/orderless_transfer.py)
+- [`batch_orderless_transfers.py`](https://github.com/aptos-labs/aptos-python-sdk/blob/main/v2/examples/batch_orderless_transfers.py)
+
+When you clone the repository, those files import `aptos_sdk_v2`. After
+`pip install aptos-sdk`, import the same APIs from `aptos_sdk.v2`.

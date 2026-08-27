@@ -1,0 +1,209 @@
+---
+title: "Go SDK 快速入门"
+description: "使用 Aptos Go SDK 创建账户、为账户注资并转移 APT"
+sidebar:
+  label: "Go SDK 快速入门"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+<Aside type="note">
+  完整示例见页面底部的[完整快速入门代码](#full-quickstart-code)。流程与 SDK 仓库中的
+  [`examples/transfer_coin`](https://github.com/aptos-labs/aptos-go-sdk/tree/main/examples/transfer_coin)
+  相同。
+</Aside>
+
+<Steps>
+  1. 安装 Go SDK
+
+     该 SDK 需要 **Go 1.25+**。
+
+     ```shellscript filename="Terminal"
+     mkdir aptos-go-quickstart
+     cd aptos-go-quickstart
+     go mod init example/aptos-go-quickstart
+     go get github.com/aptos-labs/aptos-go-sdk
+     ```
+
+  2. 设置 Aptos 客户端
+
+     ```go filename="quickstart.go"
+     client, err := aptos.NewClient(aptos.DevnetConfig)
+     if err != nil {
+         panic("Failed to create client:" + err.Error())
+     }
+     ```
+
+     <Aside type="note">
+       （进阶）若要连接特定节点，请使用自定义 `NodeUrl` 构造 `aptos.NetworkConfig`。
+     </Aside>
+
+  3. 创建并为账户注资
+
+     `NewEd25519Account` 会同时返回账户和 error。
+
+     ```go filename="quickstart.go"
+     alice, err := aptos.NewEd25519Account()
+     if err != nil {
+         panic("Failed to create alice:" + err.Error())
+     }
+     bob, err := aptos.NewEd25519Account()
+     if err != nil {
+         panic("Failed to create bob:" + err.Error())
+     }
+
+     err = client.Fund(alice.Address, 1_000_000_000)
+     if err != nil {
+         panic("Failed to fund alice:" + err.Error())
+     }
+     ```
+
+     在 testnet 上，请从[水龙头页面](/zh/network/faucet)铸造。
+
+  4. 转移 APT
+
+     构建 `aptos_account::transfer` payload，然后签名、提交并等待。
+     `BuildSignAndSubmitTransaction` 会合并这些步骤。
+
+     ```go filename="quickstart.go"
+     accountBytes, err := bcs.Serialize(&bob.Address)
+     amountBytes, err := bcs.SerializeU64(1_000)
+     resp, err := client.BuildSignAndSubmitTransaction(alice, aptos.TransactionPayload{
+         Payload: &aptos.EntryFunction{
+             Module: aptos.ModuleId{
+                 Address: aptos.AccountOne,
+                 Name:    "aptos_account",
+             },
+             Function: "transfer",
+             ArgTypes: []aptos.TypeTag{},
+             Args:     [][]byte{accountBytes, amountBytes},
+         },
+     })
+     _, err = client.WaitForTransaction(resp.Hash)
+     ```
+
+     有关更底层的构建 → 模拟 → 签名 → 提交 → 等待流程，请参阅
+     [构建交易](/zh/build/sdks/go-sdk/building-transactions)。
+</Steps>
+
+## 完整快速入门代码
+
+```go filename="quickstart.go"
+package main
+
+import (
+	"fmt"
+
+	"github.com/aptos-labs/aptos-go-sdk"
+	"github.com/aptos-labs/aptos-go-sdk/bcs"
+)
+
+const (
+	FundAmount     = 1_000_000_000
+	TransferAmount = 1_000
+)
+
+func main() {
+	client, err := aptos.NewClient(aptos.DevnetConfig)
+	if err != nil {
+		panic("Failed to create client:" + err.Error())
+	}
+
+	alice, err := aptos.NewEd25519Account()
+	if err != nil {
+		panic("Failed to create alice:" + err.Error())
+	}
+	bob, err := aptos.NewEd25519Account()
+	if err != nil {
+		panic("Failed to create bob:" + err.Error())
+	}
+
+	fmt.Printf("=== Addresses ===\n")
+	fmt.Printf("Alice: %s\n", alice.Address.String())
+	fmt.Printf("Bob:   %s\n", bob.Address.String())
+
+	err = client.Fund(alice.Address, FundAmount)
+	if err != nil {
+		panic("Failed to fund alice:" + err.Error())
+	}
+
+	aliceBalance, err := client.AccountAPTBalance(alice.Address)
+	if err != nil {
+		panic("Failed to retrieve alice balance:" + err.Error())
+	}
+	bobBalance, err := client.AccountAPTBalance(bob.Address)
+	if err != nil {
+		panic("Failed to retrieve bob balance:" + err.Error())
+	}
+	fmt.Printf("=== Initial Balances ===\n")
+	fmt.Printf("Alice: %d\n", aliceBalance)
+	fmt.Printf("Bob:   %d\n", bobBalance)
+
+	accountBytes, err := bcs.Serialize(&bob.Address)
+	if err != nil {
+		panic("Failed to serialize bob's address:" + err.Error())
+	}
+	amountBytes, err := bcs.SerializeU64(TransferAmount)
+	if err != nil {
+		panic("Failed to serialize transfer amount:" + err.Error())
+	}
+
+	resp, err := client.BuildSignAndSubmitTransaction(alice, aptos.TransactionPayload{
+		Payload: &aptos.EntryFunction{
+			Module: aptos.ModuleId{
+				Address: aptos.AccountOne,
+				Name:    "aptos_account",
+			},
+			Function: "transfer",
+			ArgTypes: []aptos.TypeTag{},
+			Args: [][]byte{
+				accountBytes,
+				amountBytes,
+			},
+		},
+	})
+	if err != nil {
+		panic("Failed to submit transaction:" + err.Error())
+	}
+
+	_, err = client.WaitForTransaction(resp.Hash)
+	if err != nil {
+		panic("Failed to wait for transaction:" + err.Error())
+	}
+
+	aliceBalance, err = client.AccountAPTBalance(alice.Address)
+	if err != nil {
+		panic("Failed to retrieve alice balance:" + err.Error())
+	}
+	bobBalance, err = client.AccountAPTBalance(bob.Address)
+	if err != nil {
+		panic("Failed to retrieve bob balance:" + err.Error())
+	}
+	fmt.Printf("=== Final Balances ===\n")
+	fmt.Printf("Alice: %d\n", aliceBalance)
+	fmt.Printf("Bob:   %d\n", bobBalance)
+	fmt.Printf("See txn: https://explorer.aptoslabs.com/txn/%s?network=devnet\n", resp.Hash)
+}
+```
+
+运行：
+
+```shellscript filename="Terminal"
+go run quickstart.go
+```
+
+## 总结
+
+你刚刚学习了如何通过以下步骤转移 APT：
+
+1. 使用 `aptos.NewClient` 连接网络。
+2. 创建并为账户注资。
+3. 提交转账并等待执行。
+
+<Aside type="note">
+  建议收藏 SDK 仓库中的
+  [示例](https://github.com/aptos-labs/aptos-go-sdk/tree/main/examples)
+  和 [集成测试](https://github.com/aptos-labs/aptos-go-sdk/tree/main/integration_test)。
+  这些套件是本文档所示 API 的权威来源。生成的 API 文档位于
+  [pkg.go.dev](https://pkg.go.dev/github.com/aptos-labs/aptos-go-sdk)。
+</Aside>

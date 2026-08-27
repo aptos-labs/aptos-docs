@@ -1,0 +1,64 @@
+---
+title: "Python SDK：无序交易"
+description: "使用 Python SDK 的重放保护 nonce 创建可按任意顺序执行的交易"
+sidebar:
+  label: "无序交易"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+无序交易允许创建彼此之间不指定执行顺序的交易。这在多台机器需要为同一发送账户签名或提交、但顺序不影响结果的场景中很有用。
+
+协议概览请参阅[无序交易](/zh/build/guides/orderless-transactions)（[AIP-123](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-123.md) 和 [AIP-129](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-129.md)）。
+
+## 构建无序交易
+
+创建和执行无序交易的流程与[简单交易流程](/zh/build/sdks/python-sdk/building-transactions)相同。向 `aptos.transaction.build` 传入 `replay_protection_nonce`，而不是依赖序列号。
+
+<Aside type="note">
+  每笔交易的 nonce 必须唯一。无序交易在提交后最多 60 秒内过期。若未在该窗口内执行，交易将过期且不会执行。
+</Aside>
+
+```python filename="orderless.py"
+import random
+import time
+
+from aptos_sdk.v2.bcs import Serializer
+from aptos_sdk.v2.transactions import EntryFunction, TransactionArgument, TransactionPayload
+from aptos_sdk.v2.types import StructTag, TypeTag
+
+payload = EntryFunction.natural(
+    "0x1::coin",
+    "transfer",
+    [TypeTag(StructTag.from_str("0x1::aptos_coin::AptosCoin"))],
+    [
+        TransactionArgument(bob.address, Serializer.struct),
+        TransactionArgument(1_000, Serializer.u64),
+    ],
+)
+raw_txn = await aptos.transaction.build(
+    sender=alice.address,
+    payload=TransactionPayload(payload),
+    replay_protection_nonce=random.randint(0, 2**64 - 1),
+    expiration_timestamps_secs=int(time.time()) + 60,
+)
+result = await aptos.transaction.sign_submit_and_wait(raw_txn, alice)
+```
+
+之后遵循与简单交易相同的步骤：
+
+1. [**模拟**交易（可选）](/zh/build/sdks/python-sdk/building-transactions/simulating-transactions)。
+2. **签名**交易。
+3. **将**交易提交到网络。
+4. **等待**交易执行。
+
+要并行发送多笔无序转账，请参阅[批量提交交易](/zh/build/sdks/python-sdk/building-transactions/batching-transactions)。
+
+## 已测试示例
+
+SDK 仓库包含遵循此 API 的可运行示例：
+
+- [`orderless_transfer.py`](https://github.com/aptos-labs/aptos-python-sdk/blob/main/v2/examples/orderless_transfer.py)
+- [`batch_orderless_transfers.py`](https://github.com/aptos-labs/aptos-python-sdk/blob/main/v2/examples/batch_orderless_transfers.py)
+
+克隆仓库时，这些文件会导入 `aptos_sdk_v2`。执行 `pip install aptos-sdk` 后，请从 `aptos_sdk.v2` 导入相同 API。

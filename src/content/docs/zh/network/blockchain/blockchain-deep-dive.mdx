@@ -39,17 +39,20 @@ graph LR
     subgraph Validators[验证者]
         direction TB
         Mempool[内存池]
+        QuorumStore[仲裁存储]
         Consensus[共识]
         Consensus -->|7, 9| Execution[执行]
         Execution -->|11| Storage[存储]
         Execution -->|8| Virtual_Machine[虚拟机]
         Mempool --> Virtual_Machine
+        Mempool --> QuorumStore
+        QuorumStore --> Consensus
         Virtual_Machine --> Storage
     end
 
     Other_Validators <-->|6, 10| Consensus
     REST_Service -->|2, 3| Mempool
-    Mempool <-->|4| Other_Validators
+    QuorumStore <-->|4| Other_Validators
     Consensus -->|5| Mempool
 ```
 
@@ -88,7 +91,7 @@ Aptos**客户端构造一个原始交易**（我们称之为Traw<sub>5</sub>）�
 | [Gas单位价格](/zh/network/glossary#gas-unit-price)                                  | 发送者愿意为每个gas单位支付的金额，以执行交易。这以[Octas](/zh/network/glossary#octa)表示。                                                                                                                                                  |
 | [最大gas量](/zh/network/glossary#maximum-gas-amount)                               | Alice愿意为此交易支付的最大gas量（以APT为单位）。Gas费用等于由计算和IO覆盖的基础gas成本乘以gas价格。Gas成本还包括使用Apt固定价格存储模型的存储。这以[Octas](/zh/network/glossary#octa)表示。                                                                                     |
 | [过期时间](/zh/network/glossary#expiration-time)                                    | 交易的过期时间。                                                                                                                                                                                                          |
-| [序列号](/zh/network/glossary#sequence-number)                                     | 账户的序列号（在此示例中为5）表示已从该账户提交并在链上提交的交易数量。在这种情况下，已从Alice的账户提交了5笔交易，包括Traw<sub>5</sub>。注意：只有当账户序列号为5时，序列号为5的交易才能在链上提交。                                                                                                   |
+| [序列号](/zh/network/glossary#sequence-number)                                     | 本有序示例为 5。序列号为 5 的有序交易只有在账户序列号为 5 时才能提交。[无序交易](/zh/build/guides/orderless-transactions)改用 nonce，并将该字段设为 `u64::MAX`。                                                                                                |
 | [链ID](https://github.com/aptos-labs/aptos-core/blob/main/types/src/chain_id.rs) | 区分Aptos网络的标识符（以防止跨网络攻击）。                                                                                                                                                                                          |
 
 ### 接受交易
@@ -105,13 +108,13 @@ Aptos**客户端构造一个原始交易**（我们称之为Traw<sub>5</sub>）�
 
 ### 与其他验证者节点共享交易
 
-**步骤4** — 内存池与网络中的其他验证者共享交易T<sub>5</sub>。
+**步骤4** — [仲裁存储](/zh/network/glossary#仲裁存储) 将交易（包括 T<sub>5</sub>）打成批次，并在验证者集合内传播，使数据在领导者提议区块前可用。共享内存池仍负责把用户交易从全节点转发到验证者。
 
 ### 提议区块
 
-**步骤5** — 共识从内存池中获取交易T<sub>5</sub>。作为当前轮次的领导者，验证者V<sub>1</sub>将创建包含交易T<sub>5</sub>的区块B<sub>5</sub>。
+**步骤5** — 作为本轮提议者/领导者，验证者 V<sub>1</sub> 拉取已认证批次组成区块，并通过共识组件将该提案复制到其他验证者。
 
-**步骤6** — 验证者V<sub>1</sub>作为提议者将区块B<sub>5</sub>传播到其他验证者节点。
+**步骤6** — 验证者V<sub>1</sub>的共识组件负责让所有验证者就所提议区块中的交易顺序达成一致。
 
 ### 执行区块并达成共识
 
@@ -152,7 +155,7 @@ Aptos区块链的每个验证者节点包含以下逻辑组件：
 
 - 保存待处理的交易
 - 验证交易格式和签名
-- 与其他验证者共享交易
+- 与其他验证者共享交易（验证者集合内由[仲裁存储](/zh/network/glossary#仲裁存储)以批次传播）
 - 为共识提供交易
 
 ### 共识
@@ -186,11 +189,13 @@ Aptos区块链的每个验证者节点包含以下逻辑组件：
 
 ### 序列号
 
-每个账户都有一个序列号，从0开始。每个成功的交易都会将序列号增加1。这确保：
+每个账户都有一个序列号，从0开始。每笔已提交的**有序**交易都会将序列号增加1。这确保：
 
 - 交易排序
 - 防止重放攻击
 - 账户状态一致性
+
+[无序交易](/zh/build/guides/orderless-transactions)不使用该计数器，而是使用 nonce，并且不改变发送者的序列号。
 
 ### Gas和费用
 

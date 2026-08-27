@@ -38,7 +38,7 @@ let event = TransferEvent {
 0x1::event::emit(event);
 ```
 
-Example module events are shown [on Explorer](https://explorer.aptoslabs.com/txn/682252266/events?network=testnet). Indices 0, 1, and 2 are three module events of type `0x66c34778730acbb120cefa57a3d98fd21e0c8b3a51e9baee530088b2e444e94c::event::MyEvent`. For REST compatibility, module events still include `Account Address`, `Creation Number`, and `Sequence Number`, all set to 0.
+Example module events appear on the Events tab of any user transaction in [Explorer](https://explorer.aptoslabs.com/?network=mainnet). The screenshot below shows three module events of type `0x66c34778730acbb120cefa57a3d98fd21e0c8b3a51e9baee530088b2e444e94c::event::MyEvent`. For REST compatibility, module events still include `Account Address`, `Creation Number`, and `Sequence Number`, all set to 0.
 
 ![Module event example](~/images/module-event.png "Module event example")
 
@@ -69,11 +69,9 @@ Query module events and remaining EventHandle events through:
 
 Aptos inherited Libra/Diem event streams keyed by an `EventHandle`: a globally unique GUID plus a per-handle counter, stored inside a resource. Each event in that stream has a sequence number from the handle.
 
-For example, a [coin transfer](/build/guides/first-transaction) emits withdraw and deposit events on the sender and receiver `CoinStore` resources. You can query them with [Get events by event handle](https://api.devnet.aptoslabs.com/v1/spec#/operations/get_events_by_event_handle).
+Legacy Coin transfers emitted withdraw and deposit events on sender and receiver `CoinStore` resources. After the Fungible Asset migration, new accounts typically do not have `CoinStore<0x1::aptos_coin::AptosCoin>`, so that handle path 404s. Query remaining EventHandle streams with [Get events by event handle](https://api.mainnet.aptoslabs.com/v1/spec#/operations/get_events_by_event_handle). The REST shape looks like:
 
-If account `0xc40f1c9b9fdc204cf77f68c9bb7029b0abbe8ad9e5561f7794964076a4fbdcfd` sent coins, this REST query returns its `withdraw_events`:
-
-`https://api.devnet.aptoslabs.com/v1/accounts/c40f1c9b9fdc204cf77f68c9bb7029b0abbe8ad9e5561f7794964076a4fbdcfd/events/0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>/withdraw_events`
+`GET /v1/accounts/{address}/events/0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>/withdraw_events`
 
 ```json
 [
@@ -88,7 +86,7 @@ If account `0xc40f1c9b9fdc204cf77f68c9bb7029b0abbe8ad9e5561f7794964076a4fbdcfd` 
 ]
 ```
 
-Each registered EventHandle has a unique `key`. That key can be queried directly, for example `https://api.devnet.aptoslabs.com/v1/events/0x0000000000000000caa60eb4a01756955ab9b2d1caca52ed`.
+Each registered EventHandle has a unique `key`. That key can be queried directly with `GET /v1/events/{key}`.
 
 Each entry has a `sequence_number` starting at `0`, a `type`, and `data`. Several events can share similar types, especially with generics. Include in `data` whatever a client needs to understand the resource before and after the emitting transaction.
 

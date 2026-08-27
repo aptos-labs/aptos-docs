@@ -38,7 +38,7 @@ let event = TransferEvent {
 0x1::event::emit(event);
 ```
 
-可在 [Explorer](https://explorer.aptoslabs.com/txn/682252266/events?network=testnet) 查看示例模块事件。索引 0、1、2 是类型为 `0x66c34778730acbb120cefa57a3d98fd21e0c8b3a51e9baee530088b2e444e94c::event::MyEvent` 的三个模块事件。为保持 REST 兼容，模块事件仍包含 `Account Address`、`Creation Number` 和 `Sequence Number`，且均为 0。
+可在 [Explorer](https://explorer.aptoslabs.com/?network=mainnet) 任意用户交易的 Events 页查看模块事件。下图示例中，类型为 `0x66c34778730acbb120cefa57a3d98fd21e0c8b3a51e9baee530088b2e444e94c::event::MyEvent` 的三个模块事件。为保持 REST 兼容，模块事件仍包含 `Account Address`、`Creation Number` 和 `Sequence Number`，且均为 0。
 
 ![模块事件示例](~/images/module-event.png "模块事件示例")
 
@@ -69,11 +69,9 @@ public fun was_event_emitted<T: drop + store>(msg: &T): bool {
 
 Aptos 继承了以 `EventHandle` 为键的 Libra/Diem 事件流：全局唯一 GUID 加上每个 handle 的计数器，存储在资源中。该流中的每个事件都有来自 handle 的序列号。
 
-例如，[代币转账](/zh/build/guides/first-transaction) 会在发送者和接收者的 `CoinStore` 资源上发出提取和存款事件。可用 [按事件句柄获取事件](https://api.devnet.aptoslabs.com/v1/spec#/operations/get_events_by_event_handle) 查询。
+遗留 Coin 转账会在发送者和接收者的 `CoinStore` 资源上发出提取和存款事件。同质化资产迁移之后，新账户通常没有 `CoinStore<0x1::aptos_coin::AptosCoin>`，该句柄路径会返回 404。可用 [按事件句柄获取事件](https://api.mainnet.aptoslabs.com/v1/spec#/operations/get_events_by_event_handle) 查询仍存在的 EventHandle 流。REST 形态如下：
 
-若账户 `0xc40f1c9b9fdc204cf77f68c9bb7029b0abbe8ad9e5561f7794964076a4fbdcfd` 发送过代币，以下 REST 查询返回其 `withdraw_events`：
-
-`https://api.devnet.aptoslabs.com/v1/accounts/c40f1c9b9fdc204cf77f68c9bb7029b0abbe8ad9e5561f7794964076a4fbdcfd/events/0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>/withdraw_events`
+`GET /v1/accounts/{address}/events/0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>/withdraw_events`
 
 ```json
 [
@@ -88,7 +86,7 @@ Aptos 继承了以 `EventHandle` 为键的 Libra/Diem 事件流：全局唯一 G
 ]
 ```
 
-每个已注册的 EventHandle 都有唯一 `key`。可直接用该键查询，例如 `https://api.devnet.aptoslabs.com/v1/events/0x0000000000000000caa60eb4a01756955ab9b2d1caca52ed`。
+每个已注册的 EventHandle 都有唯一 `key`。可直接用 `GET /v1/events/{key}` 查询。
 
 每个条目包含从 `0` 开始的 `sequence_number`、`type` 和 `data`。尤其在使用泛型时，多个事件可能共享相似类型。应在 `data` 中包含客户端理解发出事件的交易前后资源变化所需的信息。
 

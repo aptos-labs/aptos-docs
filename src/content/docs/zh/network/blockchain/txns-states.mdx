@@ -48,15 +48,15 @@ Aptos交易包含诸如发送者的账户地址、来自发送者的认证、在
 
 区块链上的已签名交易包含以下信息：
 
-- **签名**：发送者使用数字签名来验证他们签署了交易（即认证）。
-- **发送者地址**：发送者的[账户地址](/zh/network/blockchain/accounts#account-address)。
-- **发送者公钥**：与用于签署交易的私有认证密钥对应的公共认证密钥。
-- **有效载荷**：指示代表Alice的操作或操作集。如果这是一个Move函数，它直接调用链上的Move字节码。或者，它可能是Move字节码点对点[交易脚本](/zh/network/glossary#transaction-script)。它还包含函数或脚本的输入列表。对于此示例，它是一个函数调用，将一定数量的Aptos币从Alice账户转移到Bob的账户，其中Alice的账户通过发送交易隐含，Bob的账户和数量被指定为交易输入。
-- [**Gas单位价格**](/zh/network/glossary#gas-unit-price)：发送者愿意为每个gas单位支付的金额，以执行交易。这以[Octas](/zh/network/glossary#octa)表示。
-- [**最大gas量**](/zh/network/glossary#maximum-gas-amount)：发送者愿意为此交易支付的[最大gas量](/zh/network/blockchain/gas-txn-fee#specifying-gas-fees-within-a-transaction)（以APT为单位）。Gas费用等于由计算和IO覆盖的基础gas成本乘以gas价格。Gas成本还包括具有APT固定价格存储模型的存储。这表示为[Octas](/zh/network/glossary#octa)。
-- **Gas价格**（以指定的gas单位）：这是发送者愿意为每个[gas](/zh/network/blockchain/gas-txn-fee)单位支付的金额，以执行交易。[Gas](/zh/network/blockchain/gas-txn-fee)是支付计算和存储的一种方式。Gas单位是计算的抽象测量，没有固有的现实世界价值。
-- **序列号**：这是一个无符号整数，必须等于执行时发送者账户的[序列号](/zh/network/blockchain/accounts#account-sequence-number)。
-- **过期时间**：交易停止有效（即过期）的时间戳。
+- **签名**：发送者的数字签名用于认证交易。多代理和代付交易包含额外签名。
+- **发送者地址**：发送者的[账户地址](/zh/network/blockchain/accounts#账户地址)。
+- **发送者公钥**：与用于签署交易的私钥对应的公钥。派生的认证密钥必须与账户匹配。
+- **有效载荷**：要执行的操作。通常是已发布 Move 字节码中的入口函数。也可以是[交易脚本](/zh/network/glossary#transaction-script)、[多重签名负载](/zh/network/blockchain/transaction-payloads#multisig-payload)，或（在支持的网络上）[加密负载](/zh/network/blockchain/transaction-payloads#encrypted-payload)。负载包含类型参数和输入。典型例子是将 APT 从发送者转到另一地址。
+- [**Gas 单位价格**](/zh/network/glossary#gas-unit-price)：发送者愿意为每个 gas 单位支付的金额，以 [Octas](/zh/network/glossary#octa) 计。价格更高，下一区块纳入该交易的机会更大。
+- [**最大 gas 量**](/zh/network/glossary#maximum-gas-amount)：发送者愿意花费的[最大 gas 单位](/zh/network/blockchain/gas-txn-fee#指定交易中的gas费用)。若计算、IO 和换算后的存储费用超过该上限，执行会中止。
+- **重放保护**：要么是执行时必须匹配发送者链上序列号的[序列号](/zh/network/blockchain/accounts#账户序列号)，要么是[无序交易 nonce](/zh/build/guides/orderless-transactions)（AIP-123）。无序交易将 `sequence_number` 设为 `u64::MAX`，并在 60 秒内过期。
+- **过期时间**：交易不再有效的时间戳。
+- **Chain ID**：区分主网、测试网、开发网和本地网络，使已签名交易无法在另一条链上重放。
 
 ### 交易有效载荷类型
 
@@ -65,7 +65,7 @@ Aptos交易包含诸如发送者的账户地址、来自发送者的认证、在
 - 入口点
 - [脚本（有效载荷）](/zh/build/smart-contracts/scripts)
 
-目前，官方 [TypeScript](/zh/build/sdks/ts-sdk)、[Python](/zh/build/sdks/python-sdk)、[Go](/zh/build/sdks/go-sdk) 和 [Rust](/zh/build/sdks/rust-sdk) SDK 都支持这两种。本指南指出了许多这些入口点，例如`coin::transfer`和`aptos_account::create_account`。
+官方 [TypeScript](/zh/build/sdks/ts-sdk)、[Python](/zh/build/sdks/python-sdk)、[Go](/zh/build/sdks/go-sdk) 和 [Rust](/zh/build/sdks/rust-sdk) SDK 都支持这两种。本文档中的示例经常调用 `0x1::aptos_account::transfer`。
 
 Aptos区块链上的所有操作都应通过入口点调用可用。虽然可以提交多个交易串行调用入口点，但许多这样的操作可能会受益于从单个交易原子调用。脚本有效载荷交易可以调用任何模块内定义的任何入口点或公共函数。
 
@@ -133,7 +133,7 @@ dark: '~/images/transactions-and-state-dark.svg',
 
 ## 大小限制
 
-作为gas计划的一部分，对于[交易本身](https://github.com/aptos-labs/aptos-core/blob/8074588b5c9c4424fa247c2c9ec5572981ee31cd/aptos-move/aptos-gas-schedule/src/gas_schedule/transaction.rs#L71-L81)和[其输出](https://github.com/aptos-labs/aptos-core/blob/8074588b5c9c4424fa247c2c9ec5572981ee31cd/aptos-move/aptos-gas-schedule/src/gas_schedule/transaction.rs#L152-L177)的大小有链上可配置的限制。
+作为 gas 计划的一部分，[交易大小](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/aptos-gas-schedule/src/gas_schedule/transaction.rs)和执行输出有链上可配置限制。当前 genesis 默认值：
 
 | 限制类型     | 当前每笔交易限制 |
 | -------- | -------- |

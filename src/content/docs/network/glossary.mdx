@@ -154,9 +154,14 @@ nodes, [validators](#validator) and [fullnodes](#fullnodes).
 ### Blocks
 
 - On Aptos, blocks are a batch of [transactions](#transaction) committed at the
-  same time.
+  same time. Each block starts with a `BlockMetadata` transaction and, except
+  for the last block of an [epoch](#epoch), ends with a
+  [block epilogue](#block-epilogue).
 - Block number is analogous to "block height" in blockchain literature.
-- Transactions are referenced by ledger version rather than by block.
+- Transactions are referenced by ledger version rather than by block. Ledger
+  state is versioned per transaction, not per block.
+
+See [Blocks](/network/blockchain/blocks) for more information.
 
 ### Block Epilogue
 
@@ -293,15 +298,14 @@ See [Encrypted Pending Transactions](/build/guides/encrypted-pending-transaction
 
 - An **event** is the user-facing representation of the effects of executing a
   transaction.
-- A transaction may be designed to emit any number of events as a list. For
-  example, a `Coin<AptosCoin>` transfer emits a `WithdrawEvent` for the sender
-  account and a `DepositEvent` for the recipient account.
-- In the Aptos protocol, events provide evidence that the successful execution
-  of a transaction resulted in a specific effect. The `DepositEvent` (in the
-  above example) allows the recipient to confirm that a payment was received
-  into their account.
-- Events are persisted on the blockchain and are used to answer queries
-  by [clients](#client).
+- Modules emit **module events** (type-keyed streams marked `#[event]`). Older
+  **EventHandle** streams still exist on some resources but are deprecated.
+- For example, a coin transfer can emit withdraw and deposit events so the
+  recipient can confirm that a payment arrived.
+- Events are persisted on the blockchain and are queried by [clients](#client)
+  through the REST API or the [Indexer](/build/indexer/indexer-api).
+
+See [Events](/network/blockchain/events) for more information.
 
 ### Execution
 
@@ -471,11 +475,12 @@ more information.
 - **Mempool** is one of the components of the validator. It holds an in-memory
   buffer of transactions that have been submitted but not yet agreed upon and
   executed. Mempool receives transactions from other [full nodes](#fullnodes).
-- Transactions in the mempool of a validator are added from the JSON-RPC Service
-  of the current node and from the mempool of other Aptos nodes.
-- When the current validator is the leader, its consensus component pulls the
-  transactions from its mempool and proposes the order of the transactions that
-  form a block. The validator quorum then votes on the proposal.
+- Transactions in the mempool of a validator are added from the [REST API Service](#rest-api-service)
+  of fullnodes and from other Aptos nodes.
+- [Quorum Store](#quorum-store) then disseminates those transactions in batches
+  within the validator set. When the current validator is the leader, consensus
+  proposes a block that orders certified batches. The validator quorum votes on
+  the proposal.
 
 ### Merkle Trees
 

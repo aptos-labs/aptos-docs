@@ -48,15 +48,15 @@ The submitter can try to increase the gas cost by a trivial amount to help make 
 
 A signed transaction on the blockchain contains the following information:
 
-- **Signature**: The sender uses a digital signature to verify that they signed the transaction (i.e., authentication).
+- **Signature**: The sender's digital signature authenticates the transaction. Multi-agent and fee-payer transactions include additional signatures.
 - **Sender address**: The sender's [account address](/network/blockchain/accounts#account-address).
-- **Sender public key**: The public authentication key that corresponds to the private authentication key used to sign the transaction.
-- **Payload**: Indicates an action or set of actions Alice's behalf. In the case this is a Move function, it directly calls into Move bytecode on the chain. Alternatively, it may be Move bytecode peer-to-peer [transaction script](/network/glossary#transaction-script). It also contains a list of inputs to the function or script. For this example, it is a function call to transfer an amount of Aptos Coins from Alice account to Bob's account, where Alice's account is implied by sending the transaction and Bob's account and the amount are specified as transaction inputs.
-- [**Gas unit price**](/network/glossary#gas-unit-price): The amount the sender is willing to pay per unit of gas, to execute the transaction. This is represented in [Octas](/network/glossary#octa).
-- [**Maximum gas amount**](/network/glossary#maximum-gas-amount): The [maximum gas amount](/network/blockchain/gas-txn-fee#specifying-gas-fees-within-a-transaction) in APT the sender is willing to pay for this transaction. Gas charges are equal to the base gas cost covered by computation and IO multiplied by the gas price. Gas costs also include storage with an APT-fixed priced storage model. This is represented as [Octas](/network/glossary#octa).
-- **Gas price** (in specified gas units): This is the amount the sender is willing to pay per unit of [gas](/network/blockchain/gas-txn-fee) to execute the transaction. [Gas](/network/blockchain/gas-txn-fee) is a way to pay for computation and storage. A gas unit is an abstract measurement of computation with no inherent real-world value.
-- **Sequence number**: This is an unsigned integer that must be equal to the sender's account [sequence number](/network/blockchain/accounts#account-sequence-number) at the time of execution.
-- **Expiration time**: A timestamp after which the transaction ceases to be valid (i.e., expires).
+- **Sender public key**: The public key that corresponds to the private key used to sign the transaction. The derived authentication key must match the account.
+- **Payload**: The operation to run. Commonly this is an entry function in published Move bytecode. It can also be a [transaction script](/network/glossary#transaction-script), a [multisig payload](/network/blockchain/transaction-payloads#multisig-payload), or (on supporting networks) an [encrypted payload](/network/blockchain/transaction-payloads#encrypted-payload). The payload includes type arguments and inputs. A typical example is transferring APT from the sender to another address.
+- [**Gas unit price**](/network/glossary#gas-unit-price): What the sender pays per unit of gas, in [Octas](/network/glossary#octa). Higher prices raise the chance the next block includes the transaction.
+- [**Maximum gas amount**](/network/glossary#maximum-gas-amount): The [maximum gas units](/network/blockchain/gas-txn-fee#specifying-gas-fees-within-a-transaction) the sender will spend. Execution aborts if computation, IO, and converted storage fees exceed this cap.
+- **Replay protection**: Either a [sequence number](/network/blockchain/accounts#account-sequence-number) that must match the sender's on-chain sequence number at execution, or an [orderless nonce](/build/guides/orderless-transactions) (AIP-123). Orderless transactions set `sequence_number` to `u64::MAX` and expire within 60 seconds.
+- **Expiration time**: A timestamp after which the transaction is no longer valid.
+- **Chain ID**: Distinguishes Mainnet, Testnet, Devnet, and local networks so a signed transaction cannot be replayed on another chain.
 
 ### Types of transaction payloads
 
@@ -65,7 +65,7 @@ Within a given transaction, the two most common types of payloads include:
 - An entry point
 - [A script (payload)](/build/smart-contracts/scripts)
 
-Currently, the official [TypeScript](/build/sdks/ts-sdk), [Python](/build/sdks/python-sdk), [Go](/build/sdks/go-sdk), and [Rust](/build/sdks/rust-sdk) SDKs support both. This guide points out many of those entry points, such as `coin::transfer` and `aptos_account::create_account`.
+The official [TypeScript](/build/sdks/ts-sdk), [Python](/build/sdks/python-sdk), [Go](/build/sdks/go-sdk), and [Rust](/build/sdks/rust-sdk) SDKs support both. Examples in this documentation often call `0x1::aptos_account::transfer`.
 
 All operations on the Aptos blockchain should be available via entry point calls. While one could submit multiple transactions calling entry points in series, many such operations may benefit from being called atomically from a single transaction. A script payload transaction can call any entry point or public function defined within any module.
 
@@ -93,7 +93,7 @@ Anyone can submit a transaction to the Aptos blockchain to modify the ledger sta
 
 ### Proofs
 
-The Aptos blockchain uses proof to verify the authenticity and correctness of the blockchain data.
+The Aptos blockchain uses proofs to verify the authenticity and correctness of the blockchain data.
 
 Data within the Aptos blockchain is replicated across the network. Each validator and fullnode's [storage](/network/blockchain/validator-nodes#storage) is responsible for persisting the agreed upon blocks of transactions and their execution results to the database.
 
@@ -126,14 +126,14 @@ The above figure shows how executing transaction T<sub>_i_</sub> changes the sta
 In the figure:
 
 - Accounts **A** and **B**: Represent Alice's and Bob's accounts on the Aptos blockchain.
-- **S<sub>_i-1_</sub>** : Represents the (_i-1_)-the state of the blockchain. In this state, Alice's account **A** has a balance of 110 APT (Aptos coins), and Bob's account **B** has a balance of 52 APT.
+- **S<sub>_i-1_</sub>** : Represents the (_i-1_)th state of the blockchain. In this state, Alice's account **A** has a balance of 110 APT, and Bob's account **B** has a balance of 52 APT.
 - **T<sub>_i_</sub>** : This is the _i_-th transaction executed on the blockchain. In this example, it represents Alice sending 10 APT to Bob.
 - **Apply()**: This is a deterministic function that always returns the same final state for a specific initial state and a specific transaction. If the current state of the blockchain is **S<sub>_i-1_</sub>**, and transaction **T<sub>_i_</sub>** is executed on the state **S<sub>_i-1_</sub>**, then the new state of the blockchain is always **S<sub>_i_</sub>**. The Aptos blockchain uses the [Move language](https://aptos-labs.github.io/move-book/) to implement the deterministic execution function **Apply()**.
-- **S<sub>_i_</sub>** : This is the _i_-the state of the blockchain. When the transaction **T<sub>_i_</sub>** is applied to the blockchain, it generates the new state **S<sub>_i_</sub>** (an outcome of applying **Apply(S<sub>_i-1_</sub>, T<sub>_i_</sub>)** to **S<sub>_i-1_</sub>** and **T<sub>_i_</sub>**). This causes Alice’s account balance to be reduced by 10 to 100 APT and Bob’s account balance to be increased by 10 to 62 APT. The new state **S<sub>_i_</sub>** shows these updated balances.
+- **S<sub>_i_</sub>** : This is the \_i\_th state of the blockchain. Applying **T<sub>_i_</sub>** produces **S<sub>_i_</sub>** = **Apply(S<sub>_i-1_</sub>, T<sub>_i_</sub>)**. Alice's balance drops by 10 to 100 APT and Bob's balance rises by 10 to 62 APT.
 
 ## Size limits
 
-As part of the gas schedule, there are on-chain configurable limits for the sizes of [the transaction itself](https://github.com/aptos-labs/aptos-core/blob/8074588b5c9c4424fa247c2c9ec5572981ee31cd/aptos-move/aptos-gas-schedule/src/gas_schedule/transaction.rs#L71-L81) and [its outputs](https://github.com/aptos-labs/aptos-core/blob/8074588b5c9c4424fa247c2c9ec5572981ee31cd/aptos-move/aptos-gas-schedule/src/gas_schedule/transaction.rs#L152-L177).
+The gas schedule publishes on-chain limits for [transaction size](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/aptos-gas-schedule/src/gas_schedule/transaction.rs) and execution output. Current genesis defaults:
 
 | Limit Type             | Current Per Transaction Limit |
 | ---------------------- | ----------------------------- |

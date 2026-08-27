@@ -1,71 +1,62 @@
 ---
 title: "Execution"
-description: "Explore transaction execution on Aptos, including deterministic processing, parallel execution with Block-STM, and performance optimizations for high throughput."
+description: "Explore transaction execution on Aptos, including deterministic processing, Block-STM parallel execution, and why that keeps block times low."
 sidebar:
   label: "Execution"
 ---
 
-On Aptos, execution refers to the process where validators run and apply smart contract transactions
-from an ordered block. The execution output is then applied to the blockchain state.
+On Aptos, **execution** is the step where validators apply an ordered block of transactions to ledger state. The output must be [deterministic](https://en.wikipedia.org/wiki/Deterministic_algorithm): honest validators that start from the same state and the same block must produce the same write set.
 
-It is crucial for execution to be
-[deterministic](https://en.wikipedia.org/wiki/Deterministic_algorithm), and all validators should
-ideally agree on the same final state of the ledger. A majority of validators (more than 2/3 of the
-validators) must agree on the final state of the ledger in order to come to a consensus. For more
-detailed information on consensus properties, see the section on
-[BFT](/network/glossary#byzantine-fault-tolerance-bft) and [consensus](/network/glossary#consensus).
+A supermajority of voting power (more than two-thirds) must agree on that result before the block commits. See [BFT](/network/glossary#byzantine-fault-tolerance-bft) and [consensus](/network/glossary#consensus).
 
-Efficient execution, particularly parallel execution, is key to scaling blockchain performance and
-throughput. The impact of this can be felt in the block time. As of December 2024, Aptos blocks close within 250ms.
+Execution speed shows up as block time. Aptos does not wait on a fixed slot clock; it proposes the next block as soon as the network allows. Mainnet block times are typically tens of milliseconds. See [Blocks](/network/blockchain/blocks).
 
-## Why Parallel Execution?
+## Why parallel execution?
 
-![](https://miro.medium.com/v2/resize:fit:4800/format:webp/0*qG0KRe1KzsP8Odth)
+```mermaid
+flowchart TB
+  subgraph sequential [Sequential]
+    direction LR
+    S1[Txn 1] --> S2[Txn 2] --> S3[Txn 3]
+  end
+  subgraph staticp [Static parallelism]
+    direction LR
+    D1[Declare access lists] --> D2[Schedule non-overlapping txns]
+  end
+  subgraph dynamicp [Dynamic parallelism]
+    direction LR
+    P1[Execute speculatively] --> P2[Detect conflicts] --> P3[Re-execute in preset order]
+  end
+```
 
-The simplest approach for smart contract execution is to execute the transactions in a block
-sequentially, one at a time. However, this does not scale well. Having a large number of sequential
-transactions, especially with varying execution times, can cause the latency and throughput of the
-blockchain to drop drastically.
+Executing a block one transaction at a time is simple and does not scale. Long transactions stall everything behind them, so latency and throughput collapse under load.
 
-To solve this problem, blockchains began to adopt parallel execution, or the ability to process
-multiple transactions in parallel. The challenge with parallel execution, however, is that certain
-transactions may read or write the same resource, causing conflicts.
+Parallel execution runs many transactions at once. The hard part is conflicts: two transactions that read or write the same resource cannot both commit as if they ran alone in the wrong order.
 
-### Static Parallelism
+### Static parallelism
 
-One approach to address the conflict issue in parallel execution is **static parallelism**, which
-requires developers to specify the conflicts between transactions ahead of time. This, however,
-brings a higher burden on the developer, and in many cases forces transactions that don't actually
-conflict to be sequential.
+**Static parallelism** asks developers (or the runtime, from annotations) to declare which data each transaction will touch. The scheduler then runs non-overlapping transactions together.
 
-### Dynamic Parallelism
+That shifts the burden onto application authors. Declared sets are often wider than the data a transaction actually uses, so independent work is forced to run serially.
 
-**Dynamic parallelism** computes the execution ordering of transactions on-the-fly, dynamically
-detecting dependencies and avoiding conflicts during execution. An additional property that is
-important for dynamic parallelism on a blockchain is that the execution output is consistent with
-executing transactions according to a preset order.
+### Dynamic parallelism
 
-By not requiring developers to specify the conflicts ahead of time, dynamic parallelism allows
-developers to flexibly write applications without facing the design constraints of statically
-declaring transaction dependencies.
+**Dynamic parallelism** finds conflicts at runtime. Transactions execute speculatively; if two of them collide, the engine re-executes the later one. The committed result must still match executing the block in the **preset consensus order**.
+
+Developers do not declare access lists. They write ordinary Move, and the engine parallelizes whatever does not conflict.
 
 ## Block-STM
 
-Aptos uses a highly efficient, multi-threaded, in-memory parallel execution engine called Block-STM.
-Block-STM leverages the preset order of transactions and combines Software Transactional Memory
-techniques with a novel collaborative schedule.
+Aptos executes blocks with **Block-STM**, a multi-threaded, in-memory engine that combines software transactional memory with a collaborative scheduler. It uses the consensus order as the serial baseline, executes transactions in parallel, and re-executes only the ones that aborted because of a conflict.
 
-Block-STM is the state-of-the-art dynamic parallelism execution engine developed by the Aptos Labs
-team.
+Block-STM is the dynamic-parallelism engine originally built by Aptos Labs. [Polygon](https://polygon.technology/blog/innovating-the-main-chain-a-polygon-pos-study-in-parallelization), Sei, [Starknet](https://www.starknet.io/blog/parallel-execution-and-v0-13-2/), and other chains have adopted the same approach.
 
-Since its release, [Polygon](https://polygon.technology/blog/innovating-the-main-chain-a-polygon-pos-study-in-parallelization), Sei,
-[Starknet](https://www.starknet.io/blog/parallel-execution-and-v0-13-2/), and other blockchains have
-adopted it to achieve parallel execution on their respective chains.
-
-To learn more, see:
+To learn more:
 
 - [Block-STM blog post](https://medium.com/aptoslabs/block-stm-how-we-execute-over-160k-transactions-per-second-on-the-aptos-blockchain-3b003657e4ba)
 - [Block-STM paper](https://arxiv.org/pdf/2203.06871)
 - [a16z crypto research talk](https://www.youtube.com/watch?v=2SE5tqPzhyw)
 - [Stark Spaces | Block-STM and Starknet](https://www.youtube.com/watch?v=y1kXOi39RX0)
 - [Block-STM: Accelerating Smart-Contract Processing](https://blog.chain.link/block-stm/)
+- [Transactions and States](/network/blockchain/txns-states) — how execution writes versioned ledger state
+- [Computing Transaction Gas](/network/blockchain/base-gas) — how execution and IO are metered

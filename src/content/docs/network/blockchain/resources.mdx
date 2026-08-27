@@ -1,15 +1,20 @@
 ---
 title: "Move Resources"
-description: "Learn about Resources in Move on Aptos, how they differ from instances, their permission models, and storage mechanisms for managing on-chain state."
+description: "Learn how Move resources store on-chain state on Aptos, how they differ from nested instances, and how objects and fungible assets build on that model."
 sidebar:
   label: "Resources"
 ---
 
-On Aptos, on-chain state is organized into resources and modules. These are then stored within the individual accounts. This is different from other blockchains, such as Ethereum, where each smart contract maintains its own storage space. See [Accounts](/network/blockchain/accounts) for more details on accounts.
+On Aptos, on-chain state is organized into **resources** and **modules**, stored under accounts (and [object](/build/smart-contracts/objects) addresses). That differs from Ethereum, where each contract owns a private storage space. See [Accounts](/network/blockchain/accounts) for how addresses work.
 
-## Resources vs Instances
+## Resources vs instances
 
-Move modules define struct definitions. Struct definitions may include the abilities such as `key` or `store`. Resources are struct instance with The `key` ability that are stored in global storage or directly in an account. The `store` ability allows struct instances to be stored within resources. An example here is how the APT coin is stored: CoinStore is the resource that contains the APT coin, while the Coin itself is an instance:
+Move modules define structs. Abilities such as `key` and `store` control where values of those structs may live:
+
+- A **resource** is a struct with `key`. It sits in global storage at an address.
+- An **instance** with `store` can live _inside_ a resource (or another `store` value), but not as a top-level resource on its own.
+
+The original Coin model is a clear example: `CoinStore` is the resource; `Coin` is the inner instance. APT still uses this layout, while new tokens should use [Fungible Asset](/build/smart-contracts/fungible-asset) primary stores.
 
 ```move
 /// A holder of a specific coin type and associated event handles.
@@ -25,7 +30,7 @@ struct Coin<phantom CoinType> has store {
 }
 ```
 
-The Coin instance can be taken out of CoinStore with the owning account's permission and easily transferred to another CoinStore resource. It can also be kept in any other custom resource, if the definition allows, for example:
+With the owning account's permission, the module can take the `Coin` out of `CoinStore` and move it into another `CoinStore` or into a custom resource:
 
 ```move
 struct CustomCoinBox<phantom CoinType> has key {
@@ -35,7 +40,7 @@ struct CustomCoinBox<phantom CoinType> has key {
 
 ## Define resources and objects
 
-All instances and resources are defined within a module that is stored at an address. For example `0x1234::coin::CoinStore<0x1234::coin::SomeCoin>` would be represented as:
+Every instance and resource is defined in a module at an address. For example `0x1234::coin::CoinStore<0x1234::coin::SomeCoin>` looks like:
 
 ```move
 module 0x1234::coin {
@@ -43,22 +48,26 @@ module 0x1234::coin {
         coin: Coin<CoinType>,
     }
 
-    struct SomeCoin { }
+    struct SomeCoin {}
 }
 ```
 
-In this example, `0x1234` is the address, `coin` is the module, `CoinStore` is a struct that can be stored as a resource, and `SomeCoin` is a struct that is unlikely to ever be represented as an instance. The use of the phantom type allows for there to exist many distinct types of `CoinStore` resources with different `CoinType` parameters.
+Here `0x1234` is the address, `coin` is the module, `CoinStore` can be stored as a resource, and `SomeCoin` is a phantom type tag. Phantom type parameters let many distinct `CoinStore` resources exist at the same address.
 
-## Permissions of Instances including Resources
+[Objects](/build/smart-contracts/objects) extend this model: instead of stuffing many unrelated resources onto a user's account, you create a dedicated address that owns a group of resources representing one NFT, vault, or app entity.
 
-Permissions of resources and other instances are dictated by the module where the struct is defined. For example, an instance within a resource may be accessed and even removed from the resource, but the internal state cannot be changed without permission from the module where the instance's struct is defined.
+## Permissions
 
-Ownership, on the other hand, is signified by either storing a resource under an account or by logic within the module that defines the struct.
+The module that defines a struct owns its internals. Another module may receive an instance and store it, but it cannot read or mutate private fields without functions from the defining module.
+
+Ownership is either "this resource sits under this account" or logic in the defining module (for example an object's owner field).
 
 ## Viewing a resource
 
-Resources are stored within accounts. Resources can be located by searching within the owner's account for the resource at its full query path inclusive of the account where it is stored as well as its address and module. Resources can be viewed on the [Aptos Explorer](https://explorer.aptoslabs.com/) by searching for the owning account or directly fetched from a fullnode's API.
+Find a resource by owner address and full type (`address::module::Struct<TypeArgs>`). View it in the [Aptos Explorer](https://explorer.aptoslabs.com/) or fetch it from a fullnode's REST API (`GET /accounts/{address}/resource/{resource_type}`).
 
 ## How resources are stored
 
-The module that defines a struct specifies how instances may be stored. For example, events for depositing a token can be stored in the receiver account where the deposit happens or in the account where the token module is deployed. In general, storing data in individual user accounts enables a higher level of execution efficiency as there would be no state read/write conflicts among transactions from different accounts, allowing for seamless parallel execution.
+The defining module chooses where to put data. Deposit events for a token, for example, can live on the receiver or on the module's own account.
+
+Storing per-user data under each user's account (or object) usually parallelizes better: transactions from different addresses do not contend on the same resource, so [Block-STM](/network/blockchain/execution) can run them together. Hot global resources (a single shared registry) serialize those writers.

@@ -62,7 +62,7 @@ export const LLMS_INDEX_SECTIONS: LlmsSection[] = [
   },
   {
     title: "AI Tooling",
-    ids: ["build/ai", "build/ai/aptos-mcp", "llms-txt"],
+    ids: ["build/ai", "build/ai/aptos-mcp", "build/ai/aptos-agent-skills", "llms-txt"],
   },
   {
     title: "Nodes And Operations",
@@ -97,6 +97,7 @@ export const FULL_PRIORITY_DOC_IDS = [
   "build/cli",
   "build/smart-contracts",
   "build/ai",
+  "build/ai/aptos-agent-skills",
   "network/nodes",
   "network/glossary",
   "llms-txt",

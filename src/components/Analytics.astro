@@ -5,15 +5,15 @@ import SpeedInsights from "@vercel/speed-insights/astro";
 
 const isProduction = import.meta.env.VERCEL_ENV === "production";
 const isVercel = import.meta.env.VERCEL;
-const gtagId = GTAG_ID?.trim();
-const gtagInit =
-  gtagId && /^G-[A-Z0-9]+$/i.test(gtagId)
-    ? `window.dataLayer=window.dataLayer||[];function gtag(){window.dataLayer.push(arguments);}gtag("js",new Date());gtag("config",${JSON.stringify(gtagId)});`
-    : undefined;
+const gtagId = GTAG_ID?.trim() ?? "";
+const hasGtag = /^G-[A-Z0-9]+$/i.test(gtagId);
+const gtagInit = hasGtag
+  ? `window.dataLayer=window.dataLayer||[];function gtag(){window.dataLayer.push(arguments);}gtag("js",new Date());gtag("config",${JSON.stringify(gtagId)});`
+  : "";
 ---
 
 {
-  isProduction && gtagId && gtagInit && (
+  isProduction && hasGtag && (
     <>
       <script
         is:inline

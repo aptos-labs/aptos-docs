@@ -1,0 +1,43 @@
+diff --git a/dist/runtime/server/render/csp.js b/dist/runtime/server/render/csp.js
+--- a/dist/runtime/server/render/csp.js
++++ b/dist/runtime/server/render/csp.js
+@@ -28,12 +28,14 @@
+   const scriptElemActive = isEnabled(script.element);
+   const styleElemActive = isEnabled(style.element);
+   const strictDynamicSuffix = scriptDirective.strictDynamic ? ` 'strict-dynamic'` : "";
++  const scriptDefaultHasUnsafeInline = hasUnsafeInline(script.default.resources);
++  const styleDefaultHasUnsafeInline = hasUnsafeInline(style.default.resources);
+   const scriptBaselineTokens = [
+-    ...scriptElemActive ? [] : [...finalScriptHashes],
++    ...scriptElemActive || scriptDefaultHasUnsafeInline ? [] : [...finalScriptHashes],
+     ...scriptDirective.strictDynamic ? [`'strict-dynamic'`] : []
+   ];
+   const scriptSrc = `script-src ${scriptResources} ${scriptBaselineTokens.join(" ")};`;
+-  const styleSrc = `style-src ${styleResources} ${(styleElemActive ? [] : [...finalStyleHashes]).join(" ")};`;
++  const styleSrc = `style-src ${styleResources} ${(styleElemActive || styleDefaultHasUnsafeInline ? [] : [...finalStyleHashes]).join(" ")};`;
+   const scriptSrcElem = scriptElemActive ? renderSpecificDirective(
+     "script-src-elem",
+     script.element.resources,
+@@ -73,13 +75,19 @@
+     styleSrcAttr
+   ].filter(Boolean).join(" ");
+ }
++function hasUnsafeInline(resources) {
++  return resources.includes("'unsafe-inline'");
++}
+ function isEnabled(sources) {
+   return sources.resources.length > 0 || sources.hashes.length > 0;
+ }
+ function renderSpecificDirective(name, resources, defaultResource, sharedHashes, ownHashes, suffix = "") {
+-  const hashes = new Set(sharedHashes);
+-  for (const hash of ownHashes) {
+-    hashes.add(`'${hash}'`);
++  const unsafeInline = hasUnsafeInline(resources);
++  const hashes = new Set(unsafeInline ? void 0 : sharedHashes);
++  if (!unsafeInline) {
++    for (const hash of ownHashes) {
++      hashes.add(`'${hash}'`);
++    }
+   }
+   let finalResources;
+   if (resources.length > 0) {

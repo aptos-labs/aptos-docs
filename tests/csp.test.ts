@@ -3,8 +3,9 @@
  * Starlight's sidebar restore, gtag, and Mermaid in production:
  *
  * browsers ignore `'unsafe-inline'` when a hash is present in the same
- * directive. Astro 7.2.0 injects those hashes, so this site ships a hash-free
- * HTTP policy from `vercel.json` (`serializeCspHeader`) instead of Astro CSP.
+ * directive. Stay on Astro 7.2.0 and patch it to omit auto hashes when
+ * `'unsafe-inline'` is set, then emit one global header via the patched
+ * Vercel adapter (`cspMode: "global"`).
  */
 
 import { existsSync, readFileSync } from "node:fs";
@@ -37,6 +38,10 @@ function elementResources(resources: CspResource[]): string[] {
   });
 }
 
+function readWorkspaceYaml(): string {
+  return readFileSync(join(ROOT, "pnpm-workspace.yaml"), "utf8");
+}
+
 describe("createCspConfig", () => {
   it("allows inline scripts without hashes so Starlight is:inline scripts run", () => {
     for (const provider of ["algolia", "pagefind"] as const) {
@@ -50,6 +55,15 @@ describe("createCspConfig", () => {
     const config = createCspConfig("algolia");
     expect(elementResources(config.styleDirective.resources)).toContain("'unsafe-inline'");
     expect(config.styleDirective).not.toHaveProperty("hashes");
+  });
+});
+
+describe("serializeCspHeader", () => {
+  it("is a hash-free reference of the intended HTTP policy", () => {
+    const csp = serializeCspHeader("pagefind");
+    expect(csp).toContain("'unsafe-inline'");
+    expect(csp).not.toMatch(/sha256-/);
+    expect(csp.length).toBeLessThan(4096);
   });
 });
 
@@ -122,26 +136,47 @@ describe("collapseCspRoutes", () => {
   });
 });
 
-describe("vercel.json CSP header", () => {
-  it("ships one global hash-free policy that matches serializeCspHeader", () => {
+describe("pnpm patches (stay on Astro 7.2.0)", () => {
+  it("registers the Vercel global-CSP patch and the Astro hash-skip patch", () => {
+    const workspace = readWorkspaceYaml();
+    expect(workspace).toContain("patches/@astrojs__vercel.patch");
+    expect(workspace).toContain("patches/astro.patch");
+  });
+
+  it("teaches the Vercel adapter cspMode: global with a continue catch-all", () => {
+    const patch = readFileSync(join(ROOT, "patches/@astrojs__vercel.patch"), "utf8");
+    expect(patch).toContain("cspMode");
+    expect(patch).toContain("global");
+    expect(patch).toContain(CSP_CATCH_ALL_SRC);
+    expect(patch).toContain("continue: true");
+  });
+
+  it("ports Astro 7.2.5 hash suppression for 'unsafe-inline'", () => {
+    const patch = readFileSync(join(ROOT, "patches/astro.patch"), "utf8");
+    expect(patch).toContain("hasUnsafeInline");
+    expect(patch).toContain("unsafe-inline");
+  });
+});
+
+describe("astro.config and vercel.json", () => {
+  it("re-enables Astro CSP and asks the patched adapter for one global header", () => {
+    const config = readFileSync(join(ROOT, "astro.config.mjs"), "utf8");
+    expect(config).toContain('cspMode: "global"');
+    expect(config).toContain("createCspConfig(searchResolution.provider)");
+    expect(config).not.toMatch(/staticHeaders:\s*false/);
+  });
+
+  it("does not ship a second CSP from vercel.json (dual policies AND-intersect)", () => {
     const vercel = JSON.parse(readFileSync(join(ROOT, "vercel.json"), "utf8")) as {
       buildCommand?: string;
       headers?: { source: string; headers: { key: string; value: string }[] }[];
     };
     expect(vercel.buildCommand, "do not override the dashboard build command").toBeUndefined();
 
-    const global = vercel.headers?.find((entry) => entry.source === "/(.*)");
-    const csp = global?.headers.find((header) => header.key === "Content-Security-Policy")?.value;
-    expect(csp).toBe(serializeCspHeader("pagefind"));
-    expect(csp).toContain("'unsafe-inline'");
-    expect(csp).not.toMatch(/sha256-/);
-    expect(csp?.length ?? 0).toBeLessThan(4096);
-  });
-
-  it("does not ask the Vercel adapter to emit per-path CSP routes", () => {
-    const config = readFileSync(join(ROOT, "astro.config.mjs"), "utf8");
-    expect(config).toMatch(/staticHeaders:\s*false/);
-    expect(config).not.toContain("withCollapsedCsp");
+    const keys = (vercel.headers ?? []).flatMap((entry) =>
+      entry.headers.map((header) => header.key),
+    );
+    expect(keys).not.toContain("Content-Security-Policy");
   });
 });
 
@@ -149,15 +184,17 @@ describe("built Vercel routing config", () => {
   const vercelConfigPath = join(ROOT, ".vercel/output/config.json");
   const hasVercelConfig = existsSync(vercelConfigPath);
 
-  it.skipIf(!hasVercelConfig)("does not emit per-path CSP header routes", () => {
+  it.skipIf(!hasVercelConfig)("emits one continue catch-all CSP, not per-path routes", () => {
     const json = JSON.parse(readFileSync(vercelConfigPath, "utf8")) as {
       routes?: VercelRoute[];
     };
-    const perPath = (json.routes ?? []).filter((route) => {
-      const csp = route.headers?.["content-security-policy"];
-      if (!csp) return false;
-      return route.src !== CSP_CATCH_ALL_SRC && route.src !== "/(.*)";
-    });
-    expect(perPath).toHaveLength(0);
+    const cspRoutes = (json.routes ?? []).filter(
+      (route) => route.headers?.["content-security-policy"],
+    );
+    expect(cspRoutes).toHaveLength(1);
+    expect(cspRoutes[0]?.src).toBe(CSP_CATCH_ALL_SRC);
+    expect(cspRoutes[0]?.continue).toBe(true);
+    expect(cspRoutes[0]?.headers?.["content-security-policy"]).toContain("'unsafe-inline'");
+    expect(cspRoutes[0]?.headers?.["content-security-policy"]).not.toMatch(/sha256-/);
   });
 });

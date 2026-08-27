@@ -355,6 +355,10 @@ export default defineConfig({
   ],
   adapter: process.env.VERCEL
     ? vercel({
+        // Per-path CSP routes are collapsed after `astro build` by
+        // `pnpm build:collapse-csp`. Leaving `staticHeaders` on is what makes
+        // the adapter emit the header in the first place; the Astro 7 adapter
+        // no longer has the patched `cspMode: "global"` option.
         staticHeaders: true,
         edgeMiddleware: false,
         imageService: true,

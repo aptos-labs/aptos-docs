@@ -1,62 +1,96 @@
 ---
 title: "Aptos APIs"
-description: "通过各种 API 访问 Aptos 区块链，包括 REST API、GraphQL 和针对不同用例的专用端点"
+description: "通过全节点 REST API、Indexer GraphQL、Transaction Stream gRPC、水龙头和 Geomi 托管端点访问 Aptos 区块链"
 sidebar:
   label: "API"
 ---
 
-Aptos 区块链网络可以通过多种 API 进行访问,具体取决于您的使用场景.
+import { Aside, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
-## Aptos Fullnode
+使用这些 API 读取链上状态、提交交易、索引历史数据，以及为测试账户充值。大多数应用代码应通过[官方 SDK](/zh/build/sdks) 调用；下面的 HTTP、GraphQL 和 gRPC 端点是这些 SDK 所使用的底层服务。
 
-import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+## 选择 API
 
-此 API 嵌入在 Fullnodes 中,提供了一种简单,低延迟但低级别的方式来读取状态和提交交易到 Aptos 区块链.它还支持交易模拟.
+| 需求                           | 使用                                                       |
+| ---------------------------- | -------------------------------------------------------- |
+| 最新链上状态、提交交易或模拟交易             | [全节点 REST API](/zh/build/apis/fullnode-rest-api)         |
+| NFT、对象、历史活动或聚合表              | [Indexer GraphQL API](/zh/build/indexer)                 |
+| 用于自定义索引器的实时或历史交易流            | [Transaction Stream（gRPC）](/zh/build/indexer/txn-stream) |
+| 在 Devnet 或 Testnet 上获取测试 APT | [水龙头 API](/zh/build/apis/faucet-api)                     |
+| SQL、仪表板或第三方 RPC              | [数据提供商](/zh/build/apis/data-providers)                   |
+
+## Aptos Labs 官方端点
+
+[Aptos Labs](https://aptoslabs.com) 代表 [Aptos Foundation](https://aptosnetwork.com/foundation) 为每个 [Aptos 网络](/zh/network/nodes/networks) 运营这些部署。`fullnode.{network}.aptoslabs.com` 是 `api.{network}.aptoslabs.com` 的别名；请优先使用 `api.` 主机名。
+
+| 网络  | REST API（`/v1`）                        | Indexer GraphQL                                | Transaction Stream gRPC          | 水龙头                                                                            |
+| --- | -------------------------------------- | ---------------------------------------------- | -------------------------------- | ------------------------------------------------------------------------------ |
+| 主网  | `https://api.mainnet.aptoslabs.com/v1` | `https://api.mainnet.aptoslabs.com/v1/graphql` | `grpc.mainnet.aptoslabs.com:443` | —                                                                              |
+| 测试网 | `https://api.testnet.aptoslabs.com/v1` | `https://api.testnet.aptoslabs.com/v1/graphql` | `grpc.testnet.aptoslabs.com:443` | [铸币页面](/zh/network/faucet) 和 `https://faucet.testnet.aptoslabs.com`（Google 登录） |
+| 开发网 | `https://api.devnet.aptoslabs.com/v1`  | `https://api.devnet.aptoslabs.com/v1/graphql`  | `grpc.devnet.aptoslabs.com:443`  | `https://faucet.devnet.aptoslabs.com`（可编程）                                     |
+
+本站发布节点 API 规范：[OpenAPI JSON](/aptos-spec.json) 和可浏览的 [REST API 参考](/rest-api)。每个全节点还在 `/v1/spec` 提供实时 Swagger UI。
+
+## 全节点 REST API
+
+该 API 随每个全节点一起提供，是读取状态、提交交易和模拟交易的低延迟路径。
 
 <CardGrid>
-  <LinkCard href="/zh/build/apis/fullnode-rest-api?network=mainnet" title="Aptos Fullnode REST API（主网）" description="Aptos Fullnode REST API 的主网 API playground" />
+  <LinkCard href="/rest-api" title="REST API 参考" description="由 Aptos 节点 API OpenAPI 规范生成的可浏览文档" />
 
-  <LinkCard href="/zh/build/apis/fullnode-rest-api?network=testnet" title="Aptos Fullnode REST API（测试网）" description="Aptos Fullnode REST API 的测试网 API playground" />
+  <LinkCard href="/zh/build/apis/fullnode-rest-api" title="REST API 指南" description="速率限制、数据裁剪、View 函数以及如何查询状态" />
 
-  <LinkCard href="/zh/build/apis/fullnode-rest-api?network=devnet" title="Aptos Fullnode REST API（开发网）" description="Aptos Fullnode REST API 的开发网 API playground" />
+  <LinkCard href="https://api.mainnet.aptoslabs.com/v1/spec#/" title="主网浏览器" description="针对 api.mainnet.aptoslabs.com 的实时 Swagger UI" target="_blank" />
+
+  <LinkCard href="https://api.testnet.aptoslabs.com/v1/spec#/" title="测试网浏览器" description="针对 api.testnet.aptoslabs.com 的实时 Swagger UI" target="_blank" />
+
+  <LinkCard href="https://api.devnet.aptoslabs.com/v1/spec#/" title="开发网浏览器" description="针对 api.devnet.aptoslabs.com 的实时 Swagger UI" target="_blank" />
 </CardGrid>
 
 ## Indexer
 
 <CardGrid>
-  <LinkCard
-    href="/zh/build/indexer"
-    title="Indexer GraphQL API"
-    description="GraphQL API 提供可传参数可定制的 GraphQL 接口，用于从 Aptos 区块链读取状态。
-它非常适合与 NFTs、Aptos Objects 或自定义 Move 合约进行交互。
-在这里了解更多关于 Indexer 支持的 GraphQL API。"
-  />
+  <LinkCard href="/zh/build/indexer" title="Indexer GraphQL API" description="用于 NFT、Aptos Objects、同质化资产和自定义合约数据的高级 GraphQL 接口" />
 
-  <LinkCard
-    href="/zh/build/indexer/txn-stream"
-    title="Transaction Stream API"
-    description="这个 GRPC API 将历史和实时交易数据流式传输到索引处理器。
-它正在被 Aptos Core Indexing 使用，也可以支持自定义应用程序特定的索引处理器
-进行实时区块链数据处理。在这里了解更多。"
-  />
+  <LinkCard href="/zh/build/indexer/txn-stream" title="Transaction Stream API" description="面向 Aptos Core Indexing 和自定义处理器的历史与实时交易 gRPC 流" />
 </CardGrid>
 
-## Faucet (Only Devnet)
+## 水龙头（Devnet 和 Testnet）
 
 <CardGrid>
-  <LinkCard href="/zh/build/apis/faucet-api" title="Faucet API" description="该 API 提供在开发网和测试网上接收测试代币的能力。其主要目的是在将应用程序和 Move 合约部署到主网之前进行开发和测试。" />
+  <LinkCard href="/zh/build/apis/faucet-api" title="水龙头 API" description="在 Devnet 上以编程方式铸造测试 APT，或在 Testnet 上通过 Google 登录 / 铸币页面铸造" />
 </CardGrid>
 
-上述 API 的代码在 [GitHub](https://github.com/aptos-labs/aptos-core) 上开源.因此,任何人都可以操作这些 API,全球有许多独立的运营商和开发者选择这样做.
+## Geomi 与数据提供商
 
-todo translate
-For testnet, you can mint APT at the [mint page](/zh/network/faucet).
+<CardGrid>
+  <LinkCard href="/zh/build/apis/aptos-labs-developer-portal" title="Geomi" description="为 Aptos Labs 托管 API 提供 API 密钥、更高速率限制、gas 代付和无代码索引" />
 
-### Aptos Labs 运营的 API 部署
+  <LinkCard href="/zh/build/apis/data-providers" title="数据提供商" description="SQL 数据集、分析仪表板和第三方 RPC 端点" />
+</CardGrid>
 
-[Aptos Labs](https://aptoslabs.com) 代表 [Aptos Foundation](https://aptosnetwork.com/foundation) 为每个 [Aptos Network](/zh/network/nodes/networks) 运营这些 API 部署,并将其公开供大家使用.
+节点 API、Indexer、Transaction Stream 和水龙头的实现均在 [aptos-core](https://github.com/aptos-labs/aptos-core) 开源。任何人都可以运行它们；全球有许多独立运营商和开发者选择这样做。更多 RPC 供应商见 [Aptos 生态目录](https://aptosnetwork.com/ecosystem/directory/category/rpc)。
 
-目前有两组 Aptos Labs API 部署:
+## 身份验证与速率限制
 
-1. [具有匿名访问和基于 IP 的速率限制的 API](/zh/network/nodes/networks)
-2. [\[Beta\] 通过 Aptos Labs Developer Portal 进行身份验证和基于开发者账户的速率限制的 API](/zh/build/apis/aptos-labs-developer-portal)
+Labs 托管的节点、Indexer 和 Transaction Stream API 允许**匿名**访问，并按 IP 设置较低的速率限制。要获得更高限额和使用指标，请创建 [Geomi](https://geomi.dev/) API 密钥，并以 bearer token 发送。
+
+```shellscript filename="Terminal"
+curl "https://api.mainnet.aptoslabs.com/v1" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```typescript filename="index.ts"
+import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
+
+const aptos = new Aptos(
+  new AptosConfig({
+    network: Network.MAINNET,
+    clientConfig: { API_KEY: process.env.APTOS_API_KEY },
+  }),
+);
+```
+
+<Aside type="note">
+  用量以计算单元（CU）计量，组织同时还受 HTTP 速率限制。当前限额和定价见 [Geomi 计费文档](https://geomi.dev/docs/admin/billing)。请按 [Geomi 入门指南](https://geomi.dev/docs/start) 创建密钥。
+</Aside>

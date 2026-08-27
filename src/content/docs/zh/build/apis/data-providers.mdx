@@ -5,44 +5,45 @@ sidebar:
   label: "数据提供商"
 ---
 
-如果您需要访问 Aptos 区块链数据但无需实时获取.
-我们提供了几种选项让您可以通过 SQL 或 UI 仪表盘访问这些数据.
-这类数据通常用于分析场景,因为它支持聚合操作.
+# 数据提供商
 
-## 数据端点概览
+除全节点提供的 API 之外，还可以通过以下方式获取 Aptos 区块链数据。
 
-直接访问全节点将获取最新数据(除非是归档全节点,否则不包含历史数据),使用 [REST API](/zh/build/apis#aptos-fullnode)
+## Aptos 数据端点概览
 
-在此之上的索引器层提供 [GRPC 交易流](/zh/build/indexer/txn-stream/aptos-hosted-txn-stream)
+[REST API](/zh/build/apis/fullnode-rest-api) 可直接查询全节点，数据最新（除非是归档全节点，否则不包含历史数据）。
 
-基于这个交易流,我们构建了一些可通过 [GraphQL](/zh/build/indexer) 查询的产品逻辑表
+[gRPC 交易流](/zh/build/indexer/txn-stream/aptos-hosted-txn-stream) 是我们构建的流式层，提供上述数据的类型化版本。
 
-由于交易解析逻辑是 [公开的](https://github.com/aptos-labs/aptos-indexer-processors-v2),部分供应商已实现类似的解析逻辑来创建数据表子集并开放查询.
+[GraphQL](/zh/build/indexer) 提供可查询的产品表（例如转账和余额）。
+
+产品表从交易中解析而来，逻辑是[公开的](https://github.com/aptos-labs/aptos-indexer-processors-v2)。部分供应商实现了类似的解析逻辑，创建了数据表子集并开放查询。
 
 ## SQL 数据表
 
-索引器定义了多个处理器来创建不同的数据库表.
+Indexer（为 GraphQL 端点提供支持的技术栈）定义了多个处理器，在 Postgres 中创建不同的产品表。
+
+这类数据常用于分析，因为它支持聚合操作。
 
 ### 核心表
 
-这些表直接解析自节点 API 响应,一种方案是将它们拆分为以下表:
+这些表包含与 REST API 非常相似的原始数据。注意：通常使用（交易）版本号而不是交易哈希。
 
-- 区块 - 版本号,区块高度,epoch,时间戳
-- 交易 - 版本号,发送方,入口函数,gas
-- 签名 - 签名类型,签名者,费用支付地址
+- 区块 - 版本号、区块高度、epoch、时间戳
+- 交易 - 版本号、类型、发送方、入口函数、gas
+- 签名 - 签名类型、签名者、费用支付地址
 - 事件 - 事件类型和数据
 
-我们将数据存储为表项(table items),资源(resources)或模块(modules):
+链上数据存储为：[表项](/zh/build/smart-contracts/table)、[资源](/zh/network/blockchain/resources) 或[模块](/zh/build/smart-contracts/modules-on-aptos)（可执行）
 
-- (写入集)变更 - 变更索引,变更类型,资源地址
-- 表项 - 表键,表句柄,键(内容与类型),值(内容与类型)
-- (Move)资源 - 资源地址,资源类型,数据
-- (Move)模块 - 已部署模块的字节码
+- （写入集）变更 - 变更索引、变更类型（对何种数据执行写入或删除）、资源地址
+- 表项 - 表键、表句柄、解码后的键（内容与类型）、值（内容与类型）
+- （Move）资源 - 资源地址、资源类型、数据
+- （Move）模块 - 已部署模块的字节码、friends 和对外函数
 
-## 链下数据供应商
+## 核心表与指标供应商：
 
-我们大多数数据供应商仅提供核心数据集.
-以下是 [部分供应商列表](https://aptosnetwork.com/currents/aptos-on-chain-data-capabilities-with-dune-nansen-and-other-providers)
+我们提供了若干可通过 SQL 或仪表板 UI 访问这些数据的选项。
 
 ### Google BigQuery 公共数据集
 
@@ -50,37 +51,66 @@ sidebar:
 
 ![bq\_sql](~/images/screenshots/bq_sql.png)
 
-我们还提供了 [使用上述资源](https://github.com/aptos-labs/explorer/tree/main/analytics) 的分析查询示例
+我们还提供了[使用上述资源](https://github.com/aptos-labs/explorer/tree/main/analytics) 的分析查询示例
 
 ### Dune
 
-我们的仪表盘地址:[https://dune.com/aptos/aptos-chain-metrics-overview](https://dune.com/aptos/aptos-chain-metrics-overview)
-
-### Flipside
-
-另一个仪表盘供应商,核心表中的签名已合并至 `fact_transactions`
-他们还提供了一些便利表(DeFi,NFT,价格),[表清单](https://flipsidecrypto.github.io/aptos-models/#!/overview)
-
-### Artemis
-
-提供 [关键指标](https://app.artemis.xyz/asset/aptos) 和图表构建工具
-
-### Nansen
-
-提供 [关键指标](https://app.nansen.ai/macro/blockchains?chain=aptos) 及账户附加功能
+仪表板地址：[https://dune.com/aptos/aptos-chain-metrics-overview](https://dune.com/aptos/aptos-chain-metrics-overview)
 
 ### Allium
 
-原始数据地址:[https://docs.allium.so/historical-data/supported-blockchains/move-ecosystem/aptos](https://docs.allium.so/historical-data/supported-blockchains/move-ecosystem/aptos)
+为 DefiLlama、rwa.xyz 等下游供应商提供数据。原始数据见：[https://docs.allium.so/historical-data/supported-blockchains/move-ecosystem/aptos](https://docs.allium.so/historical-data/supported-blockchains/move-ecosystem/aptos)
+他们还提供稳定币转账数据：[https://docs.allium.so/historical-data/stablecoins#stablecoin-metrics](https://docs.allium.so/historical-data/stablecoins#stablecoin-metrics)
+
+### Artemis
+
+提供[关键指标](https://app.artemis.xyz/asset/aptos) 以及图表构建工具
+
+### Nansen
+
+提供[关键指标](https://app.nansen.ai/macro/blockchains?chain=aptos)，账户可使用附加功能
 
 ### Sentio
 
-他们在这里提供了指南:[https://docs.sentio.xyz/docs/aptos](https://docs.sentio.xyz/docs/aptos)  数据可以在 data source -> external project -> sentio/aptos-overview 路径下找到\
-他们还提供交易的堆栈追踪功能
+他们有一份[指南](https://docs.sentio.xyz/docs/aptos)，
+数据位于 data source -> external project -> sentio/aptos-overview
+他们还提供交易的[堆栈追踪](https://app.sentio.xyz/explorer)
 
-## 其他供应商
+### RWA.xyz
 
-我们还有一些面向更企业级使用场景的合作伙伴- [Token Terminal](https://tokenterminal.com/resources/articles/aptos-data-partnership)
+[仪表板](https://app.rwa.xyz/networks/aptos) 提供 RWA 的高层指标。
+查看稳定币详情需要创建账户。
 
+### Pangea
+
+提供[原始数据](https://docs.pangea.foundation/overview/)、
+Coin/FA 转账以及部分 DEX 解析。
+
+### 其他供应商
+
+我们还有一些面向更企业级使用场景的合作伙伴
+
+- [Token Terminal](https://tokenterminal.com/resources/articles/aptos-data-partnership)
 - [The Tie](https://www.thetie.io/insights/news/introducing-aptos-ecosystem-dashboard-and-on-chain-data/)
 - [Elliptic](https://www.elliptic.co/media-center/elliptic-partners-with-aptos-foundation-as-a-data-integration-provider-to-offer-compliance-screening-and-risk-services-for-aptos-network)
+
+## 实时数据供应商
+
+- [Geomi](https://geomi.dev/)（原 Aptos Build）
+  - 提供 [API 密钥](https://geomi.dev/docs/start)，以提高 REST API 和 gRPC 交易流的速率限制。
+  - 提供[无代码索引](https://geomi.dev/docs/no-code-indexing)，将事件解析为可查询的表。
+- [NODEREAL](https://nodereal.io/aptos) 提供 REST API 端点
+- [Shinami](https://docs.shinami.com/developer-guides/aptos) 提供 Aptos 节点访问、gas 代付和钱包服务
+- [QuickNode](https://www.quicknode.com/chains/apt) 提供 REST API 端点
+- [Codex](https://docs.codex.io/networks/aptos) 提供 GraphQL API 和 WebSocket 订阅，覆盖 Aptos 代币价格、交易对、持有人和钱包余额（网络 ID `49705`）
+
+更多 RPC 供应商见 [此处](https://aptosnetwork.com/ecosystem/directory/category/rpc)
+
+## 数据分析提示
+
+- Aptos [数据概览](https://medium.com/aptoslabs/data-analyst-guide-to-aptos-pt-1-816367edc1c5)（第 1 部分）
+- 解析 [DeFi Swaps](https://medium.com/aptoslabs/data-analyst-guide-to-aptos-defi-swaps-pt2-e343ac6be84e)（第 2 部分）
+- 计算[供应与成交量](https://medium.com/aptoslabs/data-analyst-guide-to-aptos-supply-and-volume-pt-3-535e312946ad)（第 3 部分）
+- [Aptos Explorer 分析查询](https://github.com/aptos-labs/explorer/tree/main/analytics)
+- [Dune 上的 Aptos Spellbook](https://github.com/duneanalytics/spellbook/tree/main/dbt_subprojects/daily_spellbook/models/aptos)
+- 可使用 [Revela](https://revela.verichains.io/) 或 Aptos CLI（`aptos move decompile --decompiler-version v2`）反编译模块字节码

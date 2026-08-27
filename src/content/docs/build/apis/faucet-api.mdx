@@ -1,76 +1,122 @@
 ---
 title: "Faucet API"
-description: "Get free APT tokens on devnet and testnet for development and testing purposes using the faucet API"
+description: "Mint test APT on Devnet and Testnet using the faucet API, SDKs, CLI, or the Testnet mint page"
 sidebar:
   label: "Faucet API"
 ---
 
-The faucet allows users to get `APT` on devnet. On testnet you can only mint at the [mint page](/network/faucet). It is not available on Mainnet.
+import { Aside } from '@astrojs/starlight/components';
 
-The endpoints for each faucet are:
+The faucet mints test `APT` so you can develop before Mainnet. **Devnet** is programmable with no Google login. **Testnet** requires Google sign-in (the [mint page](/network/faucet) or `POST /fund` with a Firebase ID token). There is no Mainnet faucet.
 
-- Devnet: [https://faucet.devnet.aptoslabs.com](https://faucet.devnet.aptoslabs.com)
+Amounts are in [Octas](/network/glossary#octa) (`1 APT = 100,000,000` Octas).
 
-## Using the faucet
+| Network | Endpoint                               | How to mint                                                          |
+| ------- | -------------------------------------- | -------------------------------------------------------------------- |
+| Devnet  | `https://faucet.devnet.aptoslabs.com`  | SDKs, CLI, or `POST /fund` with no auth                              |
+| Testnet | `https://faucet.testnet.aptoslabs.com` | [Mint page](/network/faucet), or `POST /fund` with a Google ID token |
+| Mainnet | —                                      | Not available                                                        |
 
-Each SDK has integration for devnet to use the faucet. Below are a few examples, but you can
-see more information on each individual [SDK's documentation](/build/sdks).
+OpenAPI (live): [Devnet spec](https://faucet.devnet.aptoslabs.com/spec.yaml) and [Testnet spec](https://faucet.testnet.aptoslabs.com/spec.yaml). Explorer: [Devnet `/spec`](https://faucet.devnet.aptoslabs.com/spec). Source: [crates/aptos-faucet/doc/spec.yaml](https://github.com/aptos-labs/aptos-core/blob/main/crates/aptos-faucet/doc/spec.yaml).
 
-### Using the faucet in a wallet
+The current operation is **`POST /fund`** with a JSON `FundRequest` body (`address`, `auth_key`, or `pub_key`, and optional `amount`). Devnet still accepts a legacy **`POST /mint?amount=&address=`** query; new integrations should use `/fund`.
 
-Most wallets, such as [Petra](https://aptosnetwork.com/ecosystem/directory/petra),
-will have a faucet button for devnet. See full list of [Aptos Wallets](https://aptosnetwork.com/ecosystem/projects/wallets).
+## Using the faucet in a wallet
 
-### Using the faucet in the Aptos CLI
+Most wallets, such as [Petra](https://aptosnetwork.com/ecosystem/directory/petra), have a Devnet faucet button. See the [Aptos wallets directory](https://aptosnetwork.com/ecosystem/projects/wallets).
 
-Once you've [set up your CLI](/build/cli/setup-cli), you can simply call fund-with-faucet.  The amount used is in Octas (1 APT = 100,000,000 Octas).
+## Using the faucet in the Aptos CLI
+
+After [CLI setup](/build/cli/setup-cli), fund an account on **Devnet**:
 
 ```shellscript filename="Terminal"
 aptos account fund-with-faucet --account 0xd0f523c9e73e6f3d68c16ae883a9febc616e484c4998a72d8899a1009e5a89d6 --amount 100000000
 ```
 
-### Using the faucet in the TypeScript SDK
+On Testnet, use the [mint page](/network/faucet) instead of this command.
 
-Here is an example funding the account `0xd0f523c9e73e6f3d68c16ae883a9febc616e484c4998a72d8899a1009e5a89d6` with 1 APT in Devnet. The amount used is in Octas (1 APT = 100,000,000 Octas).
+## Using the faucet in the TypeScript SDK
+
+This example funds `0xd0f523c9e73e6f3d68c16ae883a9febc616e484c4998a72d8899a1009e5a89d6` with 1 APT on Devnet.
 
 ```typescript filename="index.ts"
 import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
 
-const aptos = new Aptos(new AptosConfig({network: Network.Devnet}));
-aptos.fundAccount({accountAddress: "0xd0f523c9e73e6f3d68c16ae883a9febc616e484c4998a72d8899a1009e5a89d6", amount: 100000000});
+const aptos = new Aptos(new AptosConfig({ network: Network.DEVNET }));
+await aptos.fundAccount({
+  accountAddress: "0xd0f523c9e73e6f3d68c16ae883a9febc616e484c4998a72d8899a1009e5a89d6",
+  amount: 100_000_000,
+});
 ```
 
-### Using the faucet in the Go SDK
+See each [SDK](/build/sdks) for more client examples.
 
-Here is an example funding the account `0xd0f523c9e73e6f3d68c16ae883a9febc616e484c4998a72d8899a1009e5a89d6` with 1 APT in Devnet. The amount used is in Octas (1 APT = 100,000,000 Octas).
+## Using the faucet in the Python SDK
 
-```go filename="index.go"
-import "github.com/aptos-labs/aptos-go-sdk"
+```python filename="fund.py"
+from aptos_sdk.v2 import Aptos, AptosConfig, Network
+
+async with Aptos(AptosConfig(network=Network.DEVNET)) as aptos:
+    await aptos.faucet.fund_account(
+        "0xd0f523c9e73e6f3d68c16ae883a9febc616e484c4998a72d8899a1009e5a89d6",
+        100_000_000,
+    )
+```
+
+## Using the faucet in the Go SDK
+
+```go filename="fund.go"
+package main
+
+import (
+	"github.com/aptos-labs/aptos-go-sdk"
+)
 
 func main() {
-	client, err := aptos.NewClient(aptos.LocalnetConfig)
+	client, err := aptos.NewClient(aptos.DevnetConfig)
 	if err != nil {
-		panic(err)
+		panic("Failed to create client: " + err.Error())
 	}
 
-  client.Fund("0xd0f523c9e73e6f3d68c16ae883a9febc616e484c4998a72d8899a1009e5a89d6", 100000000)
+	address := aptos.AccountAddress{}
+	err = address.ParseStringRelaxed("0xd0f523c9e73e6f3d68c16ae883a9febc616e484c4998a72d8899a1009e5a89d6")
+	if err != nil {
+		panic("Failed to parse address: " + err.Error())
+	}
+
+	err = client.Fund(address, 100_000_000)
+	if err != nil {
+		panic("Failed to fund account: " + err.Error())
+	}
 }
 ```
 
-### Calling the faucet: Other languages not supported by SDKs
+## Calling the faucet without an SDK
 
-If you are trying to call the faucet in other languages, you have two options:
-
-1. Generate a client from
-   the [OpenAPI spec](https://github.com/aptos-labs/aptos-core/blob/main/crates/aptos-faucet/doc/spec.yaml).
-2. Call the faucet on your own.
-
-For the latter, you will want to build a query similar to this:
+`POST /fund` on Devnet:
 
 ```shellscript filename="Terminal"
-curl -X POST
-'https://faucet.devnet.aptoslabs.com/mint?amount=10000&address=0xd0f523c9e73e6f3d68c16ae883a9febc616e484c4998a72d8899a1009e5a89d6'
+curl -X POST "https://faucet.devnet.aptoslabs.com/fund" \
+  -H "Content-Type: application/json" \
+  -d '{"address":"0xd0f523c9e73e6f3d68c16ae883a9febc616e484c4998a72d8899a1009e5a89d6","amount":100000000}'
 ```
 
-This means mint 10000 [octas](/network/glossary#Octa) to
-address `0xd0f523c9e73e6f3d68c16ae883a9febc616e484c4998a72d8899a1009e5a89d6`.
+A successful response looks like `{"txn_hashes":["..."]}`. If `amount` is omitted, the faucet uses its configured default (capped at the maximum mint).
+
+<Aside type="note">
+  You can generate a typed client from the [OpenAPI spec](https://faucet.devnet.aptoslabs.com/spec.yaml) if you are not using an official SDK.
+</Aside>
+
+### Testnet: Google sign-in
+
+Testnet `POST /fund` requires a human Google login. The [mint page](/network/faucet) does this for you. To call the API directly, send a Firebase ID token for project `aptos-api-gateway-prod` (scopes `openid`, `email`, `profile`):
+
+```shellscript filename="Terminal"
+curl -X POST "https://faucet.testnet.aptoslabs.com/fund" \
+  -H "Authorization: Bearer FIREBASE_ID_TOKEN" \
+  -H "x-is-jwt: true" \
+  -H "Content-Type: application/json" \
+  -d '{"address":"0xd0f523c9e73e6f3d68c16ae883a9febc616e484c4998a72d8899a1009e5a89d6"}'
+```
+
+There is no agent-registration shortcut. See [`/auth.md`](/auth.md) for the OAuth discovery documents.

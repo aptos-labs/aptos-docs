@@ -8,11 +8,11 @@
  * hundreds of duplicates only inflate the file. Vercel then fails the deploy
  * with "Body exceeded 3300kb limit".
  *
- * `src/integrations/global-csp.ts` used to do this in `astro:build:done`, but
- * that hook runs before the adapter writes `config.json`, so waiting for the
- * file deadlocks. Run this *after* `astro build` and *before*
- * `build:generate-middleware-function` (that script splices middleware at
- * index 1).
+ * A standalone `astro:build:done` integration cannot do this — that hook runs
+ * *before* the adapter writes `config.json`. Either wrap the adapter (so
+ * collapse runs after its own `build:done`) or run this script after
+ * `astro build`. Vercel's Astro preset defaults to `astro build`, so the
+ * adapter wrap is what actually runs in preview/production.
  */
 
 import fs from "node:fs";
@@ -24,11 +24,22 @@ const CONFIG_PATH = path.resolve(
   "../.vercel/output/config.json",
 );
 
+/** PCRE catch-all, matching other routes the Vercel adapter emits. */
+export const CSP_CATCH_ALL_SRC = "^/(.*)$";
+
 /**
  * @typedef {{ src?: string, headers?: Record<string, string | undefined>, continue?: boolean, [key: string]: unknown }} VercelRoute
  * @typedef {{ routes?: VercelRoute[], [key: string]: unknown }} VercelConfig
  * @typedef {{ changed: boolean, reason: string, cspCount?: number }} CollapseResult
  */
+
+function isCatchAllCspRoute(route, csp) {
+  return (
+    (route?.src === CSP_CATCH_ALL_SRC || route?.src === "/(.*)") &&
+    route?.continue === true &&
+    route?.headers?.["content-security-policy"] === csp
+  );
+}
 
 /**
  * Mutates `json.routes` in place. Idempotent when the file is already collapsed
@@ -55,16 +66,12 @@ export function collapseCspRoutes(json) {
     return { changed: false, reason: "distinct-csp", cspCount: cspValues.length };
   }
 
+  const csp = [...unique][0];
   const alreadyCollapsed =
-    cspValues.length === 1 &&
-    json.routes[0]?.src === "/(.*)" &&
-    json.routes[0]?.continue === true &&
-    json.routes[0]?.headers?.["content-security-policy"] === [...unique][0];
+    cspValues.length === 1 && isCatchAllCspRoute(json.routes[0], csp) && json.routes[0]?.src === CSP_CATCH_ALL_SRC;
   if (alreadyCollapsed) {
     return { changed: false, reason: "already-collapsed", cspCount: 1 };
   }
-
-  const csp = [...unique][0];
 
   json.routes = json.routes.filter((route) => {
     if (!route.headers?.["content-security-policy"]) return true;
@@ -81,7 +88,7 @@ export function collapseCspRoutes(json) {
   });
 
   json.routes.unshift({
-    src: "/(.*)",
+    src: CSP_CATCH_ALL_SRC,
     headers: { "content-security-policy": csp },
     continue: true,
   });
@@ -89,16 +96,14 @@ export function collapseCspRoutes(json) {
   return { changed: true, reason: "collapsed", cspCount: cspValues.length };
 }
 
-function isMain() {
-  const entry = process.argv[1];
-  if (!entry) return false;
-  return path.resolve(entry) === fileURLToPath(import.meta.url);
-}
-
-function main() {
+/**
+ * Rewrite `.vercel/output/config.json` when it exists. Safe to call from the
+ * Vercel adapter wrap (after `astro:build:done`) and from `pnpm build`.
+ */
+export function collapseCspConfigFile() {
   if (!fs.existsSync(CONFIG_PATH)) {
     console.log(`[collapse-csp] ${CONFIG_PATH} not found; skipping (node adapter build).`);
-    return;
+    return { changed: false, reason: "missing-file" };
   }
 
   const json = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8"));
@@ -108,20 +113,27 @@ function main() {
     console.warn(
       `[collapse-csp] ${result.cspCount} CSP routes have more than one distinct policy; leaving per-route headers in place.`,
     );
-    return;
+    return result;
   }
 
   if (!result.changed) {
     console.log(`[collapse-csp] nothing to change (${result.reason}).`);
-    return;
+    return result;
   }
 
   fs.writeFileSync(CONFIG_PATH, `${JSON.stringify(json, null, 2)}\n`);
   console.log(
-    `[collapse-csp] collapsed ${result.cspCount} per-route CSP headers into one global /(.*) route.`,
+    `[collapse-csp] collapsed ${result.cspCount} per-route CSP headers into one global ${CSP_CATCH_ALL_SRC} route.`,
   );
+  return result;
+}
+
+function isMain() {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  return path.resolve(entry) === fileURLToPath(import.meta.url);
 }
 
 if (isMain()) {
-  main();
+  collapseCspConfigFile();
 }

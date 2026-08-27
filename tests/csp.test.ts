@@ -3,14 +3,8 @@
  * Starlight's sidebar restore, gtag, and Mermaid in production:
  *
  * browsers ignore `'unsafe-inline'` when a hash is present in the same
- * directive. Astro 7.2.5+ omits hashes for directives that list
- * `'unsafe-inline'`, which this site relies on for `is:inline` scripts and
- * runtime-injected styles.
- *
- * A second failure mode is Vercel rejecting the deploy when
- * `@astrojs/vercel` writes one CSP route per page and `.vercel/output/config.json`
- * exceeds ~3300kb. `scripts/collapse-csp.mjs` folds those identical headers
- * into a single catch-all route.
+ * directive. Astro 7.2.0 injects those hashes, so this site ships a hash-free
+ * HTTP policy from `vercel.json` (`serializeCspHeader`) instead of Astro CSP.
  */
 
 import { existsSync, readFileSync } from "node:fs";

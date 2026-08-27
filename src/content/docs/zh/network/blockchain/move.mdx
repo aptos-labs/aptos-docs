@@ -1,56 +1,59 @@
 ---
 title: "Move：Web3 语言与运行时"
-description: "探索 Aptos 上的 Move 编程语言、安全特性、与其他 VM 的比较，以及构建安全 Web3 应用的独特能力。"
+description: "探索 Aptos 上的 Move：资源安全、与其他 VM 的比较，以及对象、Block-STM 和同质化资产等 Aptos 特有功能。"
 sidebar:
   label: "Move 语言"
 ---
 
-Aptos 区块链由运行共识协议的验证者节点组成。共识协议就交易排序以及交易在 Move 虚拟机（MoveVM）上执行后的输出达成一致。每个验证者节点将交易和当前账本状态作为输入传入虚拟机；MoveVM 处理输入并输出变更集或存储增量。共识达成一致并提交输出后，结果便公开可见。本指南将介绍 Move 的核心概念及其在 Aptos 开发中的应用。
+Aptos 区块链由运行共识协议的验证者节点组成。共识就交易顺序以及交易在 Move 虚拟机（MoveVM）上执行后的输出达成一致。每个验证者将当前账本状态和区块输入虚拟机；MoveVM 产生变更集（存储增量）。共识提交该输出后，结果便公开可见。本页介绍 Move 的核心概念及其在 Aptos 上的应用。
 
 ## 什么是 Move？
 
-Move 是一门安全可靠的 Web3 编程语言，强调**稀缺性**和**访问控制**。Move 中的任何资产都可以由或存储于 _resource_。默认情况下会强制执行**稀缺性**，因为 struct 不会被意外复制或丢弃。只有在字节码层显式定义为 _copy_ 的 struct 才能复制，显式定义为 _drop_ 的 struct 才能丢弃。
+Move 是一门强调**稀缺性**和**访问控制**的 Web3 编程语言。资产由或存储于 _resource_ 中。**稀缺性**是默认行为：除非字节码显式授予 `copy` 或 `drop` 能力，struct 不能被复制或丢弃。
 
-**访问控制**来自账户概念和模块访问权限。Move 模块可以是库，也可以是创建、存储或转移资产的程序。Move 确保只有 public 模块函数可被其他模块访问。除非 struct 有 public 构造函数，否则只能在定义它的模块内构造。类似地，struct 字段只能在其模块内，或通过 public 访问器和 setter 访问和修改。使用 _key_ 定义的 struct 只能在定义它的模块中存储至全局存储并从中读取。具有 _store_ 的 struct 可在定义该 struct 的模块内外，存储于另一个 _store_ 或 _key_ struct 中。
+**访问控制**来自账户和模块可见性。模块是可以创建、存储或转移资产的库或程序。只有 `public`（以及 `public(friend)`）函数可被其他模块调用。除非 struct 有 public 构造函数，否则只有定义它的模块能创建它。字段只能在该模块内，或通过 public 访问器读写。带 `key` 的 struct 只能从定义它的模块进入全局存储。带 `store` 的 struct 可以放在另一个 `store` 或 `key` 值中，包括定义模块之外。
 
-在 Move 中，交易发送者由 _signer_ 表示，它是特定账户的经验证所有者。signer 拥有 Move 中最高级别的权限，是唯一能向账户添加资源的实体。模块开发者还可要求 signer 存在，才允许访问资源或修改账户中存储的资产。
+交易发送者是 _signer_，即账户的经验证所有者。signer 拥有 Move 中最高权限，是唯一能向账户发布资源的实体。模块作者也可以要求 signer 才能读取或更新账户下的资产。
 
 ## 与其他 VM 的比较
 
-|          | Aptos / Move                           | Solana / SeaLevel | EVM            | Sui / Move    |
-| -------- | -------------------------------------- | ----------------- | -------------- | ------------- |
-| 数据存储     | 存储在全局地址或所有者账户中                         | 存储在与程序关联的所有者账户中   | 存储在与智能合约关联的账户中 | 存储在全局地址       |
-| 并行化      | 运行时推断并行化                               | 要求指定所访问的所有数据      | 当前为串行          | 要求指定所访问的所有数据  |
-| 交易安全     | 序列号                                    | 交易唯一性             | nonce，类似序列号    | 交易唯一性         |
-| 类型安全     | 模块 struct 和泛型                          | 程序 struct         | 合约类型           | 模块 struct 和泛型 |
-| 函数调用     | 静态分派                                   | 静态分派              | 动态分派           | 静态分派          |
-| 已认证存储    | [是](/zh/network/glossary#merkle-trees) | 否                 | 是              | 否             |
-| 对象全局可访问性 | 是                                      | 不适用               | 不适用            | 否，可放入其他对象     |
+|          | Aptos / Move                                                                                | Solana / SeaLevel | EVM      | Sui / Move    |
+| -------- | ------------------------------------------------------------------------------------------- | ----------------- | -------- | ------------- |
+| 数据存储     | 存储在全局地址或所有者账户中                                                                              | 存储在与程序关联的所有者账户中   | 存储在合约账户中 | 存储在全局地址       |
+| 并行化      | 运行时由 [Block-STM](/zh/network/blockchain/execution) 推断                                       | 要求指定所访问的所有数据      | 通常为串行    | 要求指定所访问的所有数据  |
+| 交易安全     | 序列号或[无序交易 nonce](/zh/build/guides/orderless-transactions)                                   | 交易唯一性             | nonce    | 交易唯一性         |
+| 类型安全     | 模块 struct 和泛型                                                                               | 程序 struct         | 合约类型     | 模块 struct 和泛型 |
+| 函数调用     | 静态分派，以及 [函数值](/zh/build/smart-contracts/move-security-guidelines#function-values)（Move 2.2） | 静态分派              | 动态分派     | 静态分派          |
+| 已认证存储    | [是](/zh/network/glossary#merkle-trees)                                                      | 否                 | 是        | 否             |
+| 对象全局可访问性 | 是                                                                                           | 不适用               | 不适用      | 否；对象可嵌套在其他对象中 |
 
 ## Aptos Move 功能
 
-每个 MoveVM 部署都能通过适配器层以附加功能扩展核心 MoveVM。此外，MoveVM 有支持标准操作的框架，类似于计算机拥有操作系统。
+每个 MoveVM 部署都可通过适配器扩展核心 Move。Aptos 还提供一组框架模块，类似于 CPU 上的操作系统。
 
-Aptos Move 适配器功能包括：
+Aptos Move 适配器包括：
 
-- [Move 对象](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-10.md)：提供可扩展的编程模型，可全局访问存储在链上单个地址的一组异构资源。
-- 用于构建可扩展、保护隐私 dApp 的[密码学原语](/zh/build/smart-contracts/cryptography)。
-- [资源账户](/zh/build/smart-contracts/resource-accounts)：提供链上可编程账户，可用于 DAO、共享账户或构建复杂链上应用。
-- [表](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-stdlib/sources/table.move)：用于在账户中大规模存储键值数据。
-- 通过 [Block-STM](https://medium.com/aptoslabs/block-stm-how-we-execute-over-160k-transactions-per-second-on-the-aptos-blockchain-3b003657e4ba) 实现并行化，无需用户输入即可并发执行交易。
-- 多代理框架，使单笔交易能携带多个不同的 signer 实体提交。
+- [Move 对象](/zh/build/smart-contracts/objects) — 在一个链上地址存放一组异构资源的可扩展模型（[AIP-10](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-10.md)）。
+- 用于构建可扩展、保护隐私应用的[密码学原语](/zh/build/smart-contracts/cryptography)。
+- [资源账户](/zh/build/smart-contracts/resource-accounts) — 没有交互式私钥的可编程账户，用于 DAO、共享账户和应用自有模块。
+- [表](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-stdlib/sources/table.move)，用于在账户下大规模存储键值数据。
+- 通过 [Block-STM](/zh/network/blockchain/execution) 并行执行，无需声明访问列表。
+- 多代理交易，使一笔交易可携带多个不同的 `signer`。
+- [函数值](/zh/build/smart-contracts/move-security-guidelines#function-values)（Move 2.2），即一等函数，使用时须遵守重入规则。
+- [链上随机数](/zh/build/smart-contracts/randomness)，在 Move 中提供不可偏置的随机值。
 
-Aptos 框架提供许多有用的库：
+Aptos 框架包括：
 
-- [Aptos 代币对象](https://github.com/aptos-labs/aptos-core/tree/main/aptos-move/framework/aptos-token-objects/sources)标准：由 [AIP-11](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-11.md) 和 [AIP-22](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-22.md) 定义，可创建可互操作 NFT。
-- [Coin 标准](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/coin.move)：通过发布简单模块创建类型安全 Coin。
-- [同质化资产标准](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/fungible_asset.move)：由 [AIP-21](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-21.md) 定义，以更好的可编程性和控制现代化 Coin 概念。
-- [质押](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/staking_contract.move)和[委托](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/delegation_pool.move)框架。
-- type\_of 服务，用于在运行时识别给定类型的地址、模块和 struct 名称。
-- [时间戳服务](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/timestamp.move)，提供映射到实际当前 Unix 时间的单调递增时钟。
-
-这些功能会频繁更新。
+- [同质化资产标准](/zh/build/smart-contracts/fungible-asset)（[AIP-21](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-21.md)）— 当前代币模型。新资产应优先使用它。
+- [Coin 标准](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/coin.move) — 较早的类型参数代币模型。视为遗留；APT 在底层仍使用 Coin，并配对同质化资产表示。
+- [Aptos 数字资产（代币对象）](/zh/build/smart-contracts/digital-asset)，由 [AIP-11](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-11.md) 和 [AIP-22](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-22.md) 定义。
+- [质押](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/staking_contract.move)和[委托](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/delegation_pool.move)。
+- [`type_of`](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-stdlib/sources/type_info.move)，用于在运行时查看类型的地址、模块和 struct 名称。
+- [时间戳服务](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/timestamp.move)，提供单调递增的 Unix 时间。
 
 ## 更多资源
 
-开发者可前往我们的 [Move 开发者页面](/zh/network/blockchain/move)开始学习之旅。
+- [智能合约概览](/zh/build/smart-contracts) — Aptos 上的 Move、编译器和框架
+- [Move Book](https://aptos-labs.github.io/move-book/) — 语言参考
+- [Framework Book](https://aptos-labs.github.io/framework-book/) — `0x1` 模块的生成文档
+- [账户](/zh/network/blockchain/accounts)和[资源](/zh/network/blockchain/resources) — Move 状态如何存储

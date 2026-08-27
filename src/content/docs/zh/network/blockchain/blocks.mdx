@@ -1,21 +1,40 @@
 ---
 title: "区块"
-description: "了解 Aptos 上的区块，包括其在版本化数据库中的作用、系统交易、纪元以及区块如何组织区块链数据。"
+description: "了解 Aptos 上的区块，包括系统交易、区块收尾、纪元，以及版本化账本如何按交易存储状态。"
 sidebar:
   label: "区块"
 ---
 
-Aptos 是一个按交易进行版本化的数据库。交易执行后，每笔交易产生的状态都会单独存储，因此可以更细粒度地访问数据。这不同于其他区块链：后者通常只存储一个区块（一组交易）的最终状态。
+Aptos 按**交易**而非按区块为账本状态编号。执行后，每笔交易产生的状态都会单独存储，因此客户端可以读取并证明单个版本。这不同于只持久化区块结束后状态的链。
 
-区块仍然是 Aptos 的基本单位。交易会在一个区块中批量执行。此外，存储中的[证明](/zh/network/blockchain/txns-states#证明)以区块级粒度组织。区块内的交易数量随网络活动和可配置的最大区块大小限制而变化。随着区块链日益繁忙，区块可能包含更多交易。
+区块仍是共识和证明的单位。验证者就一批有序交易达成一致，用 [Block-STM](/zh/network/blockchain/execution) 执行该批次，并持久化结果。存储中的[证明](/zh/network/blockchain/txns-states#证明)以区块为粒度。一个区块包含多少用户交易，取决于网络活动以及链上限制（gas、输出大小和最大区块大小）。
+
+出块不是固定槽位时间。Aptos 在网络时延允许时就会提议下一个区块。主网出块时间通常为数十毫秒；可在 [Explorer](https://explorer.aptoslabs.com/blocks?network=mainnet) 查看实时时间戳。
+
+从提交到确认的完整路径见 [Aptos 区块链深入解析](/zh/network/blockchain/blockchain-deep-dive)。
 
 ## 系统交易
 
-每个 Aptos 区块同时包含用户交易和特殊系统交易，用于**标记**交易批次的开始和结束。具体而言，有两种系统交易：
+区块不止用户交易。共识会插入系统交易来标记批次，并在某些情况下携带协议数据：
 
-1. `BlockMetadataTransaction`：插入在区块开头。`BlockMetadata` 交易也可以标记一个[纪元](#纪元)的结束，并触发向验证者分配奖励。
-2. `StateCheckpointTransaction`：附加在区块末尾，用作检查点里程碑。
+1. **`BlockMetadataTransaction`** — 区块中的第一笔交易。记录提议者、时间戳和轮次。在纪元边界还可以触发验证者集合变更和奖励分配。
+2. **`ValidatorTransaction`** — 可选的验证者协议负载，例如 JWK 更新或随机数（DKG）材料。不是用户提交的。
+3. **用户交易** — 来自账户的已签名交易。见[交易和状态](/zh/network/blockchain/txns-states)。
+4. **`BlockEpilogueTransaction`** — 通常是区块中的最后一笔交易。携带 `BlockEndInfo`（区块是否触及 gas 或输出限制，以及大致用量）。由 [AIP-88](/zh/build/aips/aip-88) 引入，取代了此前作为区块结束标记的 `StateCheckpointTransaction`。
+
+一个[纪元](#纪元)的最后一个区块没有 `BlockEpilogueTransaction`。若索引器或浏览器假定每个区块都以 `StateCheckpoint` 结束，需要改为处理 `block_epilogue_transaction`。
+
+典型的主网区块如下：
+
+```text
+BlockMetadataTransaction
+[ValidatorTransaction ...]   // 可选
+[user transactions ...]
+BlockEpilogueTransaction     // 纪元最后一个区块会省略
+```
 
 ## 纪元
 
-在 Aptos 中，纪元代表较长的一段时间，用于安全地同步验证者集合增减等重大变更。一个纪元为固定时长，目前 Mainnet 上定义为两小时。纪元中的区块数量取决于在这段时间内可执行多少区块。验证者集合新增验证者等重大变化，只有在新纪元开始时才会对验证者生效。
+**纪元**是用于应用验证者集合变更、重新分配投票权并支付质押奖励的较长间隔。主网、测试网和开发网的纪元均为**两小时**（7200 秒）。一个纪元中的区块数量，就是该窗口内网络实际产出的区块数。
+
+重大配置变更——例如验证者加入或离开集合——只在下一纪元开始时生效。纪元触发器见[质押](/zh/network/blockchain/staking#epoch)。

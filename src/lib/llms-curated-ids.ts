@@ -28,6 +28,17 @@ export const LLMS_INDEX_SECTIONS: LlmsSection[] = [
     ],
   },
   {
+    title: "Concepts",
+    ids: [
+      "network/blockchain",
+      "network/blockchain/move",
+      "network/blockchain/execution",
+      "network/blockchain/blocks",
+      "network/blockchain/gas-txn-fee",
+      "network/blockchain/staking",
+    ],
+  },
+  {
     title: "Smart Contracts",
     ids: [
       "build/smart-contracts",
@@ -109,6 +120,7 @@ export const FULL_PRIORITY_DOC_IDS = [
   "build/guides/first-move-module",
   "network/blockchain/accounts",
   "network/blockchain/txns-states",
+  "network/blockchain",
   "build/sdks",
   "build/apis",
   "build/guides/exchanges",

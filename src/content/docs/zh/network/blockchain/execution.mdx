@@ -1,46 +1,62 @@
 ---
 title: "执行"
-description: "探索 Aptos 上的交易执行，包括确定性处理、使用 Block-STM 的并行执行，以及实现高吞吐量的性能优化。"
+description: "探索 Aptos 上的交易执行，包括确定性处理、Block-STM 并行执行，以及为何这能保持较短出块时间。"
 sidebar:
   label: "执行"
 ---
 
-在 Aptos 中，执行是指验证者运行并应用有序区块中的智能合约交易的过程。执行输出随后会应用到区块链状态。
+在 Aptos 上，**执行**是验证者将有序交易区块应用到账本状态的步骤。输出必须是[确定性的](https://en.wikipedia.org/wiki/Deterministic_algorithm)：从同一状态和同一区块出发的诚实验证者必须产生相同的写集。
 
-执行必须是[确定性的](https://en.wikipedia.org/wiki/Deterministic_algorithm)，所有验证者理想情况下都应就账本的同一最终状态达成一致。多数验证者（超过三分之二）必须同意账本最终状态，才能达成共识。有关共识属性的更多详情，请参阅[拜占庭容错（BFT）](/zh/network/glossary#byzantine-fault-tolerance-bft)和[共识](/zh/network/glossary#consensus)部分。
+超过三分之二的投票权必须对该结果达成一致，区块才能提交。参见 [BFT](/zh/network/glossary#拜占庭容错bft) 和[共识](/zh/network/glossary#共识)。
 
-高效执行，尤其是并行执行，是扩展区块链性能和吞吐量的关键，其影响体现在区块时间上。截至 2024 年 12 月，Aptos 区块会在 250 毫秒内关闭。
+执行速度体现为出块时间。Aptos 不等待固定槽位时钟；网络允许时就会提议下一个区块。主网出块时间通常为数十毫秒。参见[区块](/zh/network/blockchain/blocks)。
 
-## 为什么需要并行执行？
+## 为何需要并行执行？
 
-![](https://miro.medium.com/v2/resize:fit:4800/format:webp/0*qG0KRe1KzsP8Odth)
+```mermaid
+flowchart TB
+  subgraph sequential [顺序执行]
+    direction LR
+    S1[交易 1] --> S2[交易 2] --> S3[交易 3]
+  end
+  subgraph staticp [静态并行]
+    direction LR
+    D1[声明访问列表] --> D2[调度互不重叠的交易]
+  end
+  subgraph dynamicp [动态并行]
+    direction LR
+    P1[推测执行] --> P2[检测冲突] --> P3[按预设顺序重执行]
+  end
+```
 
-最简单的智能合约执行方式是按顺序逐笔执行区块中的交易，但这种方式难以扩展。大量顺序交易，特别是执行时间不同的交易，会导致区块链延迟和吞吐量大幅下降。
+按顺序逐笔执行区块很简单，但无法扩展。耗时长的交易会堵住后面的所有交易，负载升高时延迟上升、吞吐下降。
 
-为解决此问题，区块链开始采用并行执行，即并行处理多笔交易的能力。不过，并行执行面临的挑战是某些交易可能读取或写入同一资源，从而产生冲突。
+并行执行同时运行多笔交易。难点是冲突：读写同一资源的两笔交易，不能按错误顺序各自单独提交。
 
-### 静态并行化
+### 静态并行
 
-解决并行执行冲突问题的一种方法是**静态并行化**，要求开发者预先指定交易之间的冲突。但这会加重开发者负担，并且在许多情况下会迫使实际上并不冲突的交易按顺序执行。
+**静态并行**要求开发者（或运行时根据注解）声明每笔交易将访问哪些数据。调度器随后并行运行互不重叠的交易。
 
-### 动态并行化
+这把负担转给了应用作者。声明的集合往往宽于交易实际使用的数据，于是本可并行的工作被强制串行。
 
-**动态并行化**会即时计算交易执行顺序，在执行期间动态检测依赖关系并避免冲突。区块链动态并行化的另一重要属性是：执行输出应与按预设顺序执行交易时保持一致。
+### 动态并行
 
-动态并行化无需开发者预先指定冲突，因此开发者可以灵活编写应用，不受静态声明交易依赖关系的设计限制。
+**动态并行**在运行时发现冲突。交易先推测执行；若两笔冲突，引擎重执行较后的一笔。已提交结果仍必须与按**预设共识顺序**执行该区块一致。
+
+开发者不必声明访问列表。他们编写普通 Move，引擎会并行化互不冲突的部分。
 
 ## Block-STM
 
-Aptos 使用名为 Block-STM 的高效多线程内存中并行执行引擎。Block-STM 利用交易的预设顺序，将软件事务内存技术与新颖的协作调度相结合。
+Aptos 用 **Block-STM** 执行区块。这是一个多线程、内存中的引擎，将软件事务内存与协作式调度器结合。它以共识顺序为串行基准，并行执行交易，并只重执行因冲突而中止的交易。
 
-Block-STM 是 Aptos Labs 团队开发的先进动态并行执行引擎。
-
-自发布以来，[Polygon](https://polygon.technology/blog/innovating-the-main-chain-a-polygon-pos-study-in-parallelization)、Sei、[Starknet](https://www.starknet.io/blog/parallel-execution-and-v0-13-2/) 等区块链已采用它来实现各自链上的并行执行。
+Block-STM 是 Aptos Labs 最初构建的动态并行引擎。[Polygon](https://polygon.technology/blog/innovating-the-main-chain-a-polygon-pos-study-in-parallelization)、Sei、[Starknet](https://www.starknet.io/blog/parallel-execution-and-v0-13-2/) 等链也采用了相同思路。
 
 了解更多：
 
-- [Block-STM 博客文章](https://medium.com/aptoslabs/block-stm-how-we-execute-over-160k-transactions-per-second-on-the-aptos-blockchain-3b003657e4ba)
+- [Block-STM 博文](https://medium.com/aptoslabs/block-stm-how-we-execute-over-160k-transactions-per-second-on-the-aptos-blockchain-3b003657e4ba)
 - [Block-STM 论文](https://arxiv.org/pdf/2203.06871)
 - [a16z crypto 研究演讲](https://www.youtube.com/watch?v=2SE5tqPzhyw)
-- [Stark Spaces | Block-STM 和 Starknet](https://www.youtube.com/watch?v=y1kXOi39RX0)
-- [Block-STM：加速智能合约处理](https://blog.chain.link/block-stm/)
+- [Stark Spaces | Block-STM and Starknet](https://www.youtube.com/watch?v=y1kXOi39RX0)
+- [Block-STM: Accelerating Smart-Contract Processing](https://blog.chain.link/block-stm/)
+- [交易和状态](/zh/network/blockchain/txns-states) — 执行如何写入版本化账本状态
+- [计算交易 Gas](/zh/network/blockchain/base-gas) — 如何计量执行和 IO

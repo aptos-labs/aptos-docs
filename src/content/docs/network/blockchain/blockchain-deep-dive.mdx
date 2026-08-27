@@ -14,8 +14,8 @@ For a deeper understanding of the lifecycle of an Aptos transaction (from an ope
 - Alice and Bob are two users who each have an [account](/network/glossary#account) on the Aptos blockchain.
 - Alice's account has 110 Aptos Coins.
 - Alice is sending 10 Aptos Coins to Bob.
-- The current [sequence number](/network/glossary#sequence-number) of Alice's account is 5 (which indicates that 5 transactions have already been sent from Alice's account).
-- There are a total of 100 validator nodes — V<sub>1</sub> to V<sub>100</sub> on the network.
+- The current [sequence number](/network/glossary#sequence-number) of Alice's account is 5 (which indicates that 5 sequenced transactions have already been sent from Alice's account). This example uses a sequenced transaction. [Orderless transactions](/build/guides/orderless-transactions) use a nonce instead.
+- There are many validator nodes on the network (the live count is on [Explorer](https://explorer.aptoslabs.com/validators?network=mainnet)).
 - An Aptos client submits Alice's transaction to a REST service on an Aptos Fullnode. The fullnode forwards this transaction to a validator fullnode which in turn forwards it to validator V<sub>1</sub>.
 - Validator V<sub>1</sub> is a proposer/leader for the current round.
 
@@ -41,17 +41,20 @@ graph LR
     subgraph Validators
         direction TB
         Mempool[Mempool]
+        QuorumStore[Quorum Store]
         Consensus[Consensus]
         Consensus -->|7, 9| Execution
         Execution -->|11| Storage
         Execution -->|8| Virtual_Machine(Virtual Machine)
         Mempool --> Virtual_Machine
+        Mempool --> QuorumStore
+        QuorumStore --> Consensus
         Virtual_Machine --> Storage
     end
 
     Other_Validators <-->|6, 10| Consensus
     REST_Service -->|2, 3| Mempool
-    Mempool <-->|4| Other_Validators(Other Validators)
+    QuorumStore <-->|4| Other_Validators(Other Validators)
     Consensus -->|5| Mempool
 ```
 
@@ -89,15 +92,15 @@ An Aptos **client constructs a raw transaction** (let's call it Traw<sub>5</sub>
 
 The raw transaction includes the following fields:
 
-| Fields                                                                               | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [Account address](/network/glossary#account-address)                                 | Alice's account address                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| Payload                                                                              | Indicates an action or set of actions Alice's behalf. In the case this is a Move function, it directly calls into Move bytecode on the chain. Alternatively, it may be Move bytecode peer-to-peer [transaction script](/network/glossary#transaction-script). It also contains a list of inputs to the function or script. For this example, it is a function call to transfer an amount of Aptos Coins from Alice account to Bob's account, where Alice's account is implied by sending the transaction and Bob's account and the amount are specified as transaction inputs. |
-| [Gas unit price](/network/glossary#gas-unit-price)                                   | The amount the sender is willing to pay per unit of gas, to execute the transaction. This is represented in [Octas](/network/glossary#octa).                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| [Maximum gas amount](/network/glossary#maximum-gas-amount)                           | The maximum gas amount in APT Alice is willing to pay for this transaction. Gas charges are equal to the base gas cost covered by computation and IO multiplied by the gas price. Gas costs also include storage with an Apt-fixed priced storage model. This is represented in [Octas](/network/glossary#octa).                                                                                                                                                                                                                                                               |
-| [Expiration time](/network/glossary#expiration-time)                                 | Expiration time of the transaction.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| [Sequence number](/network/glossary#sequence-number)                                 | The sequence number (5, in this example) for an account indicates the number of transactions that have been submitted and committed on-chain from that account. In this case, 5 transactions have been submitted from Alice’s account, including Traw<sub>5</sub>. Note: a transaction with sequence number 5 can only be committed on-chain if the account sequence number is 5.                                                                                                                                                                                              |
-| [Chain ID](https://github.com/aptos-labs/aptos-core/blob/main/types/src/chain_id.rs) | An identifier that distinguishes the Aptos networks (to prevent cross-network attacks).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| Fields                                                                               | Description                                                                                                                                                                                                                                                                                                      |
+| ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Account address](/network/glossary#account-address)                                 | Alice's account address                                                                                                                                                                                                                                                                                          |
+| Payload                                                                              | Indicates an action or set of actions on Alice's behalf. Typically this is a Move entry function with inputs; it can also be a [transaction script](/network/glossary#transaction-script). In this example, Alice transfers APT to Bob.                                                                          |
+| [Gas unit price](/network/glossary#gas-unit-price)                                   | The amount the sender is willing to pay per unit of gas, to execute the transaction. This is represented in [Octas](/network/glossary#octa).                                                                                                                                                                     |
+| [Maximum gas amount](/network/glossary#maximum-gas-amount)                           | The maximum gas amount in APT Alice is willing to pay for this transaction. Gas charges are equal to the base gas cost covered by computation and IO multiplied by the gas price. Gas costs also include storage with an APT-fixed priced storage model. This is represented in [Octas](/network/glossary#octa). |
+| [Expiration time](/network/glossary#expiration-time)                                 | Expiration time of the transaction.                                                                                                                                                                                                                                                                              |
+| [Sequence number](/network/glossary#sequence-number)                                 | For this sequenced example, 5. A sequenced transaction with sequence number 5 can commit only if the account sequence number is 5. [Orderless transactions](/build/guides/orderless-transactions) use a nonce instead and set this field to `u64::MAX`.                                                          |
+| [Chain ID](https://github.com/aptos-labs/aptos-core/blob/main/types/src/chain_id.rs) | An identifier that distinguishes the Aptos networks (to prevent cross-network attacks).                                                                                                                                                                                                                          |
 
 ### Accepting the transaction
 
@@ -105,21 +108,21 @@ The raw transaction includes the following fields:
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
 | 1. **Client → REST service**: The client submits transaction T<sub>5</sub> to the REST service of an Aptos fullnode. The fullnode uses the REST service to forward the transaction to its own mempool, which then forwards the transaction to mempools running on other nodes in the network. The transaction will eventually be forwarded to a mempool running on a validator fullnode, which will send it to a validator node (V<sub>1</sub> in this case). | [1. REST Service](#1-client--rest-service)                                          |
 | 2. **REST service → Mempool**: The fullnode's mempool transmits transaction T<sub>5</sub> to validator V<sub>1</sub>'s mempool.                                                                                                                                                                                                                                                                                                                               | [2. REST Service](#2-rest-service--mempool), [1. Mempool](#1-rest-service--mempool) |
-| 3. **Mempool → Virtual Machine (VM)**: Mempool will use the virtual machine (VM) component to perform transaction validation, such as signature verification, account balance verification and replay resistance using the sequence number.                                                                                                                                                                                                                   | [4. Mempool](#4-mempool--vm), [3. Virtual Machine](#3-mempool--virtual-machine)     |
+| 3. **Mempool → Virtual Machine (VM)**: Mempool will use the virtual machine (VM) component to perform transaction validation, such as signature verification, account balance verification, and replay resistance using the sequence number or an orderless nonce.                                                                                                                                                                                            | [4. Mempool](#4-mempool--vm), [3. Virtual Machine](#3-mempool--virtual-machine)     |
 
 ### Sharing the transaction with other validator nodes
 
-| Description                                                                                                                                                                                                                                                         | Aptos Node Component Interactions               |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| 4. **Mempool**: The mempool will hold T<sub>5</sub> in an in-memory buffer. Mempool may already contain multiple transactions sent from Alice's address.                                                                                                            | [Mempool](#mempool)                             |
-| 5. **Mempool → Other Validators**: Using the shared-mempool protocol, V<sub>1</sub> will share the transactions (including T<sub>5</sub>) in its mempool with other validator nodes and place transactions received from them into its own (V<sub>1</sub>) mempool. | [2. Mempool](#2-mempool--other-validator-nodes) |
+| Description                                                                                                                                                                                                                                                                                                                  | Aptos Node Component Interactions               |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| 4. **Mempool**: The mempool will hold T<sub>5</sub> in an in-memory buffer. Mempool may already contain multiple transactions sent from Alice's address.                                                                                                                                                                     | [Mempool](#mempool)                             |
+| 5. **Quorum Store → Other Validators**: [Quorum Store](/network/glossary#quorum-store) batches transactions (including T<sub>5</sub>) and disseminates those batches to the validator set so data is available before the leader proposes a block. Shared mempool still moves transactions from fullnodes toward validators. | [2. Mempool](#2-mempool--other-validator-nodes) |
 
 ### Proposing the block
 
-| Description                                                                                                                                                                                                                                            | Aptos Node Component Interactions                                          |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
-| 6. **Consensus → Mempool**: — As validator V<sub>1</sub> is a proposer/leader for this transaction, it will pull a block of transactions from its mempool and replicate this block as a proposal to other validator nodes via its consensus component. | [1. Consensus](#1-consensus--mempool), [3. Mempool](#3-consensus--mempool) |
-| 7. **Consensus → Other Validators**: The consensus component of V<sub>1</sub> is responsible for coordinating agreement among all validators on the order of transactions in the proposed block.                                                       | [2. Consensus](#2-consensus--other-validators)                             |
+| Description                                                                                                                                                                                                                                          | Aptos Node Component Interactions                                          |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| 6. **Consensus → Mempool / Quorum Store**: — As validator V<sub>1</sub> is a proposer/leader for this transaction, it pulls certified batches and forms a block, then replicates this proposal to other validator nodes via its consensus component. | [1. Consensus](#1-consensus--mempool), [3. Mempool](#3-consensus--mempool) |
+| 7. **Consensus → Other Validators**: The consensus component of V<sub>1</sub> is responsible for coordinating agreement among all validators on the order of transactions in the proposed block.                                                     | [2. Consensus](#2-consensus--other-validators)                             |
 
 ### Executing the block and reaching consensus
 
@@ -224,7 +227,7 @@ It is important to understand that executing a transaction is different from upd
 
 When mempool receives a transaction from other validators via shared mempool or from the REST service, mempool invokes `VMValidator::validate_transaction()` on the VM to validate the transaction.
 
-For implementation details refer to the [Move Virtual Machine README](https://github.com/move-language/move/tree/main/language/move-vm).
+For implementation details refer to the [Move VM in aptos-core](https://github.com/aptos-labs/aptos-core/tree/main/third_party/move/move-vm).
 
 ## Mempool
 
@@ -244,7 +247,7 @@ graph LR
     Mempool -->|4| Virtual_Machine
 ```
 
-Mempool is a shared buffer that holds the transactions that are "waiting" to be executed. When a new transaction is added to the mempool, the mempool shares this transaction with other validator nodes in the system. To reduce network consumption in the "shared mempool," each validator is responsible for delivering its own transactions to other validators. When a validator receives a transaction from the mempool of another validator, the transaction is added to the mempool of the recipient validator.
+Mempool is a shared buffer that holds the transactions that are "waiting" to be executed. After a transaction is admitted, [Quorum Store](/network/glossary#quorum-store) disseminates it in batches to other validators so the leader's proposal can reference certified data instead of carrying every raw transaction. Shared mempool still forwards user transactions from fullnodes toward the validator set.
 
 ### 1. REST Service → Mempool
 
@@ -357,9 +360,9 @@ When the consensus component calls `BlockExecutorTrait::execute_block()`, execut
 
 ### 3. Execution → Storage
 
-Once consensus is reached on a block of transactions, execution calls storage via `DbWriter::save_transactions()` to save the block of transactions and permanently record them. This will also store the signatures from the validator nodes that agreed on this block of transactions. The in-memory data in "scratchpad" for this block is passed to update storage and persist the transactions. When the storage is updated, every account that was modified by these transactions will have its sequence number incremented by one.
+Once consensus is reached on a block of transactions, execution calls storage via `DbWriter::save_transactions()` to save the block of transactions and permanently record them. This will also store the signatures from the validator nodes that agreed on this block of transactions. The in-memory data in "scratchpad" for this block is passed to update storage and persist the transactions. When the storage is updated, every account that sent a **sequenced** transaction in the block has its sequence number incremented by one. [Orderless transactions](/build/guides/orderless-transactions) do not change the sender's sequence number.
 
-Note: The sequence number of an account on the Aptos blockchain increments by one for each committed transaction originating from that account.
+Note: For sequenced transactions, the sender's sequence number increments by one for each committed transaction from that account. Orderless transactions use a nonce and leave the sequence number unchanged.
 
 ### 4. REST Service → Storage
 

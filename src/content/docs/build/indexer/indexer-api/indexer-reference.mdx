@@ -27,6 +27,8 @@ For common queries, check out the sidebar for examples to work from. When buildi
   Remember to use Ctrl + F to find the table you are interested in! When in doubt, you may also want to query the Hasura tables linked in the [Indexer API Access](/build/indexer/indexer-api) page to see examples of the data inside.
 </Aside>
 
+This page was checked against the mainnet GraphQL schema at `https://api.mainnet.aptoslabs.com/v1/graphql`. New tables such as `public_key_auth_keys`, `current_objects`, and `confidential_asset_activities` are included below.
+
 ## Filtering (with `where` clauses)
 
 To ensure your queries filter data efficiently, check out the available indexes for each table.
@@ -95,7 +97,8 @@ This table shares what chain is currently being queried.
 
 This table shares how current this processor's data is.
 
-gives you latest version processed per “processor”
+This table shares how current this processor's data is. It reports the latest
+version processed per processor.
 
 | Field                        | Type   | Primary Key | Description                                                                              |
 | ---------------------------- | ------ | ----------- | ---------------------------------------------------------------------------------------- |
@@ -447,15 +450,15 @@ This table tracks the current voters of a staking pool.
 
 This table tracks delegated staking events.
 
-| Field                | Type      | Primary Key | Description                                                            |
-| -------------------- | --------- | ----------- | ---------------------------------------------------------------------- |
-| transaction\_version | bigint    |             | Transaction version (identifier) for activity                          |
-| event\_index         | bigint    |             | The index of the event. Ex. 1                                          |
-| delegator\_address   | String    |             | The address of the delegator.                                          |
-| pool\_address        | String    |             | The address of the pool.                                               |
-| event\_type          | String    |             | DistributeRewards, AddStake, UnlikeStake, ReactiveStake, WithdrawStake |
-| amount               | bigint    |             | The amount being staked. Ex. 1000                                      |
-| inserted\_at         | Timestamp |             | The timestamp when the record was inserted.                            |
+| Field                | Type      | Primary Key | Description                                                              |
+| -------------------- | --------- | ----------- | ------------------------------------------------------------------------ |
+| transaction\_version | bigint    |             | Transaction version (identifier) for activity                            |
+| event\_index         | bigint    |             | The index of the event. Ex. 1                                            |
+| delegator\_address   | String    |             | The address of the delegator.                                            |
+| pool\_address        | String    |             | The address of the pool.                                                 |
+| event\_type          | String    |             | DistributeRewards, AddStake, UnlockStake, ReactivateStake, WithdrawStake |
+| amount               | bigint    |             | The amount being staked. Ex. 1000                                        |
+| inserted\_at         | Timestamp |             | The timestamp when the record was inserted.                              |
 
 | Index Name                           | Indexed Columns                                                       |
 | ------------------------------------ | --------------------------------------------------------------------- |
@@ -561,6 +564,203 @@ This table maps tokens, standards, and addresses to human readable names.
 | ans\_v2\_ra\_index             | registered\_address                |
 | ans\_v2\_tn\_index             | token\_name, token\_standard       |
 | current\_ans\_lookup\_v2\_pkey | domain, subdomain, token\_standard |
+
+## Accounts, objects, and signatures
+
+These tables map authentication keys, objects, and transaction signatures. They
+are useful with [stateless accounts](/build/aips/aip-115) and key rotation.
+
+### `public_key_auth_keys`
+
+Maps public keys to authentication keys and whether the public key has been used
+on chain.
+
+| Field                      | Type    | Primary Key | Description                                                 |
+| -------------------------- | ------- | ----------- | ----------------------------------------------------------- |
+| public\_key                | String! | Yes         | Public key bytes as a hex string.                           |
+| public\_key\_type          | String! | Yes         | Key type, for example Ed25519.                              |
+| auth\_key                  | String! |             | Derived authentication key.                                 |
+| account\_public\_key       | String  |             | Account public key when the scheme uses one.                |
+| signature\_type            | String! |             | Signature scheme used with this key.                        |
+| is\_public\_key\_used      | Boolean |             | True if this public key has signed a committed transaction. |
+| last\_transaction\_version | bigint  |             | Last transaction version that updated this row.             |
+
+### `auth_key_account_addresses`
+
+Maps an authentication key to the account addresses that currently use it.
+
+| Field                      | Type    | Primary Key | Description                                     |
+| -------------------------- | ------- | ----------- | ----------------------------------------------- |
+| auth\_key                  | String! | Yes         | Authentication key.                             |
+| account\_address           | String! | Yes         | Account address using this authentication key.  |
+| is\_auth\_key\_used        | Boolean |             | True if this key has been used on chain.        |
+| last\_transaction\_version | bigint  |             | Last transaction version that updated this row. |
+
+### `current_objects`
+
+Current Object model owners and transfer settings (`0x1::object`).
+
+| Field                      | Type    | Primary Key | Description                                     |
+| -------------------------- | ------- | ----------- | ----------------------------------------------- |
+| object\_address            | String! | Yes         | Address of the object.                          |
+| owner\_address             | String! |             | Current owner of the object.                    |
+| state\_key\_hash           | String! |             | State key hash for the object.                  |
+| allow\_ungated\_transfer   | Boolean |             | Whether ungated transfer is allowed.            |
+| is\_deleted                | Boolean |             | True if the object has been deleted.            |
+| last\_guid\_creation\_num  | numeric |             | Last GUID creation number for the object.       |
+| last\_transaction\_version | bigint  |             | Last transaction version that updated this row. |
+
+### `signatures`
+
+Per-signer cryptographic material for committed transactions. Use this to inspect
+multi-agent, fee-payer, and multi-sig signatures.
+
+| Field                      | Type    | Description                                   |
+| -------------------------- | ------- | --------------------------------------------- |
+| transaction\_version       | bigint! | Transaction version.                          |
+| transaction\_block\_height | bigint! | Block height of the transaction.              |
+| signer                     | String! | Signer address.                               |
+| is\_sender\_primary        | Boolean | True if this is the primary sender signature. |
+| type                       | String! | Signature type string.                        |
+| public\_key                | String! | Public key for this signature.                |
+| signature                  | String! | Signature bytes as hex.                       |
+| threshold                  | bigint  | Multi-sig threshold when applicable.          |
+| public\_key\_indices       | jsonb   | Indices of keys that signed, for multi-sig.   |
+| multi\_agent\_index        | bigint  | Index among secondary signers.                |
+| multi\_sig\_index          | bigint  | Index within a multi-sig authenticator.       |
+
+## Confidential assets
+
+### `confidential_asset_activities`
+
+Activity for [confidential assets](/build/smart-contracts/confidential-asset)
+(register, deposit, withdraw, transfer, rollover). Amounts may be encrypted;
+`event_data` holds the raw event payload.
+
+| Field                    | Type      | Primary Key | Description                                                       |
+| ------------------------ | --------- | ----------- | ----------------------------------------------------------------- |
+| transaction\_version     | bigint!   | Yes         | Transaction version.                                              |
+| event\_index             | bigint!   | Yes         | Event index within the transaction.                               |
+| owner\_address           | String!   |             | Account that owns the confidential store.                         |
+| counterparty\_address    | String    |             | Counterparty when the event is a transfer.                        |
+| asset\_type              | String    |             | Fungible asset metadata address.                                  |
+| amount                   | numeric   |             | Amount when the event exposes one; otherwise null.                |
+| event\_type              | String!   |             | Confidential asset event type.                                    |
+| event\_data              | jsonb!    |             | Raw event data, including ciphertexts.                            |
+| event\_data\_version     | String!   |             | Event data schema version.                                        |
+| is\_transaction\_success | Boolean   |             | Whether the transaction succeeded.                                |
+| block\_height            | bigint!   |             | Block height.                                                     |
+| transaction\_timestamp   | timestamp |             | Transaction timestamp.                                            |
+| metadata                 | Join      |             | References [fungible\_asset\_metadata](#fungible_asset_metadata). |
+
+## Governance
+
+### `proposal_votes`
+
+On-chain governance votes from staking pools.
+
+| Field                  | Type      | Primary Key | Description                        |
+| ---------------------- | --------- | ----------- | ---------------------------------- |
+| transaction\_version   | bigint!   | Yes         | Transaction version of the vote.   |
+| proposal\_id           | bigint!   | Yes         | Governance proposal id.            |
+| staking\_pool\_address | String!   |             | Staking pool that voted.           |
+| voter\_address         | String!   |             | Voter address.                     |
+| num\_votes             | numeric!  |             | Voting power applied.              |
+| should\_pass           | Boolean!  |             | True if the vote is in favor.      |
+| transaction\_timestamp | timestamp |             | Timestamp of the vote transaction. |
+
+## Table items
+
+These tables expose raw Move table contents. Prefer product tables (tokens,
+fungible assets) when they cover your use case.
+
+### `table_items`
+
+Historical writes to table items.
+
+| Field                     | Type    | Primary Key | Description                |
+| ------------------------- | ------- | ----------- | -------------------------- |
+| transaction\_version      | bigint! | Yes         | Transaction version.       |
+| write\_set\_change\_index | bigint! | Yes         | Write-set change index.    |
+| table\_handle             | String! |             | Table handle.              |
+| key                       | String! |             | Raw table key.             |
+| decoded\_key              | jsonb!  |             | Decoded key.               |
+| decoded\_value            | jsonb   |             | Decoded value, if present. |
+
+### `current_table_items`
+
+Latest value for each table item.
+
+| Field                      | Type    | Primary Key | Description                        |
+| -------------------------- | ------- | ----------- | ---------------------------------- |
+| table\_handle              | String! | Yes         | Table handle.                      |
+| key\_hash                  | String! | Yes         | Hash of the table key.             |
+| key                        | String! |             | Raw table key.                     |
+| decoded\_key               | jsonb!  |             | Decoded key.                       |
+| decoded\_value             | jsonb   |             | Decoded value, if present.         |
+| is\_deleted                | Boolean |             | True if the item was deleted.      |
+| last\_transaction\_version | bigint  |             | Last updating transaction version. |
+
+### `table_metadatas`
+
+Key and value types for a table handle.
+
+| Field       | Type    | Primary Key | Description          |
+| ----------- | ------- | ----------- | -------------------- |
+| handle      | String! | Yes         | Table handle.        |
+| key\_type   | String! |             | Move type of keys.   |
+| value\_type | String! |             | Move type of values. |
+
+## Token extras
+
+### `current_token_pending_claims`
+
+Outstanding token v1 pending claims (direct-transfer offers).
+
+| Field                      | Type    | Description                        |
+| -------------------------- | ------- | ---------------------------------- |
+| token\_data\_id            | String! | Token data id.                     |
+| from\_address              | String! | Address offering the token.        |
+| to\_address                | String! | Address that can claim the token.  |
+| amount                     | numeric | Amount offered.                    |
+| property\_version          | numeric | Token v1 property version.         |
+| table\_handle              | String! | Pending-claims table handle.       |
+| collection\_id             | String  | Collection id.                     |
+| last\_transaction\_version | bigint  | Last updating transaction version. |
+
+### `current_token_royalty_v1`
+
+Token v1 royalty configuration.
+
+| Field                        | Type    | Primary Key | Description            |
+| ---------------------------- | ------- | ----------- | ---------------------- |
+| token\_data\_id              | String! | Yes         | Token data id.         |
+| payee\_address               | String! |             | Royalty recipient.     |
+| royalty\_points\_numerator   | numeric |             | Royalty numerator.     |
+| royalty\_points\_denominator | numeric |             | Royalty denominator.   |
+| last\_transaction\_version   | bigint  |             | Last updating version. |
+
+## Delegated staking extras
+
+### `delegator_distinct_pool`
+
+Distinct pools a delegator participates in, with current pool metadata.
+
+| Field                   | Type   | Description                                                                                         |
+| ----------------------- | ------ | --------------------------------------------------------------------------------------------------- |
+| delegator\_address      | String | Delegator address.                                                                                  |
+| pool\_address           | String | Delegation pool address.                                                                            |
+| current\_pool\_balance  | Join   | References [current\_delegated\_staking\_pool\_balances](#current_delegated_staking_pool_balances). |
+| staking\_pool\_metadata | Join   | References [current\_staking\_pool\_voter](#current_staking_pool_voter).                            |
+
+### `num_active_delegator_per_pool`
+
+Count of active delegators in each pool.
+
+| Field                  | Type   | Description                  |
+| ---------------------- | ------ | ---------------------------- |
+| pool\_address          | String | Delegation pool address.     |
+| num\_active\_delegator | bigint | Number of active delegators. |
 
 ## Deprecated Tables
 

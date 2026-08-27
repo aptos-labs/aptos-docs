@@ -120,9 +120,10 @@ const labels = {
   "network.group.stakingGovernance": "Staking & Governance",
   "network.group.executionTransactions": "Execution & Transactions",
 
-  // Reference Sub-Groups (Only has generated API and glossary for now)
+  // Reference Sub-Groups
   "reference.group.indexerApi": "Indexer API",
   "reference.group.restApi": "REST API",
+  "reference.group.move": "Move Framework",
 
   // AI Sub-Groups
   "ai.group.aptos-mcp": "Aptos MCP",

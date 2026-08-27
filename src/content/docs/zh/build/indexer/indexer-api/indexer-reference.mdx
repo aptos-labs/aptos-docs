@@ -7,6 +7,8 @@ import { Aside } from '@astrojs/starlight/components';
 
 Indexer API 通过 GraphQL 提供链上交易、NFT、Fungible Asset、委托质押和账户数据。可在 [Indexer API](/zh/build/indexer/indexer-api) 页面访问接口。
 
+本页已对照主网 GraphQL schema（`https://api.mainnet.aptoslabs.com/v1/graphql`）核对。下文包含 `public_key_auth_keys`、`current_objects`、`confidential_asset_activities` 等新表。
+
 <Aside type="caution">
   在生产服务中依赖数据表前，请检查本页末尾的弃用表说明；已弃用的表应按提示迁移。
 </Aside>
@@ -376,20 +378,20 @@ Indexer API 通过 GraphQL 提供链上交易、NFT、Fungible Asset、委托质
 
 ### `delegated_staking_activities`
 
-| Field                                | Type                                                                  | Primary Key | Description                                                            |
-| ------------------------------------ | --------------------------------------------------------------------- | ----------- | ---------------------------------------------------------------------- |
-| transaction\_version                 | bigint                                                                |             | Transaction version (identifier) for activity                          |
-| event\_index                         | bigint                                                                |             | The index of the event. Ex. 1                                          |
-| delegator\_address                   | String                                                                |             | The address of the delegator.                                          |
-| pool\_address                        | String                                                                |             | The address of the pool.                                               |
-| event\_type                          | String                                                                |             | DistributeRewards, AddStake, UnlikeStake, ReactiveStake, WithdrawStake |
-| amount                               | bigint                                                                |             | The amount being staked. Ex. 1000                                      |
-| inserted\_at                         | Timestamp                                                             |             | The timestamp when the record was inserted.                            |
-| Index Name                           | Indexed Columns                                                       |             |                                                                        |
-| ------------------------------------ | --------------------------------------------------------------------- |             |                                                                        |
-| delegated\_staking\_activities\_pkey | transaction\_version, event\_index                                    |             |                                                                        |
-| dsa\_pa\_da\_index                   | pool\_address, delegator\_address, transaction\_version, event\_index |             |                                                                        |
-| dsa\_insat\_index                    | inserted\_at                                                          |             |                                                                        |
+| Field                                | Type                                                                  | Primary Key | Description                                                              |
+| ------------------------------------ | --------------------------------------------------------------------- | ----------- | ------------------------------------------------------------------------ |
+| transaction\_version                 | bigint                                                                |             | Transaction version (identifier) for activity                            |
+| event\_index                         | bigint                                                                |             | The index of the event. Ex. 1                                            |
+| delegator\_address                   | String                                                                |             | The address of the delegator.                                            |
+| pool\_address                        | String                                                                |             | The address of the pool.                                                 |
+| event\_type                          | String                                                                |             | DistributeRewards, AddStake, UnlockStake, ReactivateStake, WithdrawStake |
+| amount                               | bigint                                                                |             | The amount being staked. Ex. 1000                                        |
+| inserted\_at                         | Timestamp                                                             |             | The timestamp when the record was inserted.                              |
+| Index Name                           | Indexed Columns                                                       |             |                                                                          |
+| ------------------------------------ | --------------------------------------------------------------------- |             |                                                                          |
+| delegated\_staking\_activities\_pkey | transaction\_version, event\_index                                    |             |                                                                          |
+| dsa\_pa\_da\_index                   | pool\_address, delegator\_address, transaction\_version, event\_index |             |                                                                          |
+| dsa\_insat\_index                    | inserted\_at                                                          |             |                                                                          |
 
 ### `delegated_staking_pool_balances`
 
@@ -475,6 +477,197 @@ Indexer API 通过 GraphQL 提供链上交易、NFT、Fungible Asset、委托质
 | ans\_v2\_ra\_index             | registered\_address                |             |                                                                                                                                                                                                   |
 | ans\_v2\_tn\_index             | token\_name, token\_standard       |             |                                                                                                                                                                                                   |
 | current\_ans\_lookup\_v2\_pkey | domain, subdomain, token\_standard |             |                                                                                                                                                                                                   |
+
+## 账户、对象与签名
+
+这些表用于映射认证密钥、对象和交易签名，可与 [无状态账户](/zh/build/aips/aip-115) 和密钥轮换一起使用。
+
+### `public_key_auth_keys`
+
+将公钥映射到认证密钥，并记录该公钥是否已在链上使用。
+
+| Field                      | Type    | Primary Key | Description      |
+| -------------------------- | ------- | ----------- | ---------------- |
+| public\_key                | String! | Yes         | 公钥的十六进制字符串。      |
+| public\_key\_type          | String! | Yes         | 密钥类型，例如 Ed25519。 |
+| auth\_key                  | String! |             | 派生出的认证密钥。        |
+| account\_public\_key       | String  |             | 该方案使用的账户公钥（如有）。  |
+| signature\_type            | String! |             | 与该密钥一起使用的签名方案。   |
+| is\_public\_key\_used      | Boolean |             | 该公钥是否已签署过已提交交易。  |
+| last\_transaction\_version | bigint  |             | 最后一次更新该行的交易版本。   |
+
+### `auth_key_account_addresses`
+
+将认证密钥映射到当前使用它的账户地址。
+
+| Field                      | Type    | Primary Key | Description    |
+| -------------------------- | ------- | ----------- | -------------- |
+| auth\_key                  | String! | Yes         | 认证密钥。          |
+| account\_address           | String! | Yes         | 使用该认证密钥的账户地址。  |
+| is\_auth\_key\_used        | Boolean |             | 该密钥是否已在链上使用。   |
+| last\_transaction\_version | bigint  |             | 最后一次更新该行的交易版本。 |
+
+### `current_objects`
+
+当前 Object 模型的所有者与转账设置（`0x1::object`）。
+
+| Field                      | Type    | Primary Key | Description         |
+| -------------------------- | ------- | ----------- | ------------------- |
+| object\_address            | String! | Yes         | 对象地址。               |
+| owner\_address             | String! |             | 对象的当前所有者。           |
+| state\_key\_hash           | String! |             | 对象的 state key hash。 |
+| allow\_ungated\_transfer   | Boolean |             | 是否允许无门控转账。          |
+| is\_deleted                | Boolean |             | 对象是否已删除。            |
+| last\_guid\_creation\_num  | numeric |             | 对象的最后 GUID 创建号。     |
+| last\_transaction\_version | bigint  |             | 最后一次更新该行的交易版本。      |
+
+### `signatures`
+
+已提交交易的逐签名者密码学材料。可用于检查 multi-agent、手续费代付和多重签名。
+
+| Field                      | Type    | Description  |
+| -------------------------- | ------- | ------------ |
+| transaction\_version       | bigint! | 交易版本。        |
+| transaction\_block\_height | bigint! | 交易所在区块高度。    |
+| signer                     | String! | 签名者地址。       |
+| is\_sender\_primary        | Boolean | 是否为发送者的主签名。  |
+| type                       | String! | 签名类型字符串。     |
+| public\_key                | String! | 该签名对应的公钥。    |
+| signature                  | String! | 签名的十六进制字节。   |
+| threshold                  | bigint  | 多重签名阈值（如适用）。 |
+| public\_key\_indices       | jsonb   | 参与签名的密钥索引。   |
+| multi\_agent\_index        | bigint  | 二级签名者中的索引。   |
+| multi\_sig\_index          | bigint  | 多重签名认证器中的索引。 |
+
+## 机密资产
+
+### `confidential_asset_activities`
+
+[机密资产](/zh/build/smart-contracts/confidential-asset) 的活动（注册、存入、提取、转账、rollover）。金额可能被加密；`event_data` 保存原始事件负载。
+
+| Field                    | Type      | Primary Key | Description                                               |
+| ------------------------ | --------- | ----------- | --------------------------------------------------------- |
+| transaction\_version     | bigint!   | Yes         | 交易版本。                                                     |
+| event\_index             | bigint!   | Yes         | 交易内事件索引。                                                  |
+| owner\_address           | String!   |             | 拥有机密存储的账户。                                                |
+| counterparty\_address    | String    |             | 转账事件中的对手方。                                                |
+| asset\_type              | String    |             | 同质化资产元数据地址。                                               |
+| amount                   | numeric   |             | 事件公开金额时的数量，否则为空。                                          |
+| event\_type              | String!   |             | 机密资产事件类型。                                                 |
+| event\_data              | jsonb!    |             | 原始事件数据，包括密文。                                              |
+| event\_data\_version     | String!   |             | 事件数据 schema 版本。                                           |
+| is\_transaction\_success | Boolean   |             | 交易是否成功。                                                   |
+| block\_height            | bigint!   |             | 区块高度。                                                     |
+| transaction\_timestamp   | timestamp |             | 交易时间戳。                                                    |
+| metadata                 | Join      |             | 参见 [fungible\_asset\_metadata](#fungible_asset_metadata)。 |
+
+## 治理
+
+### `proposal_votes`
+
+质押池的链上治理投票。
+
+| Field                  | Type      | Primary Key | Description |
+| ---------------------- | --------- | ----------- | ----------- |
+| transaction\_version   | bigint!   | Yes         | 投票交易的版本。    |
+| proposal\_id           | bigint!   | Yes         | 治理提案 ID。    |
+| staking\_pool\_address | String!   |             | 投票的质押池。     |
+| voter\_address         | String!   |             | 投票者地址。      |
+| num\_votes             | numeric!  |             | 使用的投票权。     |
+| should\_pass           | Boolean!  |             | 是否为赞成票。     |
+| transaction\_timestamp | timestamp |             | 投票交易的时间戳。   |
+
+## 表项
+
+这些表暴露原始 Move table 内容。如果产品表（代币、同质化资产）已覆盖你的用例，请优先使用产品表。
+
+### `table_items`
+
+表项的历史写入。
+
+| Field                     | Type    | Primary Key | Description     |
+| ------------------------- | ------- | ----------- | --------------- |
+| transaction\_version      | bigint! | Yes         | 交易版本。           |
+| write\_set\_change\_index | bigint! | Yes         | write-set 变更索引。 |
+| table\_handle             | String! |             | 表句柄。            |
+| key                       | String! |             | 原始表键。           |
+| decoded\_key              | jsonb!  |             | 解码后的键。          |
+| decoded\_value            | jsonb   |             | 解码后的值（如有）。      |
+
+### `current_table_items`
+
+每个表项的最新值。
+
+| Field                      | Type    | Primary Key | Description  |
+| -------------------------- | ------- | ----------- | ------------ |
+| table\_handle              | String! | Yes         | 表句柄。         |
+| key\_hash                  | String! | Yes         | 表键的哈希。       |
+| key                        | String! |             | 原始表键。        |
+| decoded\_key               | jsonb!  |             | 解码后的键。       |
+| decoded\_value             | jsonb   |             | 解码后的值（如有）。   |
+| is\_deleted                | Boolean |             | 该项是否已删除。     |
+| last\_transaction\_version | bigint  |             | 最后一次更新的交易版本。 |
+
+### `table_metadatas`
+
+表句柄的键值类型。
+
+| Field       | Type    | Primary Key | Description |
+| ----------- | ------- | ----------- | ----------- |
+| handle      | String! | Yes         | 表句柄。        |
+| key\_type   | String! |             | 键的 Move 类型。 |
+| value\_type | String! |             | 值的 Move 类型。 |
+
+## 代币补充表
+
+### `current_token_pending_claims`
+
+尚未领取的 token v1 pending claims（直接转账要约）。
+
+| Field                      | Type    | Description         |
+| -------------------------- | ------- | ------------------- |
+| token\_data\_id            | String! | token data id。      |
+| from\_address              | String! | 提供代币的地址。            |
+| to\_address                | String! | 可领取代币的地址。           |
+| amount                     | numeric | 要约数量。               |
+| property\_version          | numeric | token v1 属性版本。      |
+| table\_handle              | String! | pending-claims 表句柄。 |
+| collection\_id             | String  | 收藏品 ID。             |
+| last\_transaction\_version | bigint  | 最后一次更新的交易版本。        |
+
+### `current_token_royalty_v1`
+
+token v1 版税配置。
+
+| Field                        | Type    | Primary Key | Description    |
+| ---------------------------- | ------- | ----------- | -------------- |
+| token\_data\_id              | String! | Yes         | token data id。 |
+| payee\_address               | String! |             | 版税收款地址。        |
+| royalty\_points\_numerator   | numeric |             | 版税分子。          |
+| royalty\_points\_denominator | numeric |             | 版税分母。          |
+| last\_transaction\_version   | bigint  |             | 最后一次更新的版本。     |
+
+## 委托质押补充表
+
+### `delegator_distinct_pool`
+
+委托人参与的不同质押池，以及当前池元数据。
+
+| Field                   | Type   | Description                                                                                 |
+| ----------------------- | ------ | ------------------------------------------------------------------------------------------- |
+| delegator\_address      | String | 委托人地址。                                                                                      |
+| pool\_address           | String | 委托池地址。                                                                                      |
+| current\_pool\_balance  | Join   | 参见 [current\_delegated\_staking\_pool\_balances](#current_delegated_staking_pool_balances)。 |
+| staking\_pool\_metadata | Join   | 参见 [current\_staking\_pool\_voter](#current_staking_pool_voter)。                            |
+
+### `num_active_delegator_per_pool`
+
+每个池中的活跃委托人数。
+
+| Field                  | Type   | Description |
+| ---------------------- | ------ | ----------- |
+| pool\_address          | String | 委托池地址。      |
+| num\_active\_delegator | bigint | 活跃委托人数量。    |
 
 ## 已弃用的表
 

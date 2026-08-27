@@ -887,15 +887,51 @@ export const sidebar = [
   // --- REFERENCE Tab (Focus: API/Tool Lookup) ---
   group("reference", {
     items: [
-      // AIPs
+      "network/glossary",
+      "build/smart-contracts/error-codes",
+      "network/blockchain/transaction-payloads",
       group("build.group.aips", {
         collapsed: true,
-        items: ["build/aips", "build/aips/aip-88", "build/aips/aip-115"],
+        items: ["build/aips", "build/aips/aip-88", "build/aips/aip-115", "build/aips/aip-123"],
       }),
-      "network/glossary",
-      "build/external-resources",
+      group("reference.group.move", {
+        collapsed: true,
+        items: [
+          {
+            label: "Framework Book",
+            link: "https://aptos-labs.github.io/framework-book/",
+            attrs: { target: "_blank", rel: "noopener" },
+          },
+          {
+            label: "Aptos Framework",
+            link: "https://aptos-labs.github.io/framework-book/aptos-framework/overview.html",
+            attrs: { target: "_blank", rel: "noopener" },
+          },
+          {
+            label: "Aptos Standard Library",
+            link: "https://aptos-labs.github.io/framework-book/aptos-stdlib/overview.html",
+            attrs: { target: "_blank", rel: "noopener" },
+          },
+          {
+            label: "Move Standard Library",
+            link: "https://aptos-labs.github.io/framework-book/move-stdlib/overview.html",
+            attrs: { target: "_blank", rel: "noopener" },
+          },
+          {
+            label: "Aptos Token Objects",
+            link: "https://aptos-labs.github.io/framework-book/aptos-token-objects/overview.html",
+            attrs: { target: "_blank", rel: "noopener" },
+          },
+          {
+            label: "Move Book",
+            link: "https://aptos-labs.github.io/move-book/",
+            attrs: { target: "_blank", rel: "noopener" },
+          },
+        ],
+      }),
       "build/indexer/indexer-api/indexer-reference",
       ...(openAPISidebarGroups as never[]),
+      "build/external-resources",
     ],
   }),
 

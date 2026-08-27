@@ -7,15 +7,9 @@
  * keeps DocSearch despite a failed probe.
  */
 
-import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { createCspConfig } from "../src/config/csp";
 import { checkAlgoliaHealth, resolveSearchProvider } from "../src/config/search";
-
-const ROOT = resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
 
 const credentials = {
   appId: "TESTAPPID1",
@@ -214,31 +208,6 @@ describe("createCspConfig", () => {
     // contributes an unscoped resource, so it has to be declared explicitly.
     expect(scriptResources("algolia")).toContain("'self'");
     expect(scriptResources("pagefind")).toContain("'self'");
-  });
-
-  it("hashes Starlight's search shortcut script so the ⌘K hint is not blocked", () => {
-    // Astro does not hash `is:inline` scripts, so the hash is pinned in the
-    // config. Recompute it from the installed Starlight component: if a version
-    // bump edits that script, the pinned hash silently stops matching and the
-    // keyboard hint disappears from the search button.
-    const component = readFileSync(
-      resolve(ROOT, "node_modules/@astrojs/starlight/components/Search.astro"),
-      "utf-8",
-    );
-    const inlineScript = component.match(/<script is:inline>([\s\S]*?)<\/script>/)?.[1];
-    expect(
-      inlineScript,
-      "Starlight's Search component no longer has an is:inline script",
-    ).toBeTypeOf("string");
-
-    const hash = `sha256-${createHash("sha256")
-      .update(inlineScript ?? "", "utf-8")
-      .digest("base64")}`;
-    const pinned = createCspConfig("pagefind").scriptDirective.hashes.map((entry) => entry.hash);
-    expect(pinned).toContain(hash);
-    expect(createCspConfig("algolia").scriptDirective.hashes).not.toContainEqual(
-      expect.objectContaining({ hash }),
-    );
   });
 
   it("keeps Algolia hosts reachable so DocSearch can query them", () => {

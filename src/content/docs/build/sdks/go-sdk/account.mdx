@@ -12,17 +12,25 @@ use:
 - `aptos.NewSecp256k1Account()`
 - `aptos.NewEd25519SingleSenderAccount()`
 - `aptos.NewAccountFromSigner()`
+- `aptos.NewEd25519AccountFromMnemonic()`
+- `aptos.NewEd25519AccountFromDerivationPath()`
 
-`Account.NewEd25519Account()` is the most commonly used method to create keys
+`NewEd25519Account()` is the most commonly used method to create keys
 for a new account. It defaults to `ED25519` key types, but you can also specify
 which signing scheme you would prefer like so:
 
 ```go
 // To derive an ed25519 account
-account1 := aptos.NewEd25519Account()
+account1, err := aptos.NewEd25519Account()
+if err != nil {
+  panic("Failed to create account:" + err.Error())
+}
 
 // To derive a secp256k1 account
-account2 := aptos.NewSecp256k1Account()
+account2, err := aptos.NewSecp256k1Account()
+if err != nil {
+  panic("Failed to create account:" + err.Error())
+}
 ```
 
 Once you have generated credentials, you **must** fund it for the network to know it exists.
@@ -30,13 +38,16 @@ Once you have generated credentials, you **must** fund it for the network to kno
 In devnet environments this can be done with a faucet by running the following command:
 
 ```go filename="fund.go"
-client, err = aptos.NewClient(aptos.DevnetConfig)
+client, err := aptos.NewClient(aptos.DevnetConfig)
 if err != nil {
   panic("Failed to create client:" + err.Error())
 }
 
 // Fund an account with 1 Devnet APT
-client.Fund(account1.Address, 100_000_000)
+err = client.Fund(account1.Address, 100_000_000)
+if err != nil {
+  panic("Failed to fund account:" + err.Error())
+}
 ```
 
 On testnet you can mint at the [mint page](/network/faucet).
@@ -61,7 +72,10 @@ err := privateKey.FromHex(privateKeyHex)
 if err != nil {
   panic("Failed to parse private key:" + err.Error())
 }
-account := aptos.NewAccountFromSigner(privateKey)
+account, err := aptos.NewAccountFromSigner(privateKey)
+if err != nil {
+  panic("Failed to derive account:" + err.Error())
+}
 
 // to derive an account with a Single Sender Ed25519 key scheme
 privateKey := &aptos.Ed25519PrivateKey{}
@@ -70,7 +84,10 @@ if err != nil {
   panic("Failed to parse private key:" + err.Error())
 }
 singleSigner := &crypto.SingleSigner{Signer: privateKey}
-account := aptos.NewAccountFromSigner(singleSigner)
+account, err = aptos.NewAccountFromSigner(singleSigner)
+if err != nil {
+  panic("Failed to derive account:" + err.Error())
+}
 
 // to derive an account with a Single Sender Secp256k1 key scheme
 privateKey := &aptos.Secp256k1PrivateKey{}
@@ -79,20 +96,38 @@ if err != nil {
   panic("Failed to parse private key:" + err.Error())
 }
 singleSigner := &crypto.SingleSigner{Signer: privateKey}
-account := aptos.NewAccountFromSigner(singleSigner)
+account, err = aptos.NewAccountFromSigner(singleSigner)
+if err != nil {
+  panic("Failed to derive account:" + err.Error())
+}
 
 // to derive an account with a private key and account address
-address := &aptos.AccountAddress{}
-err := address.ParseStringRelaxed(addressHex)
+var address aptos.AccountAddress
+err = address.ParseStringRelaxed(addressHex)
 if err != nil {
   panic("Failed to parse address:" + err.Error())
 }
 privateKey := &aptos.Ed25519PrivateKey{}
-err := privateKey.FromHex(privateKeyHex)
+err = privateKey.FromHex(privateKeyHex)
 if err != nil {
   panic("Failed to parse private key:" + err.Error())
 }
-account := aptos.NewAccountFromSigner(privateKey, address.AuthKey())
+account, err = aptos.NewAccountFromSigner(privateKey, address)
+if err != nil {
+  panic("Failed to derive account:" + err.Error())
+}
 ```
 
-{/* TODO: Once derivation path is supported ### Derive an account from derivation path */}
+### Derive an account from a mnemonic
+
+```go
+account, err := aptos.NewEd25519AccountFromMnemonic(mnemonic)
+if err != nil {
+  panic("Failed to derive account:" + err.Error())
+}
+
+account, err = aptos.NewEd25519AccountFromDerivationPath(mnemonic, "m/44'/637'/0'/0'/0'")
+if err != nil {
+  panic("Failed to derive account:" + err.Error())
+}
+```

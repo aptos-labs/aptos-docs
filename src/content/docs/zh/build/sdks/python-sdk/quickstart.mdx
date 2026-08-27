@@ -1,0 +1,148 @@
+---
+title: "Python SDK 快速入门"
+description: "使用 Aptos Python SDK 创建账户、为账户注资并转移 APT"
+sidebar:
+  label: "Python SDK 快速入门"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+<Aside type="note">
+  完整示例见页面底部的[完整快速入门代码](#full-quickstart-code)。流程与 SDK 仓库中的
+  [`transfer_apt.py`](https://github.com/aptos-labs/aptos-python-sdk/blob/main/v2/examples/transfer_apt.py)
+  相同。
+</Aside>
+
+<Steps>
+  1. 安装 Python SDK
+
+     该 SDK 需要 **Python 3.12+**。
+
+     ```shellscript filename="Terminal"
+     pip install aptos-sdk
+     ```
+
+  2. 创建项目文件
+
+     ```shellscript filename="Terminal"
+     mkdir aptos-python-quickstart
+     cd aptos-python-quickstart
+     touch quickstart.py
+     ```
+
+  3. 设置 Aptos 客户端
+
+     使用 v2 API（`aptos_sdk.v2`）。创建客户端后即会建立连接。
+
+     ```python filename="quickstart.py"
+     import asyncio
+
+     from aptos_sdk.v2 import Account, Aptos, AptosConfig, Network
+
+     async def main():
+         async with Aptos(AptosConfig(network=Network.DEVNET)) as aptos:
+             print("Connected to Aptos devnet")
+
+     asyncio.run(main())
+     ```
+
+     <Aside type="note">
+       （进阶）若要连接特定节点，可在构造 `AptosConfig` 时传入自定义全节点 URL。
+     </Aside>
+
+  4. 创建并为账户注资
+
+     先生成凭据，再为账户注资，网络才会识别其存在。在 localnet 和 devnet 上可使用水龙头。
+
+     ```python filename="quickstart.py"
+     alice = Account.generate()
+     bob = Account.generate()
+
+     await aptos.faucet.fund_account(alice.address, 100_000_000)
+     await aptos.faucet.fund_account(bob.address, 10_000_000)
+     ```
+
+     在 testnet 上，请从[水龙头页面](/zh/network/faucet)铸造。
+
+  5. 转移 APT
+
+     `aptos.coin.transfer` 会构建、签名并提交 APT 转账。随后等待交易上链。
+
+     ```python filename="quickstart.py"
+     txn_hash = await aptos.coin.transfer(alice, bob.address, 1_000)
+     result = await aptos.transaction.wait_for_transaction(txn_hash)
+     print(f"Success: {result['success']}")
+     ```
+
+     有关更底层的构建 → 模拟 → 签名 → 提交 → 等待流程，请参阅
+     [构建交易](/zh/build/sdks/python-sdk/building-transactions)。
+</Steps>
+
+## 完整快速入门代码
+
+```python filename="quickstart.py"
+"""Create two accounts, fund them, and transfer APT on devnet."""
+
+import asyncio
+
+from aptos_sdk.v2 import Account, Aptos, AptosConfig, Network
+
+ALICE_INITIAL_BALANCE = 100_000_000
+BOB_INITIAL_BALANCE = 10_000_000
+TRANSFER_AMOUNT = 1_000
+
+
+async def main():
+    async with Aptos(AptosConfig(network=Network.DEVNET)) as aptos:
+        alice = Account.generate()
+        bob = Account.generate()
+
+        print("=== Addresses ===")
+        print(f"Alice: {alice.address}")
+        print(f"Bob:   {bob.address}")
+
+        await asyncio.gather(
+            aptos.faucet.fund_account(alice.address, ALICE_INITIAL_BALANCE),
+            aptos.faucet.fund_account(bob.address, BOB_INITIAL_BALANCE),
+        )
+
+        print("=== Initial Balances ===")
+        print(f"Alice: {await aptos.coin.balance(alice.address)}")
+        print(f"Bob:   {await aptos.coin.balance(bob.address)}")
+
+        txn_hash = await aptos.coin.transfer(alice, bob.address, TRANSFER_AMOUNT)
+        result = await aptos.transaction.wait_for_transaction(txn_hash)
+        print(f"Transaction: {txn_hash}")
+        print(f"Success: {result['success']}")
+
+        print("=== Final Balances ===")
+        print(f"Alice: {await aptos.coin.balance(alice.address)}")
+        print(f"Bob:   {await aptos.coin.balance(bob.address)}")
+
+
+asyncio.run(main())
+```
+
+运行：
+
+```shellscript filename="Terminal"
+python quickstart.py
+```
+
+## 总结
+
+你刚刚学习了如何通过以下步骤转移 APT：
+
+1. 使用 `Aptos` 客户端连接网络。
+2. 创建并为账户注资。
+3. 提交转账并等待执行。
+
+<Aside type="note">
+  建议收藏 SDK 仓库中的
+  [v2 示例](https://github.com/aptos-labs/aptos-python-sdk/tree/main/v2/examples)
+  和 [v2 测试](https://github.com/aptos-labs/aptos-python-sdk/tree/main/v2/tests)。
+  这些套件是本文档所示 API 的权威来源。
+
+  克隆 SDK 仓库时，示例会导入 `aptos_sdk_v2`。执行 `pip install aptos-sdk` 后，
+  请从 `aptos_sdk.v2` 导入相同 API。
+</Aside>

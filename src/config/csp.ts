@@ -44,10 +44,9 @@ const GOOGLE_FONTS_HOSTS = withHttps(["fonts.googleapis.com", "fonts.gstatic.com
  * - astro-mermaid injects a `<style>` element at runtime on every page.
  *
  * Browsers ignore `'unsafe-inline'` when a hash is present in the same
- * directive. Astro 7.2.5+ therefore omits auto-generated hashes for any
- * directive that lists `'unsafe-inline'`. Do not add `scriptDirective.hashes`
- * or `styleDirective.hashes` here — they would disable that fallback and block
- * Starlight's sidebar restore, gtag, and Mermaid.
+ * directive. Do not add hashes here. The HTTP policy shipped to Vercel is
+ * `serializeCspHeader()`, not Astro's built-in CSP (7.2.0 would inject hashes
+ * that disable `'unsafe-inline'`).
  *
  * Pagefind searches inside a WebAssembly module running in a Web Worker created
  * from a blob URL, both of which a strict policy blocks by default. The failure

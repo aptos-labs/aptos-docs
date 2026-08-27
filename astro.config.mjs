@@ -65,7 +65,6 @@ function starlightLinksValidator(options) {
 
 import starlightOpenAPI from "starlight-openapi";
 import { sidebar } from "./astro.sidebar.ts";
-import { createCspConfig } from "./src/config/csp";
 import { SITE_TITLES, SUPPORTED_LANGUAGES } from "./src/config/i18n";
 import { markdownProcessor } from "./src/config/markdown";
 import { resolveSearchProvider } from "./src/config/search";
@@ -471,7 +470,10 @@ export default defineConfig({
     validateSecrets: true,
   },
   security: {
-    csp: createCspConfig(searchResolution.provider),
+    // Astro 7.2.0 hashes inline scripts and styles, which makes browsers ignore
+    // `'unsafe-inline'`. The HTTP policy is the hash-free header in vercel.json
+    // (`serializeCspHeader`), not Astro's per-page CSP.
+    csp: false,
   },
   fonts: [
     {

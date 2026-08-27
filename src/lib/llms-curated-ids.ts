@@ -48,7 +48,16 @@ export const LLMS_INDEX_SECTIONS: LlmsSection[] = [
   },
   {
     title: "SDKs",
-    ids: ["build/sdks/ts-sdk", "build/sdks/python-sdk", "build/sdks/go-sdk", "build/sdks/rust-sdk"],
+    ids: [
+      "build/sdks/ts-sdk",
+      "build/sdks/ts-sdk/quickstart",
+      "build/sdks/python-sdk",
+      "build/sdks/python-sdk/quickstart",
+      "build/sdks/go-sdk",
+      "build/sdks/go-sdk/quickstart",
+      "build/sdks/rust-sdk",
+      "build/sdks/rust-sdk/quickstart",
+    ],
   },
   {
     title: "Advanced Topics",

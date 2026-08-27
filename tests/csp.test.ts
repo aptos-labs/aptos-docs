@@ -17,7 +17,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { collapseCspRoutes } from "../scripts/collapse-csp.mjs";
+import { CSP_CATCH_ALL_SRC, collapseCspRoutes } from "../scripts/collapse-csp.mjs";
 import { createCspConfig } from "../src/config/csp";
 
 const ROOT = resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
@@ -77,7 +77,7 @@ describe("collapseCspRoutes", () => {
 
     expect(result).toMatchObject({ changed: true, reason: "collapsed", cspCount: 3 });
     expect(json.routes[0]).toEqual({
-      src: "/(.*)",
+      src: CSP_CATCH_ALL_SRC,
       headers: { "content-security-policy": SHARED_CSP },
       continue: true,
     });
@@ -97,7 +97,7 @@ describe("collapseCspRoutes", () => {
     const json: CollapseInput = {
       routes: [
         {
-          src: "/(.*)",
+          src: CSP_CATCH_ALL_SRC,
           headers: { "content-security-policy": SHARED_CSP },
           continue: true,
         },
@@ -144,6 +144,19 @@ describe("build script wires CSP collapse before middleware injection", () => {
     expect(collapse).toBeGreaterThan(astro);
     expect(middleware).toBeGreaterThan(collapse);
   });
+
+  it("wraps the Vercel adapter so collapse runs during a plain astro build", () => {
+    const config = readFileSync(join(ROOT, "astro.config.mjs"), "utf8");
+    expect(config).toContain("withCollapsedCsp(");
+    expect(config).toContain("collapseCspConfigFile");
+  });
+
+  it("overrides the Astro preset build command so Vercel runs pnpm build", () => {
+    const vercel = JSON.parse(readFileSync(join(ROOT, "vercel.json"), "utf8")) as {
+      buildCommand?: string;
+    };
+    expect(vercel.buildCommand).toBe("pnpm build");
+  });
 });
 
 describe("built CSP header", () => {
@@ -158,7 +171,7 @@ describe("built CSP header", () => {
       };
       const cspRoutes = json.routes?.filter((route) => route.headers?.["content-security-policy"]);
       expect(cspRoutes, "Vercel static headers should include a CSP").toHaveLength(1);
-      expect(cspRoutes?.[0]?.src).toBe("/(.*)");
+      expect(cspRoutes?.[0]?.src).toBe(CSP_CATCH_ALL_SRC);
       expect(cspRoutes?.[0]?.continue).toBe(true);
 
       const csp = cspRoutes?.[0]?.headers?.["content-security-policy"] ?? "";

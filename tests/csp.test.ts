@@ -18,7 +18,7 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { CSP_CATCH_ALL_SRC, collapseCspRoutes } from "../scripts/collapse-csp.mjs";
-import { createCspConfig } from "../src/config/csp";
+import { createCspConfig, serializeCspHeader } from "../src/config/csp";
 
 const ROOT = resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
 
@@ -128,60 +128,42 @@ describe("collapseCspRoutes", () => {
   });
 });
 
-describe("build script wires CSP collapse before middleware injection", () => {
-  it("runs collapse-csp after astro build and before generate-middleware-function", () => {
-    const pkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")) as {
-      scripts: { build: string; "build:collapse-csp": string };
-    };
-    const build = pkg.scripts.build;
-    expect(build).toContain("pnpm build:collapse-csp");
-    expect(pkg.scripts["build:collapse-csp"]).toBe("node ./scripts/collapse-csp.mjs");
-
-    const astro = build.indexOf("astro build");
-    const collapse = build.indexOf("pnpm build:collapse-csp");
-    const middleware = build.indexOf("pnpm build:generate-middleware-function");
-    expect(astro).toBeGreaterThan(-1);
-    expect(collapse).toBeGreaterThan(astro);
-    expect(middleware).toBeGreaterThan(collapse);
-  });
-
-  it("wraps the Vercel adapter so collapse runs during a plain astro build", () => {
-    const config = readFileSync(join(ROOT, "astro.config.mjs"), "utf8");
-    expect(config).toContain("withCollapsedCsp(");
-    expect(config).toContain("collapseCspConfigFile");
-  });
-
-  it("overrides the Astro preset build command so Vercel runs pnpm build", () => {
+describe("vercel.json CSP header", () => {
+  it("ships one global hash-free policy that matches serializeCspHeader", () => {
     const vercel = JSON.parse(readFileSync(join(ROOT, "vercel.json"), "utf8")) as {
       buildCommand?: string;
+      headers?: { source: string; headers: { key: string; value: string }[] }[];
     };
-    expect(vercel.buildCommand).toBe("pnpm build");
+    expect(vercel.buildCommand, "do not override the dashboard build command").toBeUndefined();
+
+    const global = vercel.headers?.find((entry) => entry.source === "/(.*)");
+    const csp = global?.headers.find((header) => header.key === "Content-Security-Policy")?.value;
+    expect(csp).toBe(serializeCspHeader("pagefind"));
+    expect(csp).toContain("'unsafe-inline'");
+    expect(csp).not.toMatch(/sha256-/);
+    expect(csp?.length ?? 0).toBeLessThan(4096);
+  });
+
+  it("does not ask the Vercel adapter to emit per-path CSP routes", () => {
+    const config = readFileSync(join(ROOT, "astro.config.mjs"), "utf8");
+    expect(config).toMatch(/staticHeaders:\s*false/);
+    expect(config).not.toContain("withCollapsedCsp");
   });
 });
 
-describe("built CSP header", () => {
+describe("built Vercel routing config", () => {
   const vercelConfigPath = join(ROOT, ".vercel/output/config.json");
   const hasVercelConfig = existsSync(vercelConfigPath);
 
-  it.skipIf(!hasVercelConfig)(
-    "does not emit script or style hashes that would disable unsafe-inline",
-    () => {
-      const json = JSON.parse(readFileSync(vercelConfigPath, "utf8")) as {
-        routes?: VercelRoute[];
-      };
-      const cspRoutes = json.routes?.filter((route) => route.headers?.["content-security-policy"]);
-      expect(cspRoutes, "Vercel static headers should include a CSP").toHaveLength(1);
-      expect(cspRoutes?.[0]?.src).toBe(CSP_CATCH_ALL_SRC);
-      expect(cspRoutes?.[0]?.continue).toBe(true);
-
-      const csp = cspRoutes?.[0]?.headers?.["content-security-policy"] ?? "";
-      const scriptElem = /script-src-elem ([^;]*)/.exec(csp)?.[1] ?? "";
-      const styleElem = /style-src-elem ([^;]*)/.exec(csp)?.[1] ?? "";
-
-      expect(scriptElem).toContain("'unsafe-inline'");
-      expect(scriptElem).not.toMatch(/'sha256-/);
-      expect(styleElem).toContain("'unsafe-inline'");
-      expect(styleElem).not.toMatch(/'sha256-/);
-    },
-  );
+  it.skipIf(!hasVercelConfig)("does not emit per-path CSP header routes", () => {
+    const json = JSON.parse(readFileSync(vercelConfigPath, "utf8")) as {
+      routes?: VercelRoute[];
+    };
+    const perPath = (json.routes ?? []).filter((route) => {
+      const csp = route.headers?.["content-security-policy"];
+      if (!csp) return false;
+      return route.src !== CSP_CATCH_ALL_SRC && route.src !== "/(.*)";
+    });
+    expect(perPath).toHaveLength(0);
+  });
 });

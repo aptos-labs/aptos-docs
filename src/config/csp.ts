@@ -94,3 +94,34 @@ export function createCspConfig(searchProvider: SearchProvider = "algolia") {
     },
   } satisfies CspConfig;
 }
+
+/**
+ * Serialize `createCspConfig` into a Content-Security-Policy header.
+ *
+ * Used for the global Vercel header. Do not include hashes: browsers ignore
+ * `'unsafe-inline'` when a hash is present in the same directive.
+ */
+export function serializeCspHeader(searchProvider: SearchProvider = "pagefind"): string {
+  const csp = createCspConfig(searchProvider);
+  const scriptDefault = csp.scriptDirective.resources.filter(
+    (resource): resource is string => typeof resource === "string",
+  );
+  const scriptElem = csp.scriptDirective.resources.flatMap((resource) =>
+    typeof resource === "object" && resource.kind === "element" ? [resource.resource] : [],
+  );
+  const styleElem = csp.styleDirective.resources.flatMap((resource) =>
+    resource.kind === "element" ? [resource.resource] : [],
+  );
+  const styleAttr = csp.styleDirective.resources.flatMap((resource) =>
+    resource.kind === "attribute" ? [resource.resource] : [],
+  );
+
+  return [
+    ...csp.directives,
+    `script-src ${scriptDefault.join(" ")}`,
+    `script-src-elem ${scriptElem.join(" ")}`,
+    "style-src 'self'",
+    `style-src-elem ${styleElem.join(" ")}`,
+    `style-src-attr ${styleAttr.join(" ")}`,
+  ].join("; ");
+}

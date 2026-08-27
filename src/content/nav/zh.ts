@@ -123,9 +123,10 @@ export default navDictionary({
   "network.group.stakingGovernance": "质押和治理", // Staking & Governance
   "network.group.executionTransactions": "执行和交易", // Execution & Transactions
 
-  // Reference Sub-Groups (Only has generated API and glossary for now)
+  // Reference Sub-Groups
   "reference.group.indexerApi": "Indexer API",
   "reference.group.restApi": "REST API",
+  "reference.group.move": "Move 框架",
 
   // AI Sub-Groups
   "ai.group.aptos-mcp": "Aptos MCP",

@@ -1,0 +1,90 @@
+---
+title: "AIP-123: Orderless Transactions"
+description: "Understanding AIP-123, which uses a nonce instead of a sequence number for replay protection"
+sidebar:
+  label: "AIP-123"
+---
+
+[AIP-123](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-123-orderless-transactions.md)
+introduces orderless transactions. These transactions use a nonce for replay
+protection instead of a sequence number, so they can execute in any order and do
+not require an on-chain `0x1::account::Account` resource.
+
+The payload layout that carries the nonce is specified in
+[AIP-129](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-129-add-extra-information-in-transaction-payload.md).
+See [Transaction Payloads and BCS](/network/blockchain/transaction-payloads) for
+the encoding used on the REST API.
+
+## General FAQ
+
+### Why do orderless transactions exist?
+
+Sequence-number transactions require the sender's next sequence number to match
+exactly. That forces clients to serialize submissions from one account and is
+the reason a first sequence-number transaction creates the `Account` resource
+for a [stateless account](/build/aips/aip-115).
+
+Orderless transactions replace that counter with a nonce. The chain stores
+recent `(sender, nonce)` pairs and rejects a duplicate nonce. Clients can
+submit from multiple machines without coordinating a sequence number.
+
+### How is replay protection different from a sequence number?
+
+- Sequence-number transactions execute only when the transaction's sequence
+  number equals the account's current sequence number. They run in order.
+- Orderless transactions execute if the `(sender, nonce)` pair is not already
+  stored. They can commit in any order.
+
+A `(sender, sequence number)` pair uniquely identifies a committed
+sequence-number transaction. A `(sender, nonce)` pair does **not** uniquely
+identify a committed orderless transaction, because the same nonce can be reused
+after the previous entry is garbage-collected.
+
+### Who can send orderless transactions?
+
+Both stateless accounts (no `0x1::account::Account` resource) and accounts that
+already have the resource can send orderless transactions.
+
+Stateless senders can only use the default Ed25519 authentication path until
+they rotate a key. Key rotation creates the `Account` resource.
+
+### How should I choose the nonce?
+
+Pick a random `u64`. After a transaction with `(address, nonce, expiration T)`
+commits, do not reuse the same `(address, nonce)` with an expiration at or
+before about `T + 130` seconds.
+
+### What is the expiration limit?
+
+Orderless transactions must expire no more than **60 seconds** in the future.
+A longer expiration is discarded with
+`TRANSACTION_EXPIRATION_TOO_FAR_IN_FUTURE`. Sequence-number transactions do not
+have this 60-second cap.
+
+## Compatibility FAQ
+
+### Do my existing sequence-number transactions still work?
+
+Yes. Sequence-number transactions remain valid. Use them when the application
+requires ordered execution from one sender.
+
+A stateless account that submits a sequence-number transaction with sequence
+number `0` creates the `Account` resource and is no longer stateless. A
+sequence number greater than `0` on a stateless account is discarded.
+
+### What error do I get if I reuse a nonce?
+
+The VM status is `NONCE_ALREADY_USED`. See [Error Codes](/build/smart-contracts/error-codes).
+
+### How do I check whether my transaction landed?
+
+`GET /transactions/by_hash/{hash}` still works. Sequence-number clients that
+polled `GET /accounts/{address}` and inferred progress from the sequence number
+cannot use that shortcut for orderless transactions. Nodes also expose
+`GET /accounts/{address}/transaction_summaries` for hash, version, and replay
+protector (nonce or sequence number).
+
+### Where is SDK support?
+
+- [TypeScript SDK](/build/sdks/ts-sdk/building-transactions/orderless-transactions)
+- [Orderless transactions guide](/build/guides/orderless-transactions)

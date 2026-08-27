@@ -81,7 +81,16 @@ export const LLMS_INDEX_SECTIONS: LlmsSection[] = [
       "network/nodes/full-node",
       "network/nodes/validator-node",
       "network/releases",
+    ],
+  },
+  {
+    title: "Reference",
+    ids: [
       "network/glossary",
+      "build/smart-contracts/error-codes",
+      "network/blockchain/transaction-payloads",
+      "build/aips",
+      "build/external-resources",
     ],
   },
 ];
@@ -110,6 +119,9 @@ export const FULL_PRIORITY_DOC_IDS = [
   "build/ai/aptos-agent-skills",
   "network/nodes",
   "network/glossary",
+  "build/smart-contracts/error-codes",
+  "network/blockchain/transaction-payloads",
+  "build/aips",
   "llms-txt",
 ];
 

@@ -18,6 +18,9 @@ sidebar:
   of [Move modules](#move-module) and [Move resources](#move-resources).
 - The state of each account is composed of both code and data.
 - The account is identified by [account address](#account-address).
+- After [AIP-115](/build/aips/aip-115), an address does not need an on-chain
+  `0x1::account::Account` resource to be a valid account. REST `GET /accounts/{address}`
+  returns default values instead of 404 when that resource is missing.
 
 See [Accounts](/network/blockchain/accounts) for more information.
 
@@ -129,19 +132,18 @@ nodes, [validators](#validator) and [fullnodes](#fullnodes).
 
 ### AptosAccount
 
-- A **`AptosAccount`** is a Move resource that holds all the administrative data
-  associated with an account, such as sequence number, balance, and
-  authentication key.
-- A **`AptosAccount`** is the only resource that every account is guaranteed to
-  contain.
+- **`AptosAccount`** is a historical name from early Aptos/Diem Move APIs for
+  account administrative state (sequence number and authentication key).
+- The on-chain resource is `0x1::account::Account`. After
+  [AIP-115](/build/aips/aip-115), that resource is created only when needed; it
+  is not present on every account.
+- Account balances live in CoinStore or Fungible Store resources, not in
+  `Account`.
 
 ### AptosAccount module
 
-- **The AptosAccount module** is a Move module that contains the code for
-  manipulating the administrative data held in a particular `AptosAccount.T`
-  resource.
-- Code for checking or incrementing sequence numbers, withdrawing or depositing
-  currency, and extracting gas deposits is included in the AptosAccount module.
+- **The AptosAccount module** is a historical name for the Move module that
+  manages `0x1::account::Account`. Use `0x1::account` in current code and docs.
 
 ### Aptos Devnet
 
@@ -155,6 +157,15 @@ nodes, [validators](#validator) and [fullnodes](#fullnodes).
   same time.
 - Block number is analogous to "block height" in blockchain literature.
 - Transactions are referenced by ledger version rather than by block.
+
+### Block Epilogue
+
+- A **block epilogue** is a system transaction (`block_epilogue_transaction`)
+  that ends a block and carries `BlockEndInfo` (gas and output limits for that
+  block). It replaced the earlier `StateCheckpoint` transaction type.
+- The last block of an epoch has no block epilogue.
+
+See [AIP-88](/build/aips/aip-88) for more information.
 
 ### BlockSTM
 
@@ -379,6 +390,14 @@ See [Gas and Storage Fees](/network/blockchain/gas-txn-fee) for more information
 
 See [Gas and Storage Fees](/network/blockchain/gas-txn-fee) for more information.
 
+### Geomi
+
+- **[Geomi](https://geomi.dev/)** (formerly Aptos Build) is the Aptos Labs
+  developer portal for API keys, hosted indexer access, Gas Station, and no-code
+  indexing.
+
+See [Data Providers](/build/apis/data-providers) for more information.
+
 ## H
 
 ### Honest (Validator)
@@ -568,6 +587,8 @@ follow [Move scripts](/build/smart-contracts/scripts/script-tutorial).
 - **Nonce** is a number only used once, a random or semi-random number that is
   generated for a specific use for authentication protocols and cryptographic
   hash functions.
+- On Aptos, [orderless transactions](#orderless-transactions) use a `u64` nonce
+  as the replay protector instead of a [sequence number](#sequence-number).
 
 ## O
 
@@ -580,6 +601,17 @@ follow [Move scripts](/build/smart-contracts/scripts/script-tutorial).
 - **Open-source community** is a term used for a group of developers who work on
   open-source software. If you're reading this glossary, then you are part of
   the Aptos project's developer community.
+
+### Orderless Transactions
+
+- **Orderless transactions** (AIP-123) use a [nonce](#nonce) for replay
+  protection instead of a [sequence number](#sequence-number). They can execute
+  in any order, expire after at most 60 seconds, and do not require an on-chain
+  `Account` resource.
+- Use sequence-number transactions when the application needs ordered execution
+  from one sender.
+
+See [AIP-123](/build/aips/aip-123) for more information.
 
 ## P
 
@@ -670,6 +702,8 @@ instructions on use.
   number for that account (or until they expire).
 - When the transaction is applied, the sequence number of the account will
   become X+1. The account has a strictly increasing sequence number.
+- [Orderless transactions](#orderless-transactions) do not use a sequence
+  number. They use a nonce and can commit in any order.
 
 ### Sender
 
@@ -698,6 +732,18 @@ instructions on use.
 - **State root hash** is
   a [Merkle hash](https://en.wikipedia.org/wiki/Merkle_tree) over all keys and
   values the state of the Aptos blockchain at a given version.
+
+### Stateless Account
+
+- A **stateless account** is an address that has not yet created an on-chain
+  `0x1::account::Account` resource. It is still a valid account: the default
+  authentication key is the address itself and the default sequence number is
+  `0`.
+- The resource is created when a sequence-number transaction or a feature such
+  as key rotation needs it. [Orderless transactions](#orderless-transactions)
+  can be sent without creating the resource.
+
+See [AIP-115](/build/aips/aip-115) for more information.
 
 ## T
 

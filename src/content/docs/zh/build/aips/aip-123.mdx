@@ -1,0 +1,65 @@
+---
+title: "AIP-123：无序交易"
+description: "了解 AIP-123：使用 nonce 而非序列号来防止重放"
+sidebar:
+  label: "AIP-123"
+---
+
+[AIP-123](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-123-orderless-transactions.md)
+引入无序交易。这类交易用 nonce 而不是序列号来防止重放，因此可以按任意顺序执行，也不需要链上的 `0x1::account::Account` 资源。
+
+携带 nonce 的负载布局见
+[AIP-129](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-129-add-extra-information-in-transaction-payload.md)。
+REST API 使用的编码见 [交易负载与 BCS](/zh/network/blockchain/transaction-payloads)。
+
+## 常见问题
+
+### 为什么需要无序交易？
+
+基于序列号的交易要求发送者的下一个序列号精确匹配。这会强制同一账户的提交串行化，也是[无状态账户](/zh/build/aips/aip-115)在发送第一笔序列号交易时创建 `Account` 资源的原因。
+
+无序交易用 nonce 替代该计数器。链会保存近期的 `(sender, nonce)` 对，并拒绝重复 nonce。客户端可以从多台机器提交，而无需协调序列号。
+
+### 它与序列号的重放保护有何不同？
+
+- 基于序列号的交易仅在交易序列号等于账户当前序列号时执行，并且按顺序执行。
+- 无序交易在 `(sender, nonce)` 尚未被记录时执行，可以按任意顺序提交。
+
+`(sender, sequence number)` 可以唯一标识一笔已提交的序列号交易。`(sender, nonce)` **不能**唯一标识一笔已提交的无序交易，因为在旧条目被垃圾回收后，同一个 nonce 可以再次使用。
+
+### 谁可以发送无序交易？
+
+没有 `0x1::account::Account` 资源的无状态账户，以及已经拥有该资源的账户，都可以发送无序交易。
+
+无状态发送者在轮换密钥之前只能使用默认的 Ed25519 认证路径。轮换密钥会创建 `Account` 资源。
+
+### 应该如何选择 nonce？
+
+选择一个随机的 `u64`。在 `(address, nonce, expiration T)` 的交易提交后，不要在大约 `T + 130` 秒或之前的过期时间下重用同一组 `(address, nonce)`。
+
+### 过期时间有什么限制？
+
+无序交易的过期时间最多只能是未来 **60 秒**。更长的过期时间会被丢弃，状态为
+`TRANSACTION_EXPIRATION_TOO_FAR_IN_FUTURE`。基于序列号的交易没有这个 60 秒上限。
+
+## 兼容性常见问题
+
+### 现有的序列号交易还能用吗？
+
+可以。基于序列号的交易仍然有效。如果应用要求同一发送者按顺序执行，请继续使用序列号交易。
+
+无状态账户提交序列号为 `0` 的序列号交易时会创建 `Account` 资源，之后不再是无状态账户。无状态账户上大于 `0` 的序列号会被丢弃。
+
+### 重用 nonce 会得到什么错误？
+
+VM 状态为 `NONCE_ALREADY_USED`。详见 [错误码](/zh/build/smart-contracts/error-codes)。
+
+### 如何确认交易是否上链？
+
+`GET /transactions/by_hash/{hash}` 仍然可用。过去通过轮询 `GET /accounts/{address}`、并根据序列号推断进度的客户端，不能把该方法用于无序交易。节点还提供
+`GET /accounts/{address}/transaction_summaries`，返回哈希、版本以及重放保护值（nonce 或序列号）。
+
+### SDK 支持在哪里？
+
+- [TypeScript SDK](/zh/build/sdks/ts-sdk/building-transactions/orderless-transactions)
+- [无序交易指南](/zh/build/guides/orderless-transactions)

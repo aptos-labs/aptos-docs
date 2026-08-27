@@ -16,6 +16,7 @@ sidebar:
 - Aptos 区块链中的 **账户** 是一个容器，可以包含任意数量的 [Move 模块](#move-模块) 和 [Move 资源](#move-资源)。
 - 每个账户的状态由代码和数据组成。
 - 账户通过 [账户地址](#账户地址) 进行标识。
+- 在 [AIP-115](/zh/build/aips/aip-115) 之后，地址无需链上 `0x1::account::Account` 资源即可作为有效账户。缺少该资源时，REST `GET /accounts/{address}` 会返回默认值，而不再返回 404。
 
 详情请参阅 [账户](/zh/network/blockchain/accounts)。
 
@@ -91,13 +92,13 @@ sidebar:
 
 ### AptosAccount
 
-- **`AptosAccount`** 是一个 Move 资源，包含与账户相关的所有管理数据，如序列号、余额和认证密钥。
-- **`AptosAccount`** 是每个账户都保证包含的唯一资源。
+- **`AptosAccount`** 是早期 Aptos/Diem Move API 对账户管理状态（序列号和认证密钥）的历史名称。
+- 链上资源是 `0x1::account::Account`。在 [AIP-115](/zh/build/aips/aip-115) 之后，该资源仅在需要时创建，并非每个账户都有。
+- 账户余额存放在 CoinStore 或 Fungible Store 资源中，而不在 `Account` 中。
 
 ### AptosAccount 模块
 
-- **AptosAccount 模块** 是一个 Move 模块，包含用于操作特定 `AptosAccount.T` 资源中管理数据的代码。
-- 用于检查或增加序列号、提取或存入货币以及提取 gas 存款的代码都包含在 AptosAccount 模块中。
+- **AptosAccount 模块** 是管理 `0x1::account::Account` 的 Move 模块的历史名称。当前代码和文档请使用 `0x1::account`。
 
 ### Aptos 开发网
 
@@ -110,6 +111,13 @@ sidebar:
 - 在 Aptos 上，区块是同时提交的一批 [交易](#交易)。
 - 区块号类似于区块链文献中的"区块高度"。
 - 交易通过账本版本而非区块进行引用。
+
+### 区块收尾
+
+- **区块收尾** 是结束区块的系统交易（`block_epilogue_transaction`），并携带该区块的 `BlockEndInfo`（gas 与输出限制）。它取代了此前的 `StateCheckpoint` 交易类型。
+- 纪元的最后一个区块没有区块收尾交易。
+
+详见 [AIP-88](/zh/build/aips/aip-88)。
 
 ### BlockSTM
 
@@ -260,6 +268,12 @@ sidebar:
 
 详情请参阅 [Gas 和存储费用](/zh/network/blockchain/gas-txn-fee)。
 
+### Geomi
+
+- **[Geomi](https://geomi.dev/)**（原 Aptos Build）是 Aptos Labs 的开发者门户，提供 API 密钥、托管索引器访问、Gas Station 和无代码索引。
+
+详见 [数据提供商](/zh/build/apis/data-providers)。
+
 ## H
 
 ### 诚实（验证者）
@@ -391,6 +405,7 @@ sidebar:
 ### Nonce
 
 - **Nonce** 是仅使用一次的数字，是为身份验证协议和加密哈希函数的特定用途生成的随机或半随机数字。
+- 在 Aptos 上，[无序交易](#无序交易) 使用 `u64` nonce 作为重放保护，而不是[序列号](#序列号)。
 
 ## O
 
@@ -401,6 +416,13 @@ sidebar:
 ### 开源社区
 
 - **开源社区** 是用于描述从事开源软件工作的开发人员群体的术语。如果您正在阅读这个术语表，那么您就是 Aptos 项目开发者社区的一部分。
+
+### 无序交易
+
+- **无序交易**（AIP-123）使用 [nonce](#nonce) 而不是[序列号](#序列号) 来防止重放。它们可以按任意顺序执行，过期时间最多 60 秒，并且不需要链上 `Account` 资源。
+- 当应用需要同一发送者按顺序执行时，请使用基于序列号的交易。
+
+详见 [AIP-123](/zh/build/aips/aip-123)。
 
 ## P
 
@@ -462,6 +484,7 @@ sidebar:
 - 如果账户 A 的当前序列号是 X，则账户 A 上的交易 T 只有在 T 的序列号是 X 时才会执行。
 - 这些交易将保留在内存池中，直到它们成为该账户的下一个序列号（或直到它们过期）。
 - 当交易被应用时，账户的序列号将变为 X+1。账户具有严格递增的序列号。
+- [无序交易](#无序交易) 不使用序列号，而是使用 nonce，并且可以按任意顺序提交。
 
 ### 发送方
 
@@ -485,6 +508,13 @@ sidebar:
 ### 状态根哈希
 
 - **状态根哈希** 是 Aptos 区块链在给定版本的所有键和值状态的 [Merkle 哈希](https://en.wikipedia.org/wiki/Merkle_tree)。
+
+### 无状态账户
+
+- **无状态账户** 是尚未创建链上 `0x1::account::Account` 资源的地址。它仍是有效账户：默认认证密钥等于地址本身，默认序列号为 `0`。
+- 当序列号交易或密钥轮换等功能需要该资源时才会创建。[无序交易](#无序交易) 可以在不创建该资源的情况下发送。
+
+详见 [AIP-115](/zh/build/aips/aip-115)。
 
 ## T
 

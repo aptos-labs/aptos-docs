@@ -133,6 +133,7 @@ export const sidebar = [
       group("guides.group.integration", {
         collapsed: true,
         items: [
+          "build/guides/payments",
           "build/guides/exchanges",
           "build/guides/application-integration",
           "build/guides/oracles",

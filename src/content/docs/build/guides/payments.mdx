@@ -7,7 +7,7 @@ sidebar:
 
 import { Aside, CardGrid, LinkCard } from "@astrojs/starlight/components";
 
-Aptos is a Layer 1 settlement rail for moving APT, [stablecoins](/build/guides/exchanges#stablecoin-addresses), and other [fungible assets](/build/smart-contracts/fungible-asset). Payments finalize as soon as the transaction commits (BFT consensus, no extra block confirmations). This page states the latency, block-time, and fee numbers you should plan around, then maps those numbers onto ordinary transfers, confidential transfers, and other payment flows.
+Aptos is a Layer 1 settlement rail for moving APT, [stablecoins](/build/guides/exchanges#stablecoin-addresses), and other [fungible assets](/build/smart-contracts/fungible-asset). A successful payment is **final as soon as the transaction commits** (BFT consensus, no extra block confirmations). This page separates block time, end-to-end latency, finality, and fees, then maps those onto ordinary transfers, confidential transfers, and other payment flows.
 
 <Aside type="tip">
   For a first working payment, follow [Your First Transaction](/build/guides/first-transaction). For wallets and existing apps, see [Application Integration](/build/guides/application-integration).
@@ -15,23 +15,23 @@ Aptos is a Layer 1 settlement rail for moving APT, [stablecoins](/build/guides/e
 
 ## Latency, block time, and fees
 
-These three numbers answer different questions. Do not treat block time as the time a user waits for a payment.
+These four numbers answer different questions. Do not treat block time as the time a user waits for a payment.
 
 ```mermaid
-flowchart LR
+graph LR
   submit["1. Client submits"] --> mempool["2. Mempool"]
   mempool --> block["3. Block proposed"]
   block --> exec["4. Execute"]
-  exec --> commit["5. Commit = final"]
+  exec --> commit["5. Commit"]
   commit --> wait["6. Client observes"]
 ```
 
-| Metric                       | What it measures                                              | Typical mainnet value                                                                                                                                                                                    | Where to verify                                                                                                                                |
-| ---------------------------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Block time**               | Interval between consecutive blocks                           | Tens of milliseconds; often under 50 ms. Aptos does not use a fixed slot clock                                                                                                                           | [Blocks](/network/blockchain/blocks), [Explorer](https://explorer.aptoslabs.com/blocks?network=mainnet)                                        |
-| **Finality**                 | When the payment is irreversible                              | Immediate on [commit](/build/guides/exchanges#what-is-the-finality-of-a-transaction). No confirmation depth, no reorg window                                                                             | [Transactions and States](/network/blockchain/txns-states)                                                                                     |
-| **End-to-end (E2E) latency** | Client submit → committed and visible to `waitForTransaction` | Typically **sub-second** under normal load. Includes client RTT to a fullnode, mempool, consensus, execution, and polling                                                                                | Always call `waitForTransaction` after submit                                                                                                  |
-| **Transaction fee**          | APT charged to the fee payer                                  | `gas_used × gas_unit_price` in [octas](/network/glossary#octa), plus [storage fees](/network/blockchain/gas-txn-fee) when the transaction allocates new state. **Independent of the amount transferred** | [Gas and Storage Fees](/network/blockchain/gas-txn-fee), [simulate](/network/blockchain/gas-txn-fee#estimating-gas-consumption-via-simulation) |
+| Metric                       | What it measures                                                   | Typical mainnet value                                                                                                                                                                                            | Where to verify                                                                                                                                |
+| ---------------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Block time**               | Interval between consecutive blocks                                | Tens of milliseconds. Aptos does not use a fixed slot clock; live timestamps are often under 50 ms                                                                                                               | [Blocks](/network/blockchain/blocks), [Explorer](https://explorer.aptoslabs.com/blocks?network=mainnet)                                        |
+| **Finality**                 | When a committed result cannot be reversed                         | Immediate on [commit](/build/guides/exchanges#what-is-the-finality-of-a-transaction). No confirmation depth, no reorg window. A failed transaction is still final; it did not move funds                         | [Transactions and States](/network/blockchain/txns-states)                                                                                     |
+| **End-to-end (E2E) latency** | Client **submit** → committed and returned by `waitForTransaction` | Typically **sub-second** under normal load. Includes client RTT to a fullnode, mempool, consensus, execution, and polling. Build, sign, and proof generation happen **before** submit and are not in this number | Always call `waitForTransaction` after submit                                                                                                  |
+| **Transaction fee**          | APT charged to the fee payer                                       | Net charge is `gas_used × gas_unit_price − storage_refund` in [octas](/network/glossary#octa). Storage is already folded into `gas_used`. **Independent of the amount transferred**                              | [Gas and Storage Fees](/network/blockchain/gas-txn-fee), [simulate](/network/blockchain/gas-txn-fee#estimating-gas-consumption-via-simulation) |
 
 <Aside type="note">
   Block time, load, and USD-denominated fees move with the network and the APT price. Quote octas (or simulated `gas_used`) in product SLAs; treat USD figures as order-of-magnitude only. Live gas unit prices are available from [`/v1/estimate_gas_price`](https://api.mainnet.aptoslabs.com/v1/estimate_gas_price). Governance sets the floor (`txn.min_price_per_gas_unit`, currently 100 octas for ordinary transactions).
@@ -45,28 +45,27 @@ See [Blocks](/network/blockchain/blocks) and [Execution](/network/blockchain/exe
 
 ### End-to-end latency
 
-E2E latency is the user-visible path:
+On this page, **E2E latency** is the clock from **submit** to `waitForTransaction` returning a committed transaction. That wait is typically under a second for a simple payment.
 
-1. Build, (optionally) simulate, and sign.
-2. Submit to a fullnode REST API. A 202 and a hash mean the node **accepted** the transaction, not that it committed.
-3. Wait until the transaction is committed. SDKs expose this as `waitForTransaction`.
+Work that happens **before** submit is separate and can dominate the user’s clock:
 
-On Aptos, that wait is typically under a second for a simple payment. Extra work **before** submit (confidential-asset proof generation, collecting multisig signatures, encrypting a pending payload) sits outside consensus time and can dominate the user’s clock.
+- Build, optional simulation, and sign.
+- Confidential-asset proof generation, collecting multisig signatures, or encrypting a pending payload.
 
-Submission is not settlement. Poll until commit, then treat the payment as final.
+Submit is not settlement. A 202 and a hash mean the node **accepted** the transaction. Poll with `waitForTransaction`, then check `success === true` before treating the payment as completed. A committed failed transaction is still [final](#finality) (it will not reverse), but the transfer did not happen.
 
 ### Finality
 
-Aptos uses BFT consensus. A committed transaction is final. You do not wait for additional blocks the way you would on a probabilistic-finality chain. See the [exchange FAQ on finality](/build/guides/exchanges#what-is-the-finality-of-a-transaction) and the [transaction lifecycle](/network/blockchain/blockchain-deep-dive).
+Aptos uses BFT consensus. A committed transaction is final, whether it succeeded or aborted. You do not wait for additional blocks the way you would on a probabilistic-finality chain. See the [exchange FAQ on finality](/build/guides/exchanges#what-is-the-finality-of-a-transaction) and the [transaction lifecycle](/network/blockchain/blockchain-deep-dive).
 
 ### Transaction fees
 
-Fees have two parts, both documented in [Gas and Storage Fees](/network/blockchain/gas-txn-fee):
+Fees have two parts, both documented in [Gas and Storage Fees](/network/blockchain/gas-txn-fee). Today the client still sees them combined in `gas_used`:
 
 1. **Execution and IO** — gas units × `gas_unit_price` (octas). The unit price can rise under load; a higher price only helps the transaction **enter** the next block, not its order inside the block.
-2. **Storage** — fixed APT for new or grown state slots (for example, the first time a recipient holds a given fungible asset). Storage can dominate when a payment creates stores rather than updating existing ones.
+2. **Storage** — fixed APT for new or grown state slots (for example, the first time a recipient holds a given fungible asset). That amount is converted into gas units at the transaction’s `gas_unit_price` and included in `gas_used`. A deletion can later credit a `storage_refund` that is **not** inside `gas_used`.
 
-A 1 APT transfer and a 1,000,000 APT transfer with the same payload cost about the same in gas. Average mainnet fees sit at a **fraction of a US cent** (on the order of 0.0005 USD in public network figures). Simple APT and fungible-asset transfers are among the cheapest transactions. Always [simulate](/network/blockchain/gas-txn-fee#estimating-gas-consumption-via-simulation) for the exact payload you will submit.
+Net APT moved from the payer is `gas_used × gas_unit_price − storage_refund`. A 1 APT transfer and a 1,000,000 APT transfer with the same payload cost about the same in gas. Average mainnet fees sit at a **fraction of a US cent** (on the order of 0.0005 USD in public network figures; treat USD as order-of-magnitude only). Simple APT and fungible-asset transfers are among the cheapest transactions. Always [simulate](/network/blockchain/gas-txn-fee#estimating-gas-consumption-via-simulation) for the exact payload you will submit.
 
 To hide APT from end users, use a [sponsored transaction](/build/guides/sponsored-transactions) or a [Geomi Gas Station](https://geomi.dev/docs/gas-stations).
 
@@ -102,6 +101,9 @@ const transaction = await aptos.transaction.build.simple({
 
 const committed = await aptos.signAndSubmitTransaction({ signer: sender, transaction });
 const executed = await aptos.waitForTransaction({ transactionHash: committed.hash });
+if (!executed.success) {
+  throw new Error(executed.vm_status);
+}
 ```
 
 Walk through the full flow (fund, simulate, sign, wait) in [Your First Transaction](/build/guides/first-transaction). SDK quickstarts repeat the same pattern: [TypeScript](/build/sdks/ts-sdk/quickstart), [Python](/build/sdks/python-sdk/quickstart), [Go](/build/sdks/go-sdk/quickstart), [Rust](/build/sdks/rust-sdk/quickstart).
@@ -121,15 +123,21 @@ const transaction = await aptos.transaction.build.simple({
     functionArguments: [metadataAddress, recipientAddress, amount],
   },
 });
+
+const committed = await aptos.signAndSubmitTransaction({ signer: sender, transaction });
+const executed = await aptos.waitForTransaction({ transactionHash: committed.hash });
+if (!executed.success) {
+  throw new Error(executed.vm_status);
+}
 ```
 
 Mainnet stablecoin metadata addresses are listed under [Stablecoin Addresses](/build/guides/exchanges#stablecoin-addresses). For a broader token registry, see the [Panora Token List](https://github.com/PanoraExchange/Aptos-Tokens). To issue your own asset, start with [Your First Fungible Asset](/build/guides/first-fungible-asset).
 
 <Aside type="caution">
-  A first-time FA credit can allocate a storage slot and therefore pay a [storage fee](/network/blockchain/gas-txn-fee#calculating-storage-fees) on top of execution gas. Simulate the exact sender/recipient pair rather than assuming a repeat-transfer cost.
+  A first-time FA credit can allocate a storage slot. That storage fee is converted into gas units and included in `gas_used` (see [Calculating Storage Fees](/network/blockchain/gas-txn-fee#calculating-storage-fees)). Simulate the exact sender/recipient pair rather than assuming a repeat-transfer cost.
 </Aside>
 
-Read balances with `aptos.getBalance` (APT) or the `0x1::primary_fungible_store::balance` view function. Indexing and product tables are covered in the [Indexer](/build/indexer) and [fungible asset balance queries](/build/indexer/indexer-api/fungible-asset-balances).
+Read balances with `aptos.getBalance({ accountAddress, asset })` or the `0x1::primary_fungible_store::balance` view function. Indexing and product tables are covered in the [Indexer](/build/indexer) and [fungible asset balance queries](/build/indexer/indexer-api/fungible-asset-balances).
 
 ## Confidential transfers
 
@@ -139,7 +147,7 @@ Do not hand-build CA transactions. Use the TypeScript client documented in [Conf
 
 Relative to a plaintext FA transfer:
 
-- **E2E latency:** consensus is still typically sub-second after submit. Proof generation on the client happens _before_ submit and is the usual extra delay.
+- **E2E latency:** on-chain E2E is still typically sub-second after submit. Proof generation on the client happens before submit and is the usual extra delay.
 - **Fees:** higher execution and IO because of proof verification and a larger payload. Simulate. There is no separate “confidential gas schedule” beyond ordinary metering.
 - **Not the same as encrypted pending transactions.** CA hides committed amounts. [Encrypted pending transactions](/build/guides/encrypted-pending-transactions) hide the Move payload only while the transaction is in mempool.
 

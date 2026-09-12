@@ -84,6 +84,7 @@ Aptos 使用 BFT 共识。已上链确认的交易即最终，无论成功还是
 | **金库 / 策略**       | 批准带来额外往返            | 收集 N-of-M 签名      | 批准后收取一次执行费                                 | [您的第一个多签](/zh/build/guides/first-multisig)                     |
 | **无密码登录**         | 与内部转账相同             | OIDC / Keyless 流程 | 与内部转账相同                                    | [Aptos 无密钥](/zh/build/guides/aptos-keyless)                    |
 | **双方同意**          | 收齐签名后与内部转账相同        | 向每个代理收集签名         | 与内部调用的链上成本相同                               | [多代理交易](#双方同意多代理交易)                                            |
+| **点对点兑换**         | 双方签名后与内部转账相同        | 双方签署同一负载          | 两条腿的 gas 计入一笔交易                            | [点对点兑换](#点对点兑换)                                                |
 
 批量打款（工资、分发）可以使用 `0x1::aptos_account::batch_transfer` / `batch_transfer_coins`，用一笔交易支付多名接收方。gas 随输出数量增加，但端到端仍只需等待一次。
 
@@ -95,15 +96,15 @@ Aptos 使用 BFT 共识。已上链确认的交易即最终，无论成功还是
 2. **[无序交易](/zh/build/guides/orderless-transactions)**（AIP-123）：传入唯一的 `replayProtectionNonce` 代替序列号，使同一账户可以并行提交多笔支付（工资、热钱包）。无序交易最多 60 秒过期。序列号工作流仍是默认选择，见[交易管理](/zh/build/guides/transaction-management)。
 3. **[多代理](#双方同意多代理交易)**：列出的每个账户都对同一笔交易签名，从而让双方同意，而不是由一方单方面发给另一方。需要带有多个 `&signer` 参数的 Move 入口函数。不同于多签（对同一个账户的 N-of-M 控制）。
 
-| 支付           | 赞助                                 | 无序                           | 多代理（双方同意）                                   |
-| ------------ | ---------------------------------- | ---------------------------- | ------------------------------------------- |
-| **APT**      | 费用支付者承担 gas，转出的 APT 不被手续费扣减        | 同一热钱包并行打款                    | 自定义双签名模块，不要用 `0x1::aptos_account::transfer` |
-| **FA / 稳定币** | 用户持有 FA，应用支付 APT gas               | 同样的并行提交                      | 自定义双签名结算或兑换                                 |
-| **机密**       | CA 客户端 `withFeePayer: true`（全局或按次） | 自行构建 CA 负载时可使用 nonce         | 标准 CA 转账是单方发送；双方同意需要自定义合约                   |
-| **加密待处理**    | 可组合（`withFeePayer: true`）          | 可组合（`replayProtectionNonce`） | 可组合（`build.multiAgent`）                     |
-| **NFT / 对象** | 与 APT 或 FA 相同的费用支付者模式              | 同样的并行提交                      | 双方签名的对象换代币                                  |
-| **金库 / 多签**  | N-of-M 批准后仍可由赞助方支付 gas             | 金库并行操作可用无序                   | 另一套工具：两个账户，而不是一个账户上的多把密钥                    |
-| **无密钥**      | 赞助 gas，新用户无需持有 APT                 | 与其他发送方相同的 nonce 选项           | 无密钥账户可作为发送方或二级签名者                           |
+| 支付           | 赞助                                 | 无序                           | 多代理（双方同意）                                          |
+| ------------ | ---------------------------------- | ---------------------------- | -------------------------------------------------- |
+| **APT**      | 费用支付者承担 gas，转出的 APT 不被手续费扣减        | 同一热钱包并行打款                    | 自定义双签名[兑换](#点对点兑换)模块，不要用 `aptos_account::transfer` |
+| **FA / 稳定币** | 用户持有 FA，应用支付 APT gas               | 同样的并行提交                      | [点对点兑换](#点对点兑换)：双方签署同一入口函数，同时转移双方资产                |
+| **机密**       | CA 客户端 `withFeePayer: true`（全局或按次） | 自行构建 CA 负载时可使用 nonce         | 标准 CA 转账是单方发送；双方同意需要自定义合约                          |
+| **加密待处理**    | 可组合（`withFeePayer: true`）          | 可组合（`replayProtectionNonce`） | 可组合（`build.multiAgent`）                            |
+| **NFT / 对象** | 与 APT 或 FA 相同的费用支付者模式              | 同样的并行提交                      | 双方签名的对象换代币                                         |
+| **金库 / 多签**  | N-of-M 批准后仍可由赞助方支付 gas             | 金库并行操作可用无序                   | 另一套工具：两个账户，而不是一个账户上的多把密钥                           |
+| **无密钥**      | 赞助 gas，新用户无需持有 APT                 | 与其他发送方相同的 nonce 选项           | 无密钥账户可作为发送方或二级签名者                                  |
 
 在单方 APT（或 FA）转账上叠加赞助与无序：
 
@@ -159,7 +160,7 @@ if (!executed.success) {
 
 - **赞助：** 费用支付者支付 gas，因此发送方转出的 APT 不会被手续费扣减。适合由金库或应用承担 gas，或希望接收方收到精确的 Octa 数量、发送方只支出该数量。
 - **无序：** 为每笔打款使用唯一的 `replayProtectionNonce`，使同一热钱包可以一次提交多笔 APT 转账（工资、分发）。过期时间最多 60 秒。
-- **多代理：** 单方 `aptos_account::transfer` 只需要发送方。若双方必须同意（原子兑换、托管释放、「只有你也签名我才付款」），请使用带两个 `&signer` 参数的自定义入口函数。给 `0x1::aptos_account::transfer` 增加二级签名者会失败（`NUMBER_OF_SIGNER_ARGUMENTS_MISMATCH`）。见[双方同意](#双方同意多代理交易)。
+- **多代理：** 单方 `aptos_account::transfer` 只需要发送方。若双方必须同意，尤其是[点对点兑换](#点对点兑换)，请使用带两个 `&signer` 参数的自定义入口函数。给 `0x1::aptos_account::transfer` 增加二级签名者会失败（`NUMBER_OF_SIGNER_ARGUMENTS_MISMATCH`）。见[双方同意](#双方同意多代理交易)。
 
 ## 同质化资产与稳定币转账
 
@@ -194,7 +195,7 @@ if (!executed.success) {
 
 - **赞助：** 这是常见的免 gas 结账：用户持有 USDC（或其他 FA），不必持有 APT。应用或 [Geomi Gas Station](https://geomi.dev/docs/gas-stations) 支付 gas。与 APT 相同的 `withFeePayer: true` 模式，只换入口函数。
 - **无序：** 与 APT 相同的 nonce。用于同一金库账户并行打出稳定币。
-- **多代理：** 单方 `primary_fungible_store::transfer` 是付款方向接收方的推送。货银对付（稳定币换 NFT、USDC 换 APT、两种 FA 原子互换）时，两个账户对同一个自定义入口函数签名，任何一方都不能声称对方已经先付了。
+- **多代理：** 单方 `primary_fungible_store::transfer` 是付款方向接收方的推送。[点对点兑换](#点对点兑换)（USDC 换 APT、两种 FA，或货银对付）时，两个账户对同一个自定义入口函数签名，任何一方都不能声称对方已经先付了。
 
 ## 机密转账
 
@@ -218,7 +219,7 @@ if (!executed.success) {
 
 单方支付是：Alice 签名，Bob 收款。Bob 并未在链上同意。结账、提现、工资推送适合这种形态。
 
-**[多代理交易](/zh/build/sdks/ts-sdk/building-transactions/multi-agent-transactions)** 是另一种形态：Alice 和 Bob 都对同一笔交易签名。只有列出的每个账户都授权，Move 函数才会运行，因此两条腿要么都发生，要么都不发生。需要双方同意时使用：原子兑换、托管释放、商户必须接受的退款，或任何不应由单方发送的支付。
+**[多代理交易](/zh/build/sdks/ts-sdk/building-transactions/multi-agent-transactions)** 是另一种形态：Alice 和 Bob 都对同一笔交易签名。只有列出的每个账户都授权，Move 函数才会运行，因此两条腿要么都发生，要么都不发生。需要双方同意时使用：[点对点兑换](#点对点兑换)、托管释放、商户必须接受的退款，或任何不应由单方发送的支付。
 
 ```mermaid
 flowchart TB
@@ -233,16 +234,67 @@ flowchart TB
 
 这不是多签。多签是 N-of-M 密钥控制同一个账户（[您的第一个多签](/zh/build/guides/first-multisig)）。多代理是若干个不同账户出现在同一笔交易上。
 
-框架里没有已经接受两个签名者的 `0x1::` 支付函数。你需要发布（或复用）带有多个 `&signer` 参数的入口函数，然后：
+框架里没有已经接受两个签名者的 `0x1` 支付函数。你需要发布（或复用）带有多个 `&signer` 参数的入口函数。最常见的支付形态就是兑换。
 
-```typescript filename="two-party-payment.ts"
+### 点对点兑换
+
+两次单方发送无法实现兑换。若 Alice 先转出 USDC，Bob 可以拒绝再转 APT。若他们提交两笔独立交易，可能一笔上链成功、另一笔失败。多代理兑换把两次转移放进双方都签名的同一个 Move 函数：
+
+1. Alice 和 Bob 在链下就资产和数量达成一致。这些值是双方共同签署的交易参数，任何一方都不能在对方签名之后改条件。
+2. 入口函数把 Alice 的资产转给 Bob，同时把 Bob 的资产转给 Alice。
+3. Block-STM 原子执行该函数。缺少任一签名则交易无效。函数中止（例如余额不足）时，两次转移都不上链。
+
+```mermaid
+flowchart LR
+  subgraph agents [双方都必须签名]
+    A[Alice]
+    B[Bob]
+  end
+  agents --> S["兑换入口：两次转移"]
+  S --> A2[Alice 收到 Bob 的资产]
+  S --> B2[Bob 收到 Alice 的资产]
+```
+
+这不是 AMM 或 DEX 兑换。资金池兑换通常是一个签名者对合约操作。多代理是两个账户彼此兑换（OTC、货银对付、NFT 换稳定币）。
+
+发布一个模块：前两个参数为 `&signer`，并调用普通转账 API。交易中的签名者顺序必须与 Move 参数顺序一致：发送方是 `alice`，第一个二级签名者是 `bob`。
+
+```move filename="p2p_swap.move"
+module example::p2p_swap {
+    use std::signer;
+    use aptos_framework::object::Object;
+    use aptos_framework::fungible_asset::Metadata;
+    use aptos_framework::primary_fungible_store;
+
+    /// Alice 把 `alice_amount` 的 `alice_asset` 转给 Bob。
+    /// Bob 把 `bob_amount` 的 `bob_asset` 转给 Alice。
+    /// 两次转移要么都发生，要么都不发生。
+    public entry fun swap(
+        alice: &signer,
+        bob: &signer,
+        alice_asset: Object<Metadata>,
+        bob_asset: Object<Metadata>,
+        alice_amount: u64,
+        bob_amount: u64,
+    ) {
+        let alice_addr = signer::address_of(alice);
+        let bob_addr = signer::address_of(bob);
+        primary_fungible_store::transfer(alice, alice_asset, bob_addr, alice_amount);
+        primary_fungible_store::transfer(bob, bob_asset, alice_addr, bob_amount);
+    }
+}
+```
+
+同样的模式可用于 APT 换稳定币（其中一条腿调用 `0x1::aptos_account::transfer`），或对象换 FA（NFT 结账）。两条腿都是 APT 时，教学脚本 [`two_by_two_transfer`](https://github.com/aptos-labs/aptos-ts-sdk/blob/main/tests/move/transfer/sources/script_two_by_two.move#L5) 就是对应的 Coin 示例。
+
+```typescript filename="p2p-swap.ts"
 const transaction = await aptos.transaction.build.multiAgent({
-  sender: alice.accountAddress,
-  secondarySignerAddresses: [bob.accountAddress],
-  withFeePayer: true, // 可选
+  sender: alice.accountAddress, // 第一个 &signer（alice）
+  secondarySignerAddresses: [bob.accountAddress], // 第二个 &signer（bob）
+  withFeePayer: true, // 可选：由应用支付 gas
   data: {
-    function: "0xYOUR_MODULE::payments::settle", // 必须接受两个签名者
-    functionArguments: [/* amounts, metadata */],
+    function: "0xYOUR_MODULE::p2p_swap::swap",
+    functionArguments: [aliceAssetMetadata, bobAssetMetadata, aliceAmount, bobAmount],
   },
   options: {
     replayProtectionNonce: nonce, // 可选；省略则使用序列号
@@ -261,7 +313,13 @@ const committed = await aptos.transaction.submit.multiAgent({
 });
 ```
 
-教学模块见 [`two_by_two_transfer`](https://github.com/aptos-labs/aptos-ts-sdk/blob/main/tests/move/transfer/sources/script_two_by_two.move#L5)：每个签名者在同一笔交易中从自己的账户转出 Coin。其他 SDK 使用同样的 `multiAgent` 模式：[Python](/zh/build/sdks/python-sdk/building-transactions/multi-agent-transactions)、[Go](/zh/build/sdks/go-sdk/building-transactions/multi-agent-transactions)、[Rust](/zh/build/sdks/rust-sdk/building-transactions/multi-agent-transactions)。
+兑换上的组合选项：
+
+- **赞助：** 两条腿都是 FA、双方都不必为 gas 持有 APT 时很有用。费用支付者不是兑换的一方，除非你也把该账户列为签名者。
+- **无序：** 同一发送方账户并行做多笔彼此独立的 OTC 兑换时使用 nonce。偶发兑换用序列号即可。
+- **加密待处理：** 若约定数量应在内存池中保持隐藏，将 `encrypted: true` 与 `build.multiAgent` 一起使用。
+
+其他 SDK 使用同样的 `multiAgent` 流程：[Python](/zh/build/sdks/python-sdk/building-transactions/multi-agent-transactions)、[Go](/zh/build/sdks/go-sdk/building-transactions/multi-agent-transactions)、[Rust](/zh/build/sdks/rust-sdk/building-transactions/multi-agent-transactions)。
 
 ## 其他支付用法
 
@@ -287,7 +345,7 @@ const committed = await aptos.transaction.submit.multiAgent({
 
 - **赞助：** 同样的 `withFeePayer` 模式，买家不必持有 APT。
 - **无序：** 市场热钱包并行铸造或交付大量对象时使用同样的 nonce。
-- **多代理：** 单方对象转移是推送。NFT 换稳定币、且任何一方都不应先动时，买家与卖家（或市场托管）对同一个入口函数签名。
+- **多代理：** 单方对象转移是推送。[NFT 换稳定币](#点对点兑换)且任何一方都不应先动时，买家与卖家对同一个入口函数签名。
 
 ### 无密码登录（Keyless）
 

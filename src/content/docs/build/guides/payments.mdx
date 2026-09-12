@@ -84,6 +84,7 @@ Use this table to pick an API and to see how latency and fees change. Confidenti
 | **Treasury / policy**                    | Extra round-trips for approvals                       | Collect N-of-M signatures            | One execution fee after approval                                  | [Your First Multisig](/build/guides/first-multisig)                                               |
 | **Passwordless onboarding**              | Same as the inner transfer                            | OIDC / Keyless flow                  | Same as the inner transfer                                        | [Aptos Keyless](/build/guides/aptos-keyless)                                                      |
 | **Two-party agreement**                  | Same as the inner transfer after all signatures       | Collect a signature from each agent  | Same on-chain cost as the inner call                              | [Multi-agent transactions](#two-party-agreement-multi-agent)                                      |
+| **Peer-to-peer swap**                    | Same after both signatures                            | Both parties sign the same payload   | Gas of both legs in one transaction                               | [P2P swap](#peer-to-peer-swap)                                                                    |
 
 Batch payouts (payroll, disbursements) can use `0x1::aptos_account::batch_transfer` / `batch_transfer_coins` so one transaction pays many recipients. That raises gas with the number of outputs but still keeps a single E2E wait.
 
@@ -95,15 +96,15 @@ A payment is the Move call (APT, FA, confidential, NFT, …). These three option
 2. **[Orderless](/build/guides/orderless-transactions)** (AIP-123) — pass a unique `replayProtectionNonce` instead of a sequence number so one account can submit many payments in parallel (payroll, hot wallets). Orderless transactions expire after at most 60 seconds. Sequence-number workers remain the default; see [Transaction Management](/build/guides/transaction-management).
 3. **[Multi-agent](#two-party-agreement-multi-agent)** — every listed account signs **one** transaction so both parties agree, rather than one side sending to the other. Requires a Move entry function with multiple `&signer` arguments. Distinct from **multisig** (N-of-M control of a single account).
 
-| Payment                 | Sponsored                                              | Orderless                                  | Multi-agent (both parties agree)                                     |
-| ----------------------- | ------------------------------------------------------ | ------------------------------------------ | -------------------------------------------------------------------- |
-| **APT**                 | Fee payer covers gas so transferred APT is not reduced | Parallel sends from one hot wallet         | Custom two-signer module, not `0x1::aptos_account::transfer`         |
-| **FA / stablecoin**     | User holds the FA; the app pays APT gas                | Same parallel submit                       | Custom two-signer settlement or swap                                 |
-| **Confidential**        | CA client `withFeePayer: true` (global or per call)    | Nonce if you build the CA payload yourself | Standard CA transfer is one-sided; two-party needs a custom contract |
-| **Encrypted pending**   | Combinable (`withFeePayer: true`)                      | Combinable (`replayProtectionNonce`)       | Combinable (`build.multiAgent`)                                      |
-| **NFT / object**        | Same fee-payer pattern as APT or FA                    | Same parallel submit                       | Both parties sign an object-for-token transfer                       |
-| **Treasury / multisig** | Sponsor can pay gas after N-of-M approval              | Parallel treasury operations               | Different tool: two accounts, not several keys on one account        |
-| **Keyless**             | Sponsor gas so a new user never holds APT              | Same nonce option as any other sender      | Keyless account can be sender or secondary signer                    |
+| Payment                 | Sponsored                                              | Orderless                                  | Multi-agent (both parties agree)                                            |
+| ----------------------- | ------------------------------------------------------ | ------------------------------------------ | --------------------------------------------------------------------------- |
+| **APT**                 | Fee payer covers gas so transferred APT is not reduced | Parallel sends from one hot wallet         | Custom two-signer [swap](#peer-to-peer-swap), not `aptos_account::transfer` |
+| **FA / stablecoin**     | User holds the FA; the app pays APT gas                | Same parallel submit                       | [P2P swap](#peer-to-peer-swap): both sign one entry that moves both assets  |
+| **Confidential**        | CA client `withFeePayer: true` (global or per call)    | Nonce if you build the CA payload yourself | Standard CA transfer is one-sided; two-party needs a custom contract        |
+| **Encrypted pending**   | Combinable (`withFeePayer: true`)                      | Combinable (`replayProtectionNonce`)       | Combinable (`build.multiAgent`)                                             |
+| **NFT / object**        | Same fee-payer pattern as APT or FA                    | Same parallel submit                       | Both parties sign an object-for-token transfer                              |
+| **Treasury / multisig** | Sponsor can pay gas after N-of-M approval              | Parallel treasury operations               | Different tool: two accounts, not several keys on one account               |
+| **Keyless**             | Sponsor gas so a new user never holds APT              | Same nonce option as any other sender      | Keyless account can be sender or secondary signer                           |
 
 Sponsored and orderless flags on a one-sided APT (or FA) transfer:
 
@@ -159,7 +160,7 @@ How the compose options apply to APT:
 
 - **Sponsored.** The fee payer pays gas, so the sender’s transferred APT is not reduced by the fee. Use this when a treasury or app should absorb gas, or when you want the recipient to receive an exact octa amount while the sender spends only that amount.
 - **Orderless.** Give each payout a unique `replayProtectionNonce` so one hot wallet can submit many APT transfers at once (payroll, disbursements). Expiry is at most 60 seconds.
-- **Multi-agent.** A one-sided `aptos_account::transfer` only needs the sender. If both parties must agree (atomic swap, escrow release, “I pay you only if you also sign”), use a custom entry function with two `&signer` arguments. Adding a secondary signer to `0x1::aptos_account::transfer` fails (`NUMBER_OF_SIGNER_ARGUMENTS_MISMATCH`). See [Two-party agreement](#two-party-agreement-multi-agent).
+- **Multi-agent.** A one-sided `aptos_account::transfer` only needs the sender. If both parties must agree — especially a [peer-to-peer swap](#peer-to-peer-swap) — use a custom entry function with two `&signer` arguments. Adding a secondary signer to `0x1::aptos_account::transfer` fails (`NUMBER_OF_SIGNER_ARGUMENTS_MISMATCH`). See [Two-party agreement](#two-party-agreement-multi-agent).
 
 ## Fungible asset and stablecoin transfers
 
@@ -194,7 +195,7 @@ How the compose options apply to FA and stablecoins:
 
 - **Sponsored.** This is the usual gasless checkout: the user holds USDC (or another FA) and never needs APT. The application or [Geomi Gas Station](https://geomi.dev/docs/gas-stations) pays gas. Same `withFeePayer: true` pattern as APT; only the entry function changes.
 - **Orderless.** Same nonce as APT. Use it for parallel stablecoin payouts from one treasury account.
-- **Multi-agent.** A one-sided `primary_fungible_store::transfer` is a push from payer to recipient. For delivery-versus-payment (stablecoin vs NFT, USDC vs APT, two FAs swapped atomically), both accounts sign one custom entry function so neither side can claim the other already paid.
+- **Multi-agent.** A one-sided `primary_fungible_store::transfer` is a push from payer to recipient. For a [peer-to-peer swap](#peer-to-peer-swap) (USDC vs APT, two FAs, or delivery-versus-payment), both accounts sign one custom entry function so neither side can claim the other already paid.
 
 ## Confidential transfers
 
@@ -218,7 +219,7 @@ How the compose options apply to confidential transfers:
 
 A one-sided payment is: Alice signs, Bob receives. Bob never agreed on-chain. That is the right shape for a checkout, a withdrawal, or a payroll push.
 
-A **[multi-agent transaction](/build/sdks/ts-sdk/building-transactions/multi-agent-transactions)** is the other shape: Alice and Bob both sign **one** transaction. The Move function runs only if every listed account authorizes it, so either both legs happen or neither does. Use this when you need both parties to agree — an atomic swap, an escrow release, a refund that the merchant must accept, or any payment that should not be a unilateral send.
+A **[multi-agent transaction](/build/sdks/ts-sdk/building-transactions/multi-agent-transactions)** is the other shape: Alice and Bob both sign **one** transaction. The Move function runs only if every listed account authorizes it, so either both legs happen or neither does. Use this when you need both parties to agree — a [peer-to-peer swap](#peer-to-peer-swap), an escrow release, a refund that the merchant must accept, or any payment that should not be a unilateral send.
 
 ```mermaid
 flowchart TB
@@ -233,16 +234,67 @@ flowchart TB
 
 This is **not** multisig. Multisig is N-of-M keys controlling **one** account ([Your First Multisig](/build/guides/first-multisig)). Multi-agent is several **distinct accounts** on one transaction.
 
-There is no built-in `0x1` payment function that already takes two signers. You publish (or reuse) an entry function with multiple `&signer` arguments, then:
+There is no built-in `0x1` payment function that already takes two signers. You publish (or reuse) an entry function with multiple `&signer` arguments. The usual payment shape for that is a swap.
 
-```typescript filename="two-party-payment.ts"
+### Peer-to-peer swap
+
+Two one-sided sends cannot implement a swap. If Alice transfers USDC first, Bob can refuse to send APT. If they submit two separate transactions, one can commit and the other abort. A **multi-agent swap** puts both transfers in **one** Move function that both accounts sign:
+
+1. Alice and Bob agree off-chain on assets and amounts. Those values are arguments of the transaction they both sign, so neither party can change the deal after the other has signed.
+2. The entry function pulls Alice’s asset to Bob **and** Bob’s asset to Alice.
+3. Block-STM executes the function atomically. If either signer is missing, the transaction is invalid. If the function aborts (for example, insufficient balance), **neither** transfer commits.
+
+```mermaid
+flowchart LR
+  subgraph agents [Both must sign]
+    A[Alice]
+    B[Bob]
+  end
+  agents --> S["swap entry: both transfers"]
+  S --> A2[Alice receives Bob asset]
+  S --> B2[Bob receives Alice asset]
+```
+
+This is not an AMM or DEX swap. A pool swap is usually **one** signer against a contract. Multi-agent is two accounts swapping **with each other** (OTC, delivery-versus-payment, NFT-for-stablecoin).
+
+Publish a module whose first two parameters are `&signer` and that calls the ordinary transfer APIs. Signer order in the transaction must match the Move parameter order: the **sender** is `alice`; the first secondary signer is `bob`.
+
+```move filename="p2p_swap.move"
+module example::p2p_swap {
+    use std::signer;
+    use aptos_framework::object::Object;
+    use aptos_framework::fungible_asset::Metadata;
+    use aptos_framework::primary_fungible_store;
+
+    /// Alice sends `alice_amount` of `alice_asset` to Bob.
+    /// Bob sends `bob_amount` of `bob_asset` to Alice.
+    /// Both happen, or neither does.
+    public entry fun swap(
+        alice: &signer,
+        bob: &signer,
+        alice_asset: Object<Metadata>,
+        bob_asset: Object<Metadata>,
+        alice_amount: u64,
+        bob_amount: u64,
+    ) {
+        let alice_addr = signer::address_of(alice);
+        let bob_addr = signer::address_of(bob);
+        primary_fungible_store::transfer(alice, alice_asset, bob_addr, alice_amount);
+        primary_fungible_store::transfer(bob, bob_asset, alice_addr, bob_amount);
+    }
+}
+```
+
+The same pattern works for APT vs a stablecoin (`0x1::aptos_account::transfer` in one leg), or an object vs an FA (NFT checkout). Swap APT for APT by using two APT legs; the teaching script [`two_by_two_transfer`](https://github.com/aptos-labs/aptos-ts-sdk/blob/main/tests/move/transfer/sources/script_two_by_two.move#L5) is that coin-only analog.
+
+```typescript filename="p2p-swap.ts"
 const transaction = await aptos.transaction.build.multiAgent({
-  sender: alice.accountAddress,
-  secondarySignerAddresses: [bob.accountAddress],
-  withFeePayer: true, // optional
+  sender: alice.accountAddress, // first &signer (alice)
+  secondarySignerAddresses: [bob.accountAddress], // second &signer (bob)
+  withFeePayer: true, // optional: app pays gas
   data: {
-    function: "0xYOUR_MODULE::payments::settle", // must take two signers
-    functionArguments: [/* amounts, metadata, … */],
+    function: "0xYOUR_MODULE::p2p_swap::swap",
+    functionArguments: [aliceAssetMetadata, bobAssetMetadata, aliceAmount, bobAmount],
   },
   options: {
     replayProtectionNonce: nonce, // optional; omit for a sequence number
@@ -261,7 +313,13 @@ const committed = await aptos.transaction.submit.multiAgent({
 });
 ```
 
-A canonical teaching module is [`two_by_two_transfer`](https://github.com/aptos-labs/aptos-ts-sdk/blob/main/tests/move/transfer/sources/script_two_by_two.move#L5): each signer moves coin from their account in the same transaction. Other SDKs follow the same `multiAgent` pattern: [Python](/build/sdks/python-sdk/building-transactions/multi-agent-transactions), [Go](/build/sdks/go-sdk/building-transactions/multi-agent-transactions), [Rust](/build/sdks/rust-sdk/building-transactions/multi-agent-transactions).
+Compose options on a swap:
+
+- **Sponsored.** Useful when both legs are FAs and neither party should hold APT for gas. The fee payer is not a swap party unless you also pass them as a signer.
+- **Orderless.** Use a nonce if the same sender account runs many independent OTC swaps in parallel. Sequence numbers are enough for occasional swaps.
+- **Encrypted pending.** Combine `encrypted: true` with `build.multiAgent` if the agreed amounts should stay hidden in mempool.
+
+Other SDKs use the same `multiAgent` flow: [Python](/build/sdks/python-sdk/building-transactions/multi-agent-transactions), [Go](/build/sdks/go-sdk/building-transactions/multi-agent-transactions), [Rust](/build/sdks/rust-sdk/building-transactions/multi-agent-transactions).
 
 ## Other payment usages
 
@@ -287,7 +345,7 @@ N-of-M controls for mint, freeze, or large payouts: [Your First Multisig](/build
 
 - **Sponsored.** Same `withFeePayer` pattern so the buyer need not hold APT.
 - **Orderless.** Same nonce if a marketplace hot wallet mints or delivers many objects in parallel.
-- **Multi-agent.** One-sided object transfer is a push. For NFT-for-stablecoin checkout where neither side should move first, both the buyer and the seller (or the marketplace escrow) sign one entry function.
+- **Multi-agent.** One-sided object transfer is a push. For an [NFT-for-stablecoin swap](#peer-to-peer-swap) where neither side should move first, both the buyer and the seller sign one entry function.
 
 ### Passwordless onboarding (Keyless)
 

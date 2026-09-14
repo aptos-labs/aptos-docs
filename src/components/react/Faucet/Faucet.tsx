@@ -1,9 +1,8 @@
-// import { useStore } from "@nanostores/react";
-
 import { Button } from "~/components/react/Button/Button";
 import { useAuth } from "~/components/react/hooks/useAuth";
 import { IconGithub } from "~/components/react/Icon/IconGithub";
 import { IconGoogle } from "~/components/react/Icon/IconGoogle";
+import { IconWarning } from "~/components/react/Icon/IconWarning";
 import { LoginButton } from "~/components/react/LoginButton/LoginButton";
 import { FaucetForm } from "./FaucetForm";
 
@@ -13,14 +12,6 @@ export interface FaucetProps {
 
 export function Faucet({ showGithub = false }: FaucetProps) {
   const { user, error, logout, loginByGithub, loginByGoogle } = useAuth();
-  if (error) {
-    return (
-      <p className="text-text-error mt-8">
-        Could not instantiate a connection with firebase. Please make sure the correct environment
-        variables are specified.
-      </p>
-    );
-  }
 
   return (
     <div className="flex flex-col gap-2 mt-8">
@@ -47,6 +38,12 @@ export function Faucet({ showGithub = false }: FaucetProps) {
           {showGithub && (
             <LoginButton onLogin={loginByGithub} provider="GitHub" icon={<IconGithub />} />
           )}
+        </div>
+      )}
+      {error && (
+        <div className="flex items-start gap-2 text-text-error" role="alert">
+          <IconWarning className="shrink-0" />
+          <p className="m-0">{error}</p>
         </div>
       )}
     </div>

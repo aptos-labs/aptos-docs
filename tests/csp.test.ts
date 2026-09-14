@@ -3,9 +3,8 @@
  * Starlight's sidebar restore, gtag, and Mermaid in production:
  *
  * browsers ignore `'unsafe-inline'` when a hash is present in the same
- * directive. Stay on Astro 7.2.0 and patch it to omit auto hashes when
- * `'unsafe-inline'` is set, then emit one global header via the patched
- * Vercel adapter (`cspMode: "global"`).
+ * directive. Astro 7.2.5+ omits auto hashes when `'unsafe-inline'` is set.
+ * Emit one global header via the patched Vercel adapter (`cspMode: "global"`).
  */
 
 import { existsSync, readFileSync } from "node:fs";
@@ -136,11 +135,11 @@ describe("collapseCspRoutes", () => {
   });
 });
 
-describe("pnpm patches (stay on Astro 7.2.0)", () => {
-  it("registers the Vercel global-CSP patch and the Astro hash-skip patch", () => {
+describe("pnpm patches (Vercel global CSP)", () => {
+  it("registers the Vercel global-CSP patch", () => {
     const workspace = readWorkspaceYaml();
     expect(workspace).toContain("patches/@astrojs__vercel.patch");
-    expect(workspace).toContain("patches/astro.patch");
+    expect(workspace).not.toContain("patches/astro.patch");
   });
 
   it("teaches the Vercel adapter cspMode: global with a continue catch-all", () => {
@@ -151,16 +150,18 @@ describe("pnpm patches (stay on Astro 7.2.0)", () => {
     expect(patch).toContain("continue: true");
   });
 
-  it("ports Astro 7.2.5 hash suppression for 'unsafe-inline'", () => {
-    const patch = readFileSync(join(ROOT, "patches/astro.patch"), "utf8");
-    expect(patch).toContain("hasUnsafeInline");
-    expect(patch).toContain("unsafe-inline");
+  it("pins Astro 7.3.2 so 'unsafe-inline' hash skip is upstream", () => {
+    const pkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")) as {
+      dependencies: { astro: string };
+    };
+    expect(pkg.dependencies.astro).toBe("7.3.2");
   });
 });
 
 describe("astro.config and vercel.json", () => {
   it("re-enables Astro CSP and asks the patched adapter for one global header", () => {
     const config = readFileSync(join(ROOT, "astro.config.mjs"), "utf8");
+    expect(config).toContain("withFinalizedVercelOutput");
     expect(config).toContain('cspMode: "global"');
     expect(config).toContain("createCspConfig(searchResolution.provider)");
     expect(config).not.toMatch(/staticHeaders:\s*false/);

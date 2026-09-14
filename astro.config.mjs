@@ -472,8 +472,8 @@ export default defineConfig({
     validateSecrets: true,
   },
   security: {
-    // Stay on Astro 7.2.0. `patches/astro.patch` ports the 7.2.5 behavior:
-    // omit auto hashes when `'unsafe-inline'` is present so browsers honor it.
+    // Astro 7.2.5+ omits auto hashes when `'unsafe-inline'` is present so
+    // browsers honor it for Starlight, gtag, and Mermaid.
     csp: createCspConfig(searchResolution.provider),
   },
   fonts: [

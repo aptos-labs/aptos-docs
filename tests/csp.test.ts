@@ -150,13 +150,11 @@ describe("pnpm patches (Vercel global CSP)", () => {
     expect(patch).toContain("continue: true");
   });
 
-  it("pins Astro 7.2.8+ so 'unsafe-inline' hash skip and the AVIF sharp fix are upstream", () => {
+  it("pins Astro 7.2.9 so 'unsafe-inline' hash skip and the AVIF sharp fix are upstream", () => {
     const pkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")) as {
       dependencies: { astro: string };
     };
-    const [major, minor, patch] = pkg.dependencies.astro.split(".").map(Number);
-    expect(major).toBe(7);
-    expect(minor * 1000 + patch).toBeGreaterThanOrEqual(2 * 1000 + 8);
+    expect(pkg.dependencies.astro).toBe("7.2.9");
   });
 });
 

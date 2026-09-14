@@ -163,6 +163,8 @@ describe("astro.config and vercel.json", () => {
     const config = readFileSync(join(ROOT, "astro.config.mjs"), "utf8");
     expect(config).toContain('cspMode: "global"');
     expect(config).toContain("createCspConfig(searchResolution.provider)");
+    expect(config).toContain("withFinalizedVercelOutput");
+    expect(config).toContain("finalizeVercelOutput");
     expect(config).not.toMatch(/staticHeaders:\s*false/);
   });
 

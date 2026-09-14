@@ -65,7 +65,6 @@ function starlightLinksValidator(options) {
 
 import starlightOpenAPI from "starlight-openapi";
 import { sidebar } from "./astro.sidebar.ts";
-import { finalizeVercelOutput } from "./scripts/finalize-vercel-output.mjs";
 import { createCspConfig } from "./src/config/csp";
 import { SITE_TITLES, SUPPORTED_LANGUAGES } from "./src/config/i18n";
 import { markdownProcessor } from "./src/config/markdown";
@@ -117,29 +116,6 @@ process.env.SEARCH_PROVIDER = searchResolution.provider;
 const isClientViteBuild = (config) => !config.build?.ssr;
 /** @type {(config: import("vite").UserConfig) => boolean} */
 const isServerViteBuild = (config) => Boolean(config.build?.ssr);
-
-/**
- * `@astrojs/vercel` writes `.vercel/output` in its own `astro:build:done`.
- * User integrations cannot wait for that file. Wrapping the adapter runs
- * finalize after the file exists, including when Vercel uses the Astro
- * preset's default `astro build` (which does not run `pnpm build:collapse-csp`).
- *
- * @param {import("astro").AstroIntegration} integration
- * @returns {import("astro").AstroIntegration}
- */
-function withFinalizedVercelOutput(integration) {
-  const originalDone = integration.hooks?.["astro:build:done"];
-  return {
-    ...integration,
-    hooks: {
-      ...integration.hooks,
-      "astro:build:done": async (context) => {
-        await originalDone?.call(integration, context);
-        finalizeVercelOutput();
-      },
-    },
-  };
-}
 
 // https://astro.build/config
 export default defineConfig({
@@ -378,24 +354,20 @@ export default defineConfig({
     }),
   ],
   adapter: process.env.VERCEL
-    ? withFinalizedVercelOutput(
-        vercel({
-          // The patched adapter collapses Astro CSP into one catch-all route
-          // (`patches/@astrojs__vercel.patch`). Per-path static headers bloat
-          // `.vercel/output/config.json` and have failed preview deploys
-          // (Vercel "Body exceeded 3300kb limit"). The adapter wrap then
-          // copies Monaco `client/` into `static/` and drops leftover
-          // `_functions`/`client` dirs that are not Build Output API entries.
-          staticHeaders: { cspMode: "global" },
-          edgeMiddleware: false,
-          imageService: true,
-          imagesConfig: {
-            domains: [],
-            sizes: [320, 640, 1280],
-            formats: ["image/avif", "image/webp"],
-          },
-        }),
-      )
+    ? vercel({
+        // The patched adapter collapses Astro CSP into one catch-all route
+        // (`patches/@astrojs__vercel.patch`). Per-path static headers bloat
+        // `.vercel/output/config.json` and have failed preview deploys
+        // (Vercel "Body exceeded 3300kb limit").
+        staticHeaders: { cspMode: "global" },
+        edgeMiddleware: false,
+        imageService: true,
+        imagesConfig: {
+          domains: [],
+          sizes: [320, 640, 1280],
+          formats: ["image/avif", "image/webp"],
+        },
+      })
     : node({
         mode: "standalone",
         staticHeaders: true,
@@ -500,8 +472,8 @@ export default defineConfig({
     validateSecrets: true,
   },
   security: {
-    // Astro 7.2.5+ omits auto hashes when `'unsafe-inline'` is present so
-    // browsers honor it for Starlight, gtag, and Mermaid.
+    // Stay on Astro 7.2.0. `patches/astro.patch` ports the 7.2.5 behavior:
+    // omit auto hashes when `'unsafe-inline'` is present so browsers honor it.
     csp: createCspConfig(searchResolution.provider),
   },
   fonts: [

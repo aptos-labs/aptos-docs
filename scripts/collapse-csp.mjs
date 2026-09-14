@@ -99,14 +99,16 @@ export function collapseCspRoutes(json) {
 /**
  * Rewrite `.vercel/output/config.json` when it exists. Safe to call from the
  * Vercel adapter wrap (after `astro:build:done`) and from `pnpm build`.
+ *
+ * @param {string} [configPath]
  */
-export function collapseCspConfigFile() {
-  if (!fs.existsSync(CONFIG_PATH)) {
-    console.log(`[collapse-csp] ${CONFIG_PATH} not found; skipping (node adapter build).`);
+export function collapseCspConfigFile(configPath = CONFIG_PATH) {
+  if (!fs.existsSync(configPath)) {
+    console.log(`[collapse-csp] ${configPath} not found; skipping (node adapter build).`);
     return { changed: false, reason: "missing-file" };
   }
 
-  const json = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8"));
+  const json = JSON.parse(fs.readFileSync(configPath, "utf8"));
   const result = collapseCspRoutes(json);
 
   if (result.reason === "distinct-csp") {
@@ -121,7 +123,7 @@ export function collapseCspConfigFile() {
     return result;
   }
 
-  fs.writeFileSync(CONFIG_PATH, `${JSON.stringify(json, null, 2)}\n`);
+  fs.writeFileSync(configPath, `${JSON.stringify(json, null, 2)}\n`);
   console.log(
     `[collapse-csp] collapsed ${result.cspCount} per-route CSP headers into one global ${CSP_CATCH_ALL_SRC} route.`,
   );

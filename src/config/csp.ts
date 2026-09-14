@@ -44,10 +44,9 @@ const GOOGLE_FONTS_HOSTS = withHttps(["fonts.googleapis.com", "fonts.gstatic.com
  * - astro-mermaid injects a `<style>` element at runtime on every page.
  *
  * Browsers ignore `'unsafe-inline'` when a hash is present in the same
- * directive. Do not add hashes here. Stay on Astro 7.2.0 and use
- * `patches/astro.patch` so Astro omits auto hashes when `'unsafe-inline'` is
- * set. The Vercel adapter patch (`cspMode: "global"`) ships this as one HTTP
- * header instead of one route per page.
+ * directive. Do not add hashes here. Astro 7.2.5+ omits auto hashes when
+ * `'unsafe-inline'` is set. The Vercel adapter patch (`cspMode: "global"`)
+ * ships this as one HTTP header instead of one route per page.
  *
  * Pagefind searches inside a WebAssembly module running in a Web Worker created
  * from a blob URL, both of which a strict policy blocks by default. The failure
@@ -99,8 +98,8 @@ export function createCspConfig(searchProvider: SearchProvider = "algolia") {
  * Serialize `createCspConfig` into a Content-Security-Policy header.
  *
  * Useful for tests and as a hash-free reference of the intended policy. The
- * production header is rendered by Astro (with `patches/astro.patch`) and
- * emitted globally by the patched Vercel adapter.
+ * production header is rendered by Astro 7.2.5+ (hash-free when
+ * `'unsafe-inline'` is set) and emitted globally by the patched Vercel adapter.
  */
 export function serializeCspHeader(searchProvider: SearchProvider = "pagefind"): string {
   const csp = createCspConfig(searchProvider);

@@ -56,6 +56,10 @@ overrides:
   'fflate@^0.4': 0.4.9
   'fflate@^0.7': 0.7.5
   'postcss-selector-parser@^6': 6.1.4
+  # CVE-2026-93748 (GHSA-ch52-4w7c-c8xp): http-cache-semantics through 4.2.0
+  # can disclose cross-user cached responses via max-stale handling. 4.3.0 is
+  # outside the advisory's vulnerable range and clears the audit finding.
+  http-cache-semantics: 4.3.0
 
 # pnpm settings for this project. Although this repository is not a multi-package
 # workspace, pnpm-workspace.yaml is the canonical location for pnpm settings
@@ -71,6 +75,14 @@ overrides:
 # Reference: https://pnpm.io/settings#minimumreleaseage
 # Aikido Safe Chain: https://github.com/AikidoSec/safe-chain
 minimumReleaseAge: 2880
+
+# Scoped exemption so the CVE-2026-93748 fix (http-cache-semantics@4.3.0,
+# published 2026-10-04T02:56:05Z) can land before it clears the 48-hour gate
+# above. Version-scoped: any newer http-cache-semantics release still goes
+# through the normal age check. Safe to remove after 2026-10-06T02:56:05Z,
+# once 4.3.0 itself has matured past the gate.
+minimumReleaseAgeExclude:
+  - http-cache-semantics@4.3.0
 
 # When `pnpm add <pkg>` records a new dependency, write the exact installed
 # version (e.g. "1.2.3") instead of a fuzzy range (e.g. "^1.2.3" or "~1.2.3").

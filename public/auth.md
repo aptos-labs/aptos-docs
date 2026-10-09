@@ -8,7 +8,7 @@ You are an agent reading authentication instructions for `https://aptos.dev`.
 
 - Documentation on [https://aptos.dev](https://aptos.dev) is public. Fetch HTML or Markdown with no access token.
 - The Aptos MCP server advertised at [https://aptos.dev/.well-known/mcp/server-card.json](https://aptos.dev/.well-known/mcp/server-card.json) is a local stdio process (`npx @aptos-labs/aptos-mcp`). It is not an OAuth resource.
-- The Aptos Testnet Faucet at `https://faucet.testnet.aptoslabs.com` is the only API documented here that requires a bearer token. It uses Google sign-in through Firebase Auth (human OIDC), not auth.md agent registration.
+- The Aptos Testnet Faucet at `https://faucet-e2.testnet.aptoslabs.com` is the only API documented here that requires a bearer token. It uses Google sign-in through Firebase Auth (human OIDC), not auth.md agent registration.
 
 ## Discover OAuth metadata
 
@@ -39,7 +39,7 @@ Human-facing UI: [https://aptos.dev/network/faucet](https://aptos.dev/network/fa
 API:
 
 ```http
-POST https://faucet.testnet.aptoslabs.com/fund
+POST https://faucet-e2.testnet.aptoslabs.com/fund
 Authorization: Bearer <Firebase ID token>
 x-is-jwt: true
 Content-Type: application/json

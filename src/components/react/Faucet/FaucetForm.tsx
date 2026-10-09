@@ -32,7 +32,7 @@ export function FaucetForm({ user }: FaucetFormProps) {
 
     try {
       const idToken = await user.getIdToken();
-      const response = await fetch("https://faucet.testnet.aptoslabs.com/fund", {
+      const response = await fetch("https://faucet-e2.testnet.aptoslabs.com/fund", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${idToken}`,

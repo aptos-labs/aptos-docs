@@ -1,111 +1,94 @@
 ---
 title: "Client Configuration"
-description: "Configure Kaptos clients with shared and platform-specific options to customize behavior across different platforms"
+description: "Configuring the Aptos client in the Kotlin SDK"
 sidebar:
   label: "Client Configuration"
 ---
 
-Whilst **Kaptos** offers a **consistent interface** for interacting with Aptos
-across all supported platforms, it also features both shared and
-platform-specific configuration options for its various clients.
+The `AptosConfig` class is the single configuration entry point for the Aptos Kotlin SDK. When creating an `Aptos` client instance, you pass it an `AptosConfig` object.
 
-These configuration options allow you to customize the behavior of the client to
-suit your needs. They can be set by creating a `ClientConfig` object and passing
-it to the `AptosSettings` object when creating an `Aptos` client as shown below:
+## Basic configuration
 
 ```kotlin
-val clientConfig = ClientConfig(followRedirects = false, retryOnServerErrors = 3)
-val client = Aptos(AptosConfig(AptosSettings(clientConfig = clientConfig)))
+val aptos = Aptos(AptosConfig(network = Network.DEVNET))
 ```
 
-This page will guide you through the available configuration options for
-each platform.
+## AptosConfig fields
 
-### Shared Configuration
+The `AptosConfig` data class includes the following fields:
 
-`followRedirects` — A boolean value that determines whether the client should
-follow redirects. The default value is `true`.
+- `network: Network` - The Aptos network to connect to: `MAINNET`, `TESTNET`, `DEVNET`, `LOCAL`, or `CUSTOM` (default: `DEVNET`).
+- `endpoints: AptosEndpoints` - Override the default `fullNode`, `indexer`, and `faucet` URLs.
+- `commonHeaders: Map<String, String>` - Headers applied to all requests.
+- `fullNode: AptosEndpointConfig` - Per-endpoint headers and authentication for the fullnode.
+- `indexer: AptosEndpointConfig` - Per-endpoint configuration for the indexer.
+- `faucet: AptosEndpointConfig` - Per-endpoint configuration for the faucet.
+- `requestTimeoutMillis: Long` - Request timeout in milliseconds (default: `10,000`).
+- `indexerWaitTimeoutMillis: Long` - Indexer wait timeout in milliseconds (default: `10,000`).
+- `archivalFallback: Boolean` - Whether to fallback to an archival node if a request fails (default: `true`).
+- `namesContractAddress: AccountAddress?` - A custom Aptos Name Service (ANS) contract address.
+- `transactionDefaults: TransactionDefaults` - Default `maxGasAmount` and `expirationSecondsFromNow` for transactions.
+- `transport: AptosTransport?` - Inject a custom HTTP transport implementation.
+- `abiCachePolicy: AbiCachePolicy` - Move ABI caching policy for payload building.
 
-`retryOnServerErrors` — The number of times to retry the request if a server error
-occurs. The default value is `—1`, which means no retries.
+## Custom endpoints
 
-`requestTimeout` — The timeout in milliseconds for the request. The default value
-is `10_000`.
+To use a custom network or specific endpoints, use `Network.CUSTOM` and provide the URLs in `endpoints`:
 
-`maxRetries` — The maximum number of times to retry the request. The default value
-is `-1`, which means no retries.
+```kotlin
+val aptos = Aptos(AptosConfig(
+  network = Network.CUSTOM,
+  endpoints = AptosEndpoints(
+    fullNode = "https://my-node.example.com/v1",
+    indexer = "https://my-indexer.example.com/v1/graphql",
+  ),
+))
+```
 
-`agent` — A `String` that specifies the user agent to use for the connection.
-Defaults to `Kaptos/{PLATFORM}`.
+## Per-endpoint authentication
 
-`likeAgent` — A `UserAgent` enum value that specifies the user agent to use for the
-connection.
+You can provide specific headers, such as authorization tokens, for individual endpoints:
 
-`proxy` — A `String` that specifies the proxy server to use for the connection.
+```kotlin
+val aptos = Aptos(AptosConfig(
+  network = Network.MAINNET,
+  fullNode = AptosEndpointConfig(
+    headers = mapOf("Authorization" to "Bearer my-token"),
+  ),
+))
+```
 
-`cache` — A boolean value that determines whether to cache the response. The default
-value is `false`.
+## Transaction defaults
 
-### JVM Configuration
+Set default gas and expiration settings for all transactions built by this client:
 
-`pipelining` — A boolean value that determines whether the client should use
-pipelining. The default value is `false`.
+```kotlin
+val aptos = Aptos(AptosConfig(
+  transactionDefaults = TransactionDefaults(
+    maxGasAmount = 5_000_000UL,
+    expirationSecondsFromNow = 30UL,
+  ),
+))
+```
 
-`pipelineMaxSize` — The maximum number of requests to pipeline. The default value
-is `20`.
+## Managed lifecycle
 
-`maxConnectionsPerRoute` — The maximum number of connections per route. The default
-value is `100`.
+The `Aptos` class implements `AutoCloseable` to clean up resources like the HTTP client and any SDK-managed accounts. The SDK provides an `aptos { }` block for managed scoping:
 
-`maxConnectionsCount` — The maximum number of connections. The default value is
-`100`.
+```kotlin
+aptos(AptosConfig(network = Network.DEVNET)) {
+  // client and SDK-owned accounts close automatically after this block
+}
 
-`connectTimeoutMillis` — The timeout in milliseconds for establishing a connection
-to the server. The default value is `10_000`.
+// Or manual lifecycle:
+val client = Aptos(AptosConfig(network = Network.DEVNET))
+try {
+  // use client
+} finally {
+  client.close()
+}
+```
 
-`keepAliveTime` — The time in milliseconds to keep a connection alive. The default
-value is `5_000`.
+## Injecting a transport
 
-`connectAttempts` — The number of times to attempt to connect to the server. The
-default value is `5`.
-
-`connectTimeout` — The timeout in milliseconds for establishing a connection to the
-server. The default value is `10_000`.
-
-### Android Configuration
-
-`followSslRedirects` — A boolean value that determines whether the client should
-follow SSL redirects. The default value is `true`.
-
-`connectTimeoutMillis` — The timeout in milliseconds for establishing a connection
-to the server. The default value is `10_000`.
-
-`readTimeoutMillis` — The timeout in milliseconds for reading data from the server.
-The default value is `10_000`.
-
-`writeTimeoutMillis` — The timeout in milliseconds for writing data to the server.
-The default value is `10_000`.
-
-`maxRetries` — The maximum number of times to retry the request. The default value
-is `-1`, which means no retries.
-
-`connectTimeout` — The timeout in milliseconds for establishing a connection to the
-server. The default value is `10_000`.
-
-### Apple (iOS, macOS) Configuration
-
-Apple platforms currently do not have any platform-specific configuration options.
-
-### Web Configuration
-
-Web platforms currently do not have any platform-specific configuration options.
-
-### Linux Configuration
-
-`connectTimeout` — The timeout in milliseconds for establishing a connection to the
-server. The default value is `10_000`.
-
-### Windows Configuration
-
-`connectTimeout` — The timeout in milliseconds for establishing a connection to the
-server. The default value is `10_000`.
+If you want to manage your own HTTP client or use a different transport layer, you can inject an `AptosTransport` implementation via `AptosConfig`. Note that if you inject a caller-owned transport, it will not be closed by the SDK automatically when the `Aptos` instance closes.

@@ -1,0 +1,147 @@
+---
+title: "Encrypted Transactions"
+description: "Construct and submit batch-encrypted transactions to protect against MEV and front-running with Kaptos."
+sidebar:
+  label: "Encrypted Transactions"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Encrypted transactions protect user transactions against Maximum Extractable Value (MEV) exploits, sandwich attacks, and front-running. By encrypting the executable Move payload before submitting it to the mempool, transaction details remain hidden until the transaction is included in a block and decrypted by validators (AIP-144).
+
+Kaptos provides encrypted transaction support through the optional `kaptos-encrypted-transactions` artifact.
+
+## Installation
+
+Add the encrypted transactions dependency alongside core `kaptos` in your Gradle build file:
+
+```kotlin
+// Multiplatform
+commonMain.dependencies {
+    implementation("xyz.mcxross.kaptos:kaptos:<version>")
+    implementation("xyz.mcxross.kaptos:kaptos-encrypted-transactions:<version>")
+}
+
+// JVM / Android
+dependencies {
+    implementation("xyz.mcxross.kaptos:kaptos:<version>")
+    implementation("xyz.mcxross.kaptos:kaptos-encrypted-transactions:<version>")
+}
+```
+
+## Prerequisites and Constraints
+
+Before using encrypted transactions, consider the following network and signer requirements:
+
+- **Network Support**: The connected fullnode must advertise an active encryption key in its ledger metadata. If the network does not support encrypted transactions, service calls will fail with `AptosError.UnsupportedFeature`.
+- **Supported Signers**: Use a funded standard signer (such as an `Ed25519Account`). Keyless accounts are not supported for encrypted submissions.
+- **No Simulation**: Encrypted transactions cannot be simulated with `aptos.transactions.simulate`, because the transaction payload is encrypted and cannot be evaluated prior to on-chain execution.
+- **Gas Floor**: Encrypted transactions require a gas unit price floor of at least 200 octas.
+
+## Quick Example
+
+Call `encryptedTransactions()` on an existing `Aptos` client instance to obtain the encrypted transaction service:
+
+```kotlin
+aptos(AptosConfig(network = Network.TESTNET)) {
+  val sender = ed25519Account("ed25519-priv-0x...")
+  val recipient = AccountAddress.fromString("0x123...")
+
+  val encrypted = encryptedTransactions()
+
+  // Build the payload using the concise shorthand
+  val payload = TransactionPayload.entryFunctionOf(
+    "0x1::aptos_account::transfer",
+    recipient,
+    1_000_000UL,
+  )
+
+  // Encrypt, sign, submit, and wait for confirmation in one call
+  val committed = encrypted.submitAndWait(
+    sender = sender,
+    payload = payload,
+  ).getOrNull()!!
+
+  println("Committed encrypted transaction: ${committed.hash}")
+}
+```
+
+## Separate Encryption and Signing
+
+When signing occurs separately from submission (for example, in client-server architectures or hardware signing workflows), use `encrypted.encrypt(...)`:
+
+```kotlin
+// 1. Build an unsigned transaction
+val unsignedTx = aptos.transactions.build(
+  sender = sender.accountAddress,
+  payload = payload,
+).getOrNull()!!
+
+// 2. Encrypt the transaction payload
+val encryptedTx = encrypted.encrypt(unsignedTx).getOrNull()!!
+
+// 3. Sign the encrypted transaction
+val auth = aptos.transactions.sign(signer = sender, transaction = encryptedTx).getOrNull()!!
+
+// 4. Submit the signed encrypted transaction
+val pending = aptos.transactions.submit(
+  transaction = encryptedTx,
+  senderAuthenticator = auth,
+).getOrNull()!!
+
+// 5. Wait for commitment
+val committed = aptos.transactions.waitForTransaction(pending)
+```
+
+## Multi-Agent and Fee-Payer Flows
+
+For multi-agent, fee-payer (sponsored), or orderless flows, build an `UnsignedTransaction` using `aptos.transactions` and pass it to `encrypted.signAndSubmit`:
+
+```kotlin
+// Build a sponsored transaction
+val unsignedTx = aptos.transactions.buildFeePayer(
+  sender = alice.accountAddress,
+  payload = payload,
+  feePayer = sponsor.accountAddress,
+).getOrNull()!!
+
+// Encrypt, sign with all required signers, and submit
+val pending = encrypted.signAndSubmit(
+  transaction = unsignedTx,
+  sender = alice,
+  feePayer = sponsor,
+).getOrNull()!!
+
+val committed = aptos.transactions.waitForTransaction(pending)
+```
+
+## Advanced Options and Cache Invalidation
+
+### Explicit Authentication Keys and Claimed Functions
+
+`EncryptedTransactionOptions` allows you to override signer authentication keys (avoiding extra on-chain lookups) and specify a claimed entry function for indexer visibility:
+
+```kotlin
+val options = EncryptedTransactionOptions(
+  senderAuthenticationKey = FixedBytes32.fromHex("0x..."),
+  claimedEntryFunction = ClaimedEntryFunction.parse("0x1::aptos_account::transfer"),
+)
+
+val committed = encrypted.submitAndWait(
+  sender = sender,
+  payload = payload,
+  options = options,
+)
+```
+
+### Cache Management
+
+The encrypted transaction service caches ledger encryption keys and account authentication keys for performance. If an account rotates its authentication key, call `encrypted.clearCache()` to discard cached keys:
+
+```kotlin
+encrypted.clearCache()
+```
+
+<Aside type="tip">
+  Explore runnable code in the [Encrypted Transaction Sample](https://github.com/mcxross/kaptos/blob/main/sample/jvmApp/src/main/kotlin/xyz/mcxross/kaptos/sample/EncryptedTransaction.kt) in the Kaptos repository.
+</Aside>

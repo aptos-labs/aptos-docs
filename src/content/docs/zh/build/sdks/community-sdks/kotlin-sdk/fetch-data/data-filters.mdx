@@ -1,20 +1,13 @@
 ---
-title: "数据过滤"
-description: "使用 Kaptos 客户端的类型安全过滤和排序 DSL 函数处理索引器 GraphQL 查询"
+title: "数据过滤器"
+description: "处理带有类型安全的过滤器和 order_by DSL 函数的 Kaptos 客户端 Indexer GraphQL 查询"
 sidebar:
-  label: "数据过滤"
+  label: "数据过滤器"
 ---
 
-该页面目前仅提供英文版本。
+某些读取操作需要额外的参数来过滤从网络返回的数据。由于定义这些参数的类是自动生成的，它们的 Kotlin 命名可能不够地道。为了解决这个问题，SDK 提供了类似 DSL 的构建器函数，以使其更轻松地创建这些参数对象。
 
-***
-
-Some read operations require additional parameters to filter the data returned from the network. Since the classes that
-define these parameters are auto-generated, they may not have the most idiomatic Kotlin names. To help with this, the SDK
-provides DSL-style builder functions to make it easier to create these parameter objects.
-
-For example, to fetch fungible asset metadata, a `FungibleAssetMetadataFilter` object is required. You can create this
-object using the `fungibleAssetMetadataFilter` builder function:
+例如，要获取可替代资产的元数据，需要一个 `FungibleAssetMetadataFilter` 对象。你可以使用 `fungibleAssetMetadataFilter` 构建器函数来创建此对象：
 
 ```kotlin
 val filter = fungibleAssetMetadataFilter {
@@ -22,26 +15,25 @@ val filter = fungibleAssetMetadataFilter {
 }
 ```
 
-This creates a filter that matches the `AptosCoin` asset type. You can then use this filter when calling the
-`getFungibleAssetMetadata` method:
+这创建了一个匹配 `AptosCoin` 资产类型的过滤器。然后，你可以在调用 `getFungibleAssetMetadata` 方法时使用此过滤器：
 
 ```kotlin
 val metadata = aptos.getFungibleAssetMetadata(filter)
 ```
 
-The remainder of this document provides a comprehensive overview of the Domain-Specific Language (DSL) functions available for building type-safe `where` (filter) and `order_by` clauses for Aptos Indexer GraphQL queries.
+本文档的其余部分将全面概述领域专用语言 (DSL) 函数，这些函数可用于为 Aptos Indexer GraphQL 查询构建类型安全的 `where`（过滤器）和 `order_by` 子句。
 
-## Filter DSL Functions
+## 过滤器 DSL 函数
 
-These functions are used to construct the `where` argument in a GraphQL query, allowing you to specify conditions for the data you want to retrieve.
+这些函数用于构造 GraphQL 查询中的 `where` 参数，允许你为要检索的数据指定条件。
 
-### Comparison Expression Builders
+### 比较表达式构建器
 
-These are the fundamental building blocks used within entity filters. They create comparison expressions for primitive types like strings, integers, and booleans.
+这些是在实体过滤器中使用的基本构建块。它们为诸如字符串、整数和布尔值等基本类型创建比较表达式。
 
-#### For Numeric and Timestamp Types
+#### 针对数字和时间戳类型
 
-The following builders share a common set of comparison operators for numeric and time-based values.
+以下构建器针对数字和基于时间的值共享一组通用的比较运算符。
 
 - **`bigintFilter`**
 
@@ -51,52 +43,130 @@ The following builders share a common set of comparison operators for numeric an
 
 - **`timestampFilter`**
 
-- **Purpose**: To create a comparison expression for `bigint`, `numeric`, `int`, and `timestamp` fields, respectively.
+- **用途**：分别用于为 `bigint`、`numeric`、`int` 和 `timestamp` 字段创建比较表达式。
 
-- **Parameters**: Each function takes a lambda block where you can set the following comparison operators:
-  - `eq`: Equal to.
-  - `neq`: Not equal to.
-  - `gt`: Greater than.
-  - `gte`: Greater than or equal to.
-  - `lt`: Less than.
-  - `lte`: Less than or equal to.
-  - `inList`: The value must be in the provided list.
-  - `nin`: The value must not be in the provided list.
-  - `isNull`: `true` if the field should be null, `false` otherwise.
+- **参数**：每个函数接受一个 lambda 块，在其中可以设置以下比较运算符：
+  - `eq`：等于。
+  - `neq`：不等于。
+  - `gt`：大于。
+  - `gte`：大于或等于。
+  - `lt`：小于。
+  - `lte`：小于或等于。
+  - `inList`：值必须在提供的列表中。
+  - `nin`：值必须不在提供的列表中。
+  - `isNull`：如果字段应为 null，则为 `true`；否则为 `false`。
 
-#### For String Types
+#### 针对字符串类型
 
 - **`stringFilter`**
-  - **Purpose**: Creates a rich comparison expression for `String` fields.
-  - **Parameters**: In addition to the common operators (`eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `inList`, `nin`, `isNull`), it supports advanced pattern matching:
-  - `like`: Case-sensitive pattern match (e.g., `_like: "aptos%"`).
-  - `nlike`: Case-sensitive negative pattern match.
-  - `ilike`: Case-insensitive pattern match.
-  - `nilike`: Case-insensitive negative pattern match.
-  - `similar`: SQL `SIMILAR TO` pattern match.
-  - `nsimilar`: SQL `NOT SIMILAR TO` pattern match.
-  - `regex`: POSIX regular expression match.
-  - `nregex`: POSIX negative regular expression match.
-  - `iregex`: Case-insensitive POSIX regular expression match.
-  - `niregex`: Case-insensitive negative POSIX regular expression match.
+  - **用途**：为 `String` 字段创建丰富的比较表达式。
+  - **参数**：除了常用运算符（`eq`、`neq`、`gt`、`gte`、`lt`、`lte`、`inList`、`nin`、`isNull`）外，还支持高级模式匹配：
+  - `like`：区分大小写的模式匹配（例如，`_like: "aptos%"`）。
+  - `nlike`：区分大小写的负模式匹配。
+  - `ilike`：不区分大小写的模式匹配。
+  - `nilike`：不区分大小写的负模式匹配。
+  - `similar`：SQL `SIMILAR TO` 模式匹配。
+  - `nsimilar`：SQL `NOT SIMILAR TO` 模式匹配。
+  - `regex`：POSIX 正则表达式匹配。
+  - `nregex`：POSIX 负正则表达式匹配。
+  - `iregex`：不区分大小写的 POSIX 正则表达式匹配。
+  - `niregex`：不区分大小写的负 POSIX 正则表达式匹配。
 
-#### For Boolean Types
+#### 针对布尔类型
 
 - **`booleanFilter`**
-  - **Purpose**: Creates a comparison expression for `Boolean` fields.
-  - **Parameters**: A lambda block where you can set the following simple operators:
-  - `eq`: Equal to (`true` or `false`).
-  - `neq`: Not equal to.
-  - `isNull`: `true` if the field should be null.
+  - **用途**：为 `Boolean` 字段创建比较表达式。
+  - **参数**：一个 lambda 块，在其中可以设置以下简单运算符：
+  - `eq`：等于（`true` 或 `false`）。
+  - `neq`：不等于。
+  - `isNull`：如果字段应为 null，则为 `true`。
 
-#### For JSON Types
+#### 针对 JSON 类型
 
 - **`jsonbFilter`**
-  - **Purpose**: Creates a comparison expression for fields with the `jsonb` type, often used for unstructured properties.
-  - **Parameters**: A lambda block with JSON-specific operators:
-  - `contains`: Checks if the JSONB value contains the specified JSONB.
-  - `containedIn`: Checks if the JSONB value is contained within the specified JSONB.
-  - `hasKey`: Checks if the JSONB value has a specific top-level key.
-  - `hasKeysAny`: Checks if the JSONB value has any of the keys in the provided list.
-  - `hasKeysAll`: Checks if the JSONB value has all of the keys in the provided list.
-  - Also supports common operators: `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `inList`, `nin`, `isNull`.
+  - **用途**：为具有 `jsonb` 类型的字段创建比较表达式，通常用于非结构化属性。
+  - **参数**：一个带有 JSON 专用运算符的 lambda 块：
+  - `contains`：检查 JSONB 值是否包含指定的 JSONB。
+  - `containedIn`：检查 JSONB 值是否包含在指定的 JSONB 中。
+  - `hasKey`：检查 JSONB 值是否具有特定的顶级键。
+  - `hasKeysAny`：检查 JSONB 值是否具有提供的列表中的任何键。
+  - `hasKeysAll`：检查 JSONB 值是否具有提供的列表中的所有键。
+  - 同样支持常用运算符：`eq`、`neq`、`gt`、`gte`、`lt`、`lte`、`inList`、`nin`、`isNull`。
+
+### 实体过滤器构建器
+
+这些函数为索引器中特定的表或视图创建过滤器。它们都支持 `and`、`or` 和 `not` 函数来构建复杂的逻辑查询。
+
+- **`authKeyAccountAddressesFilter`**：过滤 `auth_key_account_addresses`。
+  - **字段**：`accountAddress`、`authKey`、`isAuthKeyUsed`、`lastTransactionVersion`。
+- **`currentAptosNamesFilter`**：过滤 `current_aptos_names`。
+  - **字段**：`domain`、`domainExpirationTimestamp`、`domainWithSuffix`、`expirationTimestamp`、`isActive`、`isPrimary`、`lastTransactionVersion`、`ownerAddress`、`registeredAddress`、`subdomain`、`subdomainExpirationPolicy`、`tokenName`、`tokenStandard`。
+- **`currentCollectionsV2Filter`**：过滤 `current_collections_v2`。
+  - **字段**：`collectionId`、`collectionName`、`collectionProperties`、`creatorAddress`、`currentSupply`、`description`、`lastTransactionTimestamp`、`lastTransactionVersion`、`maxSupply`、`mutableDescription`、`mutableUri`、`tableHandleV1`、`tokenStandard`、`totalMintedV2`、`uri`。
+- **`currentCollectionOwnershipV2ViewFilter`**：过滤 `current_collection_ownership_v2_view`。
+  - **字段**：`collectionId`、`collectionName`、`collectionUri`、`creatorAddress`、`distinctTokens`、`lastTransactionVersion`、`ownerAddress`、`singleTokenUri`。
+- **`currentFungibleAssetBalancesFilter`**：过滤 `current_fungible_asset_balances`。
+  - **字段**：`amount`、`assetType`、`isFrozen`、`isPrimary`、`lastTransactionTimestamp`、`lastTransactionVersion`、`metadata`、`ownerAddress`、`storageId`、`tokenStandard`。还包括 V1/V2 特定版本，如 `amountV1`、`assetTypeV2` 等。
+- **`currentObjectsFilter`**：过滤 `current_objects`。
+  - **字段**：`allowUngatedTransfer`、`isDeleted`、`lastGuidCreationNum`、`lastTransactionVersion`、`objectAddress`、`ownerAddress`、`stateKeyHash`。
+- **`currentTokenDatasV2Filter`**：过滤 `current_token_datas_v2`。
+  - **字段**：`collectionId`、`decimals`、`description`、`isDeletedV2`、`isFungibleV2`、`lastTransactionVersion`、`maximum`、`supply`、`tokenDataId`、`tokenName`、`tokenStandard`、`tokenUri`、`tokenProperties`。
+- **`currentTokenOwnershipsV2Filter`**：过滤 `current_token_ownerships_v2`。
+  - **字段**：`amount`、`isFungibleV2`、`isSoulboundV2`、`lastTransactionVersion`、`ownerAddress`、`storageId`、`tokenDataId`、`tokenStandard`。
+- **`currentTokenRoyaltyV1Filter`**：过滤 `current_token_royalty_v1`。
+  - **字段**：`lastTransactionVersion`、`payeeAddress`、`royaltyPointsDenominator`、`royaltyPointsNumerator`、`tokenDataId`。
+- **`eventsFilter`**：过滤 `events`。
+  - **字段**：`accountAddress`、`creationNumber`、`data`、`eventIndex`、`sequenceNumber`、`transactionVersion`、`type`。
+- **`fungibleAssetActivitiesFilter`**：过滤 `fungible_asset_activities`。
+  - **字段**：`amount`、`assetType`、`blockHeight`、`eventIndex`、`ownerAddress`、`tokenStandard`、`transactionVersion`、`type`。
+- **`fungibleAssetMetadataFilter`**：过滤 `fungible_asset_metadata`。
+  - **字段**：`assetType`、`creatorAddress`、`decimals`、`lastTransactionVersion`、`name`、`symbol`、`tokenStandard`。
+- **`nftMetadataCrawlerParsedAssetUrisFilter`**：过滤 `nft_metadata_crawler_parsed_asset_uris`。
+  - **字段**：`assetUri`、`cdnAnimationUri`、`cdnImageUri`、`cdnJsonUri`、`rawAnimationUri`、`rawImageUri`。
+- **`numActiveDelegatorPerPoolFilter`**：过滤 `num_active_delegator_per_pool`。
+  - **字段**：`numActiveDelegator`、`poolAddress`。
+- **`processorStatusFilter`**：过滤 `processor_status`。
+  - **字段**：`lastSuccessVersion`、`lastUpdated`、`processor`。
+- **`publicKeyAuthKeysFilter`**：过滤 `public_key_auth_keys`。
+  - **字段**：`accountPublicKey`、`authKey`、`isPublicKeyUsed`、`lastTransactionVersion`、`publicKey`、`publicKeyType`、`signatureType`。
+- **`tableItemsFilter`**：过滤 `table_items`。
+  - **字段**：`key`、`tableHandle`、`transactionVersion`，以及针对 `decodedKey` 和 `decodedValue` 的嵌套 JSONB 过滤器。
+- **`tableMetadatasFilter`**：过滤 `table_metadatas`。
+  - **字段**：`handle`、`keyType`、`valueType`。
+- **`tokenActivitiesV2Filter`**：过滤 `token_activities_v2`。
+  - **字段**：`afterValue`、`beforeValue`、`fromAddress`、`toAddress`、`tokenAmount`、`tokenDataId`、`transactionVersion`、`type`。
+
+### 聚合过滤器构建器
+
+- **`currentAptosNamesAggregateFilter`**
+- **`currentTokenOwnershipsV2AggregateFilter`**
+  - **用途**：创建一个过滤器，用于对聚合结果应用条件。
+  - **参数**：一个 lambda 块，在其中可以使用以下函数：
+  - `count()`：对项目计数应用谓词。
+  - `boolAnd()`：检查所有项目的布尔条件是否为真。
+  - `boolOr()`：检查是否有任何项目的布尔条件为真。
+
+## Order By DSL 函数
+
+这些函数用于构造 GraphQL 查询中的 `order_by` 参数，允许你指定结果的排序方式。
+
+- **`authKeyAccountAddressesOrder`**：对 `auth_key_account_addresses` 排序。
+  - **字段**：`accountAddress`、`authKey`、`isAuthKeyUsed`、`lastTransactionVersion`。
+- **`currentAptosNamesOrder`**：对 `current_aptos_names` 排序。
+  - **字段**：`domain`、`expirationTimestamp`、`lastTransactionVersion`、`ownerAddress` 等。
+- **`currentFungibleAssetBalancesOrder`**：对 `current_fungible_asset_balances` 排序。
+  - **字段**：`amount`、`assetType`、`lastTransactionTimestamp`、`ownerAddress` 等。
+- **`currentObjectsOrder`**：对 `current_objects` 排序。
+  - **字段**：`allowUngatedTransfer`、`lastTransactionVersion`、`objectAddress`、`ownerAddress`。
+- **`eventsOrder`**：对 `events` 排序。
+  - **字段**：`accountAddress`、`creationNumber`、`sequenceNumber`、`transactionVersion`。
+- **`fungibleAssetMetadataOrder`**：对 `fungible_asset_metadata` 排序。
+  - **字段**：`assetType`、`creatorAddress`、`decimals`、`name`、`symbol`。
+- **`numActiveDelegatorPerPoolOrder`**：对 `num_active_delegator_per_pool` 排序。
+  - **字段**：`numActiveDelegator`、`poolAddress`。
+- **`publicKeyAuthKeysOrder`**：对 `public_key_auth_keys` 排序。
+  - **字段**：`accountPublicKey`、`authKey`、`lastTransactionVersion`、`publicKey`。
+- **`tableItemsOrder`**：对 `table_items` 排序。
+  - **字段**：`decodedKey`、`decodedValue`、`key`、`tableHandle`、`transactionVersion`。
+- **`tableMetadatasOrder`**：对 `table_metadatas` 排序。
+  - **字段**：`handle`、`keyType`、`valueType`。

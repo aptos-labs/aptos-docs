@@ -1,86 +1,93 @@
 ---
 title: "Fetch Data via the Kotlin SDK"
-description: "Read Aptos network and account data with Kaptos, including REST, indexer, and Move view calls"
+description: "How to read data from the Aptos blockchain using the Kotlin SDK"
 sidebar:
   label: "Via the SDK"
 ---
 
-Kaptos exposes data-reading APIs across fullnode REST endpoints, indexer-backed endpoints, and Move view functions.
+Kaptos provides dedicated, namespaced services for querying on-chain data from the Aptos blockchain.
 
 ## Result-based handling
 
-Network calls return `Result<Ok, Err>`, so you can choose explicit branching or fail-fast unwrapping.
+All SDK operations return an `AptosResult<T>` sealed interface. You can handle the results using `when` expressions or extension functions like `.map()`, `.onSuccess()`, and `.onFailure()`.
 
 ```kotlin
-val ledgerInfoResult = aptos.getLedgerInfo()
-
-when (ledgerInfoResult) {
-  is Result.Ok -> println("Ledger version: ${ledgerInfoResult.value.ledgerVersion}")
-  is Result.Err -> println("Failed to read ledger info: ${ledgerInfoResult.error.message}")
+when (val result = aptos.ledger.info()) {
+  is AptosResult.Success -> println("Version: ${result.value.version}")
+  is AptosResult.Failure -> println("Error: ${result.error.message}")
 }
 ```
 
-If you want fail-fast semantics:
+For more details on error handling, see the [Response Handling](/build/sdks/community-sdks/kotlin-sdk/response-handling) documentation.
+
+## Read ledger data
+
+Use the `ledger` service to query network information or specific blocks:
 
 ```kotlin
-val ledgerInfo = aptos.getLedgerInfo().expect("Failed to fetch ledger info")
-```
+// Get current ledger state
+val state = aptos.ledger.info().getOrNull()!!
 
-For more patterns, see [Handle SDK Data Fetch Responses](/build/sdks/community-sdks/kotlin-sdk/fetch-data/response-handling).
-
-## Read general chain data
-
-```kotlin
-val chainId = aptos.getChainId().expect("Failed to fetch chain id")
-val latestBlock = aptos.getBlockByHeight(ledgerHeight = 1, withTransactions = true).expect("Failed to fetch block info")
+// Get a block by height
+val block = aptos.ledger.blockAtHeight(1UL).getOrNull()!!
 ```
 
 ## Read account data
 
+Use the `accounts` service to look up account metadata and resources:
+
 ```kotlin
 val address = AccountAddress.fromString("0x1")
-
-val accountInfo = aptos.getAccountInfo(accountAddress = address).expect("Failed to fetch account info")
-val modules = aptos.getAccountModules(accountAddress = address) { limit = 20 }.expect("Failed to fetch modules")
-val resources = aptos.getAccountResources(accountAddress = address) { limit = 50 }.expect("Failed to fetch resources")
+val accountInfo = aptos.accounts.get(address).getOrNull()!!
 ```
 
 ## Read balances
 
-Indexer-backed APT balance:
+The `accounts` service provides a convenient method to fetch balances for both traditional coins and fungible assets:
 
 ```kotlin
-val aptBalance = aptos.getAccountAPTAmount(accountAddress = address).expect("Failed to fetch APT balance")
-```
+// Coin balance
+val aptBalance = aptos.accounts.getBalance(
+  address,
+  AccountAsset.coin("0x1::aptos_coin::AptosCoin"),
+).getOrNull()!!
 
-Smart-contract view path for a specific coin type:
+// Fungible asset balance
+val faBalance = aptos.accounts.getBalance(
+  address,
+  AccountAsset.fungibleAsset("0xa"),
+).getOrNull()!!
 
-```kotlin
-val aptBalanceFromView =
-  aptos
-    .getAccountCoinAmountFromSmartContract(
-      accountAddress = address,
-      coinType = MoveValue.MoveStructId("0x1::aptos_coin::AptosCoin"),
-    )
-    .expect("Failed to fetch coin balance from smart contract")
+// Or read coin balance via concise view call shorthand
+val coinBalance = aptos.views.callOf<AptosCoin>(
+  function = "0x1::coin::balance",
+  address,
+).getOrNull()!!
 ```
 
 ## Read via Move view functions
 
-Use `view<T>()` for custom read-only Move calls.
+Use the `views` service to evaluate view functions defined in Move modules. The `callOf` shorthand automatically validates arguments against the on-chain ABI and coerces standard Kotlin types:
 
 ```kotlin
-val payload =
-  InputViewFunctionData(
-    function = "0x1::chain_id::get",
-    typeArguments = emptyList(),
-    functionArguments = emptyList(),
-  )
+// Concise view call without arguments
+val result = aptos.views.callOf(
+  function = "0x1::chain_id::get",
+).getOrNull()!!
 
-val viewResult =
-  aptos
-    .view<List<MoveValue.MoveUint8Type>>(payload)
-    .expect("Failed to execute view")
+// Concise view call with reified type argument and inferred arguments
+val balance = aptos.views.callOf<AptosCoin>(
+  function = "0x1::coin::balance",
+  address,
+).getOrNull()!!
+```
 
-val chainIdFromView = viewResult.first().value
+If you need to pass raw arguments without SDK validation or ABI lookup, use `callRaw`:
+
+```kotlin
+val result = aptos.views.callRaw(
+  function = "0x1::coin::balance",
+  typeArguments = listOf("0x1::aptos_coin::AptosCoin"),
+  arguments = listOf(JsonPrimitive("0x1")),
+).getOrNull()!!
 ```

@@ -1,124 +1,239 @@
 ---
 title: "Building and Sending Transactions"
-description: "Build, sign, and submit Aptos transactions with Kaptos using the new lean transaction DSL"
+description: "Build, sign, and submit transactions on Aptos with Kaptos."
 sidebar:
   label: "Building Transactions"
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+import { Aside, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
-Kaptos provides two ways to ship transactions:
+Kaptos provides namespaced transaction operations via `aptos.transactions`.
 
-- a **composable flow** (`buildSimpleTransaction` -> `sign` -> `submitTransaction.simple`)
-- a **one-call flow** (`execute`) for common single-signer execution
+<Aside type="note">
+  All these methods return an `AptosResult<T>`. You can use `when` for pattern matching, or extension functions like `.map()`, `.fold()`, `.getOrNull()`, `.onSuccess()`, and `.onFailure()` to chain operations and handle errors.
+</Aside>
 
-This page uses the new lean transaction API (`typeArgs(...)`, `args(...)`) introduced in the latest SDK updates.
+## Create Accounts (Setup)
 
-## Create an account
-
-Generate credentials first, then fund the address on a test network.
+First, let's create our test accounts and client configuration:
 
 ```kotlin
-val aptos = Aptos(AptosConfig(AptosSettings(network = Network.DEVNET)))
-
+val aptos = Aptos(AptosConfig(network = Network.DEVNET))
 val alice = Account.generate()
 val bob = Account.generate()
-
-aptos.fundAccount(accountAddress = alice.accountAddress, amount = 100_000_000L).expect("Failed to fund Alice")
-aptos.fundAccount(accountAddress = bob.accountAddress, amount = 100_000_000L).expect("Failed to fund Bob")
+aptos.faucet.fund(alice.accountAddress, 100_000_000UL)
 ```
 
-For private-key based accounts, see [Accounts](/build/sdks/community-sdks/kotlin-sdk/account).
+## Payload Construction Styles
 
-## Build the transaction
+An entry function payload describes the on-chain Move function to execute. Kaptos supports multiple styles of payload construction to fit different workflows:
 
-Use `buildSimpleTransaction` with the lean entry-function builder.
+### 1. Concise Shorthand (`entryFunctionOf`)
+
+The most common and concise approach. Standard Kotlin types (`AccountAddress`, `ULong`, `Boolean`, `String`, `ByteArray`, etc.) are automatically inferred as Move arguments, and type arguments can be passed as strings or `TypeTag` constants:
 
 ```kotlin
-val txn =
-  aptos.buildSimpleTransaction(sender = alice.accountAddress) {
-    function = "0x1::coin::transfer"
-    typeArgs("0x1::aptos_coin::AptosCoin")
-    args(
-      bob.accountAddress,
-      1_000_000UL,
-    )
-  }
+// With type arguments
+val payload = TransactionPayload.entryFunctionOf(
+  function = "0x1::coin::transfer",
+  typeArguments = listOf("0x1::aptos_coin::AptosCoin"), // or listOf(TypeTag.AptosCoin)
+  bob.accountAddress,
+  1_000_000UL,
+)
+
+// Without type arguments
+val simplePayload = TransactionPayload.entryFunctionOf(
+  "0x1::aptos_account::transfer",
+  bob.accountAddress,
+  1_000_000UL,
+)
 ```
 
-`args(...)` performs automatic Kotlin -> Move coercion for common types (`Boolean`, `Int`, `ULong`, `String`, `ByteArray`, `List<T>`, `AccountAddress`, etc.), so explicit wrappers are usually optional.
+### 2. Type-Safe DSL Builder
 
-If you need transaction tuning, pass options:
+Use Kotlin's unary plus (`+`) operator inside a builder lambda for structured and expressive argument construction:
 
 ```kotlin
-val txn =
-  aptos.buildSimpleTransaction(
-    sender = alice.accountAddress,
-    options = InputGenerateTransactionOptions(maxGasAmount = 20_000),
-  ) {
-    function = "0x1::coin::transfer"
-    typeArgs("0x1::aptos_coin::AptosCoin")
-    args(bob.accountAddress, 1_000_000UL)
-  }
+val payload = TransactionPayload.entryFunction(
+  function = "0x1::coin::transfer",
+  typeArguments = listOf(TypeTag.AptosCoin),
+) {
+  +bob.accountAddress
+  +1_000_000UL
+}
 ```
 
-## Sign the transaction
+### 3. ABI-Resolved Payload (`entryFunctionPayload`)
 
-Use `sign` when you want explicit control over authentication before submission.
+Fetches the on-chain Move module ABI from the fullnode to validate parameter types and automatically coerce values (e.g. numeric types and hex strings) into BCS-encoded bytes:
 
 ```kotlin
-val senderAuthenticator = aptos.sign(signer = alice, transaction = txn)
+val payload = aptos.transactions.entryFunctionPayload(
+  function = "0x1::coin::transfer",
+  typeArguments = listOf(TypeTag.AptosCoin),
+  arguments = listOf(bob.accountAddress, 1_000_000UL),
+).getOrNull()!!
 ```
 
-## Submit the transaction
+### 4. Direct Function Building
 
-Submit the raw transaction plus sender authenticator.
+Skip standalone payload creation altogether by supplying the function and arguments directly to `transactions.build`:
 
 ```kotlin
-val pendingTxn =
-  aptos
-    .submitTransaction.simple(
-      transaction = txn,
-      senderAuthenticator = senderAuthenticator,
-    )
-    .expect("Failed to submit transaction")
+val txn = aptos.transactions.build(
+  sender = alice.accountAddress,
+  function = "0x1::coin::transfer",
+  typeArguments = listOf("0x1::aptos_coin::AptosCoin"),
+  arguments = listOf(bob.accountAddress, 1_000_000UL),
+).getOrNull()!!
 ```
 
-## Wait for execution
+### 5. Explicit Long-hand (`MoveArgument` & `TypeTag`)
 
-Wait for chain confirmation using the pending hash.
+For advanced scenarios, custom serializers, or strict backwards compatibility, you can construct `MoveArgument` and `TypeTag` instances explicitly:
 
 ```kotlin
-val executedTxn =
-  aptos
-    .waitForTransaction(HexInput.fromString(pendingTxn.hash))
-    .expect("Transaction did not execute successfully")
+val payload = TransactionPayload.entryFunction(
+  function = "0x1::coin::transfer",
+  typeArguments = listOf(TypeTag.fromString("0x1::aptos_coin::AptosCoin")),
+  arguments = listOf(
+    MoveArgument.Address(bob.accountAddress),
+    MoveArgument.U64(1_000_000UL),
+  ),
+)
 ```
 
-## Execute in one call
+***
 
-If you do not need to inspect the intermediate transaction/authenticator objects, use `execute`:
+## Explicit Transaction Pipeline
+
+The explicit pipeline provides full visibility into each step of the transaction lifecycle: building an unsigned transaction, signing with an account authenticator, submitting to the network, and waiting for on-chain confirmation.
+
+### 1. Build the Transaction
+
+Combine the sender address and payload into an unsigned raw transaction:
 
 ```kotlin
-val pendingTxn =
-  aptos
-    .execute(signer = alice) {
-      function = "0x1::coin::transfer"
-      typeArgs("0x1::aptos_coin::AptosCoin")
-      args(bob.accountAddress, 1_000_000UL)
-    }
-    .expect("Failed to build/sign/submit transaction")
+val txn = aptos.transactions.build(
+  sender = alice.accountAddress,
+  payload = payload,
+).getOrNull()!!
 ```
 
-Then wait as usual:
+You can optionally specify `TransactionOptions` such as gas parameters or replay protection:
 
 ```kotlin
-val executedTxn =
-  aptos
-    .waitForTransaction(HexInput.fromString(pendingTxn.hash))
-    .expect("Transaction did not execute successfully")
+val txn = aptos.transactions.build(
+  sender = alice.accountAddress,
+  payload = payload,
+  options = TransactionOptions(maxGasAmount = 20_000UL),
+).getOrNull()!!
 ```
 
-<Aside type="note" emoji="ℹ️">
-  Backward-compatible APIs are still available (`buildTransaction.simple`, `entryFunctionData { typeArguments = ...; functionArguments = ... }`, and `signAndSubmitTransaction`). The lean API is the recommended default for new code.
-</Aside>
+### 2. Sign the Transaction
+
+Sign the raw transaction with the sender account to create an authenticator:
+
+```kotlin
+val auth = aptos.transactions.sign(signer = alice, transaction = txn).getOrNull()!!
+```
+
+### 3. Submit the Transaction
+
+Submit the signed transaction to the Aptos network:
+
+```kotlin
+val pending = aptos.transactions.submit(
+  transaction = txn,
+  senderAuthenticator = auth,
+).getOrNull()!!
+```
+
+### 4. Wait for Confirmation
+
+Wait for the submitted transaction to be processed and committed to the ledger:
+
+```kotlin
+val confirmed = aptos.transactions.waitForTransaction(pending)
+```
+
+***
+
+## All-in-One Convenience Methods
+
+Once you are familiar with the explicit pipeline, Kaptos provides convenient all-in-one methods to streamline execution for routine transactions.
+
+### Sign, Submit, and Wait (`submitAndWait`)
+
+Combine building, signing, submitting, and waiting into a single call:
+
+```kotlin
+// Using a pre-built payload
+val confirmed = aptos.transactions.submitAndWait(
+  signer = alice,
+  payload = payload,
+)
+
+// Or directly with function and arguments
+val directConfirmed = aptos.transactions.submitAndWait(
+  signer = alice,
+  function = "0x1::aptos_account::transfer",
+  arguments = listOf(bob.accountAddress, 1_000_000UL),
+)
+```
+
+### Sign and Submit (`signAndSubmit`)
+
+Submit the transaction immediately without waiting for confirmation:
+
+```kotlin
+// Using a pre-built payload
+val pending = aptos.transactions.signAndSubmit(
+  signer = alice,
+  payload = payload,
+)
+
+// Or directly with function and arguments
+val directPending = aptos.transactions.signAndSubmit(
+  signer = alice,
+  function = "0x1::aptos_account::transfer",
+  arguments = listOf(bob.accountAddress, 1_000_000UL),
+)
+```
+
+## Multi-Agent Transactions
+
+To build transactions that require multiple signers:
+
+```kotlin
+val txn = aptos.transactions.buildMultiAgent(
+  sender = alice.accountAddress,
+  secondarySigners = listOf(bob.accountAddress),
+  payload = payload,
+)
+```
+
+## Simulate a Transaction
+
+You can simulate a transaction to see its effects without actually executing it on the network.
+
+```kotlin
+val simResult = aptos.transactions.simulate(
+  transaction = txn,
+  senderPublicKey = alice.publicKey,
+)
+```
+
+## Next Steps
+
+Explore specialized transaction patterns and privacy capabilities:
+
+<CardGrid>
+  <LinkCard title="Sponsored Transactions" href="/build/sdks/community-sdks/kotlin-sdk/sponsored-transactions" description="Have a fee payer sponsor gas fees on behalf of users." />
+
+  <LinkCard title="Account Abstraction" href="/build/sdks/community-sdks/kotlin-sdk/account-abstraction" description="Custom Move authentication rules and Solana Derivable Accounts." />
+
+  <LinkCard title="Encrypted Transactions" href="/build/sdks/community-sdks/kotlin-sdk/encrypted-transactions" description="MEV protection and anti-front-running with batch encryption." />
+
+  <LinkCard title="Confidential Assets" href="/build/sdks/community-sdks/kotlin-sdk/confidential-assets" description="Privacy-preserving balances and zero-knowledge transfer proofs." />
+</CardGrid>

@@ -36,6 +36,8 @@ const labels = {
   "build.group.sdks.community-sdks": "Community SDKs",
   "build.group.sdks.react-hooks": "React Hooks",
   "build.group.sdks.community-sdks.kotlin-sdk": "Kotlin SDK",
+  "build.group.sdks.community-sdks.kotlin-sdk.accounts": "Accounts",
+  "build.group.sdks.community-sdks.kotlin-sdk.transactions": "Transactions",
   "build.group.sdks.community-sdks.swift-sdk": "Swift SDK",
   "build.group.sdks.community-sdks.unity-opendive-sdk": "Unity OpenDive SDK",
   "build.group.sdks.community-sdks.kotlin-sdk.fetch-data": "Fetch Data",

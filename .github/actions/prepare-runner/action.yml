@@ -2,7 +2,9 @@ name: "Setup runner"
 description: >
   Install Node.js and pnpm, restore the pnpm store cache, wrap package
   managers with Aikido Safe Chain, then install JS dependencies. Safe Chain
-  blocks malware and packages newer than 48 hours by default. Set
+  blocks malware and packages newer than 48 hours by default. Prefer the
+  scoped SAFE_CHAIN_MINIMUM_PACKAGE_AGE_EXCLUSIONS allowlist for a single
+  package (see the install step); set
   SAFE_CHAIN_MINIMUM_PACKAGE_AGE_HOURS=0 in the calling job's env to bypass
   the age gate in an emergency.
 runs:
@@ -34,4 +36,13 @@ runs:
 
     - name: Install dependencies
       shell: bash
+      # Scoped Safe Chain exemption for the CVE-2026-93748 fix: the
+      # http-cache-semantics@4.3.0 release (pinned via the pnpm override in
+      # pnpm-workspace.yaml) is younger than Safe Chain's 48h minimum package
+      # age gate, so its tarball download is blocked without this. Scoped to
+      # this one package name (Safe Chain exclusions don't take versions);
+      # remove once 4.3.0 has matured past the gate (after 2026-10-06T02:56:05Z)
+      # so future releases of this package go through the normal age check.
+      env:
+        SAFE_CHAIN_MINIMUM_PACKAGE_AGE_EXCLUSIONS: http-cache-semantics
       run: pnpm install --frozen-lockfile

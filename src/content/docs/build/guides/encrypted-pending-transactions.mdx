@@ -7,7 +7,7 @@ sidebar:
 
 Encrypted pending transactions let you submit a transaction whose **Move payload** (entry function, arguments, and related executable data) is **encrypted while the transaction is pending**—for example while it is held in mempool and propagated between nodes. Validators decrypt the payload only when preparing execution after the block is confirmed. This reduces what observers can learn from the public pending transaction stream compared to a fully plaintext payload.
 
-This feature is currently live on **devnet** and **testnet**, with **mainnet** to follow. The fullnode you use must expose a ledger **`encryption_key`** when encrypted submission is enabled. On networks or nodes where the key is absent, the client cannot build encrypted transactions.
+This feature is live on **devnet**, **testnet**, and **mainnet**. The fullnode you use must expose a ledger **`encryption_key`** when encrypted submission is enabled. On networks or nodes where the key is absent, the client cannot build encrypted transactions.
 
 ## What clients can still observe
 
@@ -15,7 +15,14 @@ Encryption protects the **payload bytes** in transit and at rest in the pending 
 
 ## Cost
 
-Encrypted transactions pay a **minimum gas-unit price of 200 Octas/gas-unit**, twice the network base minimum, to cover validator decryption work. SDKs enforce this floor at build time; servers reject encrypted submissions priced below it.
+Encrypted transactions cost more than plaintext transactions. The extra cost covers validator decryption work and has two parts:
+
+- **Higher minimum gas-unit price.** Encrypted transactions pay a **minimum gas-unit price of 200 Octas/gas-unit**, twice the network base minimum. SDKs enforce this floor at build time; servers reject encrypted submissions priced below it.
+- **Flat decryption charge.** Each encrypted transaction is charged an extra **375 gas units** on top of the gas its payload uses. If you set `maxGasAmount` yourself, leave room for this charge. Otherwise, the transaction is rejected during validation or runs out of gas.
+
+As a rough guide, for a transaction without storage fees: if its plaintext version uses `G` gas units, the encrypted version costs about `(G + 375) × max(gas_unit_price, 200)` Octas. For example, a transfer that uses 150 gas units costs 15,000 Octas as plaintext at 100 Octas/gas-unit. Encrypted, it costs about (150 + 375) × 200 = 105,000 Octas (0.00105 APT). The flat charge matters most for small transactions.
+
+Both values are governance-controlled parameters in the on-chain gas schedule (`0x1::gas_schedule::GasScheduleV2`): `txn.encrypted_txn_min_price_per_gas_unit` and `txn.encrypted_txn_decryption.base`. The second value is in internal gas units. Divide it by `txn.gas_unit_scaling_factor` to get gas units.
 
 ## Signer restrictions
 

@@ -11,7 +11,7 @@ export interface FaucetProps {
 }
 
 export function Faucet({ showGithub = false }: FaucetProps) {
-  const { user, error, logout, loginByGithub, loginByGoogle } = useAuth();
+  const { user, error, isLoading, logout, loginByGithub, loginByGoogle } = useAuth();
 
   return (
     <div className="flex flex-col gap-2 mt-8">
@@ -34,9 +34,15 @@ export function Faucet({ showGithub = false }: FaucetProps) {
             onLogin={loginByGoogle}
             provider="Google"
             icon={<IconGoogle style={{ width: "16", height: "16" }} />}
+            disabled={isLoading}
           />
           {showGithub && (
-            <LoginButton onLogin={loginByGithub} provider="GitHub" icon={<IconGithub />} />
+            <LoginButton
+              onLogin={loginByGithub}
+              provider="GitHub"
+              icon={<IconGithub />}
+              disabled={isLoading}
+            />
           )}
         </div>
       )}

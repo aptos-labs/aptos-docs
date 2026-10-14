@@ -56,6 +56,7 @@ interface DiscoveryEndpoints {
   apiCatalog: string;
   mcpServerCard: string;
   agentSkills: string;
+  aiCatalog: string;
 }
 
 interface FetchMarkdownResult {
@@ -67,17 +68,18 @@ interface FetchMarkdownResult {
 }
 
 /**
- * Programmatically open the Algolia DocSearch modal and prefill the search box.
+ * Programmatically open the site search modal and prefill the search box.
  *
- * DocSearch is rendered on every docs page by the starlight-docsearch plugin
- * (see `src/components/DocSearchButtonAlt.astro`). Clicking the `.DocSearch-Button`
- * mounts the modal; once mounted, DocSearch exposes an `input.DocSearch-Input`
- * whose value we set and bubble up via an `input` event so its internal store
- * updates and fetches results.
+ * The docs ship one of two search UIs depending on whether Algolia is usable at
+ * build time (see `src/config/search.ts`): Algolia DocSearch or Starlight's
+ * built-in Pagefind search. Both render a button in the header that mounts a
+ * modal containing a text input, so the tool targets either one. The input's
+ * value is set through the native setter and bubbled as an `input` event so the
+ * search UI's internal state updates and fetches results.
  */
 async function openDocSearchWithQuery(query: string): Promise<boolean> {
   const button = document.querySelector<HTMLElement>(
-    ".DocSearch-Button, .DocSearch-Button-Alt",
+    ".DocSearch-Button, button[data-open-modal]",
   );
   if (!button) return false;
   button.click();
@@ -85,7 +87,9 @@ async function openDocSearchWithQuery(query: string): Promise<boolean> {
   // The modal is portaled asynchronously; poll briefly for the input.
   const deadline = Date.now() + 1500;
   while (Date.now() < deadline) {
-    const input = document.querySelector<HTMLInputElement>(".DocSearch-Input");
+    const input = document.querySelector<HTMLInputElement>(
+      ".DocSearch-Input, .pagefind-ui__search-input",
+    );
     if (input) {
       const setter = Object.getOwnPropertyDescriptor(
         window.HTMLInputElement.prototype,
@@ -110,7 +114,7 @@ function searchTool(): ModelContextToolDefinition<
     name: "aptos-docs.search",
     title: "Search Aptos developer docs",
     description:
-      "Open the Aptos developer documentation search modal pre-populated with a query so the user can browse results. Uses Algolia DocSearch when available; otherwise no-ops.",
+      "Open the Aptos developer documentation search modal pre-populated with a query so the user can browse results. Uses Algolia DocSearch when available and Pagefind otherwise; no-ops when neither search UI is on the page.",
     inputSchema: {
       type: "object",
       properties: {
@@ -132,7 +136,7 @@ function searchTool(): ModelContextToolDefinition<
       const opened = await openDocSearchWithQuery(query);
       return opened
         ? { ok: true, query, opened: true }
-        : { ok: false, query, reason: "docsearch-unavailable" };
+        : { ok: false, query, reason: "search-unavailable" };
     },
   };
 }
@@ -222,7 +226,7 @@ function listFeedsTool(): ModelContextToolDefinition<
     name: "aptos-docs.list-llms-feeds",
     title: "List Aptos LLMs.txt and agent discovery feeds",
     description:
-      "Return the URLs of the Aptos documentation LLMs.txt feeds (index, condensed, full) plus the agent discovery endpoints (api-catalog, MCP server card, agent-skills index).",
+      "Return the URLs of the Aptos documentation LLMs.txt feeds (index, condensed, full) plus the agent discovery endpoints (api-catalog, MCP server card, agent-skills index, AI Catalog).",
     inputSchema: { type: "object", properties: {} },
     annotations: { readOnlyHint: true },
     execute: () => ({
@@ -239,6 +243,10 @@ function listFeedsTool(): ModelContextToolDefinition<
       ).toString(),
       agentSkills: new URL(
         "/.well-known/agent-skills/index.json",
+        location.origin,
+      ).toString(),
+      aiCatalog: new URL(
+        "/.well-known/ai-catalog.json",
         location.origin,
       ).toString(),
     }),

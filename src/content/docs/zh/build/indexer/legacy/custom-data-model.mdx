@@ -1,0 +1,205 @@
+---
+title: "自定义数据模型"
+description: "已弃用 Indexer 的旧版自定义数据模型文档；请迁移到现代 Indexer SDK 编写自定义处理器"
+sidebar:
+  label: "自定义数据模型（旧版）"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="caution">
+  这是旧版 Indexer 的文档。要了解如何使用最新 Indexer 技术栈编写自定义处理器，请参阅[自定义处理器](/zh/build/indexer/indexer-sdk/documentation/create-processor)。
+</Aside>
+
+## 定义自己的数据模型
+
+如果想为 Aptos 账本数据开发自定义 Indexer，请使用此方法。
+
+<Aside type="note">
+  何时应使用自定义 Indexer？
+
+  当前 Aptos 提供的索引服务（见上文）支持以下核心 Move 模块：
+
+  - `0x1::coin`。
+  - `0x3::token`。
+  - `0x3::token_transfers`。
+
+  如果需要为其他任何 Move 模块和合约创建已索引的数据库，则应开发自定义 Indexer。
+</Aside>
+
+创建自定义 Indexer 包含以下步骤。请参阅本文档开头的索引框图。
+
+1. 使用 [Diesel](https://diesel.rs/) 等 ORM 定义新表模式。本文档使用 Diesel 描述自定义索引步骤（图中的“业务逻辑”和数据查询）。
+2. 基于新表创建新数据模型（图中的“业务逻辑”）。
+3. 创建新的交易处理器，或选择添加到现有处理器。图中此步骤对应于依据新业务逻辑处理账本数据库，并写入索引数据库。
+4. 集成新处理器。若复用现有处理器，则此步骤可选。
+
+以下详细说明以索引和查询代币余额为例。可在 [`coin_processor.rs`](https://github.com/aptos-labs/aptos-core/blob/main/crates/indexer/src/processors/coin_processor.rs) 中查看。
+
+### 1. 定义新表模式
+
+本例使用 [PostgreSQL](https://www.postgresql.org/) 和 [Diesel](https://diesel.rs/) 作为 ORM。为确保无需在每次升级时重置数据库即可进行向后兼容的更改，我们使用 [Diesel migrations](https://docs.rs/diesel_migrations/latest/diesel_migrations/) 管理模式。因此，在做其他任何操作前，生成新的 Diesel migration 非常重要。
+
+请先运行 `git clone https://github.com/aptos-labs/aptos-core.git` 克隆 Aptos-core 仓库，然后 `cd` 进入 `aptos-core/tree/main/crates/indexer` 目录。接着按以下步骤操作。
+
+a. 第一步是创建新的 Diesel migration。这会在 [migrations](https://github.com/aptos-labs/aptos-core/tree/main/crates/indexer/migrations) 下生成新文件夹，其中包含 `up.sql` 和 `down.sql`。
+
+```shellscript filename="Terminal"
+DATABASE_URL=postgres://postgres@localhost:5432/postgres diesel migration generate add_coin_tables
+```
+
+b. 创建必要的表模式。这只是 PostgreSQL 代码。下列代码中，`up.sql` 包含新变更，`down.sql` 会还原这些变更。
+
+```sql filename="up.sql / down.sql"
+-- up.sql
+-- coin balances for each version
+CREATE TABLE coin_balances (
+  transaction_version BIGINT NOT NULL,
+  owner_address VARCHAR(66) NOT NULL,
+  -- Hash of the non-truncated coin type
+  coin_type_hash VARCHAR(64) NOT NULL,
+  -- creator_address::name::symbol<struct>
+  coin_type VARCHAR(5000) NOT NULL,
+  amount NUMERIC NOT NULL,
+  transaction_timestamp TIMESTAMP NOT NULL,
+  inserted_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  -- Constraints
+  PRIMARY KEY (
+    transaction_version,
+    owner_address,
+    coin_type_hash
+  )
+);
+-- latest coin balances
+CREATE TABLE current_coin_balances {...}
+-- down.sql
+DROP TABLE IF EXISTS coin_balances;
+DROP TABLE IF EXISTS current_coin_balances;
+```
+
+请参阅[`up.sql` 和 `down.sql` 的完整源代码](https://github.com/aptos-labs/aptos-core/tree/main/crates/indexer/migrations/2022-10-04-073529_add_coin_tables)。
+
+c. 运行 migration。建议使用 `redo` 多次运行，以确保 `up.sql` 和 `down.sql` 均已正确实现。这也会修改 [`schema.rs`](https://github.com/aptos-labs/aptos-core/blob/main/crates/indexer/src/schema.rs) 文件。
+
+```shellscript filename="Terminal"
+DATABASE_URL=postgres://postgres@localhost:5432/postgres diesel migration run
+DATABASE_URL=postgres://postgres@localhost:5432/postgres diesel migration redo
+```
+
+### 2. 创建新数据模式
+
+现在需要准备与 Diesel 模式对应的 Rust 数据模型。对于代币余额，将如下定义 `CoinBalance` 和 `CurrentCoinBalance`：
+
+```rust filename="coin_balance.rs"
+#[derive(Debug, Deserialize, FieldCount, Identifiable, Insertable, Serialize)]
+#[diesel(primary_key(transaction_version, owner_address, coin_type))]
+#[diesel(table_name = coin_balances)]
+pub struct CoinBalance {
+    pub transaction_version: i64,
+    pub owner_address: String,
+    pub coin_type_hash: String,
+    pub coin_type: String,
+    pub amount: BigDecimal,
+    pub transaction_timestamp: chrono::NaiveDateTime,
+}
+
+#[derive(Debug, Deserialize, FieldCount, Identifiable, Insertable, Serialize)]
+#[diesel(primary_key(owner_address, coin_type))]
+#[diesel(table_name = current_coin_balances)]
+pub struct CurrentCoinBalance {
+    pub owner_address: String,
+    pub coin_type_hash: String,
+    pub coin_type: String,
+    pub amount: BigDecimal,
+    pub last_transaction_version: i64,
+    pub last_transaction_timestamp: chrono::NaiveDateTime,
+}
+```
+
+还需要指定解析逻辑，其输入是交易的一部分。对于代币余额，可在 `WriteSetChanges` 中找到所有详细信息，尤其是写入集变更类型为 `write_resources` 的位置。
+
+**在哪里找到解析所需的数据**：这需要同时理解 Move 模块和交易结构。以代币余额为例，合约位于 [coin.move](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/coin.move)，具体是带有 `value` 字段的 coin 结构体（搜索 `struct Coin`）。随后查看[示例交易](https://api.testnet.aptoslabs.com/v1/transactions/by_version/259518)，可在 `write_resources` 中找到此精确结构：
+
+```shellscript filename="Terminal"
+"changes": [
+  {
+    ...
+    "data": {
+      "type": "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>",
+      "data": {
+        "coin": {
+          "value": "49742"
+      },
+      ...
+```
+
+完整代码请参阅 [coin\_balances.rs](https://github.com/aptos-labs/aptos-core/blob/main/crates/indexer/src/models/coin_models/coin_balances.rs)。
+
+### 3. 创建新处理器
+
+现在已有数据模型和解析函数，需要调用解析函数并将生成的模型保存到 Postgres 数据库。可以通过创建（或修改）`processor` 完成。我们已从该类抽象出大量内容，因此唯一需要实现的函数是 `process_transactions`（还需复制几个其他函数，这些在示例中应很明显）。
+
+`process_transactions` 函数接收带有起止版本、用于跟踪的交易向量。一般流程应为：
+
+- 遍历向量中的交易。
+- 汇总相关模型。有时需要去重，例如 `CurrentCoinBalance`。
+- 在单个 Diesel 交易中将模型插入数据库。这很重要，可确保不会发生部分写入。
+- 返回状态（错误或成功）。
+
+<Aside type="note">
+  较为直接的示例请参阅 [coin\_processor.rs](https://github.com/aptos-labs/aptos-core/blob/main/crates/indexer/src/processors/coin_processor.rs)。可在页面中搜索 `coin_balances`，查看与代币余额相关的特定代码片段。
+</Aside>
+
+\*\*如何决定是否创建新处理器：\*\*完全由你决定。创建新处理器的好处是从零开始，因此可完全控制写入索引数据库的内容。缺点是必须维护新的全节点，因为全节点与处理器之间是一对一映射。
+
+### 4. 集成新处理器
+
+这是最简单的一步，只涉及少量添加。
+
+1. 首先，务必在 Rust 代码文件中添加新处理器：[ `mod.rs`](https://github.com/aptos-labs/aptos-core/blob/main/crates/indexer/src/processors/mod.rs) 和 [`runtime.rs`](https://github.com/aptos-labs/aptos-core/blob/main/crates/indexer/src/runtime.rs)。见下文：
+
+[**mod.rs**](https://github.com/aptos-labs/aptos-core/blob/main/crates/indexer/src/processors/mod.rs)
+
+```rust filename="mod.rs"
+pub enum Processor {
+  CoinProcessor,
+  ...
+}
+...
+  COIN_PROCESSOR_NAME => Self::CoinProcessor,
+```
+
+[**runtime.rs**](https://github.com/aptos-labs/aptos-core/blob/main/crates/indexer/src/runtime.rs)
+
+```rust filename="runtime.rs"
+Processor::CoinProcessor => Arc::new(CoinTransactionProcessor::new(conn_pool.clone())),
+```
+
+2. 创建具有正确配置的 `fullnode.yaml`，然后通过使用该 `fullnode.yaml` 启动全节点来测试自定义 Indexer。
+
+**fullnode.yaml**
+
+```yaml filename="fullnode.yaml"
+storage:
+  enable_indexer: true
+  storage_pruner_config:
+    ledger_pruner_config:
+      enable: false
+
+indexer:
+  enabled: true
+  check_chain_id: true
+  emit_every: 1000
+  postgres_uri: "postgres://postgres@localhost:5432/postgres"
+  processor: "coin_processor"
+  fetch_tasks: 10
+  processor_tasks: 10
+```
+
+通过运行以下命令启动 Aptos 全节点进行测试。终端输出中会看到许多日志，因此请使用 `grep` 过滤器仅查看 Indexer 日志输出，如下所示：
+
+```shellscript filename="Terminal"
+cargo run -p aptos-node --features "indexer" --release -- -f ./fullnode_coin.yaml | grep -E "_processor"
+```
+
+有关如何启动启用 Indexer 的全节点的完整说明，请参阅[Indexer 全节点](/zh/build/indexer/legacy/indexer-fullnode)。

@@ -20,14 +20,24 @@ if err != nil {
 }
 
 address := aptos.AccountAddress{}
-err := address.ParseStringRelaxed("0x123")
+err = address.ParseStringRelaxed("0x123")
 if err != nil {
   panic("Failed to parse address:" + err.Error())
 }
 
 accountInfo, err := client.Account(address)
+if err != nil {
+  panic("Failed to get account:" + err.Error())
+}
 resources, err := client.AccountResources(address)
+if err != nil {
+  panic("Failed to get resources:" + err.Error())
+}
 transactions, err := client.Transactions()
+if err != nil {
+  panic("Failed to get transactions:" + err.Error())
+}
+fmt.Println(accountInfo, resources, len(transactions))
 ```
 
 <Aside type="note">
@@ -54,10 +64,9 @@ query for Indexer API data, you can use `client.QueryIndexer()` like so:
 	variables := map[string]any{
 		"address": address.StringLong(),
 	}
-	err := ic.Query(&q, variables)
-
+	err = client.QueryIndexer(&q, variables)
 	if err != nil {
-		return nil, err
+		panic("Failed to query indexer:" + err.Error())
 	}
 
 	for _, coin := range q.Current_coin_balances {
@@ -80,12 +89,15 @@ You can call view functions which return custom data from on-chain by using `cli
 For example, you can look up the network you are using with the `chain_id` view function:
 
 ```go filename="fetch_data.go"
-viewResponse, err := client.View(&aptos.ViewPayload {
-  Module: aptos.ModuleId{Address: aptos.AccountAddress{}, Name: "chain_id"},
+viewResponse, err := client.View(&aptos.ViewPayload{
+  Module:   aptos.ModuleId{Address: aptos.AccountOne, Name: "chain_id"},
   Function: "get",
   ArgTypes: []aptos.TypeTag{},
-  Args: [][]byte{},
-)
+  Args:     [][]byte{},
+})
+if err != nil {
+  panic("Failed to call view:" + err.Error())
+}
 
 chainId := viewResponse[0]
 ```

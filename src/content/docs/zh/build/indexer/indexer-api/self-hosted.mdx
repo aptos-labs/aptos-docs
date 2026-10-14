@@ -1,0 +1,113 @@
+---
+title: "自托管 Indexer API"
+description: "通过自定义处理器、数据库设置和交易流集成部署自己的 Aptos Indexer API，以私有方式访问数据。"
+sidebar:
+  label: "自托管"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+{/* <IndexerBetaNotice /> */}
+
+本指南将带你设置自托管 Indexer API。
+
+<Aside type="caution">
+  目前，本指南仅说明如何运行 Indexer API 的处理器部分。完成本指南后，你将拥有一个正在运行的处理器：它从交易流服务消费交易、解析交易并将其存入数据库。遗憾的是，本指南目前不说明如何为该系统附加 API。
+</Aside>
+
+## 前提条件
+
+- 需要运行中的 PostgreSQL 实例，并具有有效的用户和数据库。本示例中的用户为 `postgres`，数据库为 `indexer`。
+- 如果希望使用 Docker，必须已安装 Docker。[安装指南](https://docs.docker.com/get-docker/)。
+
+## 配置
+
+运行服务需要定义配置文件。先使用以下模板：
+
+```yaml filename="config.yaml"
+health_check_port: 8084
+server_config:
+  processor_config:
+    type: default_processor
+  postgres_connection_string: postgresql://postgres:@localhost:5432/indexer
+  indexer_grpc_data_service_address: 127.0.0.1:50051
+  indexer_grpc_http2_ping_interval_in_secs: 60
+  indexer_grpc_http2_ping_timeout_in_secs: 10
+  auth_token: AUTH_TOKEN
+```
+
+接下来可能需要修改其中一些字段的值。下面介绍几个字段。
+
+### processor\_name
+
+<Aside type="note">
+  单个服务实例只运行一个处理器。若想运行多个处理器，必须运行多个服务实例。此时是否使用同一个数据库由你决定。
+</Aside>
+
+这是希望运行的处理器。可在[此处](https://github.com/aptos-labs/aptos-indexer-processors-v2/tree/main/processor/src/processors)查看可用处理器。一些示例：
+
+- coin\_processor
+- ans\_processor
+- token\_v2\_processor
+
+### postgres\_connection\_string
+
+这是 PostgreSQL 数据库的连接字符串，格式应为 `postgresql://<username>:<password>@<host>:<port>/<database>`。
+
+<Aside type="caution">
+  若在 Docker Desktop 环境中运行（如果使用 MacOS 或 Windows，则很可能如此），必须改为设置 postgres\_connection\_string 为 `postgresql://host.docker.internal:5432/indexer`。Docker Desktop 中，这是二进制文件访问主机网络的方式。
+</Aside>
+
+### indexer\_grpc\_data\_service\_address
+
+这是交易流服务的 URL。若使用 Labs 托管实例，可在[此页面](/zh/build/indexer/indexer-api)找到每个网络的 URL。请确保为要索引的网络选择正确 URL。若在本地运行服务，值应为 `127.0.0.1:50051`。
+
+### auth\_token
+
+这是用于连接交易流服务的身份验证令牌。若使用 Labs 托管实例，可通过 API Gateway 获得 API 密钥。详见[此页面](/zh/build/indexer/indexer-api)。
+
+## 使用源码运行
+
+克隆仓库：
+
+```shellscript filename="Terminal"
+# SSH
+git clone git@github.com:aptos-labs/aptos-indexer-processors-v2.git
+
+# HTTPS
+git clone https://github.com/aptos-labs/aptos-indexer-processors-v2.git
+```
+
+前往服务目录：
+
+```shellscript filename="Terminal"
+cd aptos-indexer-processors
+cd rust/processor
+```
+
+运行服务：
+
+```shellscript filename="Terminal"
+cargo run --release -- -c config.yaml
+```
+
+## 使用 Docker 运行
+
+{/* <!--
+  This doesn't actually work this very moment because:
+
+  1. We don't yet publish the image as indexer-processor-rust
+  2. We don't tag it as latest.
+
+  We'll do that soon though: https://aptos-org.slack.com/archives/C04PRP1K1FZ/p1692732083583659
+  --> */}
+
+要使用 Docker 运行服务，请使用以下命令：
+
+```shellscript filename="Terminal"
+docker run -it --network host --mount type=bind,source=/tmp/config.yaml,target=/config.yaml aptoslabs/indexer-processor-rust -c /config.yaml
+```
+
+该命令将容器绑定到主机网络，并将配置文件从主机挂载到容器。本次调用假设主机中的配置文件位于 `/tmp/config.yaml`。
+
+在 DockerHub 上查看镜像：[https://hub.docker.com/r/aptoslabs/indexer-processor-rust/tags](https://hub.docker.com/r/aptoslabs/indexer-processor-rust/tags)。

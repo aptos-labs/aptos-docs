@@ -1,0 +1,76 @@
+---
+title: "获取账户交易数据"
+description: "使用交易版本和时间顺序的 GraphQL 查询获取账户的历史交易数据。"
+sidebar:
+  label: "账户交易"
+---
+
+import { GraphQLEditor } from '~/components/react/GraphQLEditor';
+
+import { Aside } from '@astrojs/starlight/components';
+
+`AccountTransactionsData` 会获取影响指定账户地址的交易的 `transaction_version`，并按降序排列。`transaction_version` 是分配给每笔链上交易的唯一 ID，每次递增 1。
+
+该查询对于需要交易历史记录以用于审计、追踪或展示的应用至关重要。
+
+<Aside type="note">
+  请动手实验并查看结果！修改以下变量中的地址、limit 和 offset，以自定义查询。
+</Aside>
+
+<GraphQLEditor
+  query={`query GetAccountTransactionsData($address: String, $limit: Int) {
+  account_transactions(
+    where: { account_address: { _eq: $address } }
+    order_by: { transaction_version: desc }
+    limit: $limit
+  ) {
+    transaction_version
+    __typename
+  }
+}`}
+  variables={`{
+  "address": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "limit": 10
+}`}
+/>
+
+#### 变量：
+
+- `$address`：**String**——要查询交易数据的区块链账户地址。例如：`"0x1abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"`。
+- `$limit`：**Integer**——指定返回的最大交易版本数量，有助于控制获取的数据量。例如：`10`。
+- `$offset`：**Integer**——开始获取交易版本时的偏移量，适用于结果分页。例如：`0`。
+
+<br />
+
+# 获取最近交易
+
+上述查询有一个很实用的变体：将结果限制为只返回发生在某个特定 `transaction_version` 之后的交易。所有结果的 `transaction_version` 都大于 `$gt`。
+
+<GraphQLEditor
+  query={`query GetAccountTransactionsData($address: String, $limit: Int, $gt: bigint) {
+  account_transactions(
+    where: {
+      account_address: { _eq: $address }
+      transaction_version: { _gt: $gt }
+    }
+    order_by: { transaction_version: desc }
+    limit: $limit
+  ) {
+    transaction_version
+    __typename
+  }
+}`}
+  variables={`{
+  "address": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "limit": 10,
+  "gt": 599296148
+}`}
+/>
+
+#### 变量：
+
+- `$address`：**String**——要查询交易数据的区块链账户地址。例如：`"0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"`。
+- `$limit`：**Integer**——指定返回的最大交易版本数量，有助于将结果控制在可处理的范围内。例如：`10`。
+- `$gt`：**bigint**——应获取其后交易的交易版本号。交易版本号会为每笔交易顺序递增。
+  版本 0 是第一笔交易（创世交易），版本 100 则是区块链中的第 101 笔交易。
+  例如：`599296148`。

@@ -1,6 +1,6 @@
 ---
 title: LLMs.txt
-description: 如何让 Cursor、GitHub Copilot、ChatGPT 和 Claude 等工具理解 Aptos 文档。
+description: 如何让 Cursor、GitHub Copilot、ChatGPT、Claude、Codex 和 Devin 等工具理解 Aptos 文档。
 ---
 
 ## 什么是 LLMs.txt？
@@ -22,6 +22,8 @@ description: 如何让 Cursor、GitHub Copilot、ChatGPT 和 Claude 等工具理
 
 此外还会列出 **Agent 工具链**（Aptos MCP、Agent Skills、浏览器、GitHub 组织）以及重要 **Markdown** 深链（AI 总览、标准、Indexer GraphQL 参考），便于模型直接拉取正确资源。
 
+发现端点、MCP Server Card 和 WebMCP 工具见 [AI 工具概览](/zh/build/ai)。
+
 ## 逐页 Markdown 访问
 
 每个文档页面也可以通过在 URL 后添加 `.md` 获取渲染后的 Markdown 格式：
@@ -32,27 +34,35 @@ description: 如何让 Cursor、GitHub Copilot、ChatGPT 和 Claude 等工具理
 | `https://aptos.dev/build/sdks/ts-sdk`                 | `https://aptos.dev/build/sdks/ts-sdk.md`                 |
 | `https://aptos.dev/zh/build/guides/first-transaction` | `https://aptos.dev/zh/build/guides/first-transaction.md` |
 
-这对于需要用最少 token 获取单个页面的 AI 工具非常有用，而不必摄取完整文档。[llms.txt](/llms.txt) 作为紧凑路由文件使用，而 [llms-small.txt](/llms-small.txt) 和 [llms-full.txt](/llms-full.txt) 分别提供精选版和完整版语料导出。
+也可以向 HTML URL 发送 `Accept: text/markdown`。这对于需要用最少 token 获取单个页面的 AI 工具非常有用，而不必摄取完整文档。[llms.txt](/llms.txt) 作为紧凑路由文件使用，而 [llms-small.txt](/llms-small.txt) 和 [llms-full.txt](/llms-full.txt) 分别提供精选版和完整版语料导出。
 
 ## 与 AI 工具的使用
 
 ### Claude Code
 
-将 Aptos 文档上下文添加到 [Claude Code](https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/overview) 项目：
+将 Aptos 文档上下文添加到 [Claude Code](https://code.claude.com/docs/en/overview) 项目：
 
-1. 将 `https://aptos.dev/llms.txt` 添加到项目的 `CLAUDE.md` 文件中作为参考
+1. 将 `https://aptos.dev/llms.txt` 添加到项目的 `CLAUDE.md` 或 `AGENTS.md` 文件中作为参考
 2. Claude Code 会读取索引并根据需要通过 `.md` URL 获取相关页面
-3. 如需更深层次的链上工具集成，请参阅 [Aptos MCP for Claude Code](/zh/build/ai/aptos-mcp/claude)
+3. 如需链上工具集成，请参阅 [Aptos MCP for Claude Code](/zh/build/ai/aptos-mcp/claude)
 
 ### Cursor
 
-在 Cursor 中使用 `@Docs` 功能将 LLMs.txt 文件包含在您的项目中。这有助于 Cursor 为 Aptos 开发提供更准确的代码建议和文档。
+Cursor 已移除 `@Docs` 索引。请改为让 Agent 直接使用这些文档源：
 
-[了解更多关于 Cursor 中的 @Docs](https://docs.cursor.com/context/@-symbols/@-docs)
+1. 将 `https://aptos.dev/llms.txt` 写入项目的 `AGENTS.md`（或 [项目规则](https://cursor.com/docs/rules)）
+2. 需要一次性拉取时，把文档源 URL 粘贴到聊天中——Agent 可以直接获取
+3. 如需链上工具，请参阅 [Aptos MCP for Cursor](/zh/build/ai/aptos-mcp/cursor)
 
 ### GitHub Copilot
 
-GitHub Copilot 可以利用这些 LLMs.txt 文件中的信息，在开发 Aptos 应用程序时提供更好的帮助。您可以在 GitHub Copilot Chat 中使用以下 URL 引用这些文件：
+在 [Copilot Chat](https://code.visualstudio.com/docs/chat/copilot-chat-context) 中，为当前会话拉取文档源：
+
+```
+#fetch https://aptos.dev/llms.txt
+```
+
+若要作为项目长期上下文，把这些 URL 写入 [`.github/copilot-instructions.md`](https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/add-custom-instructions/add-repository-instructions)：
 
 ```
 https://aptos.dev/llms.txt
@@ -60,27 +70,31 @@ https://aptos.dev/llms-small.txt
 https://aptos.dev/llms-full.txt
 ```
 
-### Windsurf
+### OpenAI Codex
 
-使用 `@` 或在您的 `.windsurfrules` 文件中引用 LLMs.txt 文件，以增强 Windsurf 对 Aptos 开发的理解。
+将 `https://aptos.dev/llms.txt` 添加到 `AGENTS.md`，然后启动 Codex。链上工具见 [Aptos MCP for Codex](/zh/build/ai/aptos-mcp/codex)。
 
-[了解更多关于 Windsurf Memories](https://docs.codeium.com/windsurf/memories#memories-and-rules)
+### Devin Desktop（原 Windsurf）
+
+Devin Desktop 会读取 `AGENTS.md` 和 `.devin/rules/`（旧的 `.windsurfrules` 仍然有效）。把 `https://aptos.dev/llms.txt` 放进项目的 `AGENTS.md`。
+
+[了解 Devin Desktop 中的 AGENTS.md](https://docs.devin.ai/desktop/cascade/agents-md)
 
 ### Claude.ai
 
-将 Aptos 文档添加为 [Claude Projects](https://claude.ai) 的知识来源：
+将 Aptos 文档添加为 [Claude Projects](https://claude.ai) 的项目知识：
 
 1. 打开 [Claude.ai](https://claude.ai) 并创建或打开一个项目
-2. 点击**添加内容**
+2. 添加项目知识 / 内容
 3. 将 `https://aptos.dev/llms-full.txt` 粘贴为 URL 来源
-4. Claude 将在该项目的所有对话中具备 Aptos 文档的上下文
+4. Claude 将在该项目的对话中具备 Aptos 文档上下文
 
 ### ChatGPT
 
 在 ChatGPT 对话中直接引用 Aptos 文档：
 
-- 将 `https://aptos.dev/llms-full.txt` 粘贴到您的消息中，要求 ChatGPT 在回答 Aptos 问题之前先阅读它
-- 对于[自定义 GPT](https://openai.com/index/introducing-gpts/)：在 GPT Builder 中添加 `https://aptos.dev/llms.txt` 作为知识来源
+- 将 `https://aptos.dev/llms-full.txt` 粘贴到消息中，要求 ChatGPT 在回答 Aptos 问题之前先阅读它
+- 对于自定义 GPT：在 GPT Builder 中添加 `https://aptos.dev/llms.txt` 作为知识来源
 
 ### 其他 AI 工具
 

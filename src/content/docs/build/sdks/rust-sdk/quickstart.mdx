@@ -1,0 +1,139 @@
+---
+title: "Rust SDK Quickstart"
+description: "Get started with the Aptos Rust SDK by creating accounts, funding them, and transferring APT"
+sidebar:
+  label: "Rust SDK Quickstart"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+<Aside type="note">
+  The complete example is at [Full Quickstart Code](#full-quickstart-code) at
+  the bottom of this page. It follows the same flow as
+  [`transfer.rs`](https://github.com/aptos-labs/aptos-rust-sdk/blob/main/crates/aptos-sdk/examples/transfer.rs)
+  in the SDK repository.
+</Aside>
+
+<Steps>
+  1. Create a Cargo project and add the SDK
+
+     The SDK requires **Rust 1.95+**.
+
+     ```shellscript filename="Terminal"
+     cargo new aptos-rust-quickstart
+     cd aptos-rust-quickstart
+     ```
+
+     Add dependencies to `Cargo.toml`:
+
+     ```toml filename="Cargo.toml"
+     [dependencies]
+     aptos-sdk = "0.7"
+     tokio = { version = "1", features = ["full"] }
+     anyhow = "1"
+     serde_json = "1"
+     ```
+
+  2. Set up the Aptos client
+
+     ```rust filename="src/main.rs"
+     use aptos_sdk::{Aptos, AptosConfig};
+
+     let aptos = Aptos::new(AptosConfig::devnet())?;
+     println!("Connected to Aptos devnet");
+     ```
+
+     <Aside type="note">
+       (Advanced) To connect to a specific node, chain `AptosConfig::devnet()`
+       with `.with_fullnode_url(...)`.
+     </Aside>
+
+  3. Create and fund accounts
+
+     ```rust filename="src/main.rs"
+     use aptos_sdk::account::Ed25519Account;
+
+     let alice = Ed25519Account::generate();
+     let bob = Ed25519Account::generate();
+
+     // Default max_gas_amount is 2_000_000. Fund well above the transfer amount.
+     aptos.fund_account(alice.address(), 1_000_000_000).await?;
+     ```
+
+     You can also generate and fund in one step with
+     `aptos.create_funded_account(amount)`. On testnet, mint from the
+     [faucet page](/network/faucet).
+
+  4. Transfer APT
+
+     `aptos.transfer_apt` builds, signs, submits, and waits.
+
+     ```rust filename="src/main.rs"
+     let result = aptos.transfer_apt(&alice, bob.address(), 1_000).await?;
+     println!("Submitted: {:?}", result.data.get("hash"));
+     ```
+
+     For the lower-level build → simulate → sign → submit → wait flow, see
+     [Building Transactions](/build/sdks/rust-sdk/building-transactions).
+</Steps>
+
+## Full Quickstart Code
+
+```rust filename="src/main.rs"
+use aptos_sdk::{Aptos, AptosConfig, account::Ed25519Account};
+
+const FUND_AMOUNT: u64 = 1_000_000_000;
+const TRANSFER_AMOUNT: u64 = 1_000;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let aptos = Aptos::new(AptosConfig::devnet())?;
+
+    let alice = Ed25519Account::generate();
+    let bob = Ed25519Account::generate();
+
+    println!("=== Addresses ===");
+    println!("Alice: {}", alice.address());
+    println!("Bob:   {}", bob.address());
+
+    aptos.fund_account(alice.address(), FUND_AMOUNT).await?;
+
+    println!("=== Initial Balances ===");
+    println!("Alice: {}", aptos.get_balance(alice.address()).await?);
+    println!("Bob:   {}", aptos.get_balance(bob.address()).await?);
+
+    let result = aptos
+        .transfer_apt(&alice, bob.address(), TRANSFER_AMOUNT)
+        .await?;
+    println!("Submitted: {:?}", result.data.get("hash"));
+
+    println!("=== Final Balances ===");
+    println!("Alice: {}", aptos.get_balance(alice.address()).await?);
+    println!("Bob:   {}", aptos.get_balance(bob.address()).await?);
+
+    Ok(())
+}
+```
+
+Run it with:
+
+```shellscript filename="Terminal"
+cargo run
+```
+
+## Summary
+
+You just learned how to transfer APT by:
+
+1. Connecting to the network with `Aptos::new`.
+2. Creating and funding accounts.
+3. Submitting a transfer and waiting for execution.
+
+<Aside type="note">
+  Bookmark the
+  [examples](https://github.com/aptos-labs/aptos-rust-sdk/tree/main/crates/aptos-sdk/examples)
+  and [tests](https://github.com/aptos-labs/aptos-rust-sdk/tree/main/crates/aptos-sdk/tests)
+  in the SDK repository. Those suites are the source of truth for APIs shown in
+  these docs. Generated rustdoc lives at
+  [aptos-labs.github.io/aptos-rust-sdk](https://aptos-labs.github.io/aptos-rust-sdk/aptos_sdk/index.html).
+</Aside>

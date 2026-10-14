@@ -1,0 +1,81 @@
+---
+title: "Go SDK：无序交易"
+description: "使用 Go SDK 的重放保护 nonce 创建可按任意顺序执行的交易"
+sidebar:
+  label: "无序交易"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+无序交易允许创建彼此之间不指定执行顺序的交易。这在多台机器需要为同一发送账户签名或提交、但顺序不影响结果的场景中很有用。
+
+协议概览请参阅[无序交易](/zh/build/guides/orderless-transactions)（[AIP-123](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-123.md) 和 [AIP-129](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-129.md)）。
+
+## 构建无序交易
+
+将入口函数包装在 `TransactionInnerPayload` 中，并在 `TransactionExtraConfigV1` 上设置 `ReplayProtectionNonce`。使用 `aptos.ExpirationSeconds(60)` 将过期时间限制为 60 秒。
+
+<Aside type="note">
+  每笔交易的 nonce 必须唯一。无序交易在提交后最多 60 秒内过期。若未在该窗口内执行，交易将过期且不会执行。
+</Aside>
+
+```go filename="orderless.go"
+replayNonce := uint64(100)
+accountBytes, err := bcs.Serialize(&bob.Address)
+if err != nil {
+    panic("Failed to serialize bob's address:" + err.Error())
+}
+amountBytes, err := bcs.SerializeU64(TransferAmount)
+if err != nil {
+    panic("Failed to serialize transfer amount:" + err.Error())
+}
+
+rawTxn, err := client.BuildTransaction(
+    alice.AccountAddress(),
+    aptos.TransactionPayload{
+        Payload: &aptos.TransactionInnerPayload{
+            Payload: &aptos.TransactionInnerPayloadV1{
+                Executable: aptos.TransactionExecutable{
+                    Inner: &aptos.EntryFunction{
+                        Module: aptos.ModuleId{
+                            Address: aptos.AccountOne,
+                            Name:    "aptos_account",
+                        },
+                        Function: "transfer",
+                        ArgTypes: []aptos.TypeTag{},
+                        Args:     [][]byte{accountBytes, amountBytes},
+                    },
+                },
+                ExtraConfig: aptos.TransactionExtraConfig{
+                    Inner: &aptos.TransactionExtraConfigV1{
+                        MultisigAddress:       nil,
+                        ReplayProtectionNonce: &replayNonce,
+                    },
+                },
+            },
+        },
+    },
+    aptos.ExpirationSeconds(60),
+)
+```
+
+之后遵循与简单交易相同的步骤：
+
+1. [**模拟**交易（可选）](/zh/build/sdks/go-sdk/building-transactions/simulating-transactions)。
+2. **签名**交易。
+3. **将**交易提交到网络。
+4. **等待**交易执行。
+
+若要跳过手动签名和提交步骤，`BuildSignAndSubmitTransaction` 也接受相同的 inner payload。
+
+## 已测试示例
+
+SDK 仓库包含遵循此 API 的可运行示例：
+
+- [`examples/orderless_transaction`](https://github.com/aptos-labs/aptos-go-sdk/tree/main/examples/orderless_transaction)
+
+运行：
+
+```shellscript filename="Terminal"
+go run examples/orderless_transaction/main.go
+```

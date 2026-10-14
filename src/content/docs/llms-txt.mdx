@@ -1,6 +1,6 @@
 ---
 title: LLMs.txt
-description: How to get tools like Cursor, GitHub Copilot, ChatGPT, and Claude to understand Aptos documentation.
+description: How to get tools like Cursor, GitHub Copilot, ChatGPT, Claude, Codex, and Devin to understand Aptos documentation.
 ---
 
 ## What is LLMs.txt?
@@ -22,6 +22,8 @@ The [`llms.txt`](/llms.txt) index also lists **structured API assets** that are 
 
 It also surfaces **agent tooling** (Aptos MCP, Agent Skills, Explorer, GitHub org) and key **Markdown** deep links (AI hub, standards, Indexer GraphQL reference) so models can fetch the right surface without guessing URLs.
 
+Discovery endpoints, the MCP Server Card, and WebMCP tools are documented on the [AI tools overview](/build/ai).
+
 ## Per-Page Markdown Access
 
 Every documentation page is also available as rendered Markdown by appending `.md` to the URL:
@@ -32,28 +34,35 @@ Every documentation page is also available as rendered Markdown by appending `.m
 | `https://aptos.dev/build/sdks/ts-sdk`                 | `https://aptos.dev/build/sdks/ts-sdk.md`                 |
 | `https://aptos.dev/zh/build/guides/first-transaction` | `https://aptos.dev/zh/build/guides/first-transaction.md` |
 
-This is useful for AI tools that need to fetch individual pages with minimal tokens, rather than ingesting the full documentation. The [llms.txt](/llms.txt) file acts as a compact router, while [llms-small.txt](/llms-small.txt) and [llms-full.txt](/llms-full.txt) provide curated and comprehensive corpus exports.
+You can also send `Accept: text/markdown` to the HTML URL. This is useful for AI tools that need to fetch individual pages with minimal tokens, rather than ingesting the full documentation. The [llms.txt](/llms.txt) file acts as a compact router, while [llms-small.txt](/llms-small.txt) and [llms-full.txt](/llms-full.txt) provide curated and comprehensive corpus exports.
 
 ## Usage with AI Tools
 
 ### Claude Code
 
-Add Aptos documentation context to [Claude Code](https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/overview) projects:
+Add Aptos documentation context to [Claude Code](https://code.claude.com/docs/en/overview) projects:
 
-1. Add `https://aptos.dev/llms.txt` to your project's `CLAUDE.md` file as a reference
+1. Add `https://aptos.dev/llms.txt` to your project's `CLAUDE.md` or `AGENTS.md` file as a reference
 2. Claude Code will read the index and fetch relevant pages via `.md` URLs as needed
-3. For deeper integration with on-chain tools, see [Aptos MCP for Claude Code](/build/ai/aptos-mcp/claude)
+3. For on-chain tools, see [Aptos MCP for Claude Code](/build/ai/aptos-mcp/claude)
 
 ### Cursor
 
-Use the `@Docs` feature in Cursor to include the LLMs.txt files in your project. This helps Cursor provide more accurate
-code suggestions and documentation for Aptos development.
+Cursor's `@Docs` index was removed. Point Agent at the feeds instead:
 
-[Read more about @Docs in Cursor](https://docs.cursor.com/context/@-symbols/@-docs)
+1. Add `https://aptos.dev/llms.txt` to the project `AGENTS.md` (or a [project rule](https://cursor.com/docs/rules))
+2. Paste a feed URL in chat when you need a one-off fetch — Agent can retrieve it directly
+3. For on-chain tools, see [Aptos MCP for Cursor](/build/ai/aptos-mcp/cursor)
 
 ### GitHub Copilot
 
-GitHub Copilot can leverage the information in these LLMs.txt files to provide better assistance when developing Aptos applications. You can reference these files in your GitHub Copilot Chat by using the following URLs:
+In [Copilot Chat](https://code.visualstudio.com/docs/chat/copilot-chat-context), fetch a feed for the current session:
+
+```
+#fetch https://aptos.dev/llms.txt
+```
+
+For standing project context, add the URLs to [`.github/copilot-instructions.md`](https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/add-custom-instructions/add-repository-instructions):
 
 ```
 https://aptos.dev/llms.txt
@@ -61,27 +70,31 @@ https://aptos.dev/llms-small.txt
 https://aptos.dev/llms-full.txt
 ```
 
-### Windsurf
+### OpenAI Codex
 
-Reference the LLMs.txt files using `@` or in your `.windsurfrules` files to enhance Windsurf's understanding of Aptos development.
+Add `https://aptos.dev/llms.txt` to `AGENTS.md`, then start Codex. For on-chain tools, see [Aptos MCP for Codex](/build/ai/aptos-mcp/codex).
 
-[Read more about Windsurf Memories](https://docs.codeium.com/windsurf/memories#memories-and-rules)
+### Devin Desktop (formerly Windsurf)
+
+Devin Desktop reads `AGENTS.md` and `.devin/rules/` (legacy `.windsurfrules` still works). Put `https://aptos.dev/llms.txt` in the project `AGENTS.md`.
+
+[Read more about AGENTS.md in Devin Desktop](https://docs.devin.ai/desktop/cascade/agents-md)
 
 ### Claude.ai
 
-Add Aptos documentation as a knowledge source in [Claude Projects](https://claude.ai):
+Add Aptos documentation as project knowledge in [Claude Projects](https://claude.ai):
 
 1. Open [Claude.ai](https://claude.ai) and create or open a Project
-2. Click **Add content**
+2. Add project knowledge / content
 3. Paste `https://aptos.dev/llms-full.txt` as a URL source
-4. Claude will now have Aptos documentation context in all conversations within that Project
+4. Claude will now have Aptos documentation context in conversations within that Project
 
 ### ChatGPT
 
 Reference the Aptos docs directly in ChatGPT conversations:
 
 - Paste `https://aptos.dev/llms-full.txt` into your message and ask ChatGPT to read it before answering Aptos questions
-- For [custom GPTs](https://openai.com/index/introducing-gpts/): add `https://aptos.dev/llms.txt` as a knowledge source in the GPT Builder
+- For custom GPTs: add `https://aptos.dev/llms.txt` as a knowledge source
 
 ### Other AI Tools
 

@@ -31,7 +31,9 @@ await build({
       apply: "build",
       async generateBundle(_, bundle) {
         try {
-          // Modify the exports
+          // Keep the public Vercel exports stable across Vite output formats.
+          // Vite 8 emits `export { config, middleware as default }`, while the
+          // deploy wrapper and guardrail test require explicit declarations.
           const { code } = await transform(bundle["middleware.js"].code, {
             plugin: updateAST,
             jsc: {
@@ -45,12 +47,8 @@ await build({
           });
 
           bundle["middleware.js"].code = code;
-
           console.log("Middleware exports updated successfully.");
         } catch (error) {
-          // Fail loudly: swallowing this used to emit a bundle with the
-          // original (unmodified) export shape, which silently broke the
-          // Vercel deploy's `config.matcher` wiring.
           console.error("Error modifying middleware exports:", error);
           throw error;
         }
@@ -79,24 +77,18 @@ await build({
 
 function updateAST(ast) {
   const newBody = [];
-
-  let matcherArrayNode = null;
+  let configNode = null;
   let middlewareDeclaration = null;
 
-  for (let node of ast.body) {
-    if (
-      node.type === "VariableDeclaration" &&
-      node.declarations.some((d) => d.type === "VariableDeclarator" && d.id.value === "matcher")
-    ) {
-      matcherArrayNode = node.declarations[0].init;
-      continue;
-    }
-
-    if (
-      node.type === "VariableDeclaration" &&
-      node.declarations.some((d) => d.type === "VariableDeclarator" && d.id.value === "config")
-    ) {
-      continue;
+  for (const node of ast.body) {
+    if (node.type === "VariableDeclaration") {
+      const configDeclaration = node.declarations.find(
+        (declaration) => declaration.type === "VariableDeclarator" && declaration.id.value === "config",
+      );
+      if (configDeclaration) {
+        configNode = configDeclaration.init;
+        continue;
+      }
     }
 
     if (node.type === "FunctionDeclaration" && node.identifier.value === "middleware") {
@@ -104,78 +96,52 @@ function updateAST(ast) {
       continue;
     }
 
-    if (node.type === "ExportNamedDeclaration") {
-      continue;
-    }
-
+    if (node.type === "ExportNamedDeclaration") continue;
     newBody.push(node);
   }
 
-  const DUMMY_SPAN = { start: 0, end: 0 };
-  const DUMMY_CTXT = 0;
-
-  // Add valid exports back
-  if (matcherArrayNode) {
-    newBody.push({
-      type: "ExportDeclaration",
-      span: {
-        start: 2988,
-        end: 3624,
-      },
-      declaration: {
-        type: "VariableDeclaration",
-        span: DUMMY_SPAN,
-        ctxt: DUMMY_CTXT,
-        kind: "const",
-        declare: false,
-        declarations: [
-          {
-            type: "VariableDeclarator",
-            span: DUMMY_SPAN,
-            id: {
-              type: "Identifier",
-              span: DUMMY_SPAN,
-              ctxt: DUMMY_CTXT,
-              value: "config",
-              optional: false,
-              typeAnnotation: null,
-            },
-            init: {
-              type: "ObjectExpression",
-              span: DUMMY_SPAN,
-              properties: [
-                {
-                  type: "KeyValueProperty",
-                  key: {
-                    type: "Identifier",
-                    span: DUMMY_SPAN,
-                    value: "matcher",
-                  },
-                  value: matcherArrayNode,
-                },
-              ],
-            },
-            definite: false,
-          },
-        ],
-      },
-    });
-  } else {
-    console.error("Matcher array node not found.");
+  if (!configNode || !middlewareDeclaration) {
+    throw new Error("Expected the middleware bundle to contain config and middleware exports.");
   }
 
-  if (middlewareDeclaration) {
-    newBody.push({
-      type: "ExportDefaultDeclaration",
-      span: DUMMY_SPAN,
-      decl: {
-        ...middlewareDeclaration,
-        type: "FunctionExpression",
-      },
-    });
-  } else {
-    console.error("Middleware declaration not found.");
-  }
+  const span = { start: 0, end: 0 };
+  const identifier = (value) => ({
+    type: "Identifier",
+    span,
+    ctxt: 0,
+    value,
+    optional: false,
+    typeAnnotation: null,
+  });
+
+  newBody.push({
+    type: "ExportDeclaration",
+    span,
+    declaration: {
+      type: "VariableDeclaration",
+      span,
+      ctxt: 0,
+      kind: "const",
+      declare: false,
+      declarations: [
+        {
+          type: "VariableDeclarator",
+          span,
+          id: identifier("config"),
+          init: configNode,
+          definite: false,
+        },
+      ],
+    },
+  });
+  newBody.push({
+    type: "ExportDefaultDeclaration",
+    span,
+    decl: {
+      ...middlewareDeclaration,
+      type: "FunctionExpression",
+    },
+  });
 
   return { ...ast, body: newBody };
 }

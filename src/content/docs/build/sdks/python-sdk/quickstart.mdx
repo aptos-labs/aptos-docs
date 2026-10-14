@@ -1,0 +1,153 @@
+---
+title: "Python SDK Quickstart"
+description: "Get started with the Aptos Python SDK by creating accounts, funding them, and transferring APT"
+sidebar:
+  label: "Python SDK Quickstart"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+<Aside type="note">
+  The complete example is at [Full Quickstart Code](#full-quickstart-code) at
+  the bottom of this page. It follows the same flow as
+  [`transfer_apt.py`](https://github.com/aptos-labs/aptos-python-sdk/blob/main/v2/examples/transfer_apt.py)
+  in the SDK repository.
+</Aside>
+
+<Steps>
+  1. Install the Python SDK
+
+     The SDK requires **Python 3.12+**.
+
+     ```shellscript filename="Terminal"
+     pip install aptos-sdk
+     ```
+
+  2. Create a project file
+
+     ```shellscript filename="Terminal"
+     mkdir aptos-python-quickstart
+     cd aptos-python-quickstart
+     touch quickstart.py
+     ```
+
+  3. Set up the Aptos client
+
+     Use the v2 API (`aptos_sdk.v2`). A connection is established as soon as you
+     create the client.
+
+     ```python filename="quickstart.py"
+     import asyncio
+
+     from aptos_sdk.v2 import Account, Aptos, AptosConfig, Network
+
+     async def main():
+         async with Aptos(AptosConfig(network=Network.DEVNET)) as aptos:
+             print("Connected to Aptos devnet")
+
+     asyncio.run(main())
+     ```
+
+     <Aside type="note">
+       (Advanced) To connect to a specific node, pass a custom fullnode URL when
+       constructing `AptosConfig`.
+     </Aside>
+
+  4. Create and fund accounts
+
+     Generate credentials, then fund the accounts so the network knows they exist.
+     On localnet and devnet you can fund from a faucet.
+
+     ```python filename="quickstart.py"
+     alice = Account.generate()
+     bob = Account.generate()
+
+     await aptos.faucet.fund_account(alice.address, 100_000_000)
+     await aptos.faucet.fund_account(bob.address, 10_000_000)
+     ```
+
+     On testnet, mint from the [faucet page](/network/faucet).
+
+  5. Transfer APT
+
+     `aptos.coin.transfer` builds, signs, and submits an APT transfer. Then wait
+     for the transaction to land.
+
+     ```python filename="quickstart.py"
+     txn_hash = await aptos.coin.transfer(alice, bob.address, 1_000)
+     result = await aptos.transaction.wait_for_transaction(txn_hash)
+     print(f"Success: {result['success']}")
+     ```
+
+     For the lower-level build → simulate → sign → submit → wait flow, see
+     [Building Transactions](/build/sdks/python-sdk/building-transactions).
+</Steps>
+
+## Full Quickstart Code
+
+```python filename="quickstart.py"
+"""Create two accounts, fund them, and transfer APT on devnet."""
+
+import asyncio
+
+from aptos_sdk.v2 import Account, Aptos, AptosConfig, Network
+
+ALICE_INITIAL_BALANCE = 100_000_000
+BOB_INITIAL_BALANCE = 10_000_000
+TRANSFER_AMOUNT = 1_000
+
+
+async def main():
+    async with Aptos(AptosConfig(network=Network.DEVNET)) as aptos:
+        alice = Account.generate()
+        bob = Account.generate()
+
+        print("=== Addresses ===")
+        print(f"Alice: {alice.address}")
+        print(f"Bob:   {bob.address}")
+
+        await asyncio.gather(
+            aptos.faucet.fund_account(alice.address, ALICE_INITIAL_BALANCE),
+            aptos.faucet.fund_account(bob.address, BOB_INITIAL_BALANCE),
+        )
+
+        print("=== Initial Balances ===")
+        print(f"Alice: {await aptos.coin.balance(alice.address)}")
+        print(f"Bob:   {await aptos.coin.balance(bob.address)}")
+
+        txn_hash = await aptos.coin.transfer(alice, bob.address, TRANSFER_AMOUNT)
+        result = await aptos.transaction.wait_for_transaction(txn_hash)
+        print(f"Transaction: {txn_hash}")
+        print(f"Success: {result['success']}")
+
+        print("=== Final Balances ===")
+        print(f"Alice: {await aptos.coin.balance(alice.address)}")
+        print(f"Bob:   {await aptos.coin.balance(bob.address)}")
+
+
+asyncio.run(main())
+```
+
+Run it with:
+
+```shellscript filename="Terminal"
+python quickstart.py
+```
+
+## Summary
+
+You just learned how to transfer APT by:
+
+1. Connecting to the network with the `Aptos` client.
+2. Creating and funding accounts.
+3. Submitting a transfer and waiting for execution.
+
+<Aside type="note">
+  Bookmark the [v2 examples](https://github.com/aptos-labs/aptos-python-sdk/tree/main/v2/examples)
+  and [v2 tests](https://github.com/aptos-labs/aptos-python-sdk/tree/main/v2/tests)
+  in the SDK repository. Those suites are the source of truth for APIs shown in
+  these docs.
+
+  When you clone the SDK repo, examples import `aptos_sdk_v2`. After
+  `pip install aptos-sdk`, import the same APIs from `aptos_sdk.v2`.
+</Aside>

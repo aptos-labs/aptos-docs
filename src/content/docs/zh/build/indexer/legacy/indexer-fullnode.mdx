@@ -1,0 +1,127 @@
+---
+title: "运行 Indexer 全节点"
+description: "旧版 Indexer 全节点设置文档：已弃用，建议使用现代交易流服务架构。"
+sidebar:
+  label: "Indexer 全节点（旧版）"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="caution">
+  这是旧版 Indexer 的文档。要了解如何为最新 Indexer 堆栈运行底层基础设施，请参阅[交易流服务](/zh/build/indexer/txn-stream)。
+</Aside>
+
+<Aside type="caution">
+  以下安装步骤仅在搭载 Apple Silicon 的 macOS 上验证过。在其他构建环境中运行时可能需要少量调整。
+</Aside>
+
+## 概要
+
+运行 Indexer 全节点的概要步骤如下：
+
+1. 确保具备本文下述的所有必需工具和软件包。
+2. 遵循说明[设置公共全节点](/zh/network/nodes/full-node/verify-pfn)，但暂不启动全节点。
+3. 按本文说明编辑 fullnode.yaml。
+4. 按下文说明运行 Indexer 全节点。
+
+## 前提条件
+
+安装以下软件包。注意，在[准备开发环境](/zh/network/nodes/building-from-source)时可能已经安装过其中许多。可运行 which command-name 并确认输出中出现该软件包（即使已安装，libpq 也不会返回）。
+
+> 重要：如果使用 macOS，请遵循[官方指南](https://docs.docker.com/desktop/install/mac-install/)安装 Docker，而不是使用 brew。
+
+对于 Aptos Indexer 全节点，请安装以下软件包：
+
+- [brew](https://brew.sh/)：/bin/bash -c "$(curl -fsSL [https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"。运行输出中的命令，将该命令加入路径并安装依赖。](https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh\)"。运行输出中的命令，将该命令加入路径并安装依赖。)
+- [cargo Rust 包管理器](https://www.rust-lang.org/tools/install)：curl --proto '=https' --tlsv1.2 -sSf [https://sh.rustup.rs](https://sh.rustup.rs) | sh。
+- [docker](https://docs.docker.com/get-docker/)：brew install docker。
+- 包含 pg\_ctl 命令的 [libpq Postgres C API 库](https://formulae.brew.sh/formula/libpq)：brew install libpq。安装后务必执行所有 export 命令。
+- [postgres PostgreSQL 服务器](https://www.postgresql.org/)：brew install postgresql。
+- [diesel](https://diesel.rs/)：brew install diesel。
+
+## 设置数据库
+
+1. 启动 PostgreSQL 服务器：brew services start postgresql。
+2. 确保可以运行 psql postgres，然后输入：`\q` 退出提示符。
+3. 使用 createuser 命令（可用 which 查找）创建 PostgreSQL 用户 postgres：
+   ```shellscript filename="Terminal"
+   /path/to/createuser -s postgres
+   ```
+4. 如果尚未克隆，请克隆 aptos-core 仓库：
+   ```shellscript filename="Terminal"
+   git clone https://github.com/aptos-labs/aptos-core.git
+   ```
+5. 前往（或 cd 到）aptos-core/crates/indexer 目录。
+6. 创建数据库架构：
+   ```shellscript filename="Terminal"
+   diesel migration run --database-url postgresql://localhost/postgres
+   ```
+   这会创建数据库架构，其 migrations 子目录位于 aptos-core/crates/indexer 目录中。若该数据库已被使用，请尝试其他数据库。例如：DATABASE\_URL=postgres\://postgres\@localhost:5432/indexer\_v2 diesel database reset。
+
+## 启动全节点 Indexer
+
+1. 遵循说明设置[公共全节点](/zh/network/nodes/full-node/verify-pfn)并准备环境，但**暂不**使用 cargo run 或 docker run 启动 Indexer。
+2. 使用以下命令拉取最新 Indexer Docker 镜像：
+   ```shellscript filename="Terminal"
+   docker pull aptoslabs/validator:nightly_indexer
+   ```
+3. 编辑 ./fullnode.yaml 并添加以下配置：
+
+   ```yaml filename="fullnode.yaml"
+   storage:
+     enable_indexer: true
+     # This is to avoid the node being pruned
+     storage_pruner_config:
+       ledger_pruner_config:
+         enable: false
+
+   indexer:
+     enabled: true
+     postgres_uri: "postgres://postgres@localhost:5432/postgres"
+     processor: "default_processor"
+     check_chain_id: true
+     emit_every: 500
+   ```
+
+<Aside type="note">
+  引导全节点
+
+  与其从创世同步 Indexer 全节点（这可能耗时很长），不如在启动前使用备份数据引导全节点。为此，请遵循说明[从备份恢复](/zh/network/nodes/bootstrap-fullnode/aptos-db-restore)。
+
+  注意：Indexer 无法使用[快照](/zh/network/nodes/bootstrap-fullnode)或[快速同步](/zh/network/nodes/configure/state-sync#fast-syncing)引导。
+</Aside>
+
+1. 根据设置，使用 cargo run 或 docker run 运行 Indexer 全节点。请记得提供特定节点所需的参数：
+   ```shellscript filename="Terminal"
+   docker run -p 8080:8080 \
+     -p 9101:9101 -p 6180:6180 \
+     -v $(pwd):/opt/aptos/etc -v $(pwd)/data:/opt/aptos/data \
+     --workdir /opt/aptos/etc \
+     --name=aptos-fullnode aptoslabs/validator:nightly_indexer aptos-node \
+     -f /opt/aptos/etc/fullnode.yaml
+   ```
+   或：
+   ```shellscript filename="Terminal"
+   cargo run -p aptos-node --features "indexer" --release -- -f ./fullnode.yaml
+   ```
+
+## 重启 Indexer
+
+要重启 PostgreSQL 服务器：
+
+1. 搜索 `postmaster` 进程并终止它，以[关闭服务器](https://www.postgresql.org/docs/8.1/postmaster-shutdown.html)：
+
+   ```shellscript filename="Terminal"
+   ps -ef | grep -i postmaster
+   ```
+
+2. 复制该进程的进程 ID（PID），然后传入以下命令将其关闭：
+
+   ```shellscript filename="Terminal"
+   kill -INT PID
+   ```
+
+3. 使用以下命令重启 PostgreSQL 服务器：
+   ```shellscript filename="Terminal"
+   brew services restart postgresql@14
+   ```

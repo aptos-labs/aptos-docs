@@ -1,0 +1,233 @@
+---
+title: "弃用 VFN"
+description: "作为 AIP-139 推出的一部分，关闭验证者全节点（VFN），并配置验证者接受直接 PFN 连接。"
+sidebar:
+  label: "弃用 VFN"
+  badge:
+    text: 新增
+    variant: tip
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+[AIP-139](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-139-deprecating-validator-full-nodes-vfns.md)
+通过允许验证者接受来自公共全节点（PFN）的直接连接，弃用了验证者全节点（VFN）。这消除了运营者在验证者旁单独运行 VFN 的需要。
+
+<Aside type="tip">
+  **Devnet 和 Testnet**<br />
+  Devnet 和 Testnet 已完成 VFN 移除。本文档中的说明仅适用于 Mainnet VFN 的弃用和移除。
+</Aside>
+
+## 摘要
+
+本指南为 **Mainnet** 验证者运营者提供逐步说明，说明如何关闭 VFN 并配置验证者接受 PFN 连接。为此，需要完成以下任务：
+
+1. **前提条件**：确保运行的是 **aptos-node v1.45.x** 或更高版本。
+2. 配置验证者接受入站 PFN 连接。
+3. 验证可从公共互联网访问 PFN 端口。
+4. **重要**：关闭 VFN 前，等待 Aptos Labs 确认。公告将在各发布组中发布。
+5. 关闭 VFN。
+
+请仔细遵循每个步骤的说明；如有疑问或需要协助，请联系 Aptos Labs 团队。
+
+## 前置条件
+
+继续前，请确认运行的是 **aptos-node v1.45.x** 或更高版本。旧版本不支持验证者到 PFN 的直接连接。
+
+可运行以下命令检查节点版本：
+
+```bash
+aptos-node --version
+```
+
+如果使用旧版本，请先升级再继续。
+
+## 第 1 步：配置 PFN 连接
+
+配置验证者接受入站 PFN 连接。这要求验证者在开放端口上监听 PFN 连接。
+
+有三个选项：
+
+1. \*\*（推荐）\*\*使用默认端口（6182）接受 PFN 连接。
+2. 使用自定义端口接受 PFN 连接。
+3. \*\*（不建议）\*\*拒绝 PFN 连接。
+
+<Aside type="tip">
+  **接受 PFN 连接**<br />
+  强烈建议运营者接受 PFN 连接（上述选项 1 或 2）。接受 PFN 连接对于网络健康和生态连接性是必要的。若验证者拒绝 PFN 连接，可能影响 PFN 同步和提供数据的能力。
+</Aside>
+
+### 选项 1：使用默认端口
+
+默认情况下，验证者二进制文件会在端口 **6182** 上开始监听 PFN 连接（无需更改配置）。若该端口符合需求，无需执行其他步骤。只需确保防火墙中已开放端口 6182，验证者即可接受入站 PFN 连接。
+
+### 选项 2：使用自定义端口
+
+若希望使用其他端口接受 PFN 连接，可配置验证者改为监听该端口。为此，在验证者配置中添加包含所需端口的 `full_node_networks` 部分：
+
+```yaml title="validator.yaml"
+full_node_networks:
+  - network_id: "public"
+    discovery_method: "none"     # Prevents unnecessary outbound connections to other PFNs.
+    max_outbound_connections: 0  # Prevents unnecessary outbound connections to other PFNs.
+    listen_address: "/ip4/0.0.0.0/tcp/<your-port>"
+    identity:
+      type: from_file
+      path: /path/to/validator-identity.yaml  # Path to the validator identity file
+```
+
+将 `<your-port>` 替换为要使用的端口（例如 `7777`），并确保在防火墙中开放该端口。
+将 `identity` 字段设置为验证者的网络身份，指向 `validator-identity.yaml` 文件。
+
+更新配置并重启验证者后，还必须更新链上的 `fullnode_network_addresses`，使其指向验证者主机和新端口。为此，使用以下三个字段更新运营者配置文件（例如 `operator.yaml`）：
+
+```yaml title="operator.yaml"
+full_node_network_public_key: "<validator-network-public-key>"
+full_node_host:
+  host: <validator-host>
+  port: <your-port>
+```
+
+将 `<validator-network-public-key>` 替换为 `validator-identity.yaml` 文件中的公钥，`<validator-host>` 替换为验证者的公共 IP 或主机名，`<your-port>` 替换为上面配置的端口。然后运行：
+
+```bash
+aptos node update-validator-network-addresses \
+  --pool-address <owner-address> \
+  --operator-config-file ~/path/to/operator.yaml
+```
+
+将 `<owner-address>` 替换为验证者池地址。有关使用 `update-validator-network-addresses` 的更多详细信息（包括如何查找池地址和运营者配置），请参阅[连接 Aptos 网络](/zh/network/nodes/validator-node/connect-nodes/connect-to-aptos-network)。
+
+<Aside type="tip">
+  **等待下一个 epoch**<br />
+  链上网络地址更新会在下一个 epoch 开始时生效。在此之前，PFN 无法发现新地址。
+</Aside>
+
+#### 验证链上注册
+
+下一个 epoch 开始后，运行以下命令确认正确地址已在链上注册：
+
+```bash
+aptos node show-validator-config \
+  --pool-address <owner-address> \
+  --profile <your-profile>
+```
+
+输出包括 `fullnode_network_addresses`，应反映验证者主机和配置的自定义端口。例如：
+
+```json
+{
+  "fullnode_network_addresses,": "/ip4/<validator-host>/tcp/<your-port>/noise-ik/<validator-network-public-key>/handshake/0"
+}
+```
+
+如果值尚未更新，请等待下一个 epoch 后再次运行该命令。
+
+### 选项 3：拒绝 PFN 连接
+
+<Aside type="caution">
+  **不推荐**<br />
+  拒绝 PFN 连接可能损害网络并降低生态系统健康度。只有在具备充分的运营理由时才使用此选项。
+</Aside>
+
+若不希望验证者接受任何 PFN 连接，请在验证者节点配置的 `base` 部分将 `enable_validator_pfn_connections` 设为 `false`：
+
+```yaml title="validator.yaml"
+base:
+  enable_validator_pfn_connections: false
+```
+
+使用该配置时，节点将不再监听或接受来自 PFN 的连接。
+
+## 第 2 步：验证 PFN 端口可访问
+
+在防火墙中开放端口并（重新）启动验证者后，确认可从公共互联网访问该端口。
+
+<Aside type="tip">
+  **Docker 部署**<br />
+  若验证者在 Docker 中运行，也请在 `docker-compose.yaml` 中发布端口（例如 `ports:` 下的 `"6182:6182"`），然后重启。仅在操作系统防火墙中开放端口并不足够。
+</Aside>
+
+从**数据中心或云 VPC 外部**的机器运行：
+
+```bash
+nc -zv <Validator-IP-or-DNS> <PFN-Port>
+```
+
+将 `<Validator-IP-or-DNS>` 替换为验证者的公共 IP 地址或主机名，`<PFN-Port>` 替换为配置的端口（默认 `6182`）。连接成功将输出：
+
+```
+nc -zv validator.aptoslabs.com 6182
+Connection to validator.aptoslabs.com port 6182 [tcp/*] succeeded!
+```
+
+如果端口被阻止，将看到 `Connection refused`，或者超时后没有输出。
+请再次检查防火墙规则并重试。
+
+<Aside type="tip">
+  **更喜欢 telnet？**<br />
+  `telnet` 是等效的替代方案。使用与上述相同的主机和端口：
+
+  ```bash
+  telnet <Validator-IP-or-DNS> <PFN-Port>
+  ```
+
+  成功时终端会保持打开（按 `Ctrl+]`，然后输入 `quit` 退出）。`Connection refused` 或 `timed out` 表示端口被阻止。
+</Aside>
+
+## 第 3 步：关闭 VFN
+
+<Aside type="danger">
+  **未获 Aptos Labs 确认前请勿继续**<br />
+  VFN 移除将分发布组推出。只有 Aptos Labs 确认安全后才能关闭 VFN。如有任何疑虑，请在继续前联系团队。
+</Aside>
+
+收到确认后，即可安全地让 VFN 下线。关闭 VFN 不需要离开验证者集合；只需保持验证者在线。
+
+<Aside type="tip">
+  **备份 VFN 数据**<br />
+  为谨慎起见，建议在关闭 VFN 前备份 VFN 密钥、身份文件和配置文件。
+</Aside>
+
+使用适合部署的方式停止 VFN，例如：
+
+- \*\*源代码：\*\*终止运行 VFN 的 `aptos-node` 进程。
+- \*\*Docker：\*\*在 VFN 目录中运行 `docker compose down --volumes`。
+- \*\*Terraform：\*\*运行针对 VFN 资源的 `terraform destroy`。
+
+## 保护验证者
+
+移除 VFN 后，验证者会更暴露于公共互联网。这增加了网络级攻击（如 DDoS）的攻击面。若尚未部署防护措施，强烈建议实施适当保障（请参阅以下建议）。
+
+<Aside type="caution">
+  **保护验证者**<br />
+  以下建议反映运营者已在使用的常见实践，但并非详尽列表；运营者应自行评估风险承受能力和运营要求。
+</Aside>
+
+### 防火墙
+
+至少建议锁定验证者主机上的所有端口，仅保留节点运行所需端口，例如：
+
+- **共识端口**（默认 `6180`）：验证者到验证者流量所需。
+- **PFN 端口**（默认 `6182`）：PFN 流量所需。
+
+防火墙应阻止所有其他端口，包括 REST API 端口和指标端口。如需为监控公开这些端口，仅限受信任 IP 或内部网络访问。
+
+常用工具包括 [ufw](https://help.ubuntu.com/community/UFW) 和 [firewalld](https://firewalld.org/)。遵循最小权限原则：默认拒绝，仅允许明确需要的访问。
+
+### 负载均衡器和反向代理
+
+在开放的验证者端口前运行负载均衡器或反向代理，可增加间接层，在不直接暴露节点的情况下实现流量整形、速率限制和健康检查。
+[HAProxy](https://www.haproxy.org/) 是常用选项；可在 [aptos-core](https://github.com/aptos-labs/aptos-core/blob/main/terraform/helm/aptos-node/files/haproxy.cfg) 仓库中找到示例配置。
+
+### DDoS 防护
+
+DDoS 防护也很有用。一些运营者已经结合使用网络级防护和 DNS 级防护，例如 [Cloudflare Spectrum](https://developers.cloudflare.com/spectrum/)、[AWS Shield](https://aws.amazon.com/shield/)、[GCP Cloud Armor Network Edge](https://docs.cloud.google.com/armor/docs/network-edge-policies)，以及上游提供商的缓解措施（包括网络级 DDoS 清洗）。
+
+### 摘要检查清单
+
+| 防护             | 最低建议                                              |
+| -------------- | ------------------------------------------------- |
+| **防火墙**        | 阻止除所需端口外的所有端口（默认拒绝）。                              |
+| **负载均衡器和反向代理** | 在验证者前部署 HAProxy（或等效方案）。                           |
+| **DDoS 防护**    | 启用 DDoS 防护（Cloudflare Spectrum、AWS Shield 或类似服务）。 |

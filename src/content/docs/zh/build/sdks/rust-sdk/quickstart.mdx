@@ -1,0 +1,136 @@
+---
+title: "Rust SDK 快速入门"
+description: "使用 Aptos Rust SDK 创建账户、为账户注资并转移 APT"
+sidebar:
+  label: "Rust SDK 快速入门"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+<Aside type="note">
+  完整示例见页面底部的[完整快速入门代码](#full-quickstart-code)。流程与 SDK 仓库中的
+  [`transfer.rs`](https://github.com/aptos-labs/aptos-rust-sdk/blob/main/crates/aptos-sdk/examples/transfer.rs)
+  相同。
+</Aside>
+
+<Steps>
+  1. 创建 Cargo 项目并添加 SDK
+
+     该 SDK 需要 **Rust 1.95+**。
+
+     ```shellscript filename="Terminal"
+     cargo new aptos-rust-quickstart
+     cd aptos-rust-quickstart
+     ```
+
+     将依赖添加到 `Cargo.toml`：
+
+     ```toml filename="Cargo.toml"
+     [dependencies]
+     aptos-sdk = "0.7"
+     tokio = { version = "1", features = ["full"] }
+     anyhow = "1"
+     serde_json = "1"
+     ```
+
+  2. 设置 Aptos 客户端
+
+     ```rust filename="src/main.rs"
+     use aptos_sdk::{Aptos, AptosConfig};
+
+     let aptos = Aptos::new(AptosConfig::devnet())?;
+     println!("Connected to Aptos devnet");
+     ```
+
+     <Aside type="note">
+       （进阶）若要连接特定节点，可在 `AptosConfig::devnet()` 上链式调用
+       `.with_fullnode_url(...)`。
+     </Aside>
+
+  3. 创建并为账户注资
+
+     ```rust filename="src/main.rs"
+     use aptos_sdk::account::Ed25519Account;
+
+     let alice = Ed25519Account::generate();
+     let bob = Ed25519Account::generate();
+
+     // 默认 max_gas_amount 为 2_000_000。注资金额应明显高于转账金额。
+     aptos.fund_account(alice.address(), 1_000_000_000).await?;
+     ```
+
+     也可使用 `aptos.create_funded_account(amount)` 一步完成生成和注资。
+     在 testnet 上，请从[水龙头页面](/zh/network/faucet)铸造。
+
+  4. 转移 APT
+
+     `aptos.transfer_apt` 会构建、签名、提交并等待。
+
+     ```rust filename="src/main.rs"
+     let result = aptos.transfer_apt(&alice, bob.address(), 1_000).await?;
+     println!("Submitted: {:?}", result.data.get("hash"));
+     ```
+
+     有关更底层的构建 → 模拟 → 签名 → 提交 → 等待流程，请参阅
+     [构建交易](/zh/build/sdks/rust-sdk/building-transactions)。
+</Steps>
+
+## 完整快速入门代码
+
+```rust filename="src/main.rs"
+use aptos_sdk::{Aptos, AptosConfig, account::Ed25519Account};
+
+const FUND_AMOUNT: u64 = 1_000_000_000;
+const TRANSFER_AMOUNT: u64 = 1_000;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let aptos = Aptos::new(AptosConfig::devnet())?;
+
+    let alice = Ed25519Account::generate();
+    let bob = Ed25519Account::generate();
+
+    println!("=== Addresses ===");
+    println!("Alice: {}", alice.address());
+    println!("Bob:   {}", bob.address());
+
+    aptos.fund_account(alice.address(), FUND_AMOUNT).await?;
+
+    println!("=== Initial Balances ===");
+    println!("Alice: {}", aptos.get_balance(alice.address()).await?);
+    println!("Bob:   {}", aptos.get_balance(bob.address()).await?);
+
+    let result = aptos
+        .transfer_apt(&alice, bob.address(), TRANSFER_AMOUNT)
+        .await?;
+    println!("Submitted: {:?}", result.data.get("hash"));
+
+    println!("=== Final Balances ===");
+    println!("Alice: {}", aptos.get_balance(alice.address()).await?);
+    println!("Bob:   {}", aptos.get_balance(bob.address()).await?);
+
+    Ok(())
+}
+```
+
+运行：
+
+```shellscript filename="Terminal"
+cargo run
+```
+
+## 总结
+
+你刚刚学习了如何通过以下步骤转移 APT：
+
+1. 使用 `Aptos::new` 连接网络。
+2. 创建并为账户注资。
+3. 提交转账并等待执行。
+
+<Aside type="note">
+  建议收藏 SDK 仓库中的
+  [示例](https://github.com/aptos-labs/aptos-rust-sdk/tree/main/crates/aptos-sdk/examples)
+  和 [测试](https://github.com/aptos-labs/aptos-rust-sdk/tree/main/crates/aptos-sdk/tests)。
+  这些套件是本文档所示 API 的权威来源。生成的 rustdoc 位于
+  [aptos-labs.github.io/aptos-rust-sdk](https://aptos-labs.github.io/aptos-rust-sdk/aptos_sdk/index.html)。
+</Aside>

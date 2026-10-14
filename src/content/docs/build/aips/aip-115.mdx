@@ -5,7 +5,7 @@ sidebar:
   label: "AIP-115"
 ---
 
-[AIP-115](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-115.md) covers
+[AIP-115](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-115-stateless-account-update.md) covers
 stateless accounts.
 
 ## General FAQ
@@ -28,13 +28,12 @@ on-demand when needed.
 
 ### How does it work?
 
-When an account signs its first transaction sequence number transaction, it
-will not have the `0x1::account::Account` resource created. Instead, it will
-create the `0x1::account::Account` resource only when an action that requires to
-increment the sequence number.
+The `0x1::account::Account` resource is not created when an address is first
+used. It is created when a sequence-number transaction needs to increment the
+sequence number, including a first transaction with sequence number `0`.
 
-For an orderless transaction, the account resource is not needed at all, and the
-account resource will not be created.
+An [orderless transaction](/build/aips/aip-123) does not need the account
+resource and does not create it.
 
 ## Technical Details FAQ
 
@@ -46,8 +45,9 @@ transactions without needing a resource.
 
 ### What is the sequence number of a Stateless Account?
 
-It defaults to `0` if the account resource does not exist. In the future, with
-Orderless Transactions, the sequence number may be eliminated entirely.
+It defaults to `0` if the account resource does not exist. [Orderless
+transactions](/build/aips/aip-123) use a nonce instead of a sequence number, so
+an account can stay without an `Account` resource.
 
 ### When is the account resource automatically created?
 
@@ -122,9 +122,9 @@ Examples:
 
 ### Is this compatible with Orderless Transactions?
 
-Yes. Orderless Transactions and Stateless Accounts are complementary. Once
-Orderless Transactions are enabled, sequence numbers will no longer be needed,
-enabling truly stateless usage.
+Yes. Orderless transactions and stateless accounts are complementary. Orderless
+transactions do not need a sequence number, so an account can stay without an
+`Account` resource. See the [AIP-123 FAQ](/build/aips/aip-123).
 
 ## Will all accounts become Stateless in the future?
 

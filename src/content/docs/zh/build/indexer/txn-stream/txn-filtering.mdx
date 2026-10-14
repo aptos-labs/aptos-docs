@@ -1,0 +1,537 @@
+---
+title: "交易筛选"
+description: "使用自定义 DSL 在交易流服务中筛选交易"
+sidebar:
+  label: "交易筛选"
+---
+
+## 概览
+
+随着 Indexer gRPC v2 的发布，我们引入了交易筛选功能。
+交易筛选使你可以根据特定条件，有选择地处理 Aptos 区块链交易。
+当构建仅需处理所有交易子集的 Indexer 或服务时，这尤其有用，例如：
+
+- 跟踪特定智能合约交互
+- 监控特定地址的钱包活动
+- 为特定模块中的事件建立索引
+- 仅处理成功交易
+
+源代码位于 [aptos-core](https://github.com/aptos-labs/aptos-core/tree/main/ecosystem/indexer-grpc/transaction-filter)。
+
+## Protocol Buffers（Proto）定义
+
+通过在交易流的 gRPC 请求中包含交易筛选器来应用筛选。
+
+### 筛选器 Proto 结构
+
+筛选系统定义于 [`aptos/indexer/v1/filter.proto`](https://github.com/aptos-labs/aptos-core/blob/main/protos/proto/aptos/indexer/v1/filter.proto)：
+
+```protobuf
+message BooleanTransactionFilter {
+  oneof filter {
+    APIFilter api_filter = 1;
+    LogicalAndFilters logical_and = 2;
+    LogicalOrFilters logical_or = 3;
+    BooleanTransactionFilter logical_not = 4;
+  }
+}
+
+message APIFilter {
+  oneof filter {
+    TransactionRootFilter transaction_root_filter = 1;
+    UserTransactionFilter user_transaction_filter = 2;
+    EventFilter event_filter = 3;
+  }
+}
+```
+
+### gRPC 请求集成
+
+在 `GetTransactionsRequest` 消息中，筛选器作为**可选**参数提供：
+
+```protobuf
+message GetTransactionsRequest {
+  // Required; start version of current stream.
+  optional uint64 starting_version = 1;
+
+  // Optional; number of transactions to return in current stream.
+  optional uint64 transactions_count = 2;
+
+  // Optional; number of transactions in each response batch.
+  optional uint64 batch_size = 3;
+
+  // Optional; if provided, only transactions matching the filter are included.
+  optional BooleanTransactionFilter transaction_filter = 4;
+}
+```
+
+**示例：**
+
+可以利用交易筛选器，从 [Geomi](https://geomi.dev/) 的 gRPC 端点获取所有用户交易：
+
+```bash
+grpcurl \
+  -d '{"transaction_filter":{"api_filter":{"transaction_root_filter":{"transaction_type":"TRANSACTION_TYPE_USER"}}}}' \
+  -max-msg-sz 30000000 \
+  -H "authorization:Bearer <api_key>" \
+  grpc.mainnet.aptoslabs.com:443 \
+  aptos.indexer.v1.RawData/GetTransactions
+```
+
+**要点：**
+
+- `transaction_filter` 字段是**可选的**，省略它即可流式传输所有交易
+- 提供筛选器时，只返回符合筛选条件的交易
+- 筛选器在服务端应用，可降低客户端的带宽和处理开销
+- 筛选器会在应用前验证；无效筛选器将产生错误响应
+
+## 工作原理
+
+交易筛选系统采用声明式方法：指定要使用筛选器匹配的内容，再使用布尔逻辑（AND、OR、NOT）组合它们。
+可在以下位置定义筛选器：
+
+- 使用构建器模式的 **Rust 代码**
+- 用于 API 配置的 **JSON**
+- 用于配置文件的 **YAML**
+
+## 筛选器类型
+
+可使用三种主要筛选器类型：
+
+### 1. 交易根筛选器
+
+根据顶层交易属性筛选交易。
+
+**可用字段：**
+
+- `success`（布尔值）：交易成功或失败
+- `txn_type`（枚举）：交易类型（User、Genesis、BlockMetadata、StateCheckpoint、Validator、BlockEpilogue）
+
+**示例：**
+
+```json
+{
+  "type": "TransactionRootFilter",
+  "txn_type": "User",
+  "success": true
+}
+```
+
+### 2. 用户交易筛选器
+
+根据发送者和入口函数详细信息筛选用户提交的交易。
+
+**可用字段：**
+
+- `sender`（字符串）：提交交易的账户地址
+- `payload`：筛选被调用的入口函数
+  - `function`：入口函数详细信息
+    - `address`（字符串）：合约地址
+    - `module`（字符串）：模块名称
+    - `function`（字符串）：函数名称
+
+**示例：**
+
+```json
+{
+  "type": "UserTransactionFilter",
+  "sender": "0x1",
+  "payload": {
+    "function": {
+      "address": "0x1",
+      "module": "coin",
+      "function": "transfer"
+    }
+  }
+}
+```
+
+### 3. 事件筛选器
+
+根据交易发出的事件筛选交易。
+
+**可用字段：**
+
+- `struct_type`：按事件的 Move 结构体类型筛选
+  - `address`（字符串）：合约地址
+  - `module`（字符串）：模块名称
+  - `name`（字符串）：结构体名称
+- `data_substring_filter`（字符串）：按事件数据中的子字符串筛选事件
+
+**示例 1：按结构体类型筛选：**
+
+```json
+{
+  "type": "EventFilter",
+  "struct_type": {
+    "address": "0x1",
+    "module": "coin",
+    "name": "CoinDeposit"
+  }
+}
+```
+
+**示例 2：按数据子字符串筛选：**
+
+```json
+{
+  "type": "EventFilter",
+  "data_substring_filter": "transfer"
+}
+```
+
+**示例 3：组合结构体类型和数据子字符串：**
+
+```json
+{
+  "type": "EventFilter",
+  "struct_type": {
+    "address": "0x1",
+    "module": "coin"
+  },
+  "data_substring_filter": "0xabc123"
+}
+```
+
+## 使用布尔逻辑组合筛选器
+
+可使用逻辑运算符组合筛选器，以创建复杂查询：
+
+### AND 运算符
+
+匹配满足指定**全部**筛选器的交易。
+
+```json
+{
+  "and": [
+    {
+      "type": "TransactionRootFilter",
+      "success": true
+    },
+    {
+      "type": "EventFilter",
+      "struct_type": {
+        "address": "0x1",
+        "module": "coin",
+        "name": "CoinDeposit"
+      }
+    }
+  ]
+}
+```
+
+### OR 运算符
+
+匹配满足指定筛选器中**任意一个**的交易。
+
+```json
+{
+  "or": [
+    {
+      "type": "UserTransactionFilter",
+      "sender": "0xabc..."
+    },
+    {
+      "type": "UserTransactionFilter",
+      "sender": "0xdef..."
+    }
+  ]
+}
+```
+
+### NOT 运算符
+
+匹配**不**满足指定筛选器的交易。
+
+```json
+{
+  "not": {
+    "type": "TransactionRootFilter",
+    "success": false
+  }
+}
+```
+
+## 常见用例
+
+### 筛选代币转账交易
+
+匹配所有成功的代币转账交易：
+
+```json
+{
+  "and": [
+    {
+      "type": "TransactionRootFilter",
+      "success": true
+    },
+    {
+      "type": "UserTransactionFilter",
+      "payload": {
+        "function": {
+          "address": "0x1",
+          "module": "coin",
+          "function": "transfer"
+        }
+      }
+    }
+  ]
+}
+```
+
+### 按特定发送者筛选
+
+跟踪特定钱包的所有交易：
+
+```json
+{
+  "type": "UserTransactionFilter",
+  "sender": "0x806b27f3d7824a1d78c4291b6d0371aa693437f9eb3393c6440519c0ffaa627f"
+}
+```
+
+### 按多个发送者筛选
+
+跟踪多个钱包的交易：
+
+```json
+{
+  "or": [
+    {
+      "type": "UserTransactionFilter",
+      "sender": "0xabc..."
+    },
+    {
+      "type": "UserTransactionFilter",
+      "sender": "0xdef..."
+    }
+  ]
+}
+```
+
+### 筛选 NFT 事件
+
+跟踪来自特定集合的 NFT 铸造事件：
+
+```json
+{
+  "type": "EventFilter",
+  "struct_type": {
+    "address": "0x4",
+    "module": "aptos_token",
+    "name": "MintTokenEvent"
+  }
+}
+```
+
+### 筛选智能合约交互
+
+跟踪与特定智能合约模块的全部交互：
+
+```json
+{
+  "type": "EventFilter",
+  "struct_type": {
+    "address": "0x123abc...",
+    "module": "my_defi_module"
+  }
+}
+```
+
+### 复杂筛选器：DEX 交易
+
+跟踪来自多个 DEX 协议的成功兑换事件：
+
+```json
+{
+  "and": [
+    {
+      "type": "TransactionRootFilter",
+      "success": true
+    },
+    {
+      "or": [
+        {
+          "type": "EventFilter",
+          "struct_type": {
+            "address": "0xdex1",
+            "module": "swap",
+            "name": "SwapEvent"
+          }
+        },
+        {
+          "type": "EventFilter",
+          "struct_type": {
+            "address": "0xdex2",
+            "module": "pool",
+            "name": "TradeEvent"
+          }
+        }
+      ]
+    }
+  ]
+}
+```
+
+### 排除失败交易
+
+获取除失败交易外的所有用户交易：
+
+```json
+{
+  "and": [
+    {
+      "type": "UserTransactionFilter",
+      "sender": "0xabc..."
+    },
+    {
+      "type": "TransactionRootFilter",
+      "success": true
+    }
+  ]
+}
+```
+
+## YAML 格式
+
+筛选器也可用 YAML 格式表示，该格式通常更适合配置文件阅读：
+
+```yaml
+and:
+  - or:
+      - type: TransactionRootFilter
+        success: true
+      - type: UserTransactionFilter
+        sender: '0x1'
+  - type: EventFilter
+    struct_type:
+      address: '0x1'
+      module: coin
+      name: CoinDeposit
+```
+
+## 在 Rust 中使用筛选器
+
+如果使用 Rust 构建，可以配合构建器模式使用 `aptos-transaction-filter` crate：
+
+### 基本筛选器
+
+```rust
+use aptos_transaction_filter::{TransactionRootFilterBuilder, BooleanTransactionFilter};
+
+// Create a filter for successful transactions
+let filter = TransactionRootFilterBuilder::default()
+    .success(true)
+    .build()
+    .unwrap();
+
+let boolean_filter = BooleanTransactionFilter::from(filter);
+```
+
+### 事件筛选器
+
+```rust
+use aptos_transaction_filter::{EventFilterBuilder, MoveStructTagFilterBuilder};
+
+let filter = EventFilterBuilder::default()
+    .struct_type(
+        MoveStructTagFilterBuilder::default()
+            .address("0x1")
+            .module("coin")
+            .name("CoinDeposit")
+            .build()
+            .unwrap()
+    )
+    .build()
+    .unwrap();
+```
+
+### 用户交易筛选器
+
+```rust
+use aptos_transaction_filter::{UserTransactionFilterBuilder, EntryFunctionFilterBuilder, UserTransactionPayloadFilterBuilder};
+
+let filter = UserTransactionFilterBuilder::default()
+    .sender("0x1")
+    .payload(
+        UserTransactionPayloadFilterBuilder::default()
+            .function(
+                EntryFunctionFilterBuilder::default()
+                    .address("0x1")
+                    .module("coin")
+                    .function("transfer")
+                    .build()
+                    .unwrap()
+            )
+            .build()
+            .unwrap()
+    )
+    .build()
+    .unwrap();
+```
+
+### 组合筛选器
+
+```rust
+use aptos_transaction_filter::BooleanTransactionFilter;
+
+// Create individual filters
+let success_filter = TransactionRootFilterBuilder::default()
+    .success(true)
+    .build()
+    .unwrap();
+
+let sender_filter = UserTransactionFilterBuilder::default()
+    .sender("0x1")
+    .build()
+    .unwrap();
+
+let event_filter = EventFilterBuilder::default()
+    .struct_type(
+        MoveStructTagFilterBuilder::default()
+            .address("0x1")
+            .module("coin")
+            .build()
+            .unwrap()
+    )
+    .build()
+    .unwrap();
+
+// Combine with logical operators
+let combined = BooleanTransactionFilter::from(success_filter)
+    .or(sender_filter)
+    .and(event_filter);
+
+// Use the filter
+if combined.matches(&transaction) {
+    // Process transaction
+}
+```
+
+### 序列化
+
+```rust
+// Serialize to JSON
+let json = serde_json::to_string_pretty(&filter).unwrap();
+
+// Serialize to YAML
+let yaml = serde_yaml::to_string(&filter).unwrap();
+
+// Deserialize from JSON
+let filter: BooleanTransactionFilter = serde_json::from_str(&json).unwrap();
+```
+
+## 性能注意事项
+
+交易筛选系统针对高吞吐处理进行了优化：
+
+1. **单次遍历**：筛选器仅处理每笔交易一次
+2. **最少分配**：筛选器避免 clone 和不必要的复制
+3. **提前退出**：一旦发现不匹配，筛选器便短路退出
+4. **地址缓存**：缓存地址标准化结果以提升性能
+
+为获得最佳性能：
+
+- 尽可能使用特定筛选器（例如按地址筛选，而不是筛选所有交易）
+- 在 AND 操作中先放置限制更严格的筛选器
+- 设计筛选器时考虑 mainnet 上的交易量

@@ -1,0 +1,132 @@
+---
+title: "导入交易"
+description: "使用支持本地开发的交易生成工具导入 Aptos 网络交易，以测试处理器"
+sidebar:
+  label: "交易导入"
+---
+
+## 概览
+
+本指南说明如何使用 `aptos-indexer-transaction-generator` 工具导入 Aptos 交易进行测试。这些测试交易可用于测试自定义处理器，并支持其本地开发。
+
+## 导入交易的一般流程
+
+首先，确定需要从 Aptos 网络获取的交易版本。此工具与[交易流](/zh/build/indexer/txn-stream)交互，以 JSON 格式检索交易数据。随后将交易汇总到 Rust 文件中，每笔交易都表示为常量变量。这些常量可以无缝地作为处理器自动化测试中的模拟输入。测试期间，处理器会获取指定交易、处理交易，并将结果写入数据库。之后可以加载写入的数据，并将其与预期数据进行比对以验证结果。
+
+## 前置条件
+
+1. 用于连接[交易流](/zh/build/indexer/txn-stream/aptos-hosted-txn-stream)的有效 API 密钥
+2. 克隆 [aptos-core](https://github.com/aptos-labs/aptos-core) 仓库：
+   - 进入 `aptos-core/ecosystem/indexer-grpc/indexer-transaction-generator` 目录。
+
+## 如何导入测试交易
+
+### 1. 指定要导入的版本
+
+找到并复制以下文件：
+
+```shellscript
+ecosystem/indexer-grpc/indexer-transaction-generator/imported_transactions/imported_transactions.yaml
+```
+
+在该文件中，通过配置相应端点、API 密钥以及版本号到描述性输出名称的映射，指定要从 Devnet、Testnet 或 Mainnet 导入的版本。示例配置如下：
+
+```yaml
+testnet:
+  transaction_stream_endpoint: https://grpc.testnet.aptoslabs.com:443
+  api_key: TESTNET_API_KEY  # <--- Replace this with your API key to generate files locally
+  versions_to_import:
+    # Replace these with the versions you want to import
+    1: 1_genesis
+    2: 2_new_block_event
+    3: 3_empty_txn
+    278556781: 278556781_v1_coin_register_fa_metadata
+    1255836496: 1255836496_v2_fa_metadata
+    5979639459: 5979639459_coin_register
+    5992795934: 5992795934_fa_activities
+    5523474016: 5523474016_validator_txn
+
+mainnet:
+  transaction_stream_endpoint: https://grpc.mainnet.aptoslabs.com:443
+  api_key: MAINNET_API_KEY
+  versions_to_import:
+    308783012: 308783012_fa_transfer
+```
+
+### 2. 运行导入交易的命令
+
+进入 `indexer-transaction-generator` 目录：
+
+```shellscript
+cd aptos-core/ecosystem/indexer-grpc/indexer-transaction-generator
+```
+
+要导入指定交易版本，请执行以下命令：
+
+```shellscript
+cargo run -- --testing-folder  /path/to/your/imported_transactions.yaml --output-folder /path/to/your/processor-repo/src --mode=import --network=testnet
+```
+
+该命令将：
+
+1. 从 `--testing-folder` 标志指定目录中的 `imported_transactions.yaml` 文件读取配置。
+2. 从所选网络（Devnet、Testnet 或 Mainnet）获取指定交易版本。
+3. 将生成的 JSON 文件存储在指定输出文件夹（`/path/to/your/processor-repo/src/json_transactions`）中。
+4. 生成一个 Rust 文件（`generated_transactions.rs`），将生成的交易 JSON 文件转换为可在测试中使用的常量变量。
+
+注意：请将 `/path/to/your/processor-repo` 替换为处理器仓库的路径或首选存储位置。
+
+**命令标志说明**
+
+1. `--testing-folder`
+   `--testing-folder` 标志是什么？
+   `--testing-folder` 标志指定包含 `imported_transactions.yaml` 配置文件的目录。该工具使用此文件夹读取想要导入的版本。
+
+- 确保文件夹路径与 `imported_transactions.yaml` 文件的位置一致。
+- 默认情况下，本指南假定配置存储在 `./imported_transactions` 中。如果将文件放在其他位置，请调整标志值。
+
+2. `--output-folder`
+   指定保存生成的交易 JSON 文件和 Rust 常量的目标目录。
+
+- 请将 `/path/to/your/processor-repo` 替换为处理器仓库的 src 目录或所需存储位置。
+- 若需共享这些文件，请确保此文件夹已纳入版本控制设置。
+
+3. `--mode`
+   指定交易生成器应以脚本模式运行，即执行 Move 脚本并生成相应交易数据。默认模式为 import，会从网络获取交易。
+   也可以使用 Import 模式从网络获取交易。默认模式为 import。
+
+可用选项：
+
+- import
+- script
+
+4. `--network`
+   指定从哪个网络获取交易。可用选项：
+
+- devnet
+- testnet
+- mainnet
+
+## 如何使用测试交易
+
+### 导出生成的文件
+
+更新 `mod.rs` 文件，将包含交易常量的生成 Rust 文件纳入其中。如果 `mod.rs` 不存在，请在目标文件夹中创建：
+
+[参考 mod.rs](https://github.com/aptos-labs/aptos-indexer-processor-example/blob/main/test-transactions-example/src/json_transactions/mod.rs)。
+
+### 导出 `json_transactions` 文件夹
+
+由于 `generated_transactions.rs` 依赖 `json_transactions`，请确保在库文件中正确导出 `json_transactions` 文件夹，以便测试可直接访问交易数据。
+
+[参考 lib.rs](https://github.com/aptos-labs/aptos-indexer-processor-example/blob/main/test-transactions-example/src/lib.rs)。
+
+### 集成到测试用例
+
+在测试用例中直接使用导出的交易常量，以模拟真实交易并验证处理逻辑。
+
+[示例 Crate](https://github.com/aptos-labs/aptos-indexer-processor-example/tree/main/test-transactions-example)。
+
+## 后续步骤
+
+集成交易常量后，即可在处理器测试中使用它们来验证功能。有关编写处理器测试的详细说明，请参阅编写处理器测试。

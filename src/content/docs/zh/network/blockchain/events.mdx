@@ -1,0 +1,97 @@
+---
+title: "事件"
+description: "了解 Aptos 上的事件，包括模块事件、已弃用的 EventHandle 流，以及如何从 Move 发出和查询事件。"
+sidebar:
+  label: "事件"
+---
+
+事件在交易执行时发出。每个 Move 模块定义自己的事件类型，并决定何时发出。
+
+Aptos Move 支持两种事件：
+
+- **模块事件** — 当前机制，随 framework 1.7 发布。按 struct 类型标识的全局流。
+- **EventHandle 事件** — 原始的 Diem 风格流，存储在资源内部。已弃用。由于历史账本数据无法改写，它们仍可查询。
+
+## 模块事件
+
+模块事件是通过 struct 类型标识的全局流。为具有 `drop` 和 `store` 的普通 Move struct 添加 `#[event]`：
+
+```move
+/// 0xcafe::my_module_name
+/// An example module event struct denoting a coin transfer.
+#[event]
+struct TransferEvent has drop, store {
+    sender: address,
+    receiver: address,
+    amount: u64
+}
+```
+
+创建并发出事件：
+
+```move
+let event = TransferEvent {
+    sender: @0xcafe,
+    receiver: @0xface,
+    amount: 100
+};
+0x1::event::emit(event);
+```
+
+可在 [Explorer](https://explorer.aptoslabs.com/?network=mainnet) 任意用户交易的 Events 页查看模块事件。下图示例中，类型为 `0x66c34778730acbb120cefa57a3d98fd21e0c8b3a51e9baee530088b2e444e94c::event::MyEvent` 的三个模块事件。为保持 REST 兼容，模块事件仍包含 `Account Address`、`Creation Number` 和 `Sequence Number`，且均为 0。
+
+![模块事件示例](~/images/module-event.png "模块事件示例")
+
+## 在测试中访问
+
+事件存放在每笔交易的事件累加器（Merkle 树）中。该树独立于状态树，因此 MoveVM 在生产执行期间无法读取事件。测试可通过 `0x1::event` 中的两个辅助函数检查它们：
+
+```move
+/// Return all emitted module events with type T as a vector.
+#[test_only]
+public native fun emitted_events<T: drop + store>(): vector<T>;
+
+/// Return true iff `msg` was emitted.
+#[test_only]
+public fun was_event_emitted<T: drop + store>(msg: &T): bool {
+    emitted_events<T>().contains(msg)
+}
+```
+
+## API 访问
+
+可通过以下方式查询模块事件和仍存在的 EventHandle 事件：
+
+- [Indexer GraphQL API](/zh/build/indexer/indexer-api)（推荐用于应用读取）
+- 全节点 [REST API](/zh/build/apis/fullnode-rest-api) 的事件端点
+
+## EventHandle 事件（已弃用）
+
+Aptos 继承了以 `EventHandle` 为键的 Libra/Diem 事件流：全局唯一 GUID 加上每个 handle 的计数器，存储在资源中。该流中的每个事件都有来自 handle 的序列号。
+
+遗留 Coin 转账会在发送者和接收者的 `CoinStore` 资源上发出提取和存款事件。同质化资产迁移之后，新账户通常没有 `CoinStore<0x1::aptos_coin::AptosCoin>`，该句柄路径会返回 404。可用 [按事件句柄获取事件](https://api.mainnet.aptoslabs.com/v1/spec#/operations/get_events_by_event_handle) 查询仍存在的 EventHandle 流。REST 形态如下：
+
+`GET /v1/accounts/{address}/events/0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>/withdraw_events`
+
+```json
+[
+  {
+    "key": "0x0000000000000000caa60eb4a01756955ab9b2d1caca52ed",
+    "sequence_number": "0",
+    "type": "0x1::coin::WithdrawEvent",
+    "data": {
+      "amount": "1000"
+    }
+  }
+]
+```
+
+每个已注册的 EventHandle 都有唯一 `key`。可直接用 `GET /v1/events/{key}` 查询。
+
+每个条目包含从 `0` 开始的 `sequence_number`、`type` 和 `data`。尤其在使用泛型时，多个事件可能共享相似类型。应在 `data` 中包含客户端理解发出事件的交易前后资源变化所需的信息。
+
+## 迁移至模块事件
+
+EventHandle 事件已弃用。在当前发出 EventHandle 事件的每个位置同时发出模块事件。索引器和客户端消费模块事件后，可以停止发出遗留事件。
+
+EventHandle 流无法删除。无法升级的合约可以继续使用它们。

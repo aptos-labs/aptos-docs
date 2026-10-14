@@ -1,0 +1,194 @@
+---
+title: "智能表"
+label: "智能表"
+description: "了解 Aptos 区块链上 Move 智能合约开发中的智能表。"
+sidebar:
+  label: "智能表"
+---
+
+智能表（Smart Table）是基于线性哈希的可扩展哈希表实现。
+该数据结构利用线性哈希来优化存储和性能：它每次拆分一个桶，而非将桶的数量翻倍，从而避免意外的 Gas 成本。
+智能表使用 SipHash 函数进行更快的哈希计算，同时可容忍碰撞。
+
+## SmartTable 的核心功能
+
+### 结构
+
+`SmartTable` 结构体旨在高效处理动态数据：
+
+- `buckets`：存储条目向量的、带有长度的表。
+- `num_buckets`：当前桶数量。
+- `level`：表示 `num_buckets` 的位数。
+- `size`：表中项目总数。
+- `split_load_threshold`：触发桶拆分的负载阈值百分比。
+- `target_bucket_size`：每个桶的目标大小，不会被严格强制执行。
+
+### 常量
+
+以下常量定义模块中使用的各种错误代码：
+
+- `ENOT_FOUND`：1
+- `EZERO_CAPACITY`：2
+- `ENOT_EMPTY`：3
+- `EALREADY_EXIST`：4
+- `EINVALID_LOAD_THRESHOLD_PERCENT`：5
+- `EINVALID_TARGET_BUCKET_SIZE`：6
+- `EEXCEED_MAX_BUCKET_SIZE`：7
+- `EINVALID_BUCKET_INDEX`：8
+- `EINVALID_VECTOR_INDEX`：9
+
+### API 概览
+
+#### 创建表
+
+- `new<K: copy + drop + store, V: store>(): SmartTable<K, V>`：使用默认配置创建空表。
+- `new_with_config<K: copy + drop + store, V: store>(num_initial_buckets: u64, split_load_threshold: u8, target_bucket_size: u64): SmartTable<K, V>`：使用自定义配置创建空表。
+
+#### 销毁表
+
+- `destroy_empty<K, V>(table: SmartTable<K, V>)`：销毁空表。
+- `destroy<K: drop, V: drop>(table: SmartTable<K, V>)`：销毁表及其元素。
+- `clear<K: drop, V: drop>(table: &mut SmartTable<K, V>)`：清除表中所有元素。
+
+#### 管理条目
+
+- `add<K, V>(table: &mut SmartTable<K, V>, key: K, value: V)`：向表添加键值对。
+- `add_all<K, V>(table: &mut SmartTable<K, V>, keys: vector<K>, values: vector<V>)`：添加多个键值对。
+- `remove<K: copy + drop, V>(table: &mut SmartTable<K, V>, key: K): V`：移除并返回与键关联的值。
+- `upsert<K: copy + drop, V: drop>(table: &mut SmartTable<K, V>, key: K, value: V)`：插入或更新键值对。
+
+#### 获取条目
+
+- `borrow<K: drop, V>(table: &SmartTable<K, V>, key: K): &V`：返回与键关联的值的不可变引用。
+- `borrow_with_default<K: copy + drop, V>(table: &SmartTable<K, V>, key: K, default: &V): &V`：返回与键关联的值；未找到键时返回默认值。
+- `borrow_mut<K: drop, V>(table: &mut SmartTable<K, V>, key: K): &mut V`：返回与键关联的值的可变引用。
+- `borrow_mut_with_default<K: copy + drop, V: drop>(table: &mut SmartTable<K, V>, key: K, default: V): &mut V`：未找到键时插入键值对，然后返回该值的可变引用。
+
+#### 实用函数
+
+- `length<K, V>(table: &SmartTable<K, V>): u64`：返回表中条目数量。
+- `load_factor<K, V>(table: &SmartTable<K, V>): u64`：返回表的负载因子。
+- `update_split_load_threshold<K, V>(table: &mut SmartTable<K, V>, split_load_threshold: u8)`：更新拆分负载阈值。
+- `update_target_bucket_size<K, V>(table: &mut SmartTable<K, V>, target_bucket_size: u64)`：更新目标桶大小。
+- `to_simple_map<K: store + copy + drop, V: store + copy>(table: &SmartTable<K, V>): SimpleMap<K, V>`：将智能表转换为简单映射。
+
+## 使用示例
+
+### 创建并使用 SmartTable
+
+```move filename="smart_table.move"
+module 0x42::smart_table_usage {
+    use aptos_std::smart_table;
+
+    public entry fun main() {
+        let table = smart_table::new<u64, u64>();
+        smart_table::add(&mut table, 1, 100);
+        smart_table::add(&mut table, 2, 200);
+
+        let length = smart_table::length(&table);
+        assert!(length == 2, 0);
+
+        let value1 = smart_table::borrow(&table, 1);
+        assert!(*value1 == 100, 0);
+
+        let value2 = smart_table::borrow(&table, 2);
+        assert!(*value2 == 200, 0);
+
+        let removed_value = smart_table::remove(&mut table, 1);
+        assert!(removed_value == 100, 0);
+
+        smart_table::destroy_empty(table);
+    }
+}
+```
+
+### 向 SmartTable 添加多个条目
+
+```move filename="smart_table.move"
+module 0x42::smart_table_usage {
+    use aptos_std::smart_table;
+
+    public fun add_multiple_entries() {
+        let table = smart_table::new<u64, u64>();
+        let keys = vector[1, 2, 3];
+        let values = vector[100, 200, 300];
+
+        smart_table::add_all(&mut table, keys, values);
+
+        let length = smart_table::length(&table);
+        assert!(length == 3, 0);
+
+        let value1 = smart_table::borrow(&table, 1);
+        assert!(*value1 == 100, 0);
+
+        let value2 = smart_table::borrow(&table, 2);
+        assert!(*value2 == 200, 0);
+
+        let value3 = smart_table::borrow(&table, 3);
+        assert!(*value3 == 300, 0);
+
+        smart_table::destroy_empty(table);
+    }
+}
+```
+
+### 更新并清除表
+
+```move filename="smart_table.move"
+module 0x42::smart_table_usage {
+    use aptos_std::smart_table;
+
+    public fun update_and_clear_table() {
+        let table = smart_table::new<u64, u64>();
+        smart_table::add(&mut table, 1, 100);
+        smart_table::add(&mut table, 2, 200);
+
+        smart_table::upsert(&mut table, 2, 300);
+        let value2 = smart_table::borrow(&table, 2);
+        assert!(*value2 == 300, 0);
+
+        smart_table::clear(&mut table);
+        let length = smart_table::length(&table);
+        assert!(length == 0, 0);
+
+        smart_table::destroy_empty(table);
+    }
+}
+```
+
+### 转换为简单映射
+
+```move filename="smart_table.move"
+module 0x42::smart_table_usage {
+    use aptos_std::smart_table;
+    use aptos_std::simple_map;
+
+    public fun convert_to_simple_map() {
+        let table = smart_table::new<u64, u64>();
+        smart_table::add(&mut table, 1, 100);
+        smart_table::add(&mut table, 2, 200);
+
+        let map = smart_table::to_simple_map(&table);
+        let length = simple_map::length(&map);
+        assert!(length == 2, 0);
+
+        let value1 = simple_map::borrow(&map, &1);
+        assert!(*value1 == 100, 0);
+
+        let value2 = simple_map::borrow(&map, &2);
+        assert!(*value2 == 200, 0);
+
+        smart_table::destroy(table);
+    }
+}
+```
+
+## 源代码
+
+- [smart\_table.move](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-stdlib/sources/data_structures/smart_table.move)
+
+## 其他示例
+
+- [Move Spiders Smart Table](https://movespiders.com/courses/modules/datastructures/lessonId/7)
+- [通过 FullNode API 查询 Smart Table 的 Move Spiders 教程](https://movespiders.com/courses/modules/datastructures/lessonId/9)
+- [通过 View Function 查询 Smart Table 的 Move Spiders 教程](https://movespiders.com/courses/modules/datastructures/lessonId/10)

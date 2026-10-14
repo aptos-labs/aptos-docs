@@ -1,0 +1,149 @@
+---
+title: "本地运行"
+description: "使用 Docker Compose 和 Python 脚本为自定义处理器开发配置交易流服务的本地开发环境"
+sidebar:
+  label: "本地开发"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+{/* <IndexerBetaNotice /> */}
+
+<Aside type="note">
+  已在 ARM 架构的 macOS 13 和 x86\_64 架构的 Debian 11 上测试。
+</Aside>
+
+构建自定义处理器时，在本地开发栈上进行开发会很有帮助。交易流服务是复杂的多组件系统。为协助本地开发，我们提供了一个封装 Docker Compose 文件的 Python 脚本，用于配置整套系统。
+
+该脚本会配置以下组件：
+
+- 启用 Indexer GRPC 流的单节点测试网。
+- 一个 Redis 实例。
+- 交易流服务，包括以下组件：
+  - [cache-worker](https://github.com/aptos-labs/aptos-core/tree/main/ecosystem/indexer-grpc/indexer-grpc-cache-worker)：从节点拉取交易并存入 Redis。
+  - [file-store](https://github.com/aptos-labs/aptos-core/tree/main/ecosystem/indexer-grpc/indexer-grpc-file-store)：从 Redis 获取交易并将其存入文件系统。
+  - [data-service](https://github.com/aptos-labs/aptos-core/tree/main/ecosystem/indexer-grpc/indexer-grpc-data-service)：通过 GRPC 流向下游客户端提供交易。它会根据交易的时间，从缓存或文件存储中拉取交易。
+- 用于连接全部组件的共享卷和网络。
+
+可在[此处](/zh/build/indexer/txn-stream)了解交易流服务的架构，并在[此处](https://github.com/aptos-labs/aptos-core/blob/main/docker/compose/indexer-grpc/docker-compose.yaml)查看 Docker Compose 文件。
+
+## 前置条件
+
+使用本地开发脚本前，必须安装以下软件：
+
+- Python 3.8+：[安装指南](https://docs.python-guide.org/starting/installation/#python-3-installation-guides)。
+- Poetry：[安装指南](https://python-poetry.org/docs/#installation)。
+- Docker：[安装指南](https://docs.docker.com/get-docker/)。
+- Docker Compose v2：现代 Docker 安装通常默认包含该组件；使用以下命令验证：
+
+```shellscript filename="Terminal"
+docker-compose version --short
+```
+
+- grpcurl：[安装指南](https://github.com/fullstorydev/grpcurl#installation)
+- OpenSSL
+
+## 准备
+
+克隆 aptos-core 仓库：
+
+```shellscript filename="Terminal"
+# HTTPS
+git clone https://github.com/aptos-labs/aptos-core.git
+
+# SSH
+git clone git@github.com:aptos-labs/aptos-core.git
+```
+
+进入 `testsuite` 目录：
+
+```shellscript filename="Terminal"
+cd aptos-core
+cd testsuite
+```
+
+安装 Python 依赖：
+
+```shellscript filename="Terminal"
+poetry install
+```
+
+## 运行脚本
+
+### 启动服务
+
+```shellscript filename="Terminal"
+poetry run python indexer_grpc_local.py start
+```
+
+命令退出且显示以下内容，即表示启动成功：
+
+```shellscript filename="Terminal"
+Attempting to stream from indexer grpc for 10s
+Stream finished successfully
+```
+
+### 停止服务
+
+```shellscript filename="Terminal"
+poetry run python indexer_grpc_local.py stop
+```
+
+### 清除数据
+
+再次启动、停止并启动服务时，系统会复用相同的 localnet 数据。如需清除 localnet 并从头开始，可运行以下命令：
+
+```shellscript filename="Terminal"
+poetry run python indexer_grpc_local.py wipe
+```
+
+## 使用本地服务
+
+你可以使用以下配置值连接本地交易流服务，例如从自定义处理器连接：
+
+```shellscript filename="Terminal"
+indexer_grpc_data_service_address: 127.0.0.1:50052
+auth_token: dummy_token
+```
+
+可通过以下地址连接节点：
+
+```shellscript filename="Terminal"
+http://127.0.0.1:8080/v1
+```
+
+## 调试
+
+### 在 ARM 系统上使用
+
+若使用 ARM 处理器的机器，例如 M1/M2 Mac，脚本应能检测该情况，并设置适当的环境变量以确保使用正确的镜像。如果遇到问题，请尝试设置以下环境变量：
+
+```shellscript filename="Terminal"
+export DOCKER_DEFAULT_PLATFORM=linux/amd64
+```
+
+此外，请确保 Docker Desktop 中的以下设置正确：
+
+- 已启用：Preferences > General > Use Virtualization framework
+- 已启用：Preferences > General > Use Docker Compose V2
+- 已禁用：Features in development -> Use Rosetta for x86/amd64 emulation on Apple Silicon
+
+该脚本尚未在 Linux ARM 系统上测试。
+
+### Redis 无法启动
+
+运行脚本前，请尝试设置以下环境变量：
+
+```shellscript filename="Terminal"
+export REDIS_IMAGE_REPO=arm64v8/redis
+```
+
+### 缓存工作器反复崩溃，或日志中出现 `Redis latest version update failed.`
+
+清除数据：
+
+```shellscript filename="Terminal"
+poetry run python indexer_grpc_local.py wipe
+```
+
+这意味着历史数据将丢失。

@@ -1,0 +1,144 @@
+---
+title: "4. 向链提交数据"
+description: "使用钱包适配器的 signAndSubmitTransaction 函数实现交易提交，以创建新的待办列表。"
+sidebar:
+  label: "4. 提交数据"
+---
+
+在 [Aptos 端到端 dApp 构建教程](/zh/build/guides/build-e2e-dapp)的第四章中，你将向链提交数据。
+
+现在，如果已连接账户尚未创建列表，我们会显示 **Add new list** 按钮。不过账户仍无法真正创建列表，因此接下来添加这项功能。
+
+1. 首先，钱包适配器 Provider 提供 `signAndSubmitTransaction` 函数。更新以下代码以提取它：
+
+```tsx filename="App.tsx"
+const { account, signAndSubmitTransaction } = useWallet();
+```
+
+2. 为新建列表按钮添加 `onClick` 事件：
+
+```tsx filename="App.tsx"
+<Button
+  onClick={addNewList}
+>
+  Add new list
+</Button>
+```
+
+3. 更新 `@aptos-labs/wallet-adapter-react` 的导入语句，同时导入 `InputTransactionData` 类型：
+
+```tsx filename="App.tsx"
+import {
+  useWallet,
+  InputTransactionData,
+} from "@aptos-labs/wallet-adapter-react";
+```
+
+4. 添加 `addNewList` 函数：
+
+```tsx filename="App.tsx"
+
+const addNewList = async () => {
+  if (!account) return [];
+
+   const transaction:InputTransactionData = {
+      data: {
+        function:`${moduleAddress}::todolist::create_list`,
+        functionArguments:[]
+      }
+    }
+  try {
+    // sign and submit transaction to chain
+    const response = await signAndSubmitTransaction(transaction);
+    // wait for transaction
+    await aptosClient().waitForTransaction({transactionHash:response.hash});
+    setAccountHasList(true);
+  } catch (error: any) {
+    setAccountHasList(false);
+  }
+};
+```
+
+5. 新函数同样使用 `moduleAddress`，因此请将它从 `fetchList` 函数作用域移到全局作用域，以便全局使用。
+
+在 `fetchList` 函数中找到以下行：
+
+```tsx filename="App.tsx"
+const moduleAddress = MODULE_ADDRESS;
+```
+
+将它移到主 `App` 函数之外，使其可被全局访问。
+
+**下面逐段理解 `addNewList` 函数。**
+
+首先，使用钱包 Provider 中的 `account` 属性，确保应用已连接账户。
+
+接着，构建要提交到链上的交易数据：
+
+```tsx filename="App.tsx"
+const transaction:InputTransactionData = {
+      data: {
+        function:`${moduleAddress}::todolist::create_list`,
+        functionArguments:[]
+      }
+    }
+```
+
+- `function`：由模块地址、模块名和函数名组成。
+- `functionArguments`：函数预期的参数；本例不需要参数。
+
+然后提交交易载荷并等待响应。`signAndSubmitTransaction` 函数返回的响应包含交易哈希。交易完全在链上执行需要一些时间，而我们还要确认交易成功执行，因此会调用 `waitForTransaction`。完成后才能把本地 `accountHasList` 状态设为 `true`。
+
+6. 测试应用前，稍微调整 UI：添加一个 Spinner 组件，在等待交易时显示。添加一个本地状态以跟踪交易是否正在进行：
+
+```tsx filename="App.tsx"
+const [transactionInProgress, setTransactionInProgress] =
+  useState<boolean>(false);
+```
+
+7. 更新 `addNewList` 函数以更新本地状态：
+
+```tsx filename="App.tsx"
+const addNewList = async () => {
+  if (!account) return [];
+  setTransactionInProgress(true);
+  const transaction:InputTransactionData = {
+      data: {
+        function:`${moduleAddress}::todolist::create_list`,
+        functionArguments:[]
+      }
+    }
+  try {
+    // sign and submit transaction to chain
+    const response = await signAndSubmitTransaction(transaction);
+    // wait for transaction
+    await aptosClient().waitForTransaction({transactionHash:response.hash});
+    setAccountHasList(true);
+  } catch (error: any) {
+    setAccountHasList(false);
+  } finally {
+    setTransactionInProgress(false);
+  }
+};
+```
+
+9. 按以下方式更新 UI：
+
+```tsx filename="App.tsx"
+return (
+  <>
+    ...
+      {!accountHasList && (
+        <div className="flex items-center justify-center flex-col">
+          <Button onClick={addNewList} disabled={transactionInProgress}>
+            Add new list
+          </Button>
+        </div>
+      )}
+  </>
+);
+```
+
+现在可以回到应用，添加一个新列表了！
+
+由于界面还不能处理账户已经创建列表的情况，下一章将学习[处理任务](/zh/build/guides/build-e2e-dapp/5-handle-tasks)。

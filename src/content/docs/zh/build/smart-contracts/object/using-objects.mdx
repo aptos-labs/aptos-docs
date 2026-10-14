@@ -1,0 +1,287 @@
+---
+title: "使用对象"
+description: "了解如何在智能合约中与 Aptos 对象交互和操作，以构建可组合的应用。"
+sidebar:
+  label: "使用对象"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+创建对象后，可以在 Move 入口函数和结构体中使用它，转移它，并使用[对象构建](/zh/build/smart-contracts/object/creating-objects)期间生成的任意引用修改它。以下介绍在 Move 中使用、管理和与对象交互的多种方式。
+
+## 将对象用作入口函数参数
+
+Move 函数中的对象类型为 `Object<T>`，其中 `T` 是对象拥有的资源类型。所有对象都有包含对象元数据的 `ObjectCore` 类型。
+
+要使用对象参数，用户可以传入对象地址或对象引用。运行时，合约会在执行函数前验证该地址上存在对象，并且它具有 T 类型的资源。
+
+```move filename="Example.move"
+module my_addr::object_playground {
+  use aptos_framework::object::{Object, ObjectCore};
+
+  struct MyAwesomeStruct has key {}
+
+  /// This will fail if the object doesn't have MyAwesomeStruct stored
+  entry fun do_something(object: Object<MyAwesomeStruct>) {
+    // ...
+  }
+
+  /// All Objects have ObjectCore, so this will only fail if the
+  /// address is not an object
+  entry fun do_something_to_object_core(object: Object<ObjectCore>) {
+    // ...
+  }
+}
+```
+
+如需让入口函数的用户指定资源类型，可以保留泛型类型 `T`，如下所示：
+
+```move filename="Example.move"
+module my_addr::object_playground {
+  use aptos_framework::object::Object;
+
+  /// This will fail if the object doesn't have the generic `T` stored
+  entry fun do_something<T>(object: Object<T>) {
+    // ...
+  }
+}
+```
+
+### 对象类型
+
+可以通过对象拥有的任意资源类型引用对象。为方便起见，只要资源可用，便可使用 `address_to_object` 和 `convert` 将地址转换为对象，或在对象类型之间转换：
+
+```move filename="Example.move"
+module my_addr::object_playground {
+  use aptos_framework::object::{Self, Object, ObjectCore};
+
+  struct MyAwesomeStruct has key {}
+
+  fun convert_type(object: Object<ObjectCore>): Object<MyAwesomeStruct> {
+    object::convert<ObjectCore, MyAwesomeStruct>(object)
+  }
+
+  fun address_to_type(object_address: address): Object<MyAwesomeStruct> {
+    object::address_to_object<MyAwesomeStruct>(object_address)
+  }
+}
+```
+
+<Aside type="note">
+  对象可由任意地址拥有，包括对象、账户和资源账户。这使对象之间具有可组合性，并可形成复杂关系。
+</Aside>
+
+## 将对象用作结构体字段的类型
+
+通过在结构体中使用对象，可以表示复杂类型。例如：
+
+```move filename="Example.move"
+module my_addr::object_playground {
+  use aptos_framework::object::{Self, Object};
+  use aptos_framework::fungible_asset::Metadata;
+  use aptos_framework::primary_fungible_store;
+  use std::signer;
+  use std::option;
+  use std::string::utf8;
+
+  struct MyStruct has key {
+    fungible_asset_object: Object<Metadata>
+  }
+
+  entry fun create_fungible_asset(creator: &signer) {
+    let fa_obj_constructor_ref = &object::create_sticky_object(@my_addr);
+    let fa_obj_signer = object::generate_signer(fa_obj_constructor_ref);
+    let fa_obj_addr = signer::address_of(&fa_obj_signer);
+    primary_fungible_store::create_primary_store_enabled_fungible_asset(
+        fa_obj_constructor_ref,
+        option::none(),
+        utf8(b"Asset name"),
+        utf8(b"Asset symbol"),
+        2,
+        utf8(b"Icon uri"),
+        utf8(b"Project uri")
+    );
+    move_to(creator, MyStruct {
+      fungible_asset_object: object::address_to_object(fa_obj_addr)
+    });
+  }
+}
+```
+
+## 查找对象的所有者
+
+为对象编写合约时，通常需要在修改对象前验证所有权。由于对象可由任意地址拥有，验证所有权时需要考虑所有者是账户、资源账户还是另一个对象：
+
+```move filename="Example.move"
+module my_addr::object_playground {
+  use std::signer;
+  use aptos_framework::object::{Self, Object};
+
+  // Not authorized!
+  const E_NOT_AUTHORIZED: u64 = 1;
+
+  fun check_owner_is_caller<T: key>(caller: &signer, object: Object<T>) {
+    assert!(
+      object::is_owner(object, signer::address_of(caller)),
+      E_NOT_AUTHORIZED
+    );
+  }
+
+  fun check_is_owner_of_object<T: key>(addr: address, object: Object<T>) {
+    assert!(object::owner(object) == addr, E_NOT_AUTHORIZED);
+  }
+
+  fun check_is_nested_owner_of_object<T: key, U: key>(
+    caller: &signer,
+    outside_object: Object<T>,
+    inside_object: Object<U>
+  ) {
+    // Ownership expected
+    // Caller account -> Outside object -> inside object
+
+    // Check outside object owns inside object
+    let outside_address = object::object_address(&outside_object);
+    assert!(object::owns(inside_object, outside_address), E_NOT_AUTHORIZED);
+
+    // Check that the caller owns the outside object
+    let caller_address = signer::address_of(caller);
+    assert!(object::owns(outside_object, caller_address), E_NOT_AUTHORIZED);
+
+    // Check that the caller owns the inside object (via the outside object)
+    // This can skip the first two calls (and even more nested)
+    assert!(object::owns(inside_object, caller_address), E_NOT_AUTHORIZED);
+  }
+}
+```
+
+## 转移所有权
+
+默认情况下，所有对象均可转移。某些对象在构建时会被配置为禁用 `ungated_transfer`（有关详细信息，请参阅构建对象）。
+
+可以按如下方式转移对象：
+
+```move filename="Example.move"
+module my_addr::object_playground {
+  use aptos_framework::object::{Self, Object};
+
+  /// Transfer to another address, this can be an object or account
+  fun transfer<T: key>(owner: &signer, object: Object<T>, destination: address) {
+    object::transfer(owner, object, destination);
+  }
+
+  /// Transfer to another object
+  fun transfer_to_object<T: key, U: key>(
+    owner: &signer,
+    object: Object<T>,
+    destination: Object<U>
+  ) {
+    object::transfer_to_object(owner, object, destination);
+  }
+}
+```
+
+<Aside type="caution">
+  如果 `ungated_transfer` 被**禁用**，所有转移都必须使用由 `TransferRef` 或 `LinearTransferRef` 授予的特殊权限。
+</Aside>
+
+## 事件
+
+默认情况下，对象只有 `TransferEvent`，它会在对象被转移时触发。
+
+可以扩展对象以拥有额外事件。
+
+可以使用以下函数为对象创建事件句柄：
+
+```move filename="example.move"
+module 0x1::object {
+  /// Create a guid for the object, typically used for events
+  public fun create_guid(object: &signer): guid::GUID {}
+
+  /// Generate a new event handle.
+  public fun new_event_handle<T: drop + store>(object: &signer): event::EventHandle<T> {}
+}
+```
+
+只要持有对象的 `SignerRef`，就能将生成的事件句柄转移给对象。例如：
+
+```move filename="example.move"
+module 0x42::example {
+  use aptos_framework::event;
+  use aptos_framework::fungible_asset::Metadata;
+  use aptos_framework::object::{Self, Object};
+
+  #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
+  struct LiquidityPoolResourceGroup has key {
+    pool: LiquidityPool,
+    event_store: LiquidityPoolEventStore,
+  }
+
+  struct LiquidityPool has store {
+    metadata_token_a: Object<Metadata>,
+    metadata_token_b: Object<Metadata>,
+    reserves_a: u128,
+    reserves_b: u128,
+  }
+
+  struct LiquidityPoolEventStore has store {
+    create_events: event::EventHandle<CreateLiquidityPoolEvent>,
+  }
+
+  #[event]
+  struct CreateLiquidityPoolEvent has store, drop {
+    token_a: address,
+    token_b: address,
+    reserves_a: u128,
+    reserves_b: u128,
+  }
+
+  public entry fun create_liquidity_pool_with_events(
+        account_signer: &signer,
+        metadata_token_a: Object<Metadata>,
+        metadata_token_b: Object<Metadata>,
+        reserves_a: u128,
+        reserves_b: u128
+  ) {
+    let liquidity_pool_constructor_ref = &object::create_object_from_account(
+      account_signer
+    );
+    let liquidity_pool_signer = &object::generate_signer(
+      liquidity_pool_constructor_ref
+    );
+    let event_handle = object::new_event_handle<CreateLiquidityPoolEvent>(
+      liquidity_pool_signer
+    );
+
+    event::emit_event<CreateLiquidityPoolEvent>(&mut event_handle, CreateLiquidityPoolEvent {
+      token_a: object::object_address(&metadata_token_a),
+      token_b: object::object_address(&metadata_token_b),
+      reserves_a,
+      reserves_b,
+    });
+
+    move_to(liquidity_pool_signer, LiquidityPoolResourceGroup {
+      pool: LiquidityPool {
+        metadata_token_a,
+        metadata_token_b,
+        reserves_a,
+        reserves_b
+      },
+      event_store: LiquidityPoolEventStore {
+        create_events: event_handle
+      }
+    });
+  }
+}
+```
+
+## 创建后修改对象
+
+通常，只能使用构建期间生成的 `Refs` 修改对象。有关可用的 `Refs`、如何生成它们及如何使用它们的更多详细信息，请参阅[创建和配置对象](/zh/build/smart-contracts/object/creating-objects)。这也是向对象添加额外资源、删除对象和扩展对象的方式。
+
+## 示例合约
+
+以下是三个使用对象的实际代码示例：
+
+- [数字资产市场示例](https://github.com/aptos-labs/aptos-core/tree/main/aptos-move/move-examples/marketplace)
+- [数字资产示例](https://github.com/aptos-labs/aptos-core/tree/main/aptos-move/move-examples/token_objects)
+- [同质化资产示例](https://github.com/aptos-labs/aptos-core/tree/main/aptos-move/move-examples/fungible_asset)

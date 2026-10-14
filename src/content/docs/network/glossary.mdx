@@ -18,6 +18,9 @@ sidebar:
   of [Move modules](#move-module) and [Move resources](#move-resources).
 - The state of each account is composed of both code and data.
 - The account is identified by [account address](#account-address).
+- After [AIP-115](/build/aips/aip-115), an address does not need an on-chain
+  `0x1::account::Account` resource to be a valid account. REST `GET /accounts/{address}`
+  returns default values instead of 404 when that resource is missing.
 
 See [Accounts](/network/blockchain/accounts) for more information.
 
@@ -33,13 +36,20 @@ See [Accounts](/network/blockchain/accounts) for more information.
 
 See [Accounts](/network/blockchain/accounts) for more information.
 
+### Agent Skills
+
+- **Agent Skills** are installable instruction packs that give coding assistants Aptos-specific knowledge for Move contracts, the TypeScript SDK, and dApp scaffolding.
+- Install them with `npx skills add aptos-labs/aptos-agent-skills`.
+
+See [Aptos Agent Skills](/build/ai/aptos-agent-skills) for more information.
+
 ### API
 
 - An **Application Programming Interface (API)** is a set of protocols and tools
   that allow users to interact with Aptos blockchain nodes and client networks
-  via external applications. Aptos offers a REST API to communicate with our
-  nodes.
-- See [documentation](/build/apis) for more details.
+  via external applications. Aptos nodes expose a REST API; Aptos Labs also
+  hosts an Indexer GraphQL API and a Transaction Stream gRPC API.
+- See [Aptos APIs](/build/apis) for more details.
 
 ### APT
 
@@ -122,19 +132,18 @@ nodes, [validators](#validator) and [fullnodes](#fullnodes).
 
 ### AptosAccount
 
-- A **`AptosAccount`** is a Move resource that holds all the administrative data
-  associated with an account, such as sequence number, balance, and
-  authentication key.
-- A **`AptosAccount`** is the only resource that every account is guaranteed to
-  contain.
+- **`AptosAccount`** is a historical name from early Aptos/Diem Move APIs for
+  account administrative state (sequence number and authentication key).
+- The on-chain resource is `0x1::account::Account`. After
+  [AIP-115](/build/aips/aip-115), that resource is created only when needed; it
+  is not present on every account.
+- Account balances live in CoinStore or Fungible Store resources, not in
+  `Account`.
 
 ### AptosAccount module
 
-- **The AptosAccount module** is a Move module that contains the code for
-  manipulating the administrative data held in a particular `AptosAccount.T`
-  resource.
-- Code for checking or incrementing sequence numbers, withdrawing or depositing
-  currency, and extracting gas deposits is included in the AptosAccount module.
+- **The AptosAccount module** is a historical name for the Move module that
+  manages `0x1::account::Account`. Use `0x1::account` in current code and docs.
 
 ### Aptos Devnet
 
@@ -145,9 +154,23 @@ nodes, [validators](#validator) and [fullnodes](#fullnodes).
 ### Blocks
 
 - On Aptos, blocks are a batch of [transactions](#transaction) committed at the
-  same time.
+  same time. Each block starts with a `BlockMetadata` transaction and, except
+  for the last block of an [epoch](#epoch), ends with a
+  [block epilogue](#block-epilogue).
 - Block number is analogous to "block height" in blockchain literature.
-- Transactions are referenced by ledger version rather than by block.
+- Transactions are referenced by ledger version rather than by block. Ledger
+  state is versioned per transaction, not per block.
+
+See [Blocks](/network/blockchain/blocks) for more information.
+
+### Block Epilogue
+
+- A **block epilogue** is a system transaction (`block_epilogue_transaction`)
+  that ends a block and carries `BlockEndInfo` (gas and output limits for that
+  block). It replaced the earlier `StateCheckpoint` transaction type.
+- The last block of an epoch has no block epilogue.
+
+See [AIP-88](/build/aips/aip-88) for more information.
 
 ### BlockSTM
 
@@ -205,6 +228,19 @@ nodes, [validators](#validator) and [fullnodes](#fullnodes).
   If users have the necessary funds in their accounts, they can follow the same
   code lab and tutorial steps used in devnet, testnet and mainnet networks.
 
+### Confidential Asset
+
+- A **confidential asset (CA)** wraps a [fungible asset](#fungible-asset) so
+  transfer amounts and confidential balances stay hidden, including from
+  validators, using zero-knowledge proofs. Sender and recipient addresses
+  remain visible.
+- Incoming funds accumulate in a pending confidential balance and must be
+  rolled over before they are spendable.
+
+See [Confidential Asset](/build/smart-contracts/confidential-asset) and the
+[TypeScript SDK client](/build/sdks/ts-sdk/confidential-asset). For how CA
+fits among payment flows, see [Payments](/build/guides/payments#confidential-transfers).
+
 ### Consensus
 
 - **Consensus** is a component of a validator.
@@ -256,8 +292,8 @@ nodes, [validators](#validator) and [fullnodes](#fullnodes).
 - **Encrypted mempool** is the protocol feature (AIP-144) in which a transaction's **Move executable payload** is encrypted while the transaction is **pending** (for example in mempool and during dissemination), then decrypted by validators for execution right after the block is confirmed.
 - Also known as **encrypted pending transactions** in consumer-facing material.
 - The submitting client uses the fullnode’s current **ledger `encryption_key`** (per-epoch batch threshold encryption on BLS12-381). Gas limits, signatures, sender metadata, and sometimes a **claimed entry function** may still be visible depending on payload type—this is **payload confidentiality**, not full transaction anonymity.
-- Encrypted submissions pay a minimum gas-unit price of **200 Octas/gas-unit** (twice the base minimum) to cover validator decryption cost. **Keyless**, **federated keyless**, and **account abstraction** signers are not supported.
-- Example: an app builds `aptos.transaction.build.simple` with `options.encrypted` and `options.authenticationKey` on the TypeScript SDK so a transfer’s arguments are not sent as plaintext before commit.
+- Encrypted submissions pay a minimum gas-unit price of **200 Octas/gas-unit** (twice the base minimum) and a flat **375 gas-unit** decryption charge per transaction to cover validator decryption cost. **Keyless**, **federated keyless**, and **account abstraction** signers are not supported.
+- Example: an app builds `aptos.transaction.build.simple` with `options.encrypted` and `options.senderAuthenticationKey` on the TypeScript SDK so a transfer’s arguments are not sent as plaintext before commit.
 
 See [Encrypted Pending Transactions](/build/guides/encrypted-pending-transactions) for more information.
 
@@ -275,15 +311,14 @@ See [Encrypted Pending Transactions](/build/guides/encrypted-pending-transaction
 
 - An **event** is the user-facing representation of the effects of executing a
   transaction.
-- A transaction may be designed to emit any number of events as a list. For
-  example, a `Coin<AptosCoin>` transfer emits a `WithdrawEvent` for the sender
-  account and a `DepositEvent` for the recipient account.
-- In the Aptos protocol, events provide evidence that the successful execution
-  of a transaction resulted in a specific effect. The `DepositEvent` (in the
-  above example) allows the recipient to confirm that a payment was received
-  into their account.
-- Events are persisted on the blockchain and are used to answer queries
-  by [clients](#client).
+- Modules emit **module events** (type-keyed streams marked `#[event]`). Older
+  **EventHandle** streams still exist on some resources but are deprecated.
+- For example, a coin transfer can emit withdraw and deposit events so the
+  recipient can confirm that a payment arrived.
+- Events are persisted on the blockchain and are queried by [clients](#client)
+  through the REST API or the [Indexer](/build/indexer/indexer-api).
+
+See [Events](/network/blockchain/events) for more information.
 
 ### Execution
 
@@ -306,9 +341,20 @@ that:
 
 ### Faucet
 
-- The **faucet** is a service that mints APT on devnet. For testnet see the [mint page](/network/faucet).
+- The **faucet** is a service that mints APT on Devnet (programmatically) and
+  Testnet (Google sign-in / the [mint page](/network/faucet)).
 - APT on devnet and testnet has no real world value, it is only for development purposes.
 - To use a faucet, see [Faucet API](/build/apis/faucet-api).
+
+### Finality
+
+- **Finality** is the point after which a committed transaction cannot be
+  reversed. Aptos uses [BFT](#byzantine-fault-tolerance-bft) consensus, so a
+  transaction is final as soon as it commits. Clients do not wait for extra
+  block confirmations.
+
+See [Payments](/build/guides/payments) for how finality relates to block time
+and end-to-end latency, and the [exchange FAQ](/build/guides/exchanges#what-is-the-finality-of-a-transaction).
 
 ### Fullnodes
 
@@ -371,6 +417,14 @@ See [Gas and Storage Fees](/network/blockchain/gas-txn-fee) for more information
 
 See [Gas and Storage Fees](/network/blockchain/gas-txn-fee) for more information.
 
+### Geomi
+
+- **[Geomi](https://geomi.dev/)** (formerly Aptos Build) is the Aptos Labs
+  developer portal for API keys, hosted indexer access, Gas Station, and no-code
+  indexing.
+
+See [Data Providers](/build/apis/data-providers) for more information.
+
 ## H
 
 ### Honest (Validator)
@@ -409,6 +463,13 @@ See [Gas and Storage Fees](/network/blockchain/gas-txn-fee) for more information
 - Leaders are selected by a function that takes the
   current [round number](#round-number) as input.
 
+### LLMs.txt
+
+- **LLMs.txt** is a machine-readable documentation index that points AI tools at Aptos docs, per-page Markdown exports, and related API assets.
+- Aptos publishes `/llms.txt` (index), `/llms-small.txt` (condensed corpus), and `/llms-full.txt` (full corpus).
+
+See [LLMs.txt](/llms-txt) for more information.
+
 ## M
 
 ### Mainnet
@@ -432,16 +493,30 @@ See [Gas and Storage Fees](/network/blockchain/gas-txn-fee) for more information
 See [Gas and Storage Fees](/network/blockchain/gas-txn-fee) for
 more information.
 
+### Multi-Agent Transaction
+
+- A **multi-agent transaction** is a single transaction that several accounts
+  sign. Use it when **both parties must agree** before funds or resources move,
+  rather than a one-sided send from payer to recipient.
+- The usual payment shape is a **peer-to-peer swap**: both accounts sign one
+  entry function that moves each party's asset, so both legs commit or neither
+  does.
+- Distinct from **multisig**, which is N-of-M control of one account.
+
+See [Multi-Agent Transactions](/build/sdks/ts-sdk/building-transactions/multi-agent-transactions)
+and [Payments](/build/guides/payments#peer-to-peer-swap).
+
 ### Mempool
 
 - **Mempool** is one of the components of the validator. It holds an in-memory
   buffer of transactions that have been submitted but not yet agreed upon and
   executed. Mempool receives transactions from other [full nodes](#fullnodes).
-- Transactions in the mempool of a validator are added from the JSON-RPC Service
-  of the current node and from the mempool of other Aptos nodes.
-- When the current validator is the leader, its consensus component pulls the
-  transactions from its mempool and proposes the order of the transactions that
-  form a block. The validator quorum then votes on the proposal.
+- Transactions in the mempool of a validator are added from the [REST API Service](#rest-api-service)
+  of fullnodes and from other Aptos nodes.
+- [Quorum Store](#quorum-store) then disseminates those transactions in batches
+  within the validator set. When the current validator is the leader, consensus
+  proposes a block that orders certified batches. The validator quorum votes on
+  the proposal.
 
 ### Merkle Trees
 
@@ -462,6 +537,13 @@ more information.
 - A Merkle accumulator can provide proofs that a transaction was included in the
   chain ("proof of inclusion").
 - They are also called "history trees" in literature.
+
+### Model Context Protocol (MCP)
+
+- The **Model Context Protocol (MCP)** is an open protocol that lets AI coding tools call external tools and data sources.
+- Aptos publishes an MCP server (`@aptos-labs/aptos-mcp`) so assistants can query on-chain data, call Aptos APIs, and follow current Move workflows.
+
+See [Aptos MCP](/build/ai/aptos-mcp) for more information.
 
 ### Module
 
@@ -546,6 +628,8 @@ follow [Move scripts](/build/smart-contracts/scripts/script-tutorial).
 - **Nonce** is a number only used once, a random or semi-random number that is
   generated for a specific use for authentication protocols and cryptographic
   hash functions.
+- On Aptos, [orderless transactions](#orderless-transactions) use a `u64` nonce
+  as the replay protector instead of a [sequence number](#sequence-number).
 
 ## O
 
@@ -559,7 +643,33 @@ follow [Move scripts](/build/smart-contracts/scripts/script-tutorial).
   open-source software. If you're reading this glossary, then you are part of
   the Aptos project's developer community.
 
+### Orderless Transactions
+
+- **Orderless transactions** (AIP-123) use a [nonce](#nonce) for replay
+  protection instead of a [sequence number](#sequence-number). They can execute
+  in any order, expire after at most 60 seconds, and do not require an on-chain
+  `Account` resource.
+- Use sequence-number transactions when the application needs ordered execution
+  from one sender.
+
+See [AIP-123](/build/aips/aip-123) for more information.
+
 ## P
+
+### Payments
+
+- **Payments** on Aptos are on-chain transfers of APT, stablecoins, and other
+  [fungible assets](#fungible-asset), including [confidential](#confidential-asset)
+  variants. Typical mainnet block times are tens of milliseconds; committed
+  transactions are [final](#finality) immediately; user-visible end-to-end
+  latency is typically sub-second.
+- Each payment type can be [sponsored](/build/guides/sponsored-transactions)
+  (another account pays gas), [orderless](#orderless-transactions) (parallel
+  submit with a nonce), or [multi-agent](#multi-agent-transaction) (both
+  parties sign one transaction).
+
+See [Payments](/build/guides/payments) for latency, fees, and the APIs for
+each payment type.
 
 ### Proof
 
@@ -648,6 +758,8 @@ instructions on use.
   number for that account (or until they expire).
 - When the transaction is applied, the sequence number of the account will
   become X+1. The account has a strictly increasing sequence number.
+- [Orderless transactions](#orderless-transactions) do not use a sequence
+  number. They use a nonce and can commit in any order.
 
 ### Sender
 
@@ -676,6 +788,18 @@ instructions on use.
 - **State root hash** is
   a [Merkle hash](https://en.wikipedia.org/wiki/Merkle_tree) over all keys and
   values the state of the Aptos blockchain at a given version.
+
+### Stateless Account
+
+- A **stateless account** is an address that has not yet created an on-chain
+  `0x1::account::Account` resource. It is still a valid account: the default
+  authentication key is the address itself and the default sequence number is
+  `0`.
+- The resource is created when a sequence-number transaction or a feature such
+  as key rotation needs it. [Orderless transactions](#orderless-transactions)
+  can be sent without creating the resource.
+
+See [AIP-115](/build/aips/aip-115) for more information.
 
 ## T
 
@@ -758,6 +882,13 @@ runbook covering download, CLI verification, and rotation.
   transaction version 100 is the 101st transaction in the blockchain.
 
 ## W
+
+### WebMCP
+
+- **WebMCP** is a browser proposal that lets pages register tools on `navigator.modelContext`.
+- Every Aptos docs page registers search, navigation, Markdown fetch, and LLMs.txt discovery tools for browsers that implement the proposal.
+
+See [AI Tools Overview](/build/ai) for more information.
 
 ### Well-Formed Transaction
 

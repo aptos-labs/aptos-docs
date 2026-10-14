@@ -1,0 +1,103 @@
+---
+title: "Kotlin SDK 快速入门"
+description: "使用最新精简 API 设置 Kaptos、读取链上数据并发送第一笔交易"
+sidebar:
+  label: "快速入门"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+本快速入门将使用当前 Kaptos API，带您从配置依赖开始完成一笔已确认的交易。
+
+<Steps>
+  1. 安装 SDK
+
+     Kaptos 会将多平台和平台专用构件发布到 Maven Central。
+
+     #### 多平台
+
+     ```kotlin
+     kotlin {
+       sourceSets {
+         commonMain.dependencies {
+           implementation("xyz.mcxross.kaptos:kaptos:<version>")
+         }
+       }
+     }
+     ```
+
+     #### JVM（示例）
+
+     ```kotlin
+     dependencies {
+       implementation("xyz.mcxross.kaptos:kaptos-jvm:<version>")
+     }
+     ```
+
+  2. 配置客户端
+
+     ```kotlin
+     val aptos = Aptos(
+       AptosConfig(
+         settings = AptosSettings(
+           network = Network.DEVNET,
+           clientConfig = ClientConfig(maxRetries = 10),
+         )
+       )
+     )
+     ```
+
+     <Aside type="note" emoji="ℹ️">
+       Kaptos 是 Kotlin 多平台 SDK。部分 HTTP 客户端选项会因目标平台略有差异，但 API 用法保持一致。
+     </Aside>
+
+  3. 读取链上数据
+
+     ```kotlin
+     val ledgerInfo = aptos.getLedgerInfo().expect("Failed to fetch ledger info")
+     println("Ledger version: ${ledgerInfo.ledgerVersion}")
+
+     val chainId = aptos.getChainId().expect("Failed to fetch chain id")
+     println("Chain id: $chainId")
+     ```
+
+  4. 创建并充值账户
+
+     ```kotlin
+     val alice = Account.generate()
+     val bob = Account.generate()
+
+     aptos.fundAccount(accountAddress = alice.accountAddress, amount = 100_000_000L).expect("Failed to fund Alice")
+     aptos.fundAccount(accountAddress = bob.accountAddress, amount = 100_000_000L).expect("Failed to fund Bob")
+     ```
+
+     有关单密钥和多密钥账户模式，请参阅[账户](/zh/build/sdks/community-sdks/kotlin-sdk/account)。
+
+  5. 构建并发送交易
+
+     精简交易构建器使用 `typeArgs(...)` 和 `args(...)`。
+
+     ```kotlin
+     val pendingTxn =
+       aptos
+         .execute(signer = alice) {
+           function = "0x1::coin::transfer"
+           typeArgs("0x1::aptos_coin::AptosCoin")
+           args(bob.accountAddress, 1_000_000UL)
+         }
+         .expect("Failed to build/sign/submit transaction")
+     ```
+
+  6. 等待确认
+
+     ```kotlin
+     val executedTxn =
+       aptos
+         .waitForTransaction(HexInput.fromString(pendingTxn.hash))
+         .expect("Transaction did not execute successfully")
+
+     println("Executed transaction version: ${executedTxn.version}")
+     ```
+</Steps>
+
+需要更精细的控制（单独构建、签名和提交，付费者流程或模拟）？请参阅[构建交易](/zh/build/sdks/community-sdks/kotlin-sdk/building-transactions)。

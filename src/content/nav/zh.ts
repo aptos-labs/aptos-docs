@@ -30,9 +30,11 @@ export default navDictionary({
   "build.group.sdks.dotnet-sdk.queries": "查询",
   "build.group.sdks.dotnet-sdk.transactions": "交易",
   "build.group.sdks.python-sdk": "Python SDK",
+  "build.group.sdks.python-sdk.building-transactions": "构建交易",
   "build.group.sdks.unity-sdk": "Unity SDK",
   "build.group.sdks.cpp-sdk": "C++ SDK",
   "build.group.sdks.rust-sdk": "Rust SDK",
+  "build.group.sdks.rust-sdk.building-transactions": "构建交易",
   "build.group.sdks.wallet-adapter": "钱包适配器",
   "build.group.sdks.community-sdks": "社区 SDK",
   "build.group.sdks.react-hooks": "React Hooks",
@@ -121,9 +123,10 @@ export default navDictionary({
   "network.group.stakingGovernance": "质押和治理", // Staking & Governance
   "network.group.executionTransactions": "执行和交易", // Execution & Transactions
 
-  // Reference Sub-Groups (Only has generated API and glossary for now)
+  // Reference Sub-Groups
   "reference.group.indexerApi": "Indexer API",
   "reference.group.restApi": "REST API",
+  "reference.group.move": "Move 框架",
 
   // AI Sub-Groups
   "ai.group.aptos-mcp": "Aptos MCP",

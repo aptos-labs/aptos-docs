@@ -1,0 +1,409 @@
+---
+title: "创建对象"
+description: "掌握 Aptos Move 开发中的对象创建模式、所有权模型和生命周期管理。"
+sidebar:
+  label: "创建对象"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+创建对象分为两步：
+
+1. 创建 `ObjectCore` 资源组（它有一个地址，可用于稍后引用对象）。
+2. 使用称为 `Ref` 的权限自定义对象的行为。
+
+<Aside type="note">
+  通过生成 `Ref` 配置对象必须在创建对象的同一笔交易中完成。之后不可能更改这些设置。
+</Aside>
+
+## 创建对象
+
+可创建三种对象：
+
+1. \*\*普通对象。\*\*此类型可删除，并具有随机地址。可使用 `0x1::object::create_object(owner_address: address)` 创建。例如：
+
+```move filename="object_playground.move"
+module my_addr::object_playground {
+  use std::signer;
+  use aptos_framework::object;
+
+  entry fun create_my_object(caller: &signer) {
+    let caller_address = signer::address_of(caller);
+    let constructor_ref = object::create_object(caller_address);
+    // ...
+  }
+}
+```
+
+2. **命名对象。**此类型**不可**删除，且具有确定性地址。可使用 `0x1::object::create_named_object(creator: &signer, seed: vector<u8>)` 创建。例如：
+
+```move filename="object_playground.move"
+module my_addr::object_playground {
+  use std::signer;
+  use aptos_framework::object;
+
+  /// Seed for my named object, must be globally unique to the creating account
+  const NAME: vector<u8> = b"MyAwesomeObject";
+
+  entry fun create_my_object(caller: &signer) {
+    let caller_address = signer::address_of(caller);
+    let constructor_ref = object::create_named_object(caller, NAME);
+    // ...
+  }
+
+  #[view]
+  fun has_object(creator: address): bool {
+    let object_address = object::create_object_address(&creator, NAME);
+    object::object_exists<0x1::object::ObjectCore>(object_address)
+  }
+}
+```
+
+3. **粘性对象。**此类型也**不可**删除，且具有随机地址。可使用 `0x1::object::create_sticky_object(owner_address: address)` 创建。例如：
+
+```move filename="object_playground.move"
+module my_addr::object_playground {
+  use std::signer;
+  use aptos_framework::object;
+
+  entry fun create_my_object(caller: &signer) {
+    let caller_address = signer::address_of(caller);
+    let constructor_ref = object::create_sticky_object(caller_address);
+    // ...
+  }
+}
+```
+
+## 自定义对象功能
+
+创建对象后，会获得 `ConstructorRef`，可用它生成额外的 `Ref`。将来可使用 `Ref` 启用、禁用或执行某些对象功能，例如转移资源、转移对象本身或删除对象。
+
+以下部分将介绍常用 `Ref` 及其启用的功能。
+
+<Aside type="note">
+  注意：`ConstructorRef` 无法存储。它会在创建对象的交易结束时销毁，因此必须在对象创建期间生成任何其他 `Ref`。
+</Aside>
+
+### 添加资源
+
+可使用 `ConstructorRef` 和 `object::generate_signer` 创建签名者，以将资源转移到对象上。这使用与向账户添加资源相同的 `move_to` 函数。
+
+```move filename="Example.move"
+module my_addr::object_playground {
+  use std::signer;
+  use aptos_framework::object;
+
+  #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
+  struct MyStruct has key {
+    num: u8
+  }
+
+  entry fun create_my_object(caller: &signer) {
+    let caller_address = signer::address_of(caller);
+
+    // Creates the object
+    let constructor_ref = object::create_object(caller_address);
+
+    // Retrieves a signer for the object
+    let object_signer = object::generate_signer(&constructor_ref);
+
+    // Moves the MyStruct resource into the object
+    move_to(&object_signer, MyStruct { num: 0 });
+
+    // ...
+  }
+}
+```
+
+### 添加可扩展性（`ExtendRef`）
+
+有时希望以后能够编辑对象。这种情况下，可使用 `object::generate_extend_ref` 生成 `ExtendRef`。该 ref 可用于为对象生成签名者。
+
+可通过智能合约逻辑控制谁有权限使用 `ExtendRef`，如下例所示。
+
+```move filename="Example.move"
+module my_addr::object_playground {
+  use std::signer;
+  use std::string::{Self, String};
+  use aptos_framework::object::{Self, Object};
+
+  /// Caller is not the owner of the object
+  const E_NOT_OWNER: u64 = 1;
+  /// Caller is not the publisher of the contract
+  const E_NOT_PUBLISHER: u64 = 2;
+
+  #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
+  struct MyStruct has key {
+    num: u8
+  }
+
+  #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
+  struct Message has key {
+    message: string::String
+  }
+
+  #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
+  struct ObjectController has key {
+    extend_ref: object::ExtendRef,
+  }
+
+  entry fun create_my_object(caller: &signer) {
+    let caller_address = signer::address_of(caller);
+
+    // Creates the object
+    let constructor_ref = object::create_object(caller_address);
+
+    // Retrieves a signer for the object
+    let object_signer = object::generate_signer(&constructor_ref);
+
+    // Moves the MyStruct resource into the object
+    move_to(&object_signer, MyStruct { num: 0 });
+
+    // Creates an extend ref, and moves it to the object
+    let extend_ref = object::generate_extend_ref(&constructor_ref);
+    move_to(&object_signer, ObjectController { extend_ref });
+    // ...
+  }
+
+  entry fun add_message(
+    caller: &signer,
+    object: Object<MyStruct>,
+    message: String
+  ) acquires ObjectController {
+    let caller_address = signer::address_of(caller);
+    // There are a couple ways to go about permissions
+
+    // Allow only the owner of the object
+    assert!(object::is_owner(object, caller_address), E_NOT_OWNER);
+    // Allow only the publisher of the contract
+    assert!(caller_address == @my_addr, E_NOT_PUBLISHER);
+    // Or any other permission scheme you can think of, the possibilities are endless!
+
+    // Use the extend ref to get a signer
+    let object_address = object::object_address(&object);
+    let extend_ref = &borrow_global<ObjectController>(object_address).extend_ref;
+    let object_signer = object::generate_signer_for_extending(extend_ref);
+
+    // Extend the object to have a message
+    move_to(&object_signer, Message { message });
+  }
+}
+```
+
+### 禁用/切换转移（`TransferRef`）
+
+默认情况下，所有对象均可转移。可通过使用 `object::generate_transfer_ref` 生成的 `TransferRef` 更改此行为。
+
+以下示例展示如何生成并管理用于确定对象是否可转移的权限。
+
+```move filename="Example.move"
+module my_addr::object_playground {
+  use std::signer;
+  use aptos_framework::object::{Self, Object};
+
+  /// Caller is not the publisher of the contract
+  const E_NOT_PUBLISHER: u64 = 1;
+
+  #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
+  struct ObjectController has key {
+    transfer_ref: object::TransferRef,
+  }
+
+  entry fun create_my_object(
+    caller: &signer,
+    transferrable: bool,
+    controllable: bool
+  ) {
+    let caller_address = signer::address_of(caller);
+
+    // Creates the object
+    let constructor_ref = object::create_object(caller_address);
+
+    // Retrieves a signer for the object
+    let object_signer = object::generate_signer(&constructor_ref);
+
+    // Creates a transfer ref for controlling transfers
+    let transfer_ref = object::generate_transfer_ref(&constructor_ref);
+
+    // We now have a choice, we can make it so the object can be transferred
+    // and we can decide if we want to allow it to change later.  By default, it
+    // is transferrable
+    if (!transferrable) {
+      object::disable_ungated_transfer(&transfer_ref);
+    };
+
+    // If we want it to be controllable, we must store the transfer ref for later
+    if (controllable) {
+      move_to(&object_signer, ObjectController { transfer_ref });
+    }
+    // ...
+  }
+
+  /// In this example, we'll only let the publisher of the contract change the
+  /// permissions of transferring
+  entry fun toggle_transfer(
+    caller: &signer,
+    object: Object<ObjectController>
+  ) acquires ObjectController {
+    // Only let the publisher toggle transfers
+    let caller_address = signer::address_of(caller);
+    assert!(caller_address == @my_addr, E_NOT_PUBLISHER);
+
+    // Retrieve the transfer ref
+    let object_address = object::object_address(&object);
+    let transfer_ref = &borrow_global<ObjectController>(
+      object_address
+    ).transfer_ref;
+
+    // Toggle it based on its current state
+    if (object::ungated_transfer_allowed(object)) {
+      object::disable_ungated_transfer(transfer_ref);
+    } else {
+      object::enable_ungated_transfer(transfer_ref);
+    }
+  }
+}
+```
+
+### 一次性转移（`LinearTransferRef`）
+
+此外，若创建者希望控制所有转移，可从 `TransferRef` 创建 `LinearTransferRef`，以提供一次性使用的转移功能。通过让对象创建者向接收者进行一次性转移，可用它创建“灵魂绑定”对象。对象所有者必须使用 `LinearTransferRef`。
+
+```move filename="Example.move"
+module my_addr::object_playground {
+  use std::signer;
+  use aptos_framework::object::{Self, Object};
+
+  /// Caller is not the publisher of the contract
+  const E_NOT_PUBLISHER: u64 = 1;
+
+  #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
+  struct ObjectController has key {
+    transfer_ref: object::TransferRef,
+  }
+
+  entry fun create_my_object(
+    caller: &signer,
+  ) {
+    let caller_address = signer::address_of(caller);
+
+    // Creates the object
+    let constructor_ref = object::create_object(caller_address);
+
+    // Retrieves a signer for the object
+    let object_signer = object::generate_signer(&constructor_ref);
+
+    // Creates a transfer ref for controlling transfers
+    let transfer_ref = object::generate_transfer_ref(&constructor_ref);
+
+    // Disable ungated transfer
+    object::disable_ungated_transfer(&transfer_ref);
+    move_to(&object_signer, ObjectController {
+      transfer_ref,
+    });
+    // ...
+  }
+
+  /// In this example, we'll only let the publisher of the contract change the
+  /// permissions of transferring
+  /// Now only owner can transfer exactly once
+  entry fun transfer(
+    caller: &signer,
+    object: Object<ObjectController>,
+    new_owner: address
+  ) acquires ObjectController {
+    // Only let the publisher toggle transfers
+    let caller_address = signer::address_of(caller);
+    assert!(caller_address == @my_addr, E_NOT_PUBLISHER);
+
+    let object_address = object::object_address(&object);
+
+    // Retrieve the transfer ref
+    let transfer_ref = &borrow_global<ObjectController>(
+      object_address
+    ).transfer_ref;
+
+    // Generate a one time use `LinearTransferRef`
+    let linear_transfer_ref = object::generate_linear_transfer_ref(
+      transfer_ref
+    );
+
+    object::transfer_with_ref(linear_transfer_ref, new_owner);
+  }
+}
+```
+
+## 允许删除对象（`DeleteRef`）
+
+对于以默认方式创建的对象（允许删除），可生成以后使用的 `DeleteRef`。这有助于清除冗余内容并获得存储退款。
+
+不能为不可删除对象创建 `DeleteRef`。
+
+```move filename="Example.move"
+module my_addr::object_playground {
+  use std::signer;
+  use aptos_framework::object::{Self, Object};
+
+  /// Caller is not the owner of the object
+  const E_NOT_OWNER: u64 = 1;
+
+  #[resource_group_member(group = aptos_framework::object::ObjectGroup)]
+  struct ObjectController has key {
+    delete_ref: object::DeleteRef,
+  }
+
+  entry fun create_my_object(
+    caller: &signer,
+    _transferrable: bool,
+    _controllable: bool
+  ) {
+    let caller_address = signer::address_of(caller);
+
+    // Creates the object
+    let constructor_ref = object::create_object(caller_address);
+
+    // Retrieves a signer for the object
+    let object_signer = object::generate_signer(&constructor_ref);
+
+    // Creates and store the delete ref
+    let delete_ref = object::generate_delete_ref(&constructor_ref);
+    move_to(&object_signer, ObjectController {
+      delete_ref
+    });
+    // ...
+  }
+
+  /// Now only let the owner delete the object
+  entry fun delete(
+    caller: &signer,
+    object: Object<ObjectController>,
+  ) acquires ObjectController {
+    // Only let caller delete
+    let caller_address = signer::address_of(caller);
+    assert!(object::is_owner(object, caller_address), E_NOT_OWNER);
+
+    let object_address = object::object_address(&object);
+
+    // Retrieve the delete ref, it is consumed so it must be extracted
+    // from the resource
+    let ObjectController {
+      delete_ref
+    } = move_from<ObjectController>(
+      object_address
+    );
+
+    // Delete the object forever!
+    object::delete(delete_ref);
+  }
+}
+```
+
+## 使对象不可变
+
+可通过使关联合约不可变，并移除扩展或变更对象的所有能力，使对象不可变。默认情况下，合约并非不可变；若合约允许，对象可通过 `ExtendRef` 扩展，资源可被变更。
+
+## 延伸阅读
+
+可在 [Move 参考文档](https://aptos-labs.github.io/framework-book/aptos-framework/object.html)中查看 `0x1::object` 的全部可用 `Ref` 文档。
+
+还可在[此处](/zh/build/smart-contracts/object/using-objects)探索对象构建后的使用方式。

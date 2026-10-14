@@ -15,7 +15,7 @@ import { Aside, Steps } from "@astrojs/starlight/components";
 
 ## 前置条件
 
-加密内存池目前已在 **开发网(devnet)** 上线,**测试网(testnet)** 支持即将推出,**主网(mainnet)** 随后跟进.提交所用网络必须支持该特性;请先检查账本信息:
+加密内存池目前已在 **开发网(devnet)**、**测试网(testnet)** 和 **主网(mainnet)** 上线.提交所用网络必须支持该特性;请先检查账本信息:
 
 ```typescript
 const ledgerInfo = await aptos.getLedgerInfo();
@@ -24,7 +24,7 @@ const supportsEncrypted = Boolean(ledgerInfo.encryption_key);
 
 若节点未暴露 `encryption_key`,以 `encrypted: true` 构建会抛出错误.
 
-`senderAuthenticationKey` 选项为 **可选项**——SDK 会自动从链上获取并按地址缓存约 1 小时.若需跳过该查询(例如刚完成密钥轮换后),可显式传入.接受 `AuthenticationKey` 实例、`AccountPublicKey`(SDK 自动派生认证密钥),或原始 32 字节十六进制字符串.对于从未轮换密钥的账户,账户地址字节与认证密钥字节完全相同,因此可直接传入地址的十六进制字符串.
+`senderAuthenticationKey` 选项为 **可选项**——SDK 会自动从链上获取并按地址缓存约 1 小时.若需跳过该查询(例如刚完成密钥轮换后),可显式传入.接受 `AuthenticationKey` 实例,或原始 32 字节十六进制字符串 / `Uint8Array`——可调用 `publicKey.authKey()` 从公钥派生 `AuthenticationKey`.对于从未轮换密钥的账户,账户地址字节与认证密钥字节完全相同,因此可直接传入地址的十六进制字符串.
 
 ## 构建、签名与提交
 
@@ -58,7 +58,7 @@ const supportsEncrypted = Boolean(ledgerInfo.encryption_key);
 </Steps>
 
 <Aside type="note">
-  加密交易的最低 gas 单价为 **每 gas 单位 200 Octas**(为网络基础最低值的两倍).SDK 在构建时强制该下限:低于该值的价格会被自动调升;若调用方显式设置了更低的值,SDK 会发出警告.
+  加密交易的最低 gas 单价为 **每 gas 单位 200 Octas**(为网络基础最低值的两倍).SDK 在构建时强制该下限:低于该值的价格会被自动调升;若调用方显式设置了更低的值,SDK 会发出警告.每笔加密交易还会在其负载消耗的 gas 之外,额外收取固定的 **375 gas 单位** 解密费用;如果你自行设置 `maxGasAmount`,请把这部分计算在内.参见 [成本](/zh/build/guides/encrypted-pending-transactions#成本).
 </Aside>
 
 ## 模拟加密交易
@@ -68,7 +68,7 @@ const supportsEncrypted = Boolean(ledgerInfo.encryption_key);
 若必须通过模拟来估算 gas,请用相同的 `data` 构建一个 **明文副本** 进行模拟,然后再用 `encrypted: true` 重新构建用于提交:
 
 1. `build.simple({ ..., options: { /* 不要 encrypted */ } })` —— 相同的函数、参数和 gas 提示.
-2. `aptos.transaction.simulate.simple({ ... })` —— 根据结果调整 `maxGasAmount` / `gasUnitPrice`.
+2. `aptos.transaction.simulate.simple({ ... })` —— 根据结果调整 `maxGasAmount` / `gasUnitPrice`.明文副本不会支付解密费用,因此设置 `maxGasAmount` 时,请在模拟得到的 gas 基础上至少再加 **375 gas 单位**.
 3. `build.simple({ ..., options: { encrypted: true, ...来自第 2 步的 gas } })` —— 提交该构建.
 
 ## 多代理
@@ -85,8 +85,8 @@ const transaction = await aptos.transaction.build.multiAgent({
   },
   options: {
     encrypted: true,
-    senderAuthenticationKey: sender.publicKey,           // 可选
-    secondarySignerAuthenticationKeys: [secondary.publicKey], // 可选;项可为 undefined
+    senderAuthenticationKey: sender.publicKey.authKey(),           // 可选
+    secondarySignerAuthenticationKeys: [secondary.publicKey.authKey()], // 可选;项可为 undefined
   },
 });
 ```
@@ -105,8 +105,8 @@ const transaction = await aptos.transaction.build.simple({
   },
   options: {
     encrypted: true,
-    senderAuthenticationKey: sender.publicKey,    // 可选
-    feePayerAuthenticationKey: sponsor.publicKey,  // 可选
+    senderAuthenticationKey: sender.publicKey.authKey(),    // 可选
+    feePayerAuthenticationKey: sponsor.publicKey.authKey(),  // 可选
   },
 });
 ```
@@ -137,7 +137,7 @@ const transaction = await aptos.transaction.build.simple({
 ```typescript
 options: {
   encrypted: true,
-  feePayerAuthenticationKey: sponsor.publicKey,
+  feePayerAuthenticationKey: sponsor.publicKey.authKey(),
   claimedEntryFunction: {
     module: "0x1::aptos_account",
     // 故意省略 functionName

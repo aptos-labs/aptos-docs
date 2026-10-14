@@ -1,0 +1,43 @@
+---
+title: "Rust SDK：二进制规范序列化（BCS）格式"
+description: "了解如何使用 Rust SDK 以二进制规范序列化（BCS）格式编码交易参数"
+sidebar:
+  label: "BCS 格式"
+---
+
+Aptos Rust SDK 的交易参数使用二进制规范序列化（BCS）编码。这是 Aptos 链识别的格式，使用 `u64` 或 `u128` 等具体类型，而不是泛型整数。
+
+`EntryFunction::apt_transfer` 等辅助方法会为你编码参数。手动构建 payload 时，请使用 `aptos_bcs` 序列化每个参数：
+
+```rust filename="example.rs"
+use aptos_sdk::{
+    transaction::{EntryFunction, TransactionPayload},
+    types::MoveModuleId,
+};
+
+let payload = TransactionPayload::EntryFunction(EntryFunction {
+    module: MoveModuleId::from_str_strict("0x1::aptos_account")?,
+    function: "transfer".to_string(),
+    type_args: vec![],
+    args: vec![
+        aptos_bcs::to_bytes(&bob.address())?,
+        aptos_bcs::to_bytes(&1_000u64)?,
+    ],
+});
+let raw_txn = aptos.build_transaction(&alice, payload).await?;
+```
+
+也可以直接序列化和反序列化值：
+
+```rust
+let bytes = aptos_bcs::to_bytes(&value)?;
+let value: MyType = aptos_bcs::from_bytes(&bytes)?;
+```
+
+SDK 中提供 Move 类型标签：
+
+```rust
+use aptos_sdk::types::{MoveStructTag, MoveType, TypeTag};
+```
+
+可通过 [BCS GitHub 仓库](https://github.com/aptos-labs/bcs) 了解更多 BCS 信息。

@@ -1,0 +1,316 @@
+---
+title: "Aptos Indexer SDK 快速入门指南"
+description: "开始使用 Aptos Indexer SDK 构建自定义 Rust 处理器，将区块链事件索引到 PostgreSQL 数据库"
+sidebar:
+  label: "快速入门"
+---
+
+## 本指南的预期成果
+
+本指南将带你设置并运行 Rust 处理器，将 Aptos 区块链上的事件索引到 PostgreSQL。
+我们提供可自定义的模板处理器，用于索引自定义合约中的事件。
+完成本指南后，你应能基本了解处理器的工作方式，并可根据索引需求自定义处理器。
+
+## 开始使用
+
+首先克隆 [aptos-indexer-processor-sdk](https://github.com/aptos-labs/aptos-indexer-processor-sdk) 仓库。
+
+```text
+# HTTPS
+https://github.com/aptos-labs/aptos-indexer-processor-sdk.git
+
+# SSH
+git@github.com:aptos-labs/aptos-indexer-processor-sdk.git
+```
+
+处理器从交易流服务消费交易。要使用 Labs 托管的交易流服务，需要授权令牌。
+按照[本指南](/zh/build/indexer/txn-stream/aptos-hosted-txn-stream#authorization-via-api-key)从 Developer Portal 获取令牌。本教程面向 `Testnet`，请为其创建 API Key。
+完成后，应拥有如下格式的令牌：
+
+```text
+aptoslabs_yj4bocpaKy_Q6RBP4cdBmjA8T51hto1GcVX5ZS9S65dx
+```
+
+还需要以下工具：
+
+- Rust 1.79：[安装指南](https://www.rust-lang.org/tools/install)
+- Cargo：[安装指南](https://doc.rust-lang.org/cargo/getting-started/installation.html#install-rust-and-cargo)
+
+本教程使用 [PostgreSQL](https://www.postgresql.org/) 作为数据库，并使用 [Diesel](https://diesel.rs/guides/getting-started) 作为 ORM。可以自由选用其他方案，但为简化说明，本教程以 PostgreSQL 为目标。我们使用以下数据库配置和工具：
+
+### PostgreSQL 安装（macOS）
+
+1. `brew install libpq`（[Postgres C API 库](https://formulae.brew.sh/formula/libpq)）。安装后还需执行全部 export 命令：
+
+```shellscript
+export PATH="/opt/homebrew/opt/libpq/bin:$PATH"
+export LDFLAGS="-L/opt/homebrew/opt/libpq/lib"
+export CPPFLAGS="-I/opt/homebrew/opt/libpq/include"
+```
+
+2. `brew install postgres`
+3. `pg_ctl -D /opt/homebrew/var/postgres start` 或 `brew services start postgresql`
+4. `/opt/homebrew/bin/createuser -s postgres`
+5. 确保可执行：`psql postgres`
+6. `cargo install diesel_cli --no-default-features --features postgres`
+7. 确保位于 DB 文件夹（在基础目录运行 `cd src/db/postgres`），再运行 `diesel migration run --database-url postgresql://localhost/postgres`
+   a. 若该数据库已在使用，请尝试其他数据库，例如：`DATABASE_URL=postgres://postgres@localhost:5432/indexer_v2 diesel database reset`
+
+- 我们使用托管在 `localhost`、端口为 `5432` 的数据库，这通常是默认配置。
+- 创建用户名时，请记录用户名和密码。
+- 如需方便地查看数据库数据，可使用 [DBeaver](https://dbeaver.io/)（_推荐_）、[pgAdmin](https://www.pgadmin.org/) 或 [Postico](https://eggerapps.at/postico2/) 等 GUI。
+
+## 设置环境
+
+请确保启动 `postgresql` 服务：
+
+Linux/WSL 的命令可能类似：
+
+```shellscript
+sudo service postgresql start
+```
+
+在 macOS 上，若使用 brew，请通过以下命令启动：
+
+```shellscript
+brew services start postgresql
+```
+
+## **配置处理器**
+
+现在开始配置实际将使用的 Indexer 处理器。
+
+### **设置 config.yaml 文件**
+
+示例文件夹中包含一个示例 config.yaml 文件，内容应类似：
+
+```yaml
+# This is a template yaml for the processor
+health_check_port: 8085
+server_config:
+  transaction_stream_config:
+    indexer_grpc_data_service_address: "https://grpc.mainnet.aptoslabs.com:443"
+    auth_token: "AUTH_TOKEN"
+    request_name_header: "events-processor"
+    starting_version: 0
+  postgres_config:
+    connection_string: postgresql://postgres:@localhost:5432/example
+```
+
+打开 `config.yaml` 文件并更新以下字段：
+
+- `auth_token`：从 Developer Portal 获取的授权令牌
+- `postgres_connection_string`：PostgreSQL 数据库的连接字符串
+
+### 使用 config.yaml 进行更多自定义
+
+可使用 `config.yaml` 文件自定义更多配置。
+
+要从特定账本版本开始，可在 `config.yaml` 文件中指定版本：
+
+```yaml
+starting_version: <Starting Version>
+```
+
+要在特定账本版本停止处理，可指定结束版本：
+
+```yaml
+request_ending_version: <Ending Version>
+```
+
+若要使用其他网络，请将 `indexer_grpc_data_service_address` 字段更改为相应的值：
+
+```yaml
+# Devnet
+indexer_grpc_data_service_address: grpc.devnet.aptoslabs.com:443
+
+# Testnet
+indexer_grpc_data_service_address: grpc.testnet.aptoslabs.com:443
+
+# Mainnet
+indexer_grpc_data_service_address: grpc.mainnet.aptoslabs.com:443
+```
+
+本教程使用 `testnet`，因此请将 `indexer_grpc_data_service_address` 更新为 `grpc.testnet.aptoslabs.com:443`。
+
+## 创建事件处理器
+
+从高层来看，每个处理器负责接收交易流、解析和转换相关数据，并将数据存储到数据库。
+
+### 定义数据库模式
+
+在 `src/db/migrations` 中可看到 events migration，它定义用于存储事件的数据库模式。
+
+```sql up.sql
+CREATE TABLE events (
+    sequence_number BIGINT NOT NULL,
+    creation_number BIGINT NOT NULL,
+    account_address VARCHAR(66) NOT NULL,
+    transaction_version BIGINT NOT NULL,
+    transaction_block_height BIGINT NOT NULL,
+    type TEXT NOT NULL,
+    data JSONB NOT NULL,
+    inserted_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    event_index BIGINT NOT NULL,
+    indexed_type VARCHAR(300) NOT NULL,
+    PRIMARY KEY (transaction_version, event_index)
+);
+```
+
+应用 migration 后，diesel 会重新生成 `schema.rs` 文件，内容如下：
+
+```rust schema.rs
+diesel::table! {
+    events (transaction_version, event_index) {
+        sequence_number -> Int8,
+        creation_number -> Int8,
+        #[max_length = 66]
+        account_address -> Varchar,
+        transaction_version -> Int8,
+        transaction_block_height -> Int8,
+        #[sql_name = "type"]
+        type_ -> Text,
+        data -> Jsonb,
+        inserted_at -> Timestamp,
+        event_index -> Int8,
+        #[max_length = 300]
+        indexed_type -> Varchar,
+    }
+}
+```
+
+在 `schema.rs` 中，还会看到另外两个重要表：
+
+- `ledger_infos`：跟踪正在建立索引的账本的链 ID
+- `processor_status`：跟踪处理器的 `last_success_version`
+
+### 定义处理逻辑
+
+文件 `src/main.rs` 包含定义事件处理器的代码。核心组件包括：
+
+1. `insert_events_query` 定义将事件插入数据库的 diesel 查询。
+
+```rust
+   fn insert_events_query(
+       items_to_insert: Vec<EventModel>,
+   ) -> impl QueryFragment<Pg> + diesel::query_builder::QueryId + Send {
+       use crate::schema::events::dsl::*;
+       diesel::insert_into(crate::schema::events::table)
+           .values(items_to_insert)
+           .on_conflict((transaction_version, event_index))
+           .do_nothing()
+   }
+```
+
+2. `process` 是封装常规处理器的辅助函数。
+   在后台，此强大函数负责连接交易流、使用你定义的转换函数处理交易、应用数据库 migration，并跟踪处理器状态。
+
+```rust
+   process(
+           "events_processor".to_string(), // name of the processor that will be used to track the processor status
+           MIGRATIONS, // migrations to be applied to the database
+           async |transactions, conn_pool| {
+             // transform from transaction to events and insert the events into the database
+           },
+   ).await?;
+```
+
+## 运行处理器
+
+使用前面创建的 `config.yaml`，即可运行事件处理器：
+
+```shellscript
+cd examples/postgres-basic-events-example
+cargo run --release -- -c config.yaml
+```
+
+应该会看到处理器开始索引 Aptos 区块链事件！
+
+```text
+{"timestamp":"2024-08-15T01:06:35.169217Z","level":"INFO","message":"[Transaction Stream] Received transactions from GRPC.","stream_address":"https://grpc.testnet.aptoslabs.com/","connection_id":"5575cb8c-61fb-498f-aaae-868d1e8773ac","start_version":0,"end_version":4999,"start_txn_timestamp_iso":"1970-01-01T00:00:00.000000000Z","end_txn_timestamp_iso":"2022-09-09T01:49:02.023089000Z","num_of_transactions":5000,"size_in_bytes":5708539,"duration_in_secs":0.310734,"tps":16078,"bytes_per_sec":18371143.80788713,"filename":"/Users/reneetso/.cargo/git/checkouts/aptos-indexer-processor-sdk-2f3940a333c8389d/e1e1bdd/rust/transaction-stream/src/transaction_stream.rs","line_number":400,"threadName":"tokio-runtime-worker","threadId":"ThreadId(6)"}
+{"timestamp":"2024-08-15T01:06:35.257756Z","level":"INFO","message":"Events version [0, 4999] stored successfully","filename":"src/processors/events/events_storer.rs","line_number":75,"threadName":"tokio-runtime-worker","threadId":"ThreadId(10)"}
+{"timestamp":"2024-08-15T01:06:35.257801Z","level":"INFO","message":"Finished processing events from versions [0, 4999]","filename":"src/processors/events/events_processor.rs","line_number":90,"threadName":"tokio-runtime-worker","threadId":"ThreadId(17)"}
+```
+
+## 自定义处理器
+
+大多数情况下，需要索引自己合约中的事件。示例处理器是创建自定义处理器的良好起点。
+
+若要自定义处理器以索引自定义合约中的事件，可进行以下变更：
+
+1. 将数据库模式改为更符合 dapp 或 API 的格式。
+   a. 使用 diesel 创建新的 migration：
+
+```shellscript
+  diesel migration generate {migration_name}
+```
+
+b. 将 migration 变更添加到 `up.sql` 和 `down.sql`，再应用 migration：
+
+```shellscript
+  diesel migration run --database-url={YOUR_DATABASE_URL}
+```
+
+c. `schema.rs` 文件会自动更新。然后可创建使用新模式的 diesel 查询。
+2\. 更新 `process()` 中的转换逻辑。可按特定事件类型筛选，并从自定义合约中提取特定事件数据。
+
+## 从旧版处理器迁移
+
+若要从旧版处理器迁移，仍可按照上述相同步骤，使用 Indexer SDK 创建新处理器。
+
+还需遵循以下步骤：
+
+1. 将 migration 文件复制到 `src/db/`。
+2. 在旧版处理器中，处理逻辑定义在 `process_transactions` 方法内。
+
+```rust
+// Example with the legacy processors
+#[async_trait]
+impl ProcessorTrait for EventsProcessor {
+    async fn process_transactions(
+        ...
+    ) -> anyhow::Result<ProcessingResult> {
+        // Extract events from transactions
+        let events: Vec<EventModel> = process_events(transactions);
+
+        // Store the events in the database
+        let tx_result = insert_to_db(
+            self.get_pool(),
+            self.name(),
+            start_version,
+            end_version,
+            &events,
+            &self.per_table_chunk_sizes,
+        )
+        .await;
+
+        return tx_result;
+    }
+}
+```
+
+将 `process_transactions` 方法中的逻辑复制到 SDK 的 `process` 转换函数中，即可迁移到 SDK：
+
+```rust
+// Example with SDK processor
+    process(
+        "events_processor".to_string(),
+        MIGRATIONS,
+        async |transactions, conn_pool| {
+          // Extract events from transactions
+          let events: Vec<EventModel> = process_events(transactions);
+
+          // Store events in the database
+          let execute_res = execute_in_chunks(
+              conn_pool.clone(),
+              insert_events_query,
+              &events,
+              MAX_DIESEL_PARAM_SIZE / EventModel::field_count(),
+          )
+          .await;
+        },
+    )
+    .await?;
+```
+
+3. 将 `config.yaml` 文件更新为新格式。将 `starting_version` 更新为 `processor_status` 表中最后保存的版本。

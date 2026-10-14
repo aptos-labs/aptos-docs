@@ -1,0 +1,149 @@
+---
+title: "基础交易"
+description: "了解如何使用 .NET SDK 构建并向 Aptos 区块链提交基础交易类型"
+sidebar:
+  label: "基础交易"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+<Aside type="caution" emoji="❗">
+  此 SDK 目前处于 Beta 阶段。请在
+  [aptos-labs/aptos-dotnet-sdk](https://github.com/aptos-labs/aptos-dotnet-sdk)
+  仓库中创建 issue，报告遇到的任何问题。
+</Aside>
+
+本节介绍可构建并提交到 Aptos 区块链的基础交易类型。
+
+<Steps>
+  1. 配置 AptosClient
+
+     通过添加 `Aptos` 命名空间并实例化 `AptosClient` 来配置 Aptos 客户端。你可以使用 `Networks` 提供的预定义配置，也可以自行配置。
+
+     ```csharp filename="Program.cs"  {1-1, 7-8}
+     using Aptos;
+
+     class Program
+     {
+         static void Main(string[] args)
+         {
+             var config = new AptosConfig(Aptos.Networks.Mainnet);
+             var client = new AptosClient(config);
+         }
+     }
+     ```
+
+  2. 配置账户
+
+     创建交易需要一个账户来签名。可使用私钥、助记词，或两者的组合。在本例中，我们将生成一个随机的新账户。
+
+     ```csharp filename="Program.cs" {10-12}
+     using Aptos;
+
+     class Program
+     {
+         static void Main(string[] args)
+         {
+             var config = new AptosConfig(Aptos.Networks.Devnet);
+             var client = new AptosClient(config);
+
+             // 1. Create an account and fund it.
+             var account = Account.Generate();
+             await client.Faucet.FundAccount(account.Address, 100_000_000);
+         }
+     }
+     ```
+
+  3. 构建交易
+
+     要与区块链交互，需要构建交易。`AptosClient` 可用于构建可签名并提交到链上的交易载荷。在交易中，可以指定发送者、入口函数和参数。
+
+     ```csharp filename="Program.cs" {12-20}
+     using Aptos;
+
+     class Program
+     {
+         static void Main(string[] args)
+         {
+             var config = new AptosConfig(Aptos.Networks.Devnet);
+             var client = new AptosClient(config);
+
+             var account = Account.Generate();
+
+             // 2. Build the transaction
+             var transaction = await client.Transaction.Build(
+                 sender: account,
+                 data: new GenerateEntryFunctionPayloadData(
+                     function: "0x1::aptos_account::transfer_coins",
+                     typeArguments: ["0x1::aptos_coin::AptosCoin"],
+                     functionArguments: [account.Address, "100000"]
+                 )
+             );
+         }
+     }
+     ```
+
+  4. 签名并提交交易
+
+     交易构建完成后，即可签名并提交到区块链。`AptosClient` 可用于签名和提交交易。
+
+     ```csharp filename="Program.cs" {21-22}
+     using Aptos;
+
+     class Program
+     {
+         static void Main(string[] args)
+         {
+             var config = new AptosConfig(Aptos.Networks.Devnet);
+             var client = new AptosClient(config);
+
+             var account = Account.Generate();
+
+             var transaction = await client.Transaction.Build(
+                 sender: account,
+                 data: new GenerateEntryFunctionPayloadData(
+                     function: "0x1::aptos_account::transfer_coins",
+                     typeArguments: ["0x1::aptos_coin::AptosCoin"],
+                     functionArguments: [account.Address, "100000"]
+                 )
+             );
+
+             // 3. Sign the transaction
+             var submittedTransaction = await client.Transaction.SignAndSubmitTransaction(signer, transaction);
+         }
+     }
+     ```
+
+  5. （可选）等待交易执行
+
+     交易提交后，需要先完成处理，才能提交到区块链。`AptosClient` 可用于等待交易被处理和执行。
+
+     ```csharp filename="Program.cs" {23-24}
+     using Aptos;
+
+     class Program
+     {
+         static void Main(string[] args)
+         {
+             var config = new AptosConfig(Aptos.Networks.Devnet);
+             var client = new AptosClient(config);
+
+             var account = Account.Generate();
+
+             var transaction = await client.Transaction.Build(
+                 sender: account,
+                 data: new GenerateEntryFunctionPayloadData(
+                     function: "0x1::aptos_account::transfer_coins",
+                     typeArguments: ["0x1::aptos_coin::AptosCoin"],
+                     functionArguments: [account.Address, "100000"]
+                 )
+             );
+
+             var submittedTransaction = await client.Transaction.SignAndSubmitTransaction(account, transaction);
+
+             // 4. Wait for the transaction to be processed
+             var transactionResult = await client.Transaction.WaitForTransaction(submittedTransaction.Hash);
+         }
+     }
+     ```
+</Steps>

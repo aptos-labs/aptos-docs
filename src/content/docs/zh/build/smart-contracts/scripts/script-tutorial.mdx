@@ -1,0 +1,156 @@
+---
+title: "Move 脚本教程"
+description: "通过实用示例和最佳实践，逐步学习创建和部署 Move 脚本。"
+sidebar:
+  label: "脚本教程"
+---
+
+import { FileTree } from '@astrojs/starlight/components';
+
+本教程说明如何编写和执行 [Move 脚本](https://aptos-labs.github.io/move-book/modules-and-packages.html)。你可以使用 Move 脚本，通过已发布 Move 模块的接口执行一系列命令。
+
+有关脚本的更多信息，请参阅 [Move 脚本文档](/zh/build/smart-contracts/scripts)。
+
+## 示例用例
+
+以下示例会调用 [aptos\_coin.move](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/aptos_coin.move) 模块中的函数，确认目标账户余额低于 `desired_balance`；若是，则将其补足到 `desired_balance`。
+
+```move
+script {
+    use std::signer;
+    use aptos_framework::aptos_account;
+    use aptos_framework::aptos_coin;
+    use aptos_framework::coin;
+
+    fun main(src: &signer, dest: address, desired_balance: u64) {
+        let src_addr = signer::address_of(src);
+
+        addr::my_module::do_nothing();
+
+        let balance = coin::balance<aptos_coin::AptosCoin>(src_addr);
+        if (balance < desired_balance) {
+            aptos_account::transfer(src, dest, desired_balance - balance);
+        };
+    }
+}
+```
+
+## 执行
+
+现在你已确定要完成的操作，接下来需要确定：
+
+- 应将这些文件放在哪里？
+- 文件应如何命名？
+- 是否需要 `Move.toml`？
+- 如何使用 CLI 运行脚本？
+
+下面通过 [Aptos CLI](/zh/build/cli/working-with-move-contracts) 中的分步示例，演示如何执行 Move 脚本。
+
+1. 新建一个工作目录：
+
+   ```shellscript filename="Terminal"
+   mkdir testing
+   cd testing
+   ```
+
+2. 配置 Aptos CLI 并[创建账户](/zh/build/cli/setup-cli)：
+
+   ```shellscript filename="Terminal"
+   aptos init --network devnet
+   ```
+
+   你可以复用现有私钥（形如 `0xbd944102bf5b5dfafa7fe865d8fa719da6a1f0eafa3cd600f93385482d2c37a4`），也可以在配置账户时让它为你生成新密钥。假设你的账户配置如下：
+
+   ```shellscript filename="Terminal"
+   ---
+   profiles:
+     default:
+       private_key: "0xbd944102bf5b5dfafa7fe865d8fa719da6a1f0eafa3cd600f93385482d2c37a4"
+       public_key: "0x47673ec83bb254cc9a8bfdb31846daacd0c96fe41f81855462f5fc5306312b1b"
+       account: cb265645385819f3dbe71aac266e319e7f77aed252cacf2930b68102828bf615
+       rest_url: "https://api.devnet.aptoslabs.com"
+       faucet_url: "https://faucet.devnet.aptoslabs.com"
+   ```
+
+3. 在同一目录中初始化新的 Move 项目：
+
+   ```shellscript filename="Terminal"
+   aptos move init --name run_script
+   ```
+
+4. 在 `testing/` 目录的 `sources/` 子目录下，创建包含上述示例脚本的 `my_script.move` 文件。还需创建如下示例中的 `my_module.move` 文件：
+
+   ```move
+   module addr::my_module {
+       public entry fun do_nothing() { }
+   }
+   ```
+
+   最终文件结构如下：
+
+<FileTree>
+  - testing/
+    - Move.toml
+    - sources/
+      - my\_script.move
+      - my\_module.move
+</FileTree>
+
+5. 编译脚本：
+
+   ```shellscript filename="Terminal"
+   $ aptos move compile --named-addresses addr=cb265645385819f3dbe71aac266e319e7f77aed252cacf2930b68102828bf615
+   Compiling, may take a little while to download git dependencies...
+   INCLUDING DEPENDENCY AptosFramework
+   INCLUDING DEPENDENCY AptosStdlib
+   INCLUDING DEPENDENCY MoveStdlib
+   BUILDING run_script
+   {
+     "Result": [
+       "cb265645385819f3dbe71aac266e319e7f77aed252cacf2930b68102828bf615::my_module"
+     ]
+   }
+   ```
+
+   请注意这里使用了 `--named-addresses` 参数。由于代码中引用了名为 `addr` 的命名地址，因此必须使用该参数。编译器需要知道它所指的内容。除使用此 CLI 参数外，也可以在 `Move.toml` 中加入如下内容：
+
+   ```toml
+   [addresses]
+   addr = "cb265645385819f3dbe71aac266e319e7f77aed252cacf2930b68102828bf615"
+   ```
+
+6. 运行编译后的脚本：
+   ```shellscript filename="Terminal"
+   $ aptos move run-script --compiled-script-path build/run_script/bytecode_scripts/main.mv --args address:b078d693856a65401d492f99ca0d6a29a0c5c0e371bc2521570a86e40d95f823 --args u64:5
+   Do you want to submit a transaction for a range of [17000 - 25500] Octas at a gas unit price of 100 Octas? [yes/no] >
+   yes
+   {
+     "Result": {
+       "transaction_hash": "0xa6ca6275c73f82638b88a830015ab81734a533aebd36cc4647b48ff342434cdf",
+       "gas_used": 3,
+       "gas_unit_price": 100,
+       "sender": "cb265645385819f3dbe71aac266e319e7f77aed252cacf2930b68102828bf615",
+       "sequence_number": 4,
+       "success": true,
+       "timestamp_us": 1683030933803632,
+       "version": 3347495,
+       "vm_status": "Executed successfully"
+     }
+   }
+   ```
+
+请注意，编译脚本的路径位于 `build/run_script/`，而非 `build/my_script/`。这是因为该路径使用 `Move.toml` 中的项目名称；该名称是在运行 `aptos move init --name run_script` 时设置的 `run_script`。
+
+参阅本文档使用的[代码](https://github.com/banool/move-examples/tree/main/run_script)。完整示例还说明了如何使用依赖用户创建 Move 模块的 Move 脚本。
+
+另请参阅 Aptos Developer Discussions 中关于如何通过 [Rust SDK](https://github.com/aptos-labs/aptos-developer-discussions/discussions/24)（而不是 Aptos CLI）完成此操作的说明。
+
+## 高级用法
+
+可以采用更精简的方式执行脚本：不必分别运行 `aptos move compile` 和 `aptos move run-script --compiled-script-path`，而是直接执行：
+
+```shellscript filename="Terminal"
+$ aptos move run-script --script-path sources/my_script.move --args address:b078d693856a65401d492f99ca0d6a29a0c5c0e371bc2521570a86e40d95f823 --args u64:5
+```
+
+该命令会通过单条 CLI 命令完成两个步骤，但存在[问题](https://github.com/aptos-labs/aptos-core/issues/5733)。因此，目前建议使用前述两步方式。

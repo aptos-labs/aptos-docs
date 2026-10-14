@@ -22,9 +22,13 @@ The site advertises a full set of agent-discovery endpoints. Treat these as a si
 | MCP Server Card                      | `public/.well-known/mcp/server-card.json`              | [SEP-2127](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2127) |
 | Agent Skills index                   | `public/.well-known/agent-skills/index.json`           | [Agent Skills Discovery RFC v0.2.0](https://github.com/cloudflare/agent-skills-discovery-rfc) |
 | Agent Skills regeneration            | `scripts/generate-agent-skills-index.mjs`              | Pins `sha256:` digests from `aptos-labs/aptos-agent-skills@main`                 |
-| Content Signals                      | `public/robots.txt` → `Content-Signal:` line           | [contentsignals.org](https://contentsignals.org/)                                |
-| OAuth Protected Resource Metadata    | `public/.well-known/oauth-protected-resource` (only the [Aptos Testnet Faucet](https://aptos.dev/network/faucet) is OAuth-protected) | [RFC 9728](https://www.rfc-editor.org/rfc/rfc9728)                               |
+| ARD / AI Catalog                     | `public/.well-known/ai-catalog.json`                   | [ARD](https://agenticresourcediscovery.org/), [AI Catalog](https://github.com/Agent-Card/ai-catalog) |
+| Sitemap `/sitemap.xml`               | `@astrojs/sitemap` + `src/integrations/sitemap-xml-alias.ts` (+ `vercel.json` rewrite to `/sitemap-0.xml`) | [Sitemaps protocol](https://www.sitemaps.org/protocol.html) |
+| Content Signals                      | `public/robots.txt` → `Content-Signal:` / `Agentmap:`  | [contentsignals.org](https://contentsignals.org/)                                |
+| Auth.md                               | `public/auth.md`                                       | [auth.md](https://workos.com/auth-md)                                            |
+| OAuth Protected Resource Metadata    | `public/.well-known/oauth-protected-resource` (`resource` must be `https://aptos.dev`; listed authorization servers mint tokens for the [Aptos Testnet Faucet](https://aptos.dev/network/faucet)) | [RFC 9728](https://www.rfc-editor.org/rfc/rfc9728)                               |
 | OIDC / OAuth 2.0 discovery           | `public/.well-known/openid-configuration`, `public/.well-known/oauth-authorization-server` | [OpenID Connect Discovery 1.0](https://openid.net/specs/openid-connect-discovery-1_0.html), [RFC 8414](https://www.rfc-editor.org/rfc/rfc8414) |
+| DNS-AID                              | Google Cloud DNS zone for `aptos.dev` (not in this repo). Record shape is documented in `build/ai.mdx` | [draft-mozleywilliams-dnsop-dnsaid](https://datatracker.ietf.org/doc/draft-mozleywilliams-dnsop-dnsaid/), [RFC 9460](https://www.rfc-editor.org/rfc/rfc9460) |
 | Markdown content negotiation         | `src/middlewares/markdown-negotiation.ts` + `src/vercel-middleware.ts` | Rewrites `Accept: text/markdown` requests to the `.md` export.      |
 | Middleware matcher + bundle          | `scripts/generate-middleware-matcher.js`, `scripts/generate-middleware.js`, committed `middleware.js` | Matcher covers the locales + route prefixes middleware should run on. `generate-middleware.js` also copies the bundled middleware to the repo root so `scripts/generate-middleware-function.js` ships it — never hand-edit `middleware.js`. |
 | MCP card regeneration                | Hand-maintained `public/.well-known/mcp/server-card.json` pinned to a real `@aptos-labs/aptos-mcp` version | Bump the `version` field and both `packages[0].version` + `packages[0].transport.args` whenever the npm package is released; never use `latest`. |
@@ -33,12 +37,12 @@ The site advertises a full set of agent-discovery endpoints. Treat these as a si
 
 Keep-fresh checklist when editing any of the above:
 
-1. **Update the endpoint or config.** Changes to the Link header, MCP card, api-catalog, or Agent Skills index must go hand in hand — adding a new well-known endpoint means adding it to `vercel.json` (header + Content-Type) _and_ the Head override _and_ the `build/ai.mdx` tables (English + Chinese).
+1. **Update the endpoint or config.** Changes to the Link header, MCP card, api-catalog, Agent Skills index, ARD catalog, or `/sitemap.xml` alias must go hand in hand — adding a new well-known endpoint means adding it to `vercel.json` (header + Content-Type) _and_ the Head override _and_ the `build/ai.mdx` tables (English + Chinese).
 2. **Regenerate skill digests.** After bumping a skill in `aptos-labs/aptos-agent-skills`, run `node scripts/generate-agent-skills-index.mjs` so `sha256:` digests match upstream. Don't hand-edit the JSON.
 3. **Rebuild the middleware bundle.** After any change to `src/vercel-middleware.ts`, the middleware order, the matcher, or any file under `src/middlewares/*`, run `pnpm build:middleware`. It regenerates both `.vercel/output/middleware/middleware.js` and the repo-root `middleware.js` (Prettier-formatted) that Vercel ships, so the committed bundle stays in sync with the TypeScript source.
-4. **Run the guardrail tests.** `pnpm test tests/agent-discovery.test.ts tests/markdown-negotiation.test.ts` asserts the Link header, well-known payload shapes, Content Signals, Content-Type routing, and the markdown-negotiation routing decisions still line up. Both suites run as part of the default `pnpm test`.
+4. **Run the guardrail tests.** `pnpm test tests/agent-discovery.test.ts tests/markdown-negotiation.test.ts tests/sitemap-xml-alias.test.ts` asserts the Link header, well-known payload shapes, Content Signals, `/sitemap.xml` alias wiring, Content-Type routing, and the markdown-negotiation routing decisions still line up. These suites run as part of the default `pnpm test`.
 5. **Update translations.** Anything added to `src/content/docs/build/ai.mdx` must appear in `src/content/docs/zh/build/ai.mdx` (Spanish is out of scope).
-6. **Verify in production.** Once deployed, re-scan with `curl -sI https://aptos.dev/ | rg '^link:'` and an "Is It Agent Ready?" scan. If a signal regressed, note the fix in the PR description.
+6. **Verify in production.** Once deployed, re-scan with `curl -sI https://aptos.dev/ | rg '^link:'` and an "Is It Agent Ready?" scan. If a signal regressed, note the fix in the PR description. DNS-AID (`_index._agents.aptos.dev`) is published in Google Cloud DNS, not this repo — the HTTPS record already exists; a scanner fail there means the zone still needs a parent `DS` so DNSSEC validates (`AD=1`). The ARD catalog TXT (`_catalog._agents.aptos.dev`) is also DNS-only.
 
 WebMCP specifics:
 
@@ -261,7 +265,7 @@ This is a single-service Astro/Starlight documentation site. No databases, Docke
 
 - `pnpm dev` starts the Astro dev server at `http://localhost:4321`.
 - The `predev` script automatically builds middleware matcher and starts middleware watcher in the background.
-- Search (Algolia DocSearch) is disabled in dev mode; this is expected.
+- Search is disabled in dev mode; this is expected. Which provider a build ships (Algolia DocSearch or Starlight's Pagefind fallback) is decided in `src/config/search.ts`; run `pnpm check:search` to see the current decision.
 
 ### Linting and testing
 

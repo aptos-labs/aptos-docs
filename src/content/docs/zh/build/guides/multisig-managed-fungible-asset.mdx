@@ -1,0 +1,90 @@
+---
+title: "使用多签管理同质化资产"
+description: "将多签账户与同质化资产标准结合，以提升同质化资产的受保护管理安全性。"
+sidebar:
+  label: "多签同质化资产"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+本教程介绍一个实用场景：将 Aptos 框架多签账户与同质化资产标准相结合，提升同质化资产管理的安全边际。继续之前，请确保已了解模块发布和 Aptos 框架多签账户；如未了解，强烈建议先完成以下教程：
+
+- [第一个 Move 模块](/zh/build/guides/first-move-module)
+
+## 第 1 步：选择 SDK
+
+本教程基于 [TypeScript SDK](/zh/build/sdks/ts-sdk) 编写。
+
+欢迎其他开发者添加对 [Python SDK](/zh/build/sdks/python-sdk)、[Rust SDK](/zh/build/sdks/rust-sdk) 和 [Go SDK](/zh/build/sdks/go-sdk) 的支持！
+
+## 第 2 步：发布模块
+
+要创建一个由 Aptos 框架多签账户控制、支持所有管理操作（铸造、转移、销毁、冻结/解冻）的同质化资产，前提是拥有一个基于同质化资产标准设计完善的智能合约。Aptos 团队在 `aptos-core` 仓库中提供了示例代码。
+
+克隆 `aptos-core` 仓库：
+
+```shellscript filename="Terminal"
+git clone git@github.com:aptos-labs/aptos-core.git ~/aptos-core
+```
+
+进入 `managed_fungible_asset` 目录，然后使用 CLI 将该包发布到 `default` 账户：
+
+```shellscript filename="Terminal"
+cd ~/aptos-core/aptos-move/move-examples/fungible_asset/managed_fungible_asset
+aptos move publish --named-addresses example_addr=default
+```
+
+进入 `multisig_managed_coin` 目录，并同样使用 CLI 将该包发布到 `default` 账户：
+
+```shellscript filename="Terminal"
+cd ~/aptos-core/aptos-move/move-examples/fungible_asset/multisig_managed_coin
+aptos move publish --named-addresses example_addr=default
+```
+
+在本教程中，`multisig_managed_coin` 需要调用同一地址上 `managed_fungible_asset` 定义的函数。因此必须发布两个模块。
+
+<Aside type="note">
+  发布模块前，不要忘记使用水龙头为账户注资。
+</Aside>
+
+## 第 3 步：理解链上流程
+
+原先位于 `aptos-core/ecosystem/typescript/sdk` 的 TypeScript 示例已随 SDK 迁出而移除。请使用刚刚发布的 Move 包，再用当前 SDK 的多签 API 驱动同一流程。
+
+- Move：[`managed_fungible_asset`](https://github.com/aptos-labs/aptos-core/tree/main/aptos-move/move-examples/fungible_asset/managed_fungible_asset) 和 [`multisig_managed_coin`](https://github.com/aptos-labs/aptos-core/tree/main/aptos-move/move-examples/fungible_asset/multisig_managed_coin)
+- TypeScript SDK 多签（创建、提案、批准、执行）：[`examples/typescript-esm/multisig_v2.ts`](https://github.com/aptos-labs/aptos-ts-sdk/blob/main/examples/typescript-esm/multisig_v2.ts)
+- 入门教程：[您的第一个多签](/zh/build/guides/first-multisig)
+
+<Aside type="note">
+  如果使用带水龙头的 localnet，提交交易前请设置 `APTOS_NODE_URL` 和 `APTOS_FAUCET_URL`（例如 `http://127.0.0.1:8080` 和 `http://127.0.0.1:8081`）。
+</Aside>
+
+预期流程如下：
+
+### 生成单签账户
+
+生成三个账户 owner1、owner2 和 owner3，它们将共同拥有一个 Aptos 框架多签账户。
+
+### 创建管理同质化资产的框架多签
+
+让 owner1 调用 `multisig_managed_coin.move` 中的 `initialize()`。该函数会创建由 owner1 拥有的框架多签，加入 owner2 和 owner3，按参数列表创建设置好的同质化资产（“meme coin”），并让多签成为资产管理员。每项提案至少需要两个批准。
+
+### 铸造
+
+向 owner2 铸造 1000、向 owner3 铸造 2000。owner2 提交提案，owner3 批准后执行。
+
+### 冻结
+
+冻结 owner1 的主存储。owner2 提交，owner3 批准。解冻是同一个调用，最后一个参数设为 `false`。
+
+### 强制转移
+
+owner1 被冻结时，普通转账无法从该账户取出或向该账户存入。多签作为管理员仍可强制将 1000 从 owner3 转到 owner1。owner2 提案，owner1 批准。
+
+### 销毁
+
+从每位所有者销毁 1000。owner2 提案，owner1 批准。
+
+## 总结
+
+本教程展示了使用 Aptos 框架多签账户管理同质化资产的端到端流程。你可以发布自己的模块，并用当前 SDK 构建适合自身需求的管理方案。

@@ -1,0 +1,343 @@
+---
+title: "跨链账户"
+description: "使用可派生账户抽象在 Aptos 上启用跨链钱包集成，实现无缝的多链用户体验"
+sidebar:
+  label: "跨链账户"
+---
+
+import { Aside, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
+
+得益于 [AIP-113 可派生账户抽象](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-113.md)，可在 Aptos 网络上灵活、安全地管理跨链签名。任何在 Aptos 链上实现认证函数的钱包均可向 Aptos 网络提交交易。这为 dApp 带来多种用例，并改善用户体验和入门流程。
+
+### 高层流程
+
+用户进入支持跨链账户的 dApp 时，体验与普通 Aptos 钱包相同。用户连接跨链账户（例如 Solana 的 Phantom），可查看可派生抽象账户（DAA）详细信息、签名消息并向 Aptos 链提交交易。
+
+dApp 使用跨链账户提交交易时，钱包适配器会使用跨链账户标准定义的 `signIn` 函数进行域验证和安全保护。若钱包不支持 `signIn`，适配器会回退使用默认 `signMessage`。钱包批准签名后，交易提交到 Aptos 链并进行签名验证。
+
+### DAA 在跨链账户中如何运作？
+
+跨链账户适配器会计算用户的 DAA 地址，并将跨链账户转换为遵循 Aptos 钱包标准的接口，使开发者和最终用户均可无缝交互。
+
+DAA 地址使用钱包适配器中定义的 `authenticationFunction` 和 `accountIdentity` 计算：
+
+- `authenticationFunction`：链上用于验证跨链账户签名的函数。
+- `accountIdentity`：链上认证函数用于验证签名的账户身份。它基于原跨链账户公钥和 dApp 域名（如 mydomain.com），格式为：`${originWalletAddress}${domain}`。
+
+<Aside type="note">
+  账户身份基于 dApp 域名，因此限定在 dApp 上下文内；同一账户在不同 dApp 上拥有不同 DAA 地址。
+</Aside>
+
+### 如何在 dApp 中集成跨链账户？
+
+<Aside type="note">
+  强烈建议使用 `@aptos-labs/wallet-adapter-react` 以获得最佳体验。请按这些[步骤](/zh/build/sdks/wallet-adapter/dapp)集成 Aptos Wallet Adapter。
+</Aside>
+
+<Tabs>
+  <TabItem label="Solana">
+    钱包适配器遵循 [Solana Wallet Standard](https://github.com/wallet-standard/wallet-standard/blob/master/DESIGN.md) 来发现钱包。已测试支持跨链账户的钱包：
+
+    |          | Aptos Devnet | Aptos Testnet | Aptos Mainnet |
+    | -------- | ------------ | ------------- | ------------- |
+    | Phantom  | ✅            | ✅             | ✅             |
+    | Solflare | ✅            | ✅             | ✅             |
+    | Backpack | ✅            | ✅             | ✅             |
+    | OKX      | ✅            | ✅             | ✅             |
+
+    <Aside type="caution">
+      Ledger 硬件钱包目前不支持 Solana 派生 Aptos 账户所需的链下消息签名。这是 Ledger Solana 应用的已知限制；请使用未连接硬件设备的软件钱包（Phantom、Solflare 等）。
+    </Aside>
+
+    跨链账户集成分三步：
+
+    <Steps>
+      1. 安装 @aptos-labs/derived-wallet-solana 包
+
+         ```shellscript
+         npm install @aptos-labs/derived-wallet-solana
+         ```
+
+      2. 导入 setupAutomaticSolanaWalletDerivation 函数
+
+         安装后，在导入其他钱包的同一文件（如 `WalletProvider.tsx`）中添加：
+
+         ```tsx filename="WalletProvider.tsx"
+         import { setupAutomaticSolanaWalletDerivation } from "@aptos-labs/derived-wallet-solana";
+
+         setupAutomaticSolanaWalletDerivation({ defaultNetwork: Network.TESTNET }); // this is the Aptos network your dapp is working with
+
+         ...
+
+         <AptosWalletAdapterProvider
+          dappConfig={{
+             network: Network.TESTNET,
+           }}
+         >
+           {children}
+         </AptosWalletAdapterProvider>
+         ```
+
+      3. 将 AptosWalletAdapterProvider 的 crossChainWallets dapp 配置属性设为 true
+
+         ```tsx filename="WalletProvider.tsx"
+         <AptosWalletAdapterProvider
+          dappConfig={{
+             network: Network.TESTNET,
+             crossChainWallets: true,
+           }}
+         >
+           {children}
+         </AptosWalletAdapterProvider>
+         ```
+    </Steps>
+  </TabItem>
+
+  <TabItem label="EVM">
+    钱包适配器遵循 [EIP-1193](https://eips.ethereum.org/EIPS/eip-1193) 来发现钱包。已测试支持跨链账户的钱包：
+
+    |          | Aptos Devnet | Aptos Testnet | Aptos Mainnet |
+    | -------- | ------------ | ------------- | ------------- |
+    | Metamask | ✅            | ✅             | ✅             |
+    | Phantom  | ✅            | ✅             | ✅             |
+    | Coinbase | ✅            | ✅             | ✅             |
+    | OKX      | ✅            | ✅             | ✅             |
+    | Exodus   | ✅            | ✅             | ✅             |
+    | Backpack | ✅            | ✅             | ✅             |
+
+    <Steps>
+      1. 安装 @aptos-labs/derived-wallet-ethereum 包
+
+         ```shellscript
+         npm install @aptos-labs/derived-wallet-ethereum
+         ```
+
+      2. 导入 setupAutomaticEthereumWalletDerivation 函数，并在 `WalletProvider.tsx` 等文件中使用：
+
+         ```tsx filename="WalletProvider.tsx"
+         import { setupAutomaticEthereumWalletDerivation } from "@aptos-labs/derived-wallet-ethereum";
+
+         setupAutomaticEthereumWalletDerivation({ defaultNetwork: Network.TESTNET }); // this is the Aptos network your dapp is working with
+
+         ...
+
+         <AptosWalletAdapterProvider
+          dappConfig={{
+             network: Network.TESTNET,
+           }}
+         >
+           {children}
+         </AptosWalletAdapterProvider>
+         ```
+
+      3. 将 crossChainWallets dapp 配置属性设为 true：
+
+         ```tsx filename="WalletProvider.tsx"
+         <AptosWalletAdapterProvider
+          dappConfig={{
+             network: Network.TESTNET,
+             crossChainWallets: true,
+           }}
+         >
+           {children}
+         </AptosWalletAdapterProvider>
+         ```
+    </Steps>
+  </TabItem>
+
+  <TabItem label="Sui">
+    钱包适配器遵循 [Sui Wallet Standard](https://docs.sui.io/standards/wallet-standard) 来发现钱包。已测试支持跨链账户的钱包：
+
+    |              | Aptos Devnet | Aptos Testnet | Aptos Mainnet |
+    | ------------ | ------------ | ------------- | ------------- |
+    | Backpack     | ✅            | ✅             | ✅             |
+    | Bitget       | ✅            | ✅             | ✅             |
+    | Ethos        | ✅            | ✅             | ✅             |
+    | Nightly      | ✅            | ✅             | ✅             |
+    | OKX          | ✅            | ✅             | ✅             |
+    | Phantom      | ✅            | ✅             | ✅             |
+    | Slush        | ✅            | ✅             | ✅             |
+    | Trust Wallet | ✅            | ✅             | ✅             |
+
+    <Steps>
+      1. 安装 @aptos-labs/derived-wallet-sui 包
+
+         ```shellscript
+         npm install @aptos-labs/derived-wallet-sui
+         ```
+
+      2. 导入 setupAutomaticSuiWalletDerivation 函数，并在 `WalletProvider.tsx` 等文件中使用：
+
+         ```tsx filename="WalletProvider.tsx"
+         import { setupAutomaticSuiWalletDerivation } from "@aptos-labs/derived-wallet-sui";
+
+         setupAutomaticSuiWalletDerivation({ defaultNetwork: Network.TESTNET }); // this is the Aptos network your dapp is working with
+
+         ...
+
+         <AptosWalletAdapterProvider
+          dappConfig={{
+             network: Network.TESTNET,
+           }}
+         >
+           {children}
+         </AptosWalletAdapterProvider>
+         ```
+
+      3. 将 crossChainWallets dapp 配置属性设为 true：
+
+         ```tsx filename="WalletProvider.tsx"
+         <AptosWalletAdapterProvider
+          dappConfig={{
+             network: Network.TESTNET,
+             crossChainWallets: true,
+           }}
+         >
+           {children}
+         </AptosWalletAdapterProvider>
+         ```
+    </Steps>
+  </TabItem>
+</Tabs>
+
+这些步骤会处理将跨链账户作为 Aptos 钱包纳入所需的逻辑和实现。
+
+### 提交交易
+
+大多数情况下，允许用户通过跨链账户向 Aptos 链提交交易需要使用赞助交易，因为跨链账户可能没有支付 Gas 的 APT。因此 dApp 应考虑维护赞助账户。
+
+<Tabs>
+  <TabItem label="本地赞助账户">
+    ```tsx filename="SignAndSubmitDemo.tsx"
+    import React from 'react';
+    import { useWallet } from '@aptos-labs/wallet-adapter-react';
+    import { Aptos, AptosConfig, Network, Ed25519PrivateKey, PrivateKey, PrivateKeyVariants, Account } from '@aptos-labs/ts-sdk';
+
+    // Initialize an Aptos client
+    const config = new AptosConfig({ network: Network.TESTNET });
+    const aptos = new Aptos(config);
+
+    // Generate a sponsor account or use an existing account
+    const privateKey = new Ed25519PrivateKey(
+      PrivateKey.formatPrivateKey(
+        "0x123",
+        PrivateKeyVariants.Ed25519
+      )
+    );
+    const sponsor = Account.fromPrivateKey({ privateKey });
+
+    const SignAndSubmit = () => {
+      const { account, signTransaction } = useWallet();
+
+      const onSignAndSubmitTransaction = async () => {
+        if(!account) {
+          throw new Error("Account is not connected and unable to sign transaction")
+        }
+
+        try {
+          // Build the transaction
+          const rawTransaction = await aptos.transaction.build.simple({
+            data: {
+              function: "0x1::aptos_account::transfer",
+              functionArguments: [account.address.toString(), 1],
+            },
+            sender: account.address,
+            withFeePayer: true,
+          });
+
+          // Send it to the wallet to sign
+          const walletSignedTransaction = await signTransaction({
+            transactionOrPayload: rawTransaction,
+          });
+
+          // Sponsor account signs the transaction to pay for the gas fees
+          const sponsorAuthenticator = aptos.transaction.signAsFeePayer({
+            signer: sponsor,
+            transaction: rawTransaction,
+          });
+
+          // Submit the transaction to chain
+          const txnSubmitted = await aptosClient(network).transaction.submit.simple(
+            {
+              transaction: rawTransaction,
+              senderAuthenticator: walletSignedTransaction.authenticator,
+              feePayerAuthenticator: sponsorAuthenticator,
+            }
+          );
+
+          // if you want to wait for transaction
+          await aptos.waitForTransaction({ transactionHash: txnSubmitted.hash });
+        } catch (error) {
+          console.error(error);
+        }
+      };
+
+      return (
+        <button onClick={onSignAndSubmitTransaction}>
+          Sign and submit transaction
+        </button>
+      );
+    };
+
+    export default SignAndSubmit;
+    ```
+  </TabItem>
+
+  <TabItem label="Gas Station">
+    <Steps>
+      1. 按照 [Gas Station 文档](https://geomi.dev/docs/gas-stations)设置 Gas Station 服务，以获取 gas station API 密钥。
+
+      2. 在应用中集成 Gas Station 实例：
+
+         ```tsx filename="SignAndSubmitDemo.tsx"
+           import {
+             GasStationClient,
+             GasStationTransactionSubmitter,
+           } from "@aptos-labs/gas-station-client";
+           import { Network } from "@aptos-labs/ts-sdk";
+
+           const network = Network.TESTNET;
+           const gasStationClient = new GasStationClient({
+             network,
+             apiKey: process.env.GAS_STATION_API_KEY,
+           });
+           const transactionSubmitter = new GasStationTransactionSubmitter(gasStationClient);
+         ```
+
+      3. 使用 `transactionSubmitter` 仅赞助跨链账户交易：
+
+         ```tsx filename="SignAndSubmitDemo.tsx"
+
+         const { signAndSubmitTransaction, wallet } = useWallet();
+
+         const transactionInput = {
+           data: {
+             function:"0x1::aptos_account::transfer",
+             functionArguments: [account.address, 717],
+           },
+           sender: account.address,
+           transactionSubmitter: null
+         };
+
+         // If wallet is NOT an Aptos native wallet
+         if (!wallet.isAptosNativeWallet) {
+           transactionInput.transactionSubmitter = transactionSubmitter;
+         }
+
+         const txn = await signAndSubmitTransaction(transactionInput);
+         ```
+    </Steps>
+  </TabItem>
+</Tabs>
+
+### 注意事项
+
+- 原始钱包创建跨链账户，且通常未与 Aptos 集成，因此钱包中无法进行模拟。
+- 跨链账户优先使用 DAA，但每个账户仍会保留原始钱包，因此开发者仍可使用和与其交互。
+
+### 资源
+
+- 跨链账户适配器演示应用
+  - [在线站点](https://x-chain-accounts.vercel.app/)
+  - [源代码](https://github.com/aptos-labs/aptos-wallet-adapter/tree/main/apps/nextjs-x-chain)
+- [AIP-113 可派生账户抽象](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-113.md)

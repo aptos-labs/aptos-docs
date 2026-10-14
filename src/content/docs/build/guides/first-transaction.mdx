@@ -1,19 +1,19 @@
 ---
 title: "Your First Transaction"
-description: "Create and submit your first transaction on Aptos blockchain - transfer coins between accounts with TypeScript and Python examples."
+description: "Create and submit your first transaction on Aptos blockchain - transfer coins between accounts with TypeScript, Python, Go, and Rust examples."
 sidebar:
   label: "Your First Transaction"
 ---
 
 import { Aside, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
 
-Transactions are the fundamental way to change data on the Aptos blockchain. Think of them like sending a package: you need to specify what you're sending, who it's going to, and then track it until delivery is confirmed. In blockchain terms, transactions allow you to transfer coins, call smart contract functions, and update on-chain state.
+Transactions are the fundamental way to change data on the Aptos blockchain. Think of them like sending a package: you need to specify what you're sending, who it's going to, and then track it until delivery is confirmed. In blockchain terms, transactions allow you to transfer APT, call smart contract functions, and update on-chain state.
 
 This tutorial will guide you through creating and submitting your first transaction on the Aptos blockchain. You'll learn how to:
 
 1. Set up your development environment
 2. Create test accounts and fund them
-3. Build a transaction to transfer coins
+3. Build a transaction to transfer APT
 4. Simulate the transaction to estimate costs
 5. Sign and submit the transaction
 6. Verify the transaction was executed successfully
@@ -22,6 +22,15 @@ This tutorial will guide you through creating and submitting your first transact
   This tutorial builds on concepts from the Aptos blockchain. If you're new to blockchain development, don't worry - we'll explain key concepts along the way.
 
   You can jump to the full code sample [here](#full-code-sample) or continue reading for a step-by-step walkthrough.
+
+  Official SDK walkthroughs with the same transfer flow:
+
+  - [TypeScript quickstart](/build/sdks/ts-sdk/quickstart)
+  - [Python quickstart (v2 API)](/build/sdks/python-sdk/quickstart)
+  - [Go quickstart](/build/sdks/go-sdk/quickstart)
+  - [Rust quickstart](/build/sdks/rust-sdk/quickstart)
+
+  For latency, block times, fees, and other payment types (including confidential transfers), see [Payments](/build/guides/payments).
 </Aside>
 
 ## 1. Setting Up Your Environment
@@ -237,12 +246,16 @@ This tutorial will guide you through creating and submitting your first transact
   </TabItem>
 
   <TabItem label="Python">
-    In blockchain, all transactions must come from an account. Let's create two test accounts: one to send coins (Alice) and one to receive them (Bob).
+    In blockchain, all transactions must come from an account. Let's create two test accounts: one to send APT (Alice) and one to receive them (Bob).
 
     <Steps>
       1. Set up the client
 
          First, we need to initialize the Aptos client that will connect to the blockchain. Open `transaction.py` in your editor and add:
+
+         <Aside type="note">
+           This walkthrough uses the Python SDK v1 API (`RestClient`). New projects should prefer the v2 API (`aptos_sdk.v2`). See the [Python SDK](/build/sdks/python-sdk) page and the [v1 to v2 migration guide](https://github.com/aptos-labs/aptos-python-sdk/blob/main/MIGRATION.md).
+         </Aside>
 
          ```python filename="transaction.py"
          import asyncio
@@ -348,7 +361,7 @@ This tutorial will guide you through creating and submitting your first transact
 
 <Tabs>
   <TabItem label="TypeScript">
-    Now that we have funded accounts, let's create a transaction to transfer coins from Alice to Bob. This is like filling out a form specifying what you want to send and to whom.
+    Now that we have funded accounts, let's create a transaction to transfer APT from Alice to Bob. This is like filling out a form specifying what you want to send and to whom.
 
     <Steps>
       1. Understand transaction structure
@@ -356,11 +369,11 @@ This tutorial will guide you through creating and submitting your first transact
          A transaction in Aptos has several key components:
 
          1. **Sender**: The account initiating the transaction (Alice)
-         2. **Function**: The on-chain function to call (in this case, a coin transfer)
+         2. **Function**: The on-chain function to call (in this case, an APT transfer)
          3. **Arguments**: Data needed by the function (recipient address and amount)
          4. **Gas parameters**: Maximum gas amount and gas unit price
          5. **Expiration time**: When the transaction is no longer valid if not executed
-         6. **Sequence number**: A counter that prevents replay attacks
+         6. **Sequence number**: A counter that prevents replay attacks. For parallel submission from multiple machines, Aptos also supports [orderless transactions](/build/guides/orderless-transactions) that use a nonce instead.
 
          <Aside type="note">
            All data in Aptos transactions is serialized using Binary Canonical Serialization (BCS), a compact and deterministic format designed for blockchain use. The SDK handles this serialization for you.
@@ -396,13 +409,13 @@ This tutorial will guide you through creating and submitting your first transact
          ```
 
          <Aside type="note">
-           The function `0x1::aptos_account::transfer` is a built-in function in the Aptos framework that transfers coins between accounts. The `0x1` prefix indicates it's part of the core framework. Behind the scenes, this function calls the [Coin Move module source code](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/coin.move) to perform the actual transfer.
+           The function `0x1::aptos_account::transfer` is a built-in framework function that transfers APT between accounts. The `0x1` prefix marks it as part of the core framework. After the Fungible Asset migration, this entry function deposits APT into the recipient's primary fungible store rather than the legacy `CoinStore`. See [`aptos_account`](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/aptos_account.move) and the [Fungible Asset standard](/build/smart-contracts/fungible-asset).
          </Aside>
     </Steps>
   </TabItem>
 
   <TabItem label="Python">
-    Now that we have funded accounts, let's create a transaction to transfer coins from Alice to Bob. This is like filling out a form specifying what you want to send and to whom.
+    Now that we have funded accounts, let's create a transaction to transfer APT from Alice to Bob. This is like filling out a form specifying what you want to send and to whom.
 
     <Steps>
       1. Understand transaction structure
@@ -410,11 +423,11 @@ This tutorial will guide you through creating and submitting your first transact
          A transaction in Aptos has several key components:
 
          1. **Sender**: The account initiating the transaction (Alice)
-         2. **Function**: The on-chain function to call (in this case, a coin transfer)
+         2. **Function**: The on-chain function to call (in this case, an APT transfer)
          3. **Arguments**: Data needed by the function (recipient address and amount)
          4. **Gas parameters**: Maximum gas amount and gas unit price
          5. **Expiration time**: When the transaction is no longer valid if not executed
-         6. **Sequence number**: A counter that prevents replay attacks
+         6. **Sequence number**: A counter that prevents replay attacks. For parallel submission from multiple machines, Aptos also supports [orderless transactions](/build/guides/orderless-transactions) that use a nonce instead.
 
          <Aside type="note">
            All data in Aptos transactions is serialized using Binary Canonical Serialization (BCS), a compact and deterministic format designed for blockchain use. The SDK handles this serialization for you.
@@ -470,7 +483,7 @@ This tutorial will guide you through creating and submitting your first transact
          ```
 
          <Aside type="note">
-           The function `0x1::aptos_account::transfer` is a built-in function in the Aptos framework that transfers coins between accounts. The `0x1` prefix indicates it's part of the core framework. Behind the scenes, this function calls the [Coin Move module source code](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/coin.move) to perform the actual transfer.
+           The function `0x1::aptos_account::transfer` is a built-in framework function that transfers APT between accounts. The `0x1` prefix marks it as part of the core framework. After the Fungible Asset migration, this entry function deposits APT into the recipient's primary fungible store rather than the legacy `CoinStore`. See [`aptos_account`](https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/aptos_account.move) and the [Fungible Asset standard](/build/smart-contracts/fungible-asset).
 
            The Python SDK uses several key components to construct transactions:
 
@@ -915,12 +928,15 @@ Congratulations! You've successfully created and executed your first transaction
 
 **Learn about more complex transactions**:
 
-- [Multi-Agent Signatures](/build/sdks/ts-sdk/building-transactions/multi-agent-transactions) - Transactions requiring multiple signers
-- [Sponsoring Transactions](/build/sdks/ts-sdk/building-transactions/sponsoring-transactions) - Having another account pay gas fees
-- [Batching Transactions](/build/sdks/ts-sdk/building-transactions/batching-transactions) - Sending multiple transactions efficiently
+- [TypeScript SDK](/build/sdks/ts-sdk/building-transactions) — [multi-agent](/build/sdks/ts-sdk/building-transactions/multi-agent-transactions), [sponsored](/build/sdks/ts-sdk/building-transactions/sponsoring-transactions), [batching](/build/sdks/ts-sdk/building-transactions/batching-transactions)
+- [Python SDK](/build/sdks/python-sdk/building-transactions) — [multi-agent](/build/sdks/python-sdk/building-transactions/multi-agent-transactions), [sponsored](/build/sdks/python-sdk/building-transactions/sponsoring-transactions), [batching](/build/sdks/python-sdk/building-transactions/batching-transactions)
+- [Go SDK](/build/sdks/go-sdk/building-transactions) — [multi-agent](/build/sdks/go-sdk/building-transactions/multi-agent-transactions), [sponsored](/build/sdks/go-sdk/building-transactions/sponsoring-transactions), [batching](/build/sdks/go-sdk/building-transactions/batching-transactions)
+- [Rust SDK](/build/sdks/rust-sdk/building-transactions) — [multi-agent](/build/sdks/rust-sdk/building-transactions/multi-agent-transactions), [sponsored](/build/sdks/rust-sdk/building-transactions/sponsoring-transactions), [batching](/build/sdks/rust-sdk/building-transactions/batching-transactions)
 
 <Aside type="note">
-  The above links are for the Typescript SDK but the principles are the same if you are using Python or Rust.
+  The step-by-step Python samples on this page use the v1 API. New Python
+  projects should follow the [Python SDK quickstart](/build/sdks/python-sdk/quickstart)
+  (`aptos_sdk.v2`).
 </Aside>
 
 **Explore smart contracts or account basics**:

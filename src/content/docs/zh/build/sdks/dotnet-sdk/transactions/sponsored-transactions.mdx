@@ -1,0 +1,194 @@
+---
+title: "赞助交易"
+description: "了解如何使用 Aptos .NET SDK 实现由一个账户为另一个账户支付 Gas 费用的赞助交易"
+sidebar:
+  label: "赞助交易"
+---
+
+import { Aside, LinkCard, Steps } from '@astrojs/starlight/components';
+
+<Aside type="caution" emoji="❗">
+  此 SDK 目前处于 Beta 阶段。请在
+  [aptos-labs/aptos-dotnet-sdk](https://github.com/aptos-labs/aptos-dotnet-sdk)
+  仓库中创建 issue，报告遇到的任何问题。
+</Aside>
+
+本节介绍如何使用 Aptos .NET SDK 执行赞助交易。
+
+**请务必先了解构建交易的基础知识。如不了解，请参阅以下指南。**
+
+<br />
+
+<LinkCard href="/zh/build/sdks/dotnet-sdk/transactions/basic-transactions" title="基础交易" description="了解如何使用 Aptos .NET SDK 构建基础交易。" />
+
+## 创建赞助交易
+
+<Steps>
+  1. 配置 AptosClient
+
+     通过添加 `Aptos` 命名空间并实例化 `AptosClient` 来配置 Aptos 客户端。你可以使用 `Networks` 提供的预定义配置，也可以自行配置。
+
+     ```csharp filename="Program.cs"  {1-1, 7-8}
+     using Aptos;
+
+     class Program
+     {
+         static void Main(string[] args)
+         {
+             var config = new AptosConfig(Aptos.Networks.Mainnet);
+             var client = new AptosClient(config);
+         }
+     }
+     ```
+
+  2. 配置账户
+
+     创建赞助交易时，必须有赞助者和用户。在本例中：
+
+     - \*\*用户：\*\*向接收者发送 APT 的账户。
+     - **赞助者：**支付交易**Gas 费用**的账户。
+
+     ```csharp filename="Program.cs" {10-16}
+     using Aptos;
+
+     class Program
+     {
+         static void Main(string[] args)
+         {
+             var config = new AptosConfig(Aptos.Networks.Devnet);
+             var client = new AptosClient(config);
+
+             // 1. Create accounts and fund it them.
+             var user = Account.Generate();
+             var recipient = Account.Generate();
+             var sponsor = Account.Generate();
+
+             await client.Faucet.FundAccount(user.Address, 100_000_000);
+             await client.Faucet.FundAccount(sponsor.Address, 100_000_000);
+         }
+     }
+     ```
+
+  3. 构建交易
+
+     现在可以使用 `AptosClient` 构建交易。必须在交易中启用 `withFeePayer` 标志，才能启用赞助交易。
+
+     ```csharp filename="Program.cs" {9-19}
+     using Aptos;
+
+     class Program
+     {
+         static void Main(string[] args)
+         {
+             ...
+
+             // 2. Build the transaction
+             var transaction = await client.Transaction.Build(
+                 sender: account,
+                 data: new GenerateEntryFunctionPayloadData(
+                     function: "0x1::aptos_account::transfer_coins",
+                     typeArguments: ["0x1::aptos_coin::AptosCoin"],
+                     functionArguments: [account.Address, "100000"]
+                 ),
+                 // It's important to set this flag to true to enable sponsored transactions
+                 withFeePayer: true
+             );
+         }
+     }
+     ```
+
+  4. 使用两个账户签名交易
+
+     让用户和赞助者都签署交易。这可确保赞助者同意支付交易费用，用户同意执行交易。使用赞助者签名时，应改用 `SignAsFeePayer` 方法。
+
+     ```csharp filename="Program.cs" {9-13}
+     using Aptos;
+
+     class Program
+     {
+         static void Main(string[] args)
+         {
+             ...
+
+             // 3. Sign the transaction with the user
+             var userSignature = client.Transaction.SignTransaction(transaction);
+
+             // 4. Sign the transaction with the sponsor
+             var feePayerSignature = client.Transaction.SignAsFeePayer(feePayer, transaction);
+         }
+     }
+     ```
+
+  5. 提交交易
+
+     用户和赞助者都签名后，即可将交易提交到区块链。`AptosClient` 可用于提交交易。
+
+     ```csharp filename="Program.cs" {9-11}
+     using Aptos;
+
+     class Program
+     {
+         static void Main(string[] args)
+         {
+             ...
+
+             // 5. Submit the transaction
+             var submitTransactionData = new SubmitTransactionData(transaction, userSignature, feePayerSignature);
+             var submittedTransaction = await client.Transaction.SubmitTransaction(submitTransactionData);
+         }
+     }
+     ```
+
+  6. 等待交易执行
+
+     交易提交后，需要先完成处理，才能提交到区块链。`AptosClient` 可用于等待交易被处理和执行。
+
+     ```csharp filename="Program.cs" {8-9}
+     using Aptos;
+
+     class Program
+     {
+         static void Main(string[] args)
+         {
+             ...
+
+             // 6. Wait for the transaction to be processed
+             var transactionResult = await client.Transaction.WaitForTransaction(submittedTransaction.Hash);
+         }
+     }
+     ```
+
+  7. 打印余额
+
+     交易提交到区块链后，可打印用户和接收者的余额。
+
+     ```csharp filename="Program.cs" {9-15}
+     using Aptos;
+
+     class Program
+     {
+         static void Main(string[] args)
+         {
+             ...
+
+             // 7. Print balances
+             var userBalance = await client.Account.GetCoinBalance(user.Address);
+             var feePayerBalance = await client.Account.GetCoinBalance(feePayer.Address);
+             var recipientBalance = await client.Account.GetCoinBalance(recipient.Address);
+             Console.WriteLine($"User {user.Address} has {userBalance?.Amount ?? 0} APT");
+             Console.WriteLine($"FeePayer {feePayer.Address} has {feePayerBalance?.Amount ?? 0} APT");
+             Console.WriteLine($"Recipient {recipient.Address} has {recipientBalance?.Amount ?? 0} APT");
+         }
+     }
+     ```
+
+     结果应如下所示：
+
+     ```shellscript
+     User 0xffd89f1e2fef8c67cfb1b99d58ea799281f1d1a0a178db49c3eacab2fe7c0735 has 99900000 APT
+     FeePayer 0x842ca7d995255ee73186a6793d6bde7c983c528be7b1a25e1614f4eddb744d4c has 99900100 APT
+     Recipient 0x823010a52a589ef528d14ebee4a4af56a00f0ae8afba135c9268581a960e21d7 has 100000 APT
+     ```
+
+     用户向接收者发送了 0.001 APT，因此用户剩余 0.999 APT。赞助者支付了交易的 Gas 费用，因此赞助者剩余 0.999001 APT。
+</Steps>

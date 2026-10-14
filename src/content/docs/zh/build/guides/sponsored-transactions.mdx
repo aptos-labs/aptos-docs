@@ -1,0 +1,86 @@
+---
+title: "赞助交易"
+description: "允许应用为用户支付交易费用，免除 Gas 代币需求，从而简化用户接入。"
+sidebar:
+  label: "赞助交易"
+---
+
+如 [AIP-39](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-039-sponsored-transactions.md) 所述，赞助交易允许一个账户为另一账户执行交易所产生的费用付款，实质上设置了一个费用支付者。赞助交易让应用可以承担与 Aptos 区块链交互的全部相关费用，从而简化用户接入流程。以下是两个例子：
+
+- [MerkleTrade](https://merkle.trade/) 通过为 Ethereum 钱包用户创建 Aptos 钱包并承担所有交易费用，提供低成本交易；用户无需获取 Aptos 实用代币。
+- [Graffio](https://medium.com/aptoslabs/graffio-web3s-overnight-sensation-81a6cf18b626) 等社区互动应用曾为托管账户承担交易费用，以支持没有钱包的用户使用协作绘图应用。
+
+## 流程概览
+
+发送赞助交易的流程如下：
+
+- 交易发送者根据 `RawTransaction` 中定义的操作确定交易。
+- 发送者生成 `RawTransactionWithData::MultiAgentWithFeePayer` 结构。
+  - 在 framework 1.8 发布前，该结构必须包含费用支付者地址。
+  - 在 framework 1.8 发布后，地址可选地设为 `0x0`。
+- （可选）发送者收集其他签名者的签名。
+- 发送者可将已签名交易转发给费用支付者，由其签名并转发至区块链。
+- 交易执行后，Gas 费用从费用支付者扣除，退款也返回给费用支付者。序列号交易还会递增发送方的序列号；[无序](/zh/build/guides/orderless-transactions)赞助交易则使用 nonce。
+
+或者，如果费用支付者知道操作和所有相关签名者，费用支付者可以生成并签署交易，再将其发回给其他签名者签名。
+
+## 技术细节
+
+在 Aptos 中，赞助交易与其他用户交易一样复用同一 SignedTransaction：
+
+```rust
+pub struct SignedTransaction {
+    /// The raw transaction
+    raw_txn: RawTransaction,
+
+    /// Public key and signature to authenticate
+    authenticator: TransactionAuthenticator,
+}
+```
+
+区别在于 TransactionAuthenticator，它存储交易费用支付者的授权，以从该账户提取实用费用：
+
+```rust
+pub enum TransactionAuthenticator {
+...
+    /// Optional Multi-agent transaction with a fee payer.
+    FeePayer {
+        sender: AccountAuthenticator,
+        secondary_signer_addresses: Vec<AccountAddress>,
+        secondary_signers: Vec<AccountAuthenticator>,
+        fee_payer_address: AccountAddress,
+        fee_payer_signer: AccountAuthenticator,
+    },
+...
+}
+```
+
+自 framework 1.8 和 [AIP-115](/zh/build/aips/aip-115) 无状态账户起，发送方无需预先创建 `0x1::account::Account` 资源。首笔会创建该资源的交易仍需有足够 Gas 覆盖创建成本和执行费用。
+
+交易签名期间，各方会对以下内容签名：
+
+```rust
+pub enum RawTransactionWithData {
+...
+    MultiAgentWithFeePayer {
+        raw_txn: RawTransaction,
+        secondary_signer_addresses: Vec<AccountAddress>,
+        fee_payer_address: AccountAddress,
+    },
+}
+```
+
+在 framework 1.8 发布前，所有签名者都必须在签名之前知道实际费用支付者地址。自 framework 1.8 发布起，签名者可以将地址设为 `0x0`；只有费用支付者必须在设置其地址后签名。
+
+## SDK 支持
+
+使用 `withFeePayer: true` 构建赞助交易，然后让发送方调用 `.sign`，赞助方调用 `.signAsFeePayer`。完整流程见 [TypeScript SDK 赞助交易指南](/zh/build/sdks/ts-sdk/building-transactions/sponsoring-transactions)。
+
+每个官方 SDK 都记录了赞助交易，并提供已测试示例：
+
+- [TypeScript SDK](/zh/build/sdks/ts-sdk/building-transactions/sponsoring-transactions) — [`simple_sponsored_transaction.ts`](https://github.com/aptos-labs/aptos-ts-sdk/blob/main/examples/typescript/simple_sponsored_transaction.ts)
+- [Python SDK](/zh/build/sdks/python-sdk/building-transactions/sponsoring-transactions) — [`sponsored_transaction.py`](https://github.com/aptos-labs/aptos-python-sdk/blob/main/v2/examples/sponsored_transaction.py)
+- [Go SDK](/zh/build/sdks/go-sdk/building-transactions/sponsoring-transactions) — [`examples/sponsored_transaction`](https://github.com/aptos-labs/aptos-go-sdk/tree/main/examples/sponsored_transaction)
+- [Rust SDK](/zh/build/sdks/rust-sdk/building-transactions/sponsoring-transactions) — [`sponsored_transaction.rs`](https://github.com/aptos-labs/aptos-rust-sdk/blob/main/crates/aptos-sdk/examples/sponsored_transaction.rs)
+
+赞助交易如何与 APT、稳定币、机密转账和双方支付组合，见[支付](/zh/build/guides/payments#组合每一种支付)。

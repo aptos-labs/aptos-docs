@@ -1,0 +1,42 @@
+---
+title: "处理 SDK 数据获取响应"
+description: "使用 Kaptos 客户端以符合 Kotlin 惯例的 Result 错误处理方式，处理获取到的链上数据和网络信息。"
+sidebar:
+  label: "响应处理"
+---
+
+SDK 中所有的数据获取操作以及大多数其他操作都会返回 `Result`，它表示成功结果（`Ok`）或失败结果（`Err`）。这种设计要求你显式处理两种结果，使代码默认更可预测、更安全。
+
+可以通过多种方式处理结果：
+
+### 使用 `when` 表达式
+
+这是显式处理两种情况、也最符合 Kotlin 惯例的方式：
+
+```kotlin
+val result = aptos.getLedgerInfo()
+
+when(result) {
+  is Result.Ok -> {
+    println("Ledger Info: ${result.value}")
+  }
+  is Result.Err -> {
+    println("Failed to fetch ledger info: ${result.error.message}")
+  }
+}
+```
+
+### 使用便捷函数
+
+`Result` 类提供了更简洁的辅助方法：
+
+- `unwrap()`：成功时返回值，失败时抛出异常。
+- `unwrapErr()`：失败时返回错误，成功时抛出异常。
+- `expect("message")`：与 `unwrap()` 相同，但会附带自定义错误消息。
+- `expectErr("message")`：与 `unwrapErr()` 相同，但会附带自定义错误消息。
+
+```kotlin
+val data = result.expect("Failed to fetch account balance")
+```
+
+在你确信操作结果，或希望在测试和调试中立即暴露失败时，可使用这些方法。

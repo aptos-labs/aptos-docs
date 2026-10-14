@@ -26,7 +26,10 @@ The [Aptos-core](/network/glossary#aptos-core) software can be configured to run
 
 <figure>
   ![Aptos Explorer Validators page showing global node distribution](~/assets/images/explorer-validators.png)
-  <figcaption>Aptos validator network as of 3/30/2026: 115 nodes across 16 countries. <a href="https://explorer.aptoslabs.com/validators?network=mainnet">View live on Explorer</a></figcaption>
+
+  <figcaption>
+    Aptos validator network on Explorer. Counts change as operators join and leave; <a href="https://explorer.aptoslabs.com/validators?network=mainnet">view the live set</a>.
+  </figcaption>
 </figure>
 
 ## Overview
@@ -47,11 +50,11 @@ Validator nodes communicate directly with other validator nodes over a private n
 
 ### Mempool
 
-Mempool is a component within each node that holds an in-memory buffer of transactions that have been submitted to the blockchain, but not yet agreed upon or executed. This buffer is replicated between validator nodes and fullnodes.
+Mempool is a component within each node that holds an in-memory buffer of transactions that have been submitted to the blockchain, but not yet agreed upon or executed. Fullnodes forward user transactions into this buffer over the REST API.
 
-The JSON-RPC service of a fullnode sends transactions to a validator node's mempool. Mempool performs various checks on the transactions to ensure transaction validity and protect against DOS attacks. When a new transaction passes initial verification and is added to mempool, it is then distributed to the mempools of other validator nodes in the network.
+Mempool verifies signatures, balances, and replay protection (sequence number or orderless nonce) to reject invalid traffic and to limit denial-of-service attacks. After a transaction passes those checks, [Quorum Store](/network/glossary#quorum-store) disseminates it in batches to the validator set. That decouples data availability from the leader's metadata proposal.
 
-When a validator node temporarily becomes a leader in the consensus protocol, consensus pulls the transactions from mempool and proposes a new transaction block. This block is broadcast to other validators and contains a total ordering over all transactions in the block. Each validator then executes the block and submits votes on whether to accept the new block proposal.
+When a validator becomes the consensus leader, it proposes a block that orders certified batches rather than flooding raw transactions through the proposal. Each validator executes that block and votes on the result.
 
 ### Consensus
 

@@ -1,0 +1,211 @@
+---
+title: "Go SDK Quickstart"
+description: "Get started with the Aptos Go SDK by creating accounts, funding them, and transferring APT"
+sidebar:
+  label: "Go SDK Quickstart"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+<Aside type="note">
+  The complete example is at [Full Quickstart Code](#full-quickstart-code) at
+  the bottom of this page. It follows the same flow as
+  [`examples/transfer_coin`](https://github.com/aptos-labs/aptos-go-sdk/tree/main/examples/transfer_coin)
+  in the SDK repository.
+</Aside>
+
+<Steps>
+  1. Install the Go SDK
+
+     The SDK requires **Go 1.25+**.
+
+     ```shellscript filename="Terminal"
+     mkdir aptos-go-quickstart
+     cd aptos-go-quickstart
+     go mod init example/aptos-go-quickstart
+     go get github.com/aptos-labs/aptos-go-sdk
+     ```
+
+  2. Set up the Aptos client
+
+     ```go filename="quickstart.go"
+     client, err := aptos.NewClient(aptos.DevnetConfig)
+     if err != nil {
+         panic("Failed to create client:" + err.Error())
+     }
+     ```
+
+     <Aside type="note">
+       (Advanced) To connect to a specific node, construct an `aptos.NetworkConfig`
+       with a custom `NodeUrl`.
+     </Aside>
+
+  3. Create and fund accounts
+
+     `NewEd25519Account` returns both the account and an error.
+
+     ```go filename="quickstart.go"
+     alice, err := aptos.NewEd25519Account()
+     if err != nil {
+         panic("Failed to create alice:" + err.Error())
+     }
+     bob, err := aptos.NewEd25519Account()
+     if err != nil {
+         panic("Failed to create bob:" + err.Error())
+     }
+
+     err = client.Fund(alice.Address, 1_000_000_000)
+     if err != nil {
+         panic("Failed to fund alice:" + err.Error())
+     }
+     ```
+
+     On testnet, mint from the [faucet page](/network/faucet).
+
+  4. Transfer APT
+
+     Build an `aptos_account::transfer` payload, then sign, submit, and wait.
+     `BuildSignAndSubmitTransaction` combines those steps.
+
+     ```go filename="quickstart.go"
+     accountBytes, err := bcs.Serialize(&bob.Address)
+     amountBytes, err := bcs.SerializeU64(1_000)
+     resp, err := client.BuildSignAndSubmitTransaction(alice, aptos.TransactionPayload{
+         Payload: &aptos.EntryFunction{
+             Module: aptos.ModuleId{
+                 Address: aptos.AccountOne,
+                 Name:    "aptos_account",
+             },
+             Function: "transfer",
+             ArgTypes: []aptos.TypeTag{},
+             Args:     [][]byte{accountBytes, amountBytes},
+         },
+     })
+     _, err = client.WaitForTransaction(resp.Hash)
+     ```
+
+     For the lower-level build → simulate → sign → submit → wait flow, see
+     [Building Transactions](/build/sdks/go-sdk/building-transactions).
+</Steps>
+
+## Full Quickstart Code
+
+```go filename="quickstart.go"
+package main
+
+import (
+	"fmt"
+
+	"github.com/aptos-labs/aptos-go-sdk"
+	"github.com/aptos-labs/aptos-go-sdk/bcs"
+)
+
+const (
+	FundAmount     = 1_000_000_000
+	TransferAmount = 1_000
+)
+
+func main() {
+	client, err := aptos.NewClient(aptos.DevnetConfig)
+	if err != nil {
+		panic("Failed to create client:" + err.Error())
+	}
+
+	alice, err := aptos.NewEd25519Account()
+	if err != nil {
+		panic("Failed to create alice:" + err.Error())
+	}
+	bob, err := aptos.NewEd25519Account()
+	if err != nil {
+		panic("Failed to create bob:" + err.Error())
+	}
+
+	fmt.Printf("=== Addresses ===\n")
+	fmt.Printf("Alice: %s\n", alice.Address.String())
+	fmt.Printf("Bob:   %s\n", bob.Address.String())
+
+	err = client.Fund(alice.Address, FundAmount)
+	if err != nil {
+		panic("Failed to fund alice:" + err.Error())
+	}
+
+	aliceBalance, err := client.AccountAPTBalance(alice.Address)
+	if err != nil {
+		panic("Failed to retrieve alice balance:" + err.Error())
+	}
+	bobBalance, err := client.AccountAPTBalance(bob.Address)
+	if err != nil {
+		panic("Failed to retrieve bob balance:" + err.Error())
+	}
+	fmt.Printf("=== Initial Balances ===\n")
+	fmt.Printf("Alice: %d\n", aliceBalance)
+	fmt.Printf("Bob:   %d\n", bobBalance)
+
+	accountBytes, err := bcs.Serialize(&bob.Address)
+	if err != nil {
+		panic("Failed to serialize bob's address:" + err.Error())
+	}
+	amountBytes, err := bcs.SerializeU64(TransferAmount)
+	if err != nil {
+		panic("Failed to serialize transfer amount:" + err.Error())
+	}
+
+	resp, err := client.BuildSignAndSubmitTransaction(alice, aptos.TransactionPayload{
+		Payload: &aptos.EntryFunction{
+			Module: aptos.ModuleId{
+				Address: aptos.AccountOne,
+				Name:    "aptos_account",
+			},
+			Function: "transfer",
+			ArgTypes: []aptos.TypeTag{},
+			Args: [][]byte{
+				accountBytes,
+				amountBytes,
+			},
+		},
+	})
+	if err != nil {
+		panic("Failed to submit transaction:" + err.Error())
+	}
+
+	_, err = client.WaitForTransaction(resp.Hash)
+	if err != nil {
+		panic("Failed to wait for transaction:" + err.Error())
+	}
+
+	aliceBalance, err = client.AccountAPTBalance(alice.Address)
+	if err != nil {
+		panic("Failed to retrieve alice balance:" + err.Error())
+	}
+	bobBalance, err = client.AccountAPTBalance(bob.Address)
+	if err != nil {
+		panic("Failed to retrieve bob balance:" + err.Error())
+	}
+	fmt.Printf("=== Final Balances ===\n")
+	fmt.Printf("Alice: %d\n", aliceBalance)
+	fmt.Printf("Bob:   %d\n", bobBalance)
+	fmt.Printf("See txn: https://explorer.aptoslabs.com/txn/%s?network=devnet\n", resp.Hash)
+}
+```
+
+Run it with:
+
+```shellscript filename="Terminal"
+go run quickstart.go
+```
+
+## Summary
+
+You just learned how to transfer APT by:
+
+1. Connecting to the network with `aptos.NewClient`.
+2. Creating and funding accounts.
+3. Submitting a transfer and waiting for execution.
+
+<Aside type="note">
+  Bookmark the [examples](https://github.com/aptos-labs/aptos-go-sdk/tree/main/examples)
+  and [integration tests](https://github.com/aptos-labs/aptos-go-sdk/tree/main/integration_test)
+  in the SDK repository. Those suites are the source of truth for APIs shown in
+  these docs. Generated API docs live on
+  [pkg.go.dev](https://pkg.go.dev/github.com/aptos-labs/aptos-go-sdk).
+</Aside>

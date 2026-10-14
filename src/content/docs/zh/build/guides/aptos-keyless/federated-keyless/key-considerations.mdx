@@ -1,0 +1,39 @@
+---
+title: "联邦 Keyless 的关键注意事项"
+description: "在生产环境实现联邦 Keyless 账户时的重要注意事项和受支持的 IAM 提供商。"
+sidebar:
+  label: "关键注意事项"
+---
+
+## 联邦 Keyless 的关键注意事项
+
+**受支持的 IAM**
+
+目前，Devnet、Testnet 和 Mainnet 支持的 IAM 为 Amazon Cognito 和 Auth0。请在[这里](/zh/build/guides/aptos-keyless/oidc-support)查看完整的受支持 IAM 提供商表格。
+
+**联邦 Keyless 流程**
+
+联邦 Keyless 交易的流程与[这里](/zh/build/guides/aptos-keyless/how-keyless-works)描述的流程相同。但不同之处在于：在联邦 Keyless 中，JWT 的发行者不是 OIDC 提供商（如 Google、Apple），而是 IAM 提供商（如 Auth0、Cognito）。用户向应用验证身份，IAM 接收用户凭证，随后 IAM 签发与 Keyless 兼容的 JWT。
+
+**可用的身份验证方法**
+
+IAM 提供商支持的所有身份验证方法均可使用，包括短信 OTP、电子邮件链接，以及传统的用户名加密码。
+
+**配置限制**
+
+Keyless 账户地址随 `aud`（即应用 ID 或客户端 ID）和 `iss`（即发行方）而变化。IAM 中用户数据的设置必须反映您希望为用户提供的互操作性。若同一用户池中的用户 JWT 是针对不同应用签发的，且 `aud` 值不同，则会得到不同的地址派生结果。
+
+**JSON Web Key Set 管理**
+
+如果您或 IAM 平台轮换了用于签署 JWT 的密钥对，则必须使用创建应用联邦 Keyless 账户的同一账户在链上更新 JWK 集。因此，务必：
+
+1. 保持对 JWKS 所有者账户的访问权限。
+2. 每次发生密钥轮换时在链上更新 JWK 集。
+
+密钥对轮换后，只要旧 JWK 未被移除，现有 Keyless 账户实例会继续工作。新密钥对签发的任何新 JWT，在链上的 JWK 集更新并包含其公钥前都不会被接受。
+
+**联邦 Keyless 的信任和安全模型**
+
+与现有 Keyless 实现相比，使用联邦 Keyless 的 dApp 开发者若采用电子邮件/短信、OTP、电子邮件/密码等身份验证方式，通过 IAM 提供商时可能比使用直接 OIDC 提供商集成更容易访问用户凭证。
+
+建议每位 dApp 开发者在集成身份验证方法前自行研究并咨询法律顾问。开发者还应了解自己在何种程度上能够访问用户凭证，以及已采取哪些控制措施。

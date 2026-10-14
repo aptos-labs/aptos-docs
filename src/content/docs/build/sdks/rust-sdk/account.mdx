@@ -1,0 +1,89 @@
+---
+title: "Rust SDK - Creating and Managing Accounts"
+description: "Learn how to generate, fund, and manage Aptos accounts using the Rust SDK with Ed25519, Secp256k1, and mnemonic derivation"
+sidebar:
+  label: "Accounts"
+---
+
+There are several ways to generate account credentials using the Rust SDK. You can
+use:
+
+- `Ed25519Account::generate()`
+- `Secp256k1Account::generate()`
+- `Ed25519Account::from_private_key_hex(...)`
+- `Ed25519Account::from_mnemonic(...)`
+
+`Ed25519Account::generate()` is the most commonly used method to create keys
+for a new account. It defaults to Ed25519, but you can also specify another
+signing scheme:
+
+```rust
+use aptos_sdk::account::{Ed25519Account, Secp256k1Account};
+
+// Derive an Ed25519 account
+let account1 = Ed25519Account::generate();
+
+// Derive a Secp256k1 account (Ethereum-compatible)
+let account2 = Secp256k1Account::generate();
+```
+
+Once you have generated credentials, you **must** fund the account for the
+network to know it exists.
+
+In devnet environments this can be done with a faucet:
+
+```rust filename="fund.rs"
+use aptos_sdk::{Aptos, AptosConfig, account::Ed25519Account};
+
+let aptos = Aptos::new(AptosConfig::devnet())?;
+let account1 = Ed25519Account::generate();
+
+// Fund an account with 1 Devnet APT
+aptos
+    .fund_account(account1.address(), 1_000_000_000)
+    .await?;
+```
+
+On testnet you can mint at the [mint page](/network/faucet). You can also
+generate and fund in one step with `aptos.create_funded_account(amount)`.
+
+## Other Ways To Represent Accounts
+
+If you have a private key, mnemonic phrase, or equivalent representation, you
+can create an account type to manage those credentials while using the Rust SDK.
+
+### Derive an account from private key
+
+```rust
+use aptos_sdk::account::Ed25519Account;
+
+let account = Ed25519Account::from_private_key_hex(&private_key_hex)?;
+let account = Ed25519Account::from_private_key_bytes(&bytes)?;
+```
+
+### Derive an account from a mnemonic
+
+```rust
+use aptos_sdk::account::Ed25519Account;
+
+let (account, phrase) = Ed25519Account::generate_with_mnemonic()?;
+let restored = Ed25519Account::from_mnemonic(&phrase, 0)?;
+let account_1 = Ed25519Account::from_mnemonic(&phrase, 1)?;
+```
+
+### Multi-key accounts
+
+Create an M-of-N account from mixed signature schemes:
+
+```rust
+use aptos_sdk::account::{AnyPrivateKey, MultiKeyAccount};
+use aptos_sdk::crypto::{Ed25519PrivateKey, Secp256k1PrivateKey};
+
+let multi_key = MultiKeyAccount::new(
+    vec![
+        AnyPrivateKey::ed25519(Ed25519PrivateKey::generate()),
+        AnyPrivateKey::secp256k1(Secp256k1PrivateKey::generate()),
+    ],
+    2, // threshold
+)?;
+```

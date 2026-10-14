@@ -5,54 +5,58 @@ sidebar:
   label: "Claude Code"
 ---
 
-## 使用 Aptos MCP 设置 Claude Code
-
-1. 安装 `claude-code` 包
+1. 安装 [Claude Code](https://code.claude.com/docs/en/quickstart)。npm 包仍然可用：
 
 ```bash
 npm install -g @anthropic-ai/claude-code
 ```
 
-2. 找到 Claude Code 存储配置的位置，通常在 Mac 上位于 `~/.claude.json`
-3. 编辑 `json` 文件中的 `mcpServers` 对象：
+2. 从 [Geomi](https://geomi.dev/) 获取 `APTOS_BOT_KEY`（账户菜单中的 **Bot Keys**）。完整步骤见 [Aptos MCP](/zh/build/ai/aptos-mcp)。
 
-```json
-{
-  "mcpServers": {
-    "aptos-mcp": {
-      "command": "npx",
-      "args": ["-y", "@aptos-labs/aptos-mcp"],
-      "type": "stdio",
-      "env": {
-        "APTOS_BOT_KEY": "<bot_api_key>"
-      }
-    }
-  }
-}
-```
-
-4. 获取您的 `APTOS_BOT_KEY`：
-
-- 访问 [Geomi](https://geomi.dev/) 并使用您的账户登录。
-- 导航到 API Keys 部分并创建一个新密钥。
-- 复制生成的密钥以供下一步使用。
-
-5. 确保使用您在上一步中生成的密钥更新 `APTOS_BOT_KEY`。
-
-6. 导航到您的项目
+3. 进入你的项目目录：
 
 ```bash
 cd your-awesome-project
 ```
 
-7. 在新的终端窗口中输入：
+4. 使用 Claude CLI 添加 Aptos MCP 服务器。把 Claude 自己的参数放在服务器名称之前，把启动命令放在 `--` 之后：
+
+```bash
+claude mcp add --scope local --env APTOS_BOT_KEY=<your_bot_key> --transport stdio aptos-mcp -- npx -y @aptos-labs/aptos-mcp
+```
+
+将 `<your_bot_key>` 替换为第 2 步生成的密钥。
+
+`--scope local` 只对当前项目生效。使用 `--scope user` 可在本机所有项目中启用，或使用 `--scope project` 写入可共享的 `.mcp.json`（不要提交 Bot Key）。
+
+传输方式、作用域和 `--env` 语法见 [Claude Code MCP 文档](https://code.claude.com/docs/en/mcp)。
+
+5. 确认服务器已注册：
+
+```bash
+claude mcp list
+```
+
+列表中应出现 `aptos-mcp`。
+
+6. 启动 Claude Code：
 
 ```bash
 claude
 ```
 
-8. 您现在可以使用 Claude Code 与 Aptos MCP 进行交互。向代理询问 `what aptos mcp version are you using?` 来验证连接。代理应该回复类似的内容：
+7. 向代理询问 `what aptos mcp version are you using?` 以验证连接。它应返回 [MCP Server Card](/.well-known/mcp/server-card.json) 中当前发布的 `@aptos-labs/aptos-mcp` 版本。
 
-```text
-I'm using Aptos MCP version 0.0.2.
+## 备选：JSON 配置
+
+如果 CLI 命令失败，可以用 JSON 添加同一个 stdio 服务器：
+
+```bash
+claude mcp add-json aptos-mcp '{"command": "npx", "args": ["-y", "@aptos-labs/aptos-mcp"], "type": "stdio", "env": {"APTOS_BOT_KEY": "<your_bot_key>"}}'
 ```
+
+## 故障排查
+
+- 修改 MCP 配置后请完全退出并重新启动 Claude Code，以便重新加载服务器列表。
+- 如果 Aptos 工具没有出现，运行 `claude mcp list`。
+- 确认 `APTOS_BOT_KEY` 是有效的 Geomi Bot Key。

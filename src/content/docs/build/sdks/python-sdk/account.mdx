@@ -1,0 +1,85 @@
+---
+title: "Python SDK - Creating and Managing Accounts"
+description: "Learn how to generate, fund, and manage Aptos accounts using the Python SDK with Ed25519, Secp256k1, and mnemonic derivation"
+sidebar:
+  label: "Accounts"
+---
+
+There are several ways to generate account credentials using the Python SDK. You can
+use:
+
+- `Account.generate()` for a new Ed25519 account
+- `Account.generate_secp256k1()` for a new Secp256k1 account
+- `Account.from_private_key(...)` to restore from an existing key
+- `Account.from_mnemonic(...)` to derive from a BIP-39 phrase
+
+`Account.generate()` is the most commonly used method to create keys for a new
+account. It defaults to Ed25519, but you can also specify Secp256k1:
+
+```python
+from aptos_sdk.v2 import Account
+
+# Derive an Ed25519 account
+account1 = Account.generate()
+
+# Derive a Secp256k1 account
+account2 = Account.generate_secp256k1()
+```
+
+Once you have generated credentials, you **must** fund the account for the
+network to know it exists.
+
+In devnet environments this can be done with a faucet:
+
+```python filename="fund.py"
+from aptos_sdk.v2 import Account, Aptos, AptosConfig, Network
+
+async with Aptos(AptosConfig(network=Network.DEVNET)) as aptos:
+    account1 = Account.generate()
+    # Fund an account with 1 Devnet APT
+    await aptos.faucet.fund_account(account1.address, 100_000_000)
+```
+
+On testnet you can mint at the [mint page](/network/faucet).
+
+## Other Ways To Represent Accounts
+
+If you have a private key, mnemonic phrase, or equivalent representation, you
+can create an `Account` to manage those credentials while using the Python SDK.
+
+### Derive an account from private key
+
+```python
+from aptos_sdk.v2 import Account
+from aptos_sdk.v2.crypto import Ed25519PrivateKey, Secp256k1PrivateKey
+
+# Ed25519 from hex (also accepts AIP-80, for example ed25519-priv-0x...)
+private_key = Ed25519PrivateKey.from_str(private_key_hex)
+account = Account.from_private_key(private_key)
+
+# Secp256k1 from hex
+secp_key = Secp256k1PrivateKey.from_str(secp_private_key_hex)
+secp_account = Account.from_private_key(secp_key)
+```
+
+### Derive an account from a mnemonic
+
+```python
+from aptos_sdk.v2 import Account
+from aptos_sdk.v2.crypto import generate_mnemonic, validate_mnemonic
+
+phrase = generate_mnemonic()  # 12 words by default; pass 24 for extra entropy
+assert validate_mnemonic(phrase)
+
+# Default: Ed25519 at m/44'/637'/0'/0'/0'
+account = Account.from_mnemonic(phrase)
+
+# Secp256k1 from the same phrase
+secp_account = Account.from_mnemonic(phrase, secp256k1=True)
+
+# Additional accounts from the same seed
+account_1 = Account.from_mnemonic(phrase, path="m/44'/637'/1'/0'/0'")
+```
+
+Account fields are properties, not methods: use `account.address`,
+`account.public_key`, and `account.private_key`.

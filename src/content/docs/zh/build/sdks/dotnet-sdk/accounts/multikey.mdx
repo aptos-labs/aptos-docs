@@ -1,0 +1,89 @@
+---
+title: "Multikey 账户"
+description: "使用 Aptos .NET SDK 通过多个密钥对创建和管理用于多签功能的 Multikey 账户。"
+sidebar:
+  label: "Multikey 账户"
+---
+
+import { Aside, CardGrid, LinkCard, Steps } from '@astrojs/starlight/components';
+
+<Aside type="caution" emoji="❗">
+  此 SDK 目前处于 beta 阶段。请在
+  [aptos-labs/aptos-dotnet-sdk](https://github.com/aptos-labs/aptos-dotnet-sdk)
+  仓库创建 issue，报告遇到的问题。
+</Aside>
+
+Aptos .NET SDK 提供 Multikey 账户实现，可通过多个密钥对组合创建账户。这对多签账户很有用。本指南提供创建账户的代码片段。
+
+## 创建 MultiKeyAccount
+
+MultiKeyAccount 用于签署交易，其账户受多个私钥控制。
+
+### 创建 MultiKeyAccount
+
+创建 MultiKey 账户需要以下组件：
+
+- `PublicKeys`：控制 MultiKey 账户的账户公钥。
+- `SignaturesRequired`：签署交易所需的最小签名者数量。
+- `Signers`：用于签署交易的账户签名者。签名者数量应等于或大于 `SignaturesRequired`。
+
+<Steps>
+  1. 创建账户
+
+     创建账户；它们可以是不同类型的账户。
+
+     ```csharp
+     var account1 = Ed25519Account.Generate();
+     var account2 = SingleKeyAccount.Generate(PublicKeyVariant.Secp256k1Ecdsa);
+     ```
+
+  2. 创建 MultiKey 验证密钥
+
+     使用 `PublicKeys` 和 `SignaturesRequired` 创建 MultiKey 验证密钥。在此例中，有两个账户控制 MultiKey，并要求 2 个签名者签署交易。
+
+     ```csharp
+     var multiKey = new MultiKey(
+         publicKeys: [account1.PublicKey, account2.PublicKey],
+         signaturesRequired: 2,
+     );
+     ```
+
+  3. 创建 MultiKey 账户
+
+     使用 `PublicKeys`、`SignaturesRequired` 和 `Signers` 创建 MultiKey 账户。
+
+     ```csharp
+     var multikeyAccount = new MultiKeyAccount(
+         multiKey: multiKey,
+         signers: [account1, account2]
+     );
+     ```
+
+  4. 签署并提交交易
+
+     创建 MultiKey 账户后，可使用 `AptosClient` 签署并提交交易。
+
+     ```csharp
+     // 1. Build the transaction
+     var transaction = await client.Transaction.Build(
+         sender: multikeyAccount,
+         data: new GenerateEntryFunctionPayloadData(
+             function: "0x1::aptos_account::transfer_coins",
+             typeArguments: ["0x1::aptos_coin::AptosCoin"],
+             functionArguments: [account.Address, "100000"]
+         )
+     );
+
+     // 2. Sign and submit the transaction
+     var submittedTransaction = await client.Transaction.SignAndSubmitTransaction(multikeyAccount, transaction);
+
+     // 3. (Optional) Wait for the transaction to be committed
+     var committedTransaction = await client.Transaction.WaitForTransaction(submittedTransaction.Hash);
+     ```
+</Steps>
+
+## 其他资源
+
+<CardGrid>
+  <LinkCard href="https://aptos-labs.github.io/aptos-dotnet-sdk/docs/Aptos.MultiKeyAccount.html" title="MultiKeyAccount 参考" description="MultiKeyAccount 类的完整 API 参考。" target="_blank" />
+</CardGrid>

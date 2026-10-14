@@ -18,7 +18,17 @@ const shouldRenderSearch =
   <div class="title-wrapper sl-flex">
     <SiteTitle />
   </div>
-  <div class="sl-flex print:hidden">
+  {
+    /**
+     * Both search UIs (Algolia DocSearch and Pagefind) mount themselves on
+     * `DOMContentLoaded`, which never fires again once the ClientRouter takes
+     * over navigation. Persisting this wrapper across view transitions keeps the
+     * mounted search alive instead of swapping in inert server-rendered markup.
+     * The directive lives on the wrapper because Starlight's `Search` component
+     * does not spread props onto its root element.
+     */
+  }
+  <div class="sl-flex print:hidden" transition:persist="site-search">
     {shouldRenderSearch && <Search />}
   </div>
   <div class="sl-hidden md:sl-flex print:hidden right-group">

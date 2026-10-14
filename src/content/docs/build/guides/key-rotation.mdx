@@ -87,9 +87,10 @@ operation would fail the check that the rotating account's address is the one
 mapped to in the table (since the table is only updated during rotation, not
 upon standard account generation).
 
-To prevent this issue and ensure best practices are followed, you can always run
-[`account::set_originating_address`] after generating a new account (see below
-CLI tutorial).
+To prevent this issue and ensure best practices are followed, proven rotations
+update [`account::OriginatingAddress`]. Do **not** call
+[`account::set_originating_address`] after generating a new account: that entry
+currently always aborts (see below).
 
 ### Unproven key rotations
 
@@ -112,10 +113,18 @@ While it is technically possible to authenticate as many accounts as you want
 with a given authentication key via unproven key rotations, it is not considered
 best practice because this approach does not ensure one-to-one mapping.
 
-If you execute an unproven key rotation, it is suggested that you follow up with
-[`account::set_originating_address`] to ensure a one-to-one mapping from
-authentication key to account address for ease of originating address lookup
-(see below CLI tutorial).
+If you execute an unproven key rotation, there is currently no supported
+on-chain follow-up to write [`account::OriginatingAddress`]:
+[`account::set_originating_address`] is disabled. Track authentication-key
+mappings off-chain (for example with an indexer) instead of calling that entry
+function.
+
+<Aside type="caution" title="`set_originating_address` is currently disabled">
+  `0x1::account::set_originating_address` currently always aborts with
+  `ESET_ORIGINATING_ADDRESS_DISABLED` because of account-abstraction poisoning
+  risk. Proven rotations still update `OriginatingAddress`. See
+  [aptos-core#16900](https://github.com/aptos-labs/aptos-core/pull/16900).
+</Aside>
 
 ## Key rotation with the Aptos CLI
 
@@ -373,39 +382,17 @@ authentication key to account address for ease of originating address lookup
        ```
      </details>
 
-  6. Set originating address
+  6. Originating address lookup (optional)
 
-     To ensure an entry in the [`account::OriginatingAddress`] table for this new account,
-     you can run [`account::set_originating_address`]:
+     Proven rotations write [`account::OriginatingAddress`]. You can query that
+     table with `0x1::account::originating_address`.
 
-     ```shellscript filename="Terminal"
-     aptos move run \
-         --assume-yes \
-         --function-id 0x1::account::set_originating_address \
-         --profile test-profile-1
-     ```
+     **Do not** run `0x1::account::set_originating_address`. That entry currently
+     always aborts with `ESET_ORIGINATING_ADDRESS_DISABLED`. Skip this step and
+     continue the tutorial; later proven rotations still update the table.
 
-     <details>
-       <summary>Example output</summary>
-
-       ```shellscript filename="Terminal"
-       {
-         "Result": {
-           "transaction_hash": "0x216992ef37a3c2f42aa9f8fed8f94d9f945a00e952dfe96b46123bb5c387ab6c",
-           "gas_used": 444,
-           "gas_unit_price": 100,
-           "sender": "aaa5131b4d3fcef8d33ee465c4ee65727e36039f283455be87b1164200572e5b",
-           "sequence_number": 0,
-           "success": true,
-           "timestamp_us": 1717809169531279,
-           "version": 3268,
-           "vm_status": "Executed successfully"
-         }
-       }
-       ```
-     </details>
-
-     Then you should see an entry in the [`account::OriginatingAddress`] table:
+     After a new account is created and before any rotation, the view typically
+     returns an empty vector:
 
      ```shellscript filename="Terminal"
      aptos move view \
@@ -421,9 +408,7 @@ authentication key to account address for ease of originating address lookup
        {
          "Result": [
            {
-             "vec": [
-               "0xaaa5131b4d3fcef8d33ee465c4ee65727e36039f283455be87b1164200572e5b"
-             ]
+             "vec": []
            }
          ]
        }
@@ -825,18 +810,22 @@ rotates the Alice's authentication key to that of Bob's.
 View the full example for this code
 [here](https://github.com/aptos-labs/aptos-ts-sdk/blob/main/examples/typescript/rotate_key.ts).
 
-The function to rotate is very simple:
+The function to rotate is `aptos.rotateAuthKey`:
 
-{/* TODO CODE EXAMPLE */}
+```typescript filename="rotate_key.ts"
+await aptos.rotateAuthKey({
+  fromAccount: alice,
+  toNewPrivateKey: bob.privateKey,
+});
+```
 
 Commands to run the example script:
 
-### Navigate to the typescript SDK directory, install dependencies and run
-
-rotate\_key.ts
+### Clone the TypeScript SDK, install dependencies, and run
 
 ```shellscript filename="Terminal"
-cd ~/aptos-core/ecosystem/typescript/sdk/examples/typescript-esm
+git clone https://github.com/aptos-labs/aptos-ts-sdk.git
+cd aptos-ts-sdk/examples/typescript
 pnpm install && pnpm rotate_key
 ```
 
@@ -862,19 +851,15 @@ rotates the Alice's authentication key to that of Bob's.
 View the full example for this code
 [here](https://github.com/aptos-labs/aptos-python-sdk/blob/main/examples/rotate_key.py).
 
-Here's the relevant code that rotates Alice's keys to Bob's:
+Here's the relevant call that rotates Alice's keys to Bob's:
 
-{/* TODO CODE EXAMPLE */}
-
-Commands to run the example script:
-
-### Navigate to the python SDK directory, install dependencies and run
-
-rotate\_key.ts
+The Python example uses `account.rotate_key`. Clone the Python SDK and run:
 
 ```shellscript filename="Terminal"
-cd aptos-core/ecosystem/python/sdk
-poetry install && poetry run python -m examples.rotate-key
+git clone https://github.com/aptos-labs/aptos-python-sdk
+cd aptos-python-sdk
+pip install .
+python -m examples.rotate_key
 ```
 
 ### rotate\_key.py output
@@ -891,12 +876,12 @@ Alice 0x213d...031013 '0x1c06...ac3bb3' '0xf2be...9486aa' '0xbbc1...abb808'
 Bob 0x1c06...ac3bb3 0x1c06...ac3bb3 0xf2be...9486aa 0xbbc1...abb808
 ```
 
-[`account::rotate_authentication_key`]: https://github.com/aptos-labs/aptos-core/blob/acb6c891cd42a63b3af96561a1aca164b800c7ee/aptos-move/framework/aptos-framework/sources/account.move#L326
+[`account::rotate_authentication_key`]: https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/account/account.move
 
-[`account::rotate_authentication_key_call`]: https://github.com/aptos-labs/aptos-core/blob/acb6c891cd42a63b3af96561a1aca164b800c7ee/aptos-move/framework/aptos-framework/sources/account.move#L294
+[`account::rotate_authentication_key_call`]: https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/account/account.move
 
-[`account::RotationProofChallenge`]: https://github.com/aptos-labs/aptos-core/blob/acb6c891cd42a63b3af96561a1aca164b800c7ee/aptos-move/framework/aptos-framework/sources/account.move#L79
+[`account::RotationProofChallenge`]: https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/account/account.move
 
-[`account::OriginatingAddress`]: https://github.com/aptos-labs/aptos-core/blob/acb6c891cd42a63b3af96561a1aca164b800c7ee/aptos-move/framework/aptos-framework/sources/account.move#L70
+[`account::OriginatingAddress`]: https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/account/account.move
 
-[`account::set_originating_address`]: https://github.com/alnoki/aptos-core/blob/5ba4a8d1344b0bb6e22665525a96e787b9a44e55/aptos-move/framework/aptos-framework/sources/account.move#L528
+[`account::set_originating_address`]: https://github.com/aptos-labs/aptos-core/blob/main/aptos-move/framework/aptos-framework/sources/account/account.move

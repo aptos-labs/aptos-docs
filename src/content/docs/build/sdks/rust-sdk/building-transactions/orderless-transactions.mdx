@@ -1,0 +1,60 @@
+---
+title: "Rust SDK - Orderless Transactions"
+description: "Create transactions that can be executed in any order using replay-protection nonces with the Rust SDK"
+sidebar:
+  label: "Orderless Transactions"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Orderless transactions allow you to create transactions that do not specify an
+order of execution between them. This is useful when multiple machines need to
+sign or submit for the same sending account, but the order does not affect the
+outcome.
+
+See [Orderless Transactions](/build/guides/orderless-transactions) for the
+protocol overview ([AIP-123](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-123.md)
+and [AIP-129](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-129.md)).
+
+## Building Orderless Transactions
+
+`Aptos::sign_submit_and_wait_orderless` wraps an ordinary payload, attaches a
+replay-protection nonce, and submits. Pass `None` for the nonce to let the SDK
+generate a fresh random value.
+
+<Aside type="note">
+  The nonce must be unique for each transaction. Orderless transactions expire
+  at most 60 seconds after submission. If the transaction is not executed in
+  that window, it expires and will not execute.
+</Aside>
+
+```rust filename="orderless.rs"
+use aptos_sdk::{Aptos, AptosConfig, account::Ed25519Account, transaction::EntryFunction};
+
+let aptos = Aptos::new(AptosConfig::devnet())?;
+let sender = aptos.create_funded_account(1_000_000_000).await?;
+let recipient = Ed25519Account::generate();
+
+let payload = EntryFunction::apt_transfer(recipient.address(), 1_000_000)?;
+let result = aptos
+    .sign_submit_and_wait_orderless(&sender, payload.into(), None, None)
+    .await?;
+```
+
+The third argument is an optional explicit nonce (`Some(nonce)` to reuse a
+specific value). The fourth argument is an optional wait timeout.
+
+After that, treat the result like any other submitted transaction: inspect
+`success`, `hash`, and `vm_status` on `result.data`.
+
+## Tested example
+
+The SDK repository includes a runnable example that follows this API:
+
+- [`orderless_transaction.rs`](https://github.com/aptos-labs/aptos-rust-sdk/blob/main/crates/aptos-sdk/examples/orderless_transaction.rs)
+
+Run it with:
+
+```shellscript filename="Terminal"
+cargo run -p aptos-sdk --example orderless_transaction --features "ed25519,faucet"
+```

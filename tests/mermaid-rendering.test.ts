@@ -144,7 +144,7 @@ describe("Mermaid Rendering Validation", () => {
     it("should import and use astro-mermaid", () => {
       const config = readAstroConfig();
       expect(config).toMatch(/astro-mermaid/);
-      expect(config).toMatch(/mermaid\(\)/);
+      expect(config).toMatch(/mermaid\(/);
     });
 
     it("should have mermaid integration listed before starlight", () => {
@@ -154,7 +154,7 @@ describe("Mermaid Rendering Validation", () => {
       expect(integrationsMatch).not.toBeNull();
       const integrationsStart = integrationsMatch?.index ?? 0;
       const configFromIntegrations = config.slice(integrationsStart);
-      const mermaidPos = configFromIntegrations.indexOf("mermaid()");
+      const mermaidPos = configFromIntegrations.indexOf("mermaid(");
       const starlightPos = configFromIntegrations.indexOf("starlight(");
       expect(mermaidPos).toBeGreaterThan(-1);
       expect(starlightPos).toBeGreaterThan(-1);

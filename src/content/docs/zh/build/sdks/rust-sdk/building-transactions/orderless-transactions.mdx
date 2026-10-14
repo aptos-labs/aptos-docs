@@ -1,0 +1,49 @@
+---
+title: "Rust SDK：无序交易"
+description: "使用 Rust SDK 的重放保护 nonce 创建可按任意顺序执行的交易"
+sidebar:
+  label: "无序交易"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+无序交易允许创建彼此之间不指定执行顺序的交易。这在多台机器需要为同一发送账户签名或提交、但顺序不影响结果的场景中很有用。
+
+协议概览请参阅[无序交易](/zh/build/guides/orderless-transactions)（[AIP-123](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-123.md) 和 [AIP-129](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-129.md)）。
+
+## 构建无序交易
+
+`Aptos::sign_submit_and_wait_orderless` 会包装普通 payload、附加重放保护 nonce 并提交。对 nonce 传入 `None` 可让 SDK 生成新的随机值。
+
+<Aside type="note">
+  每笔交易的 nonce 必须唯一。无序交易在提交后最多 60 秒内过期。若未在该窗口内执行，交易将过期且不会执行。
+</Aside>
+
+```rust filename="orderless.rs"
+use aptos_sdk::{Aptos, AptosConfig, account::Ed25519Account, transaction::EntryFunction};
+
+let aptos = Aptos::new(AptosConfig::devnet())?;
+let sender = aptos.create_funded_account(1_000_000_000).await?;
+let recipient = Ed25519Account::generate();
+
+let payload = EntryFunction::apt_transfer(recipient.address(), 1_000_000)?;
+let result = aptos
+    .sign_submit_and_wait_orderless(&sender, payload.into(), None, None)
+    .await?;
+```
+
+第三个参数是可选的显式 nonce（使用 `Some(nonce)` 可复用特定值）。第四个参数是可选的等待超时。
+
+之后像处理其他已提交交易一样处理结果：检查 `result.data` 上的 `success`、`hash` 和 `vm_status`。
+
+## 已测试示例
+
+SDK 仓库包含遵循此 API 的可运行示例：
+
+- [`orderless_transaction.rs`](https://github.com/aptos-labs/aptos-rust-sdk/blob/main/crates/aptos-sdk/examples/orderless_transaction.rs)
+
+运行：
+
+```shellscript filename="Terminal"
+cargo run -p aptos-sdk --example orderless_transaction --features "ed25519,faucet"
+```

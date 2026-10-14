@@ -133,6 +133,7 @@ export const sidebar = [
       group("guides.group.integration", {
         collapsed: true,
         items: [
+          "build/guides/payments",
           "build/guides/exchanges",
           "build/guides/application-integration",
           "build/guides/oracles",
@@ -209,6 +210,7 @@ export const sidebar = [
             collapsed: true,
             items: [
               "build/sdks/go-sdk",
+              "build/sdks/go-sdk/quickstart",
               "build/sdks/go-sdk/account",
               "build/sdks/go-sdk/fetch-data-via-sdk",
               "build/sdks/go-sdk/go-examples",
@@ -220,6 +222,7 @@ export const sidebar = [
                   "build/sdks/go-sdk/building-transactions/simulating-transactions",
                   "build/sdks/go-sdk/building-transactions/bcs-format",
                   "build/sdks/go-sdk/building-transactions/multi-agent-transactions",
+                  "build/sdks/go-sdk/building-transactions/orderless-transactions",
                   "build/sdks/go-sdk/building-transactions/sponsoring-transactions",
                 ],
               }),
@@ -227,6 +230,7 @@ export const sidebar = [
           }),
           group("build.group.sdks.dotnet-sdk", {
             collapsed: true,
+            badge: { text: "DEPRECATED", variant: "danger" },
             items: [
               "build/sdks/dotnet-sdk",
               "build/sdks/dotnet-sdk/dotnet-examples",
@@ -254,14 +258,62 @@ export const sidebar = [
               }),
             ],
           }),
-          // Python SDK (no subpages found)
-          "build/sdks/python-sdk",
-          // Unity SDK (no subpages found)
-          "build/sdks/unity-sdk",
-          // C++ SDK (no subpages found)
-          "build/sdks/cpp-sdk",
-          // Rust SDK (no subpages found)
-          "build/sdks/rust-sdk",
+          group("build.group.sdks.python-sdk", {
+            collapsed: true,
+            items: [
+              "build/sdks/python-sdk",
+              "build/sdks/python-sdk/quickstart",
+              "build/sdks/python-sdk/account",
+              "build/sdks/python-sdk/fetch-data-via-sdk",
+              "build/sdks/python-sdk/python-examples",
+              group("build.group.sdks.python-sdk.building-transactions", {
+                collapsed: true,
+                items: [
+                  "build/sdks/python-sdk/building-transactions",
+                  "build/sdks/python-sdk/building-transactions/batching-transactions",
+                  "build/sdks/python-sdk/building-transactions/simulating-transactions",
+                  "build/sdks/python-sdk/building-transactions/bcs-format",
+                  "build/sdks/python-sdk/building-transactions/multi-agent-transactions",
+                  "build/sdks/python-sdk/building-transactions/orderless-transactions",
+                  "build/sdks/python-sdk/building-transactions/sponsoring-transactions",
+                ],
+              }),
+            ],
+          }),
+          {
+            label: "Unity SDK",
+            translations: { zh: "Unity SDK" },
+            link: "build/sdks/unity-sdk",
+            badge: { text: "DEPRECATED", variant: "danger" },
+          },
+          {
+            label: "C++ SDK",
+            translations: { zh: "C++ SDK" },
+            link: "build/sdks/cpp-sdk",
+            badge: { text: "DEPRECATED", variant: "danger" },
+          },
+          group("build.group.sdks.rust-sdk", {
+            collapsed: true,
+            items: [
+              "build/sdks/rust-sdk",
+              "build/sdks/rust-sdk/quickstart",
+              "build/sdks/rust-sdk/account",
+              "build/sdks/rust-sdk/fetch-data-via-sdk",
+              "build/sdks/rust-sdk/rust-examples",
+              group("build.group.sdks.rust-sdk.building-transactions", {
+                collapsed: true,
+                items: [
+                  "build/sdks/rust-sdk/building-transactions",
+                  "build/sdks/rust-sdk/building-transactions/batching-transactions",
+                  "build/sdks/rust-sdk/building-transactions/simulating-transactions",
+                  "build/sdks/rust-sdk/building-transactions/bcs-format",
+                  "build/sdks/rust-sdk/building-transactions/multi-agent-transactions",
+                  "build/sdks/rust-sdk/building-transactions/orderless-transactions",
+                  "build/sdks/rust-sdk/building-transactions/sponsoring-transactions",
+                ],
+              }),
+            ],
+          }),
           group("build.group.sdks.wallet-adapter", {
             collapsed: true,
             items: [
@@ -309,8 +361,18 @@ export const sidebar = [
                   }),
                 ],
               }),
-              "build/sdks/community-sdks/swift-sdk",
-              "build/sdks/community-sdks/unity-opendive-sdk",
+              {
+                label: "Swift SDK",
+                translations: { zh: "Swift SDK" },
+                link: "build/sdks/community-sdks/swift-sdk",
+                badge: { text: "DEPRECATED", variant: "danger" },
+              },
+              {
+                label: "Unity OpenDive SDK",
+                translations: { zh: "Unity OpenDive SDK" },
+                link: "build/sdks/community-sdks/unity-opendive-sdk",
+                badge: { text: "DEPRECATED", variant: "danger" },
+              },
             ],
           }),
         ],
@@ -796,6 +858,7 @@ export const sidebar = [
           "network/blockchain/gas-txn-fee",
           "network/blockchain/base-gas",
           "network/blockchain/txns-states",
+          "network/blockchain/transaction-payloads",
           "network/blockchain/events",
         ],
       }),
@@ -831,15 +894,51 @@ export const sidebar = [
   // --- REFERENCE Tab (Focus: API/Tool Lookup) ---
   group("reference", {
     items: [
-      // AIPs
+      "network/glossary",
+      "build/smart-contracts/error-codes",
+      "network/blockchain/transaction-payloads",
       group("build.group.aips", {
         collapsed: true,
-        items: ["build/aips", "build/aips/aip-88", "build/aips/aip-115"],
+        items: ["build/aips", "build/aips/aip-88", "build/aips/aip-115", "build/aips/aip-123"],
       }),
-      "network/glossary",
-      "build/external-resources",
+      group("reference.group.move", {
+        collapsed: true,
+        items: [
+          {
+            label: "Framework Book",
+            link: "https://aptos-labs.github.io/framework-book/",
+            attrs: { target: "_blank", rel: "noopener" },
+          },
+          {
+            label: "Aptos Framework",
+            link: "https://aptos-labs.github.io/framework-book/aptos-framework/overview.html",
+            attrs: { target: "_blank", rel: "noopener" },
+          },
+          {
+            label: "Aptos Standard Library",
+            link: "https://aptos-labs.github.io/framework-book/aptos-stdlib/overview.html",
+            attrs: { target: "_blank", rel: "noopener" },
+          },
+          {
+            label: "Move Standard Library",
+            link: "https://aptos-labs.github.io/framework-book/move-stdlib/overview.html",
+            attrs: { target: "_blank", rel: "noopener" },
+          },
+          {
+            label: "Aptos Token Objects",
+            link: "https://aptos-labs.github.io/framework-book/aptos-token-objects/overview.html",
+            attrs: { target: "_blank", rel: "noopener" },
+          },
+          {
+            label: "Move Book",
+            link: "https://aptos-labs.github.io/move-book/",
+            attrs: { target: "_blank", rel: "noopener" },
+          },
+        ],
+      }),
       "build/indexer/indexer-api/indexer-reference",
       ...(openAPISidebarGroups as never[]),
+      "build/external-resources",
     ],
   }),
 
@@ -848,17 +947,20 @@ export const sidebar = [
       "build/ai",
       group("ai.group.aptos-mcp", {
         collapsed: true,
-        items: ["build/ai/aptos-mcp", "build/ai/aptos-mcp/claude", "build/ai/aptos-mcp/cursor"],
+        items: [
+          "build/ai/aptos-mcp",
+          "build/ai/aptos-mcp/claude",
+          "build/ai/aptos-mcp/cursor",
+          "build/ai/aptos-mcp/codex",
+        ],
       }),
       {
         label: "Agent Skills",
         link: "build/ai/aptos-agent-skills",
-        badge: { text: "NEW", variant: "tip" },
       },
       {
         label: "LLMs.txt",
         link: "llms-txt",
-        badge: { text: "NEW", variant: "tip" },
       },
     ],
   }),
@@ -868,4 +970,4 @@ export const sidebar = [
   /*group("contribute", {
     items: ["contribute/components/themed-image"],
   }),*/
-] satisfies StarlightUserConfig["sidebar"];
+] as StarlightUserConfig["sidebar"];

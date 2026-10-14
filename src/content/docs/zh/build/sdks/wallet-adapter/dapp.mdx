@@ -1,0 +1,579 @@
+---
+title: "面向 dApp 构建者的钱包适配器"
+description: "使用 React Provider 和 Context 将 Aptos 钱包集成到 dApp，实现顺畅的钱包连接"
+sidebar:
+  label: "面向 dApp 构建者"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+Aptos 提供 React Provider 和 Context，用于将 Aptos 钱包连接到你的 dApp。通过 Provider 可以指定允许连接的钱包；随后可查询账户信息，并对交易或消息签名。
+
+该适配器为所有 Aptos 钱包提供标准接口。升级 React Wallet Adapter 的依赖版本即可轻松支持新钱包。
+
+## 使用 React Provider 和 Context
+
+<Steps>
+  1. 安装 @aptos-labs/wallet-adapter-react。
+
+     ```shellscript filename="Terminal"
+     npm install @aptos-labs/wallet-adapter-react
+     ```
+
+     <Aside type="note">
+       所有兼容 [AIP-62](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-62.md) 的钱包都会被自动发现，无需安装额外软件包即可使用。
+     </Aside>
+
+  2. 初始化 AptosWalletAdapterProvider。
+
+     可以使用下列任意可选字段。建议：
+
+     1. 将 autoConnect 设为 true。
+     2. 配置 dappConfig：
+        - 将 network 属性设为 dApp 使用的网络。
+        - 将 aptosApiKeys 属性设为为该网络生成的 API Key。
+
+     | 字段          | 说明                                                                        | 示例                           |
+     | ----------- | ------------------------------------------------------------------------- | ---------------------------- |
+     | autoConnect | 指定 dApp 是否应在页面重新加载时自动连接最近一次连接的钱包。                                         | true                         |
+     | dappConfig  | 指定要使用的其他网络。仅适用于非 Chrome 扩展钱包。设置后对象必须包含应用所连接的网络名称，也可包含 aptosConnectDappId。 | 网络、API Key 和可选的 dApp ID 配置对象 |
+     | onError     | 适配器抛出错误时触发的回调函数。                                                          | 错误回调函数                       |
+
+     #### 完整示例
+
+     ```tsx filename="App.tsx"
+     import { AptosWalletAdapterProvider } from "@aptos-labs/wallet-adapter-react";
+     import { PropsWithChildren } from "react";
+     import { Network } from "@aptos-labs/ts-sdk";
+
+     export const WalletProvider = ({ children }: PropsWithChildren) => {
+
+       return (
+         <AptosWalletAdapterProvider
+           autoConnect={true}
+           dappConfig={{
+             network: Network.MAINNET,
+             aptosApiKeys: {
+               mainnet: process.env.APTOS_API_KEY_MAINNET,
+             }
+           }}
+           onError={(error) => {
+             console.log("error", error);
+           }}
+         >
+           {children}
+         </AptosWalletAdapterProvider>
+       );
+     };
+     ```
+
+  3. 在需要从 Provider 访问数据的文件中导入 useWallet。
+
+     ```tsx filename="Example.tsx"
+     import { useWallet } from "@aptos-labs/wallet-adapter-react";
+
+     // Access fields / functions from the adapter
+     const { account, connected, wallet, changeNetwork } = useWallet();
+     ```
+</Steps>
+
+# 选择 UI 软件包
+
+[Wallet Adapter 仓库](https://github.com/aptos-labs/aptos-wallet-adapter)提供多个 UI 软件包，帮助用户连接和选择钱包。
+
+如需开箱即用、但可定制性较低的 UI 组件，可选择：
+
+- [Ant Design](https://github.com/aptos-labs/aptos-wallet-adapter/tree/main/packages/wallet-adapter-ant-design)
+- [MUI](https://github.com/aptos-labs/aptos-wallet-adapter/tree/main/packages/wallet-adapter-mui-design)（Material UI）
+
+否则，请使用 [shadcn/ui 钱包选择器](https://github.com/aptos-labs/aptos-wallet-adapter/blob/main/apps/nextjs-example/README.md#use-shadcnui-wallet-selector-for-your-own-app)，它提供最多的自定义选项。自定义该选择器或构建自有选择器的详细说明，请参阅[此指南](https://github.com/aptos-labs/aptos-wallet-adapter/blob/main/packages/wallet-adapter-react/docs/BYO-wallet-selector.md)。
+
+<Aside type="note">
+  有关这些 UI 选项的实际用法，请访问[在线示例应用](https://aptos-wallet-adapter-example.vercel.app/)；其[参考代码](https://github.com/aptos-labs/aptos-wallet-adapter/tree/main/apps/nextjs-example)也已公开。
+</Aside>
+
+## useWallet 字段和函数
+
+### 字段
+
+| 字段        | 类型         | 说明                                    |
+| --------- | ---------- | ------------------------------------- |
+| connected | boolean    | 钱包当前是否已连接。                            |
+| isLoading | boolean    | 钱包操作当前是否正在加载。                         |
+| account   | 账户对象或 null | 当前账户信息；未连接账户时为 null。                  |
+| network   | 网络对象或 null | 当前网络信息；未选择网络时为 null。                  |
+| wallet    | 钱包对象或 null | 当前钱包信息；未选择钱包时为 null，包含名称、图标和 URL。     |
+| wallets   | 钱包数组       | 可用钱包列表，包含名称、URL、图标、就绪状态和 AIP62 标准兼容性。 |
+
+### 函数
+
+_这些函数的实现位置请参阅 [wallet-adapter-core](https://github.com/aptos-labs/aptos-wallet-adapter/tree/main/packages/wallet-adapter-core) 中的 [WalletCore.ts](https://github.com/aptos-labs/aptos-wallet-adapter/blob/main/packages/wallet-adapter-core/src/WalletCore.ts)。_
+
+| 函数                       | 签名                            | 说明                   |
+| ------------------------ | ----------------------------- | -------------------- |
+| connect                  | connect(walletName)           | 按名称连接指定的钱包。          |
+| disconnect               | disconnect()                  | 断开当前已连接的钱包。          |
+| signTransaction          | signTransaction(...)          | 使用可选手续费支付参数对交易签名。    |
+| submitTransaction        | submitTransaction(...)        | 提交给定交易数据。            |
+| signAndSubmitTransaction | signAndSubmitTransaction(...) | 对给定输入数据签名并提交。        |
+| signMessage              | signMessage(message)          | 对消息签名，并返回签名和其他响应信息。  |
+| signMessageAndVerify     | signMessageAndVerify(message) | 对消息签名并验证签名者。         |
+| changeNetwork            | changeNetwork(network)        | 请求切换已连接网络；并非所有钱包都支持。 |
+
+## 代码示例
+
+以下 Next.js 示例 dApp 演示了这些组件的实际使用方式：
+
+- [在线站点](https://aptos-wallet-adapter-example.vercel.app/)
+- [源代码](https://github.com/aptos-labs/aptos-wallet-adapter/tree/main/apps/nextjs-example)
+
+### wallets
+
+wallets 是可用钱包列表，包含名称、URL、图标、就绪状态和 AIP62 标准兼容性。
+
+```tsx filename="WalletDisplayDemo.tsx"
+import { useWallet } from '@aptos-labs/wallet-adapter-react';
+
+const displayInstalledWalletsDemo = () => {
+
+  const { wallets } = useWallet();
+
+  return (
+    <div>
+      {wallets.map(wallet => {
+        return <p>{wallet.name}</p>
+      })}
+    </div>
+  )
+}
+```
+
+#### 支持未安装的钱包
+
+遵循 AIP-62，适配器通过钱包和 dApp 之间基于事件的通信模型工作。因此，只有用户浏览器中已安装的钱包会被自动发现并可供使用。为支持完整的 Aptos 钱包生态，适配器维护了受支持钱包注册表，让 dApp 也能展示未安装的钱包，并公开用于便捷管理所有钱包的工具函数。
+
+```tsx filename="WalletDisplayDemo.tsx"
+import { useWallet, groupAndSortWallets } from '@aptos-labs/wallet-adapter-react';
+
+const displayAllWalletsDemo = () => {
+
+  const { wallets = [], notDetectedWallets = [] } = useWallet();
+
+  const { aptosConnectWallets, availableWallets, installableWallets } =
+    groupAndSortWallets(
+      [...wallets, ...notDetectedWallets]
+    );
+
+  return (
+    <div>
+      /** Wallets that use social login to create an account on the blockchain */
+      {aptosConnectWallets.map((aptosConnectwallet) => (
+        return <p>{aptosConnectwallet.name}</p>
+      ))}
+      /** Wallets that are currently installed or loadable. */
+      {availableWallets.map((availableWallet) => (
+        return <p>{availableWallet.name}</p>
+      ))}
+      /** Wallets that are NOT currently installed or loadable. */
+      {installableWallets.map((installableWallet) => (
+        return <p>{installableWallet.name}</p>
+      ))}
+    </div>
+  )
+}
+```
+
+### connect() 和 disconnect()
+
+connect() 在 dApp 和钱包之间建立连接；随后可用 disconnect() 断开连接。
+
+```tsx filename="WalletConnectDemo.tsx"
+import React from 'react';
+import { WalletName, useWallet } from '@aptos-labs/wallet-adapter-react';
+
+const WalletConnectDemo = () => {
+  const { connect, disconnect, account, connected } = useWallet();
+
+  const handleConnect = async () => {
+    try {
+      // Change below to the desired wallet name instead of "Petra"
+      await connect("Petra" as WalletName<"Petra">);
+      console.log('Connected to wallet:', account);
+    } catch (error) {
+      console.error('Failed to connect to wallet:', error);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    try {
+      await disconnect();
+      console.log('Disconnected from wallet');
+    } catch (error) {
+      console.error('Failed to disconnect from wallet:', error);
+    }
+  };
+
+  return (
+    <div>
+      <h1>Aptos Wallet Connection</h1>
+      <div>
+        {connected ? (
+          <div>
+            <p>Connected to: {account?.address}</p>
+            <button onClick={handleDisconnect}>Disconnect</button>
+          </div>
+        ) : (
+          <button onClick={handleConnect}>Connect Wallet</button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default WalletConnectDemo;
+```
+
+### signAndSubmitTransaction
+
+如果希望将这些步骤拆开，可以分别使用 signTransaction 和 submitTransaction。
+
+```tsx filename="SignAndSubmitDemo.tsx"
+import React from 'react';
+import { useWallet } from '@aptos-labs/wallet-adapter-react';
+import { Aptos, AptosConfig, Network } from '@aptos-labs/ts-sdk';
+
+const config = new AptosConfig({ network: Network.MAINNET });
+const aptos = new Aptos(config);
+
+const SignAndSubmit = () => {
+  const { account, signAndSubmitTransaction } = useWallet();
+
+  const onSignAndSubmitTransaction = async () => {
+    if(account == null) {
+        throw new Error("Unable to find account to sign transaction")
+    }
+    const response = await signAndSubmitTransaction({
+      sender: account.address,
+      data: {
+        function: "0x1::aptos_account::transfer",
+        functionArguments: [account.address, 1],
+      },
+    });
+    // if you want to wait for transaction
+    try {
+      await aptos.waitForTransaction({ transactionHash: response.hash });
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  return (
+    <button onClick={onSignAndSubmitTransaction}>
+      Sign and submit transaction
+    </button>
+  );
+};
+
+export default SignAndSubmit;
+```
+
+### signMessage 和 verifyMessage
+
+也可以使用简写的 signAndVerifyMessage，创建可验证其来自已连接钱包的消息。
+
+```tsx filename="SignMessageDemo.tsx"
+import React, { useState } from 'react';
+import { useWallet } from '@aptos-labs/wallet-adapter-react';
+
+const SignMessageDemo = () => {
+  const { signMessage, signMessageAndVerify, connected, account } = useWallet();
+  const [message, setMessage] = useState<string>('');
+  const [nonce, setNonce] = useState<string>('');
+  const [signedMessage, setSignedMessage] = useState<any>(null);
+  const [verificationResult, setVerificationResult] = useState<boolean | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSignMessage = async () => {
+    setError(null);
+    try {
+      const response = await signMessage({ message, nonce });
+      setSignedMessage(response);
+    } catch (err: any) {
+      setError(`Failed to sign message: ${err.message}`);
+    }
+  };
+
+  const handleVerifyMessage = async () => {
+    setError(null);
+    try {
+      const result = await signMessageAndVerify({ message, nonce });
+      setVerificationResult(result);
+    } catch (err: any) {
+      setError(`Failed to verify message: ${err.message}`);
+    }
+  };
+
+  return (
+    <div>
+      <h1>Aptos Sign and Verify Message</h1>
+      <div>
+        {connected ? (
+          <div>
+            <p>Connected to: {account?.address}</p>
+            <div className="flex flex-col gap-4">
+              <textarea
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                placeholder="Enter your message here"
+                className="border rounded p-2"
+              />
+              <input
+                type="text"
+                value={nonce}
+                onChange={(e) => setNonce(e.target.value)}
+                placeholder="Enter nonce (random string) here"
+                className="border rounded p-2 mt-2"
+              />
+              <button onClick={handleSignMessage} className="bg-blue-500 text-white rounded p-2 mt-2">
+                Sign Message
+              </button>
+              {signedMessage && (
+                <div>
+                  <h4>Signed Message</h4>
+                  <pre>{JSON.stringify(signedMessage, null, 2)}</pre>
+                  <button onClick={handleVerifyMessage} className="bg-green-500 text-white rounded p-2 mt-2">
+                    Verify Message
+                  </button>
+                </div>
+              )}
+              {verificationResult !== null && (
+                <div>
+                  <h4>Verification Result</h4>
+                  <p>{verificationResult ? 'Message is verified!' : 'Failed to verify message.'}</p>
+                </div>
+              )}
+              {error && (
+                <div className="text-red-600">
+                  <p>{error}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <p>Please connect your wallet to sign and verify messages.</p>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default SignMessageDemo;
+```
+
+### changeNetwork（并非所有钱包都支持）
+
+部分钱包仅支持主网，因此不支持 changeNetwork。若依赖此功能，请为不支持 changeNetwork 的钱包实现错误处理。[Nightly](https://chromewebstore.google.com/detail/nightly/fiikommddbeccaoicoejoniammnalkfa?hl=en) 是一个**支持** changeNetwork 的钱包示例。
+
+```tsx filename="ChangeNetworkDemo.tsx"
+import React from 'react';
+import { useWallet } from '@aptos-labs/wallet-adapter-react';
+import { Network } from '@aptos-labs/ts-sdk';
+
+const ChangeNetworkDemo = () => {
+  const { network, changeNetwork, wallet } = useWallet();
+  const isNetworkChangeSupported = wallet?.name === "Nightly";
+
+  const isValidNetworkName = () => {
+    return network && Object.values<string>(Network).includes(network.name);
+  };
+
+  return (
+    <div>
+      <h4>Network Info</h4>
+      <div>
+        <div><strong>Network name</strong></div>
+        <div>
+          <span style={{ color: isValidNetworkName() ? 'green' : 'red' }}>
+            {network?.name ?? 'Not Present'}
+          </span>
+          {` (Expected: ${Object.values<string>(Network).join(', ')})`}
+        </div>
+        <div><strong>URL</strong></div>
+        <div>
+          {network?.url ? (
+            <a href={network.url} target="_blank" rel="noreferrer">
+              {network.url}
+            </a>
+          ) : (
+            'Not Present'
+          )}
+        </div>
+        <div><strong>Chain ID</strong></div>
+        <div>{network?.chainId ?? 'Not Present'}</div>
+      </div>
+      <div>
+        <h4>Change Network</h4>
+        <div>
+          <label>
+            <input
+              type="radio"
+              name="network"
+              value={Network.DEVNET}
+              checked={network?.name === Network.DEVNET}
+              onChange={() => changeNetwork(Network.DEVNET)}
+              disabled={!isNetworkChangeSupported}
+            />
+            Devnet
+          </label>
+          <label>
+            <input
+              type="radio"
+              name="network"
+              value={Network.TESTNET}
+              checked={network?.name === Network.TESTNET}
+              onChange={() => changeNetwork(Network.TESTNET)}
+              disabled={!isNetworkChangeSupported}
+            />
+            Testnet
+          </label>
+          <label>
+            <input
+              type="radio"
+              name="network"
+              value={Network.MAINNET}
+              checked={network?.name === Network.MAINNET}
+              onChange={() => changeNetwork(Network.MAINNET)}
+              disabled={!isNetworkChangeSupported}
+            />
+            Mainnet
+          </label>
+        </div>
+        {!isNetworkChangeSupported && (
+          <div>
+            * {wallet?.name ?? 'This wallet'} does not support network change requests
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default ChangeNetworkDemo;
+```
+
+### signAndSubmitBCSTransaction(payload)（并非所有钱包都支持）
+
+<Aside type="caution">
+  此功能不属于 AIP-62 标准，因此并非所有钱包都支持。调用前请通过错误处理进行验证。
+</Aside>
+
+该逻辑与 signAndSubmit 类似，但会对交易 data 使用 BCS 格式。
+
+```tsx filename="SignAndSubmitBCSTransactionDemo.tsx"
+const onSignAndSubmitBCSTransaction = async () => {
+  const response = await signAndSubmitTransaction({
+    sender: account.address,
+    data: {
+      function: "0x1::aptos_account::transfer",
+      functionArguments: [AccountAddress.from(account.address), new U64(1)],
+    },
+  });
+  // if you want to wait for transaction
+  try {
+    await aptos.waitForTransaction({ transactionHash: response.hash });
+  } catch (error) {
+    console.error(error);
+  }
+};
+
+<button onClick={onSignAndSubmitTransaction}>
+  Sign and submit BCS transaction
+</button>;
+```
+
+## 移动端支持
+
+默认情况下，移动浏览器不支持 Chrome 扩展，因此适配器维护未发现钱包的 registry，其中为支持深度链接的钱包包含 deeplinkProvider 属性。这样 dApp 就能展示无法在移动浏览器中检测到、但仍可通过将用户重定向至应用内浏览器视图来连接的钱包。
+
+```tsx filename="registry.tsx"
+{
+  name: "Petra",
+  url: "https://chromewebstore.google.com/detail/petra-aptos-wallet/ejjladinnckdgjemekebdpeokbikhfci?hl=en",
+  icon: "data:image/png;base64,iVBOR...QmCC",
+  readyState: WalletReadyState.NotDetected,
+  isAIP62Standard: true,
+  deeplinkProvider: "https://petra.app/explore?link=",
+}
+```
+
+若未使用官方适配器的钱包选择器 UI，要在 dApp 中渲染支持 deeplinkProvider 的钱包，请按以下步骤操作：
+
+<Steps>
+  1. 获取所有兼容钱包，并按钱包类型分组。
+
+     ```tsx filename="WalletDisplayDemo.tsx"
+     import { useWallet, groupAndSortWallets } from '@aptos-labs/wallet-adapter-react';
+
+     const displayAllWalletsDemo = () => {
+
+       const { wallets = [], notDetectedWallets = [] } = useWallet();
+
+       const { aptosConnectWallets, availableWallets, installableWallets } =
+         groupAndSortWallets(
+           [...wallets, ...notDetectedWallets]
+         );
+
+       return (
+         <div>
+           /** Wallets that use social login to create an account on the blockchain */
+           {aptosConnectWallets.map((aptosConnectwallet) => (
+             <WalletItemComponent wallet={aptosConnectwallet}/>
+           ))}
+           /** Wallets that are currently installed or loadable. */
+           {availableWallets.map((availableWallet) => (
+             <WalletItemComponent wallet={availableWallets}/>
+           ))}
+           /** Wallets that are NOT currently installed or loadable. */
+           {installableWallets.map((installableWallet) => (
+             <WalletItemComponent wallet={installableWallets}/>
+           ))}
+         </div>
+       )
+     }
+     ```
+
+     这段代码会获取钱包适配器支持的 Aptos 生态中的所有钱包。
+
+  2. 在移动端视图中展示支持深度链接的未安装钱包。
+
+     为确保仅展示支持移动端深度链接的钱包，可以同时检查 deepLinkProvider 支持情况和当前视图类型。
+
+     在渲染每个钱包的组件中：
+
+     ```tsx filename="WalletItemComponent.tsx"
+     import { useWallet, WalletReadyState } from '@aptos-labs/wallet-adapter-react';
+
+     const WalletItemComponent = (wallet) => {
+
+       const { connect } = useWallet();
+
+       // On mobile, extension wallets will never have a state of `Installed`
+       const isWalletReady = wallet.readyState === WalletReadyState.Installed;
+
+       // Check if the wallet supports mobile deep linking.
+       const mobileSupport =
+         "deeplinkProvider" in wallet && wallet.deeplinkProvider;
+
+       // If the wallet is not installed, the user is in a redirectable view (i.e., mobile browser but not an in-app browser),
+       // and the wallet does not support deep linking—do not display the wallet.
+       if (!isWalletReady && isRedirectable() && !mobileSupport) return null;
+
+       // Otherwise, display the wallet
+       return (
+         <Button onClick={connect(wallet)}>{wallet.name}</Button>
+       )
+     }
+     ```
+
+     这段代码确保在相应视图中展示正确的 wallet 对象。
+</Steps>

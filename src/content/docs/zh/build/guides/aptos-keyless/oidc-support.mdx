@@ -1,0 +1,110 @@
+---
+title: "Keyless OIDC 支持"
+description: "支持的 OpenID Connect 身份提供商及各网络配置选项的完整列表。"
+sidebar:
+  label: "OIDC 支持"
+---
+
+import { Steps } from '@astrojs/starlight/components';
+
+Aptos Keyless 在我们的网络上支持以下 IdP 和 IAM 提供商；未来将支持更多 IdP。如需覆盖特定用例，请联系我们。
+
+| 身份提供商     | 仅限联邦式 | Devnet | Testnet | Mainnet |
+| --------- | ----- | ------ | ------- | ------- |
+| Google    | 否     | 已上线    | 已上线     | 已上线     |
+| Apple     | 否     | 已上线    | 已上线     | 已上线     |
+| Auth0     | 是     | 已上线    | 已上线     | 已上线     |
+| Cognito   | 是     | 已上线    | 已上线     | 已上线     |
+| Microsoft | 否     | 审核中    | -       | -       |
+| Github    | 否     | 审核中    | -       | -       |
+| Facebook  | 否     | 审核中    | -       | -       |
+
+如果你的身份提供商标记为“仅限联邦式”，则需遵循[联邦式 Keyless](/zh/build/guides/aptos-keyless/federated-keyless) 的说明。
+
+要将 Aptos Keyless 集成到 dApp，必须通过至少一个可用身份提供商的 OIDC 注册流程注册 dApp。各注册流程都会为你的应用分配 Client ID，它将作为 Keyless 架构中应用的标识符。
+
+## 向 Google 注册 dApp
+
+<Steps>
+  1. 第 1 步：登录 Google Developer Console
+
+     1. 前往 [Google Cloud Console](https://console.cloud.google.com/)。
+     2. 使用 Google 账户凭据登录。
+
+  2. 第 2 步：创建新项目
+
+     1. 如果没有现有项目，请点击页面顶部的 “Select a project” 下拉菜单，然后选择 “New Project”。
+     2. 输入项目名称并点击 “Create”。详见[此处](https://cloud.google.com/resource-manager/docs/creating-managing-projects#creating_a_project)。
+
+  3. 第 3 步：配置同意屏幕
+
+     1. 在左侧边栏依次进入 “APIs & Services” > “OAuth consent screen”。
+     2. 选择 “External” 用户类型，然后点击 “Create”。
+     3. 输入应用名称、用户支持邮箱和开发者联系信息等必填信息。
+     4. 可选地添加应用徽标、隐私政策 URL 等额外信息。
+     5. 点击 “Save and continue”。详见[此处](https://developers.google.com/workspace/guides/create-credentials#configure_the_oauth_consent_screen)。
+
+  4. 第 4 步：注册应用
+
+     1. 在左侧边栏依次进入 “APIs & Services” > “Credentials”。
+        ![Google 凭据导航截图](~/images/aptos-keyless/google-credentials-nav.png "Google 凭据导航截图")
+
+     2. 点击 “Create Credentials”，选择 “OAuth client ID”。
+        ![Google 创建凭据截图](~/images/aptos-keyless/google-create-credentials.png "Google 创建凭据截图")
+
+     3. 选择应用类型（例如 Web application、Desktop app 或 Mobile app）。
+
+     4. 输入必要信息，例如应用名称和获授权的重定向 URI。对于 OIDC，重定向 URI 应采用 [https://your-app-domain.com/auth/google/callback](https://your-app-domain.com/auth/google/callback) 格式。
+
+     5. 点击 “Create”。
+
+  5. 第 5 步：取得 Client ID 和 Client Secret
+
+     1. 创建 OAuth client ID 后，Google 会提供 client ID 和 client secret。这些凭据是验证应用所必需的。
+     2. 安全记录 client ID 和 client secret，切勿公开。
+
+  6. 第 6 步：在应用中配置 OIDC 集成
+
+     1. 使用合适的 OIDC 库或框架（例如 Node.js 的 Passport.js、Java 的 Spring Security，或适用于多种平台的 Auth0）将 OIDC 身份验证集成到应用。
+     2. 使用从 Google 取得的 client ID 和 client secret 在应用设置中配置 OIDC 身份验证。
+     3. 设置适当的回调 URL（[https://your-app-domain.com/auth/google/callback](https://your-app-domain.com/auth/google/callback)），以处理来自 Google 的身份验证响应。
+</Steps>
+
+## 向 Apple 注册 dApp
+
+<Steps>
+  1. 第 1 步：登录 Apple 开发者账户
+
+     1. 前往 [Apple Developer 网站](https://developer.apple.com/)。
+     2. 使用 Apple ID 登录。
+     3. 如尚未加入，请注册 Apple Developer Program。
+        ![Apple 开发者计划注册截图](~/images/aptos-keyless/apple-dev-program.png "Apple 开发者计划注册截图")
+
+  2. 第 2 步：创建新 App ID
+
+     1. 前往 “Certificates, Identifiers & Profiles”。
+     2. 在边栏中点击 “Identifiers”。
+     3. 点击 “+” 按钮创建新的 App ID。
+     4. 填写应用信息，包括名称和 bundle ID。
+     5. 在 “Capabilities” 中启用 “Sign in with Apple”。
+     6. 点击 “Continue”，然后点击 “Register” 创建 App ID。
+
+  3. 第 3 步：生成私钥
+
+     1. 在 “Certificates, Identifiers & Profiles” 页面的 “Keys” 部分，点击 “+” 按钮创建新密钥。
+     2. 输入密钥名称，启用 “Sign in with Apple” 功能，然后点击 “Continue”。
+     3. 下载生成的私钥并安全存储。该密钥将用于向 Apple 的 OIDC 服务验证应用。
+
+  4. 第 4 步：配置重定向 URI
+
+     1. 在 “App ID” 部分找到新建的 App ID 并点击它。
+     2. 向下滚动到 “Sign in with Apple” 部分，点击 “Edit”。
+     3. 添加应用在身份验证后回调时使用的重定向 URI，格式应为 [https://your-app-domain.com/auth/apple/callback](https://your-app-domain.com/auth/apple/callback)。
+     4. 点击 “Save” 更新设置。
+
+  5. 第 5 步：设置 OIDC 集成
+
+     1. 使用兼容 Apple OIDC 服务的 OIDC 库或框架（例如 Node.js 的 Passport.js、Java 的 Spring Security）。
+     2. 将应用配置为使用注册期间从 Apple 取得的 client ID 和私钥。
+     3. 设置适当的回调 URL（[https://your-app-domain.com/auth/apple/callback](https://your-app-domain.com/auth/apple/callback)），以处理来自 Apple 的身份验证响应。
+</Steps>

@@ -44,6 +44,81 @@ interface LinksetEntry {
   describedby?: { href: string }[];
 }
 
+describe("ARD / AI Catalog (/.well-known/ai-catalog.json)", () => {
+  const catalog = readJson<{
+    specVersion?: string;
+    host?: { displayName?: string; identifier?: string; documentationUrl?: string };
+    entries?: {
+      identifier?: string;
+      displayName?: string;
+      type?: string;
+      url?: string;
+      data?: unknown;
+      representativeQueries?: string[];
+    }[];
+  }>("public/.well-known/ai-catalog.json");
+
+  it("declares specVersion, host identity, and a non-empty entries array", () => {
+    expect(catalog.specVersion, "specVersion").toMatch(/^\d+\.\d+$/);
+    expect(catalog.host?.displayName, "host.displayName").toBeTruthy();
+    expect(catalog.host?.identifier, "host.identifier").toMatch(/^(did:web:|urn:air:)/);
+    expect(Array.isArray(catalog.entries), "entries").toBe(true);
+    expect(catalog.entries?.length, "entries length").toBeGreaterThan(0);
+  });
+
+  it("gives every entry a urn:air identifier, displayName, type, and exactly one of url or data", () => {
+    for (const entry of catalog.entries ?? []) {
+      expect(entry.identifier, "identifier").toMatch(/^urn:air:aptos\.dev:[a-z0-9-]+:[a-z0-9-]+$/);
+      expect(entry.displayName, `${entry.identifier} displayName`).toBeTruthy();
+      expect(entry.type, `${entry.identifier} type`).toMatch(
+        /^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/i,
+      );
+      const hasUrl = typeof entry.url === "string" && entry.url.length > 0;
+      const hasData = entry.data !== undefined;
+      expect(hasUrl !== hasData, `${entry.identifier} must have exactly one of url or data`).toBe(
+        true,
+      );
+      if (hasUrl) {
+        expect(entry.url).toMatch(/^https:\/\/aptos\.dev\//);
+      }
+    }
+  });
+
+  it("includes 2–5 representativeQueries on every entry", () => {
+    for (const entry of catalog.entries ?? []) {
+      const queries = entry.representativeQueries ?? [];
+      expect(
+        queries.length,
+        `${entry.identifier} representativeQueries length`,
+      ).toBeGreaterThanOrEqual(2);
+      expect(
+        queries.length,
+        `${entry.identifier} representativeQueries length`,
+      ).toBeLessThanOrEqual(5);
+      for (const query of queries) {
+        expect(query.trim().length, `${entry.identifier} empty query`).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("points at the MCP Server Card, Agent Skills index, OpenAPI spec, and RFC 9727 catalog", () => {
+    const urls = (catalog.entries ?? []).map((entry) => entry.url);
+    expect(urls).toEqual(
+      expect.arrayContaining([
+        "https://aptos.dev/.well-known/mcp/server-card.json",
+        "https://aptos.dev/.well-known/agent-skills/index.json",
+        "https://aptos.dev/aptos-spec.json",
+        "https://aptos.dev/.well-known/api-catalog",
+      ]),
+    );
+  });
+
+  it("uses unique urn:air identifiers", () => {
+    const ids = (catalog.entries ?? []).map((entry) => entry.identifier);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
 describe("well-known API catalog (RFC 9727)", () => {
   const catalog = readJson<{ linkset: LinksetEntry[] }>("public/.well-known/api-catalog");
 
@@ -158,11 +233,13 @@ describe("OAuth Protected Resource Metadata (RFC 9728)", () => {
     resource_documentation?: string;
   }>("public/.well-known/oauth-protected-resource");
 
-  it("declares the faucet's resource identifier and authorization servers", () => {
-    // Only the Aptos Testnet Faucet is OAuth-protected; the rest of aptos.dev
-    // is unauthenticated public docs. Keep the resource pinned to the faucet
-    // host so RFC 9728 validation (Section 3.3) succeeds.
-    expect(metadata.resource, "resource").toBe("https://faucet.testnet.aptoslabs.com");
+  it("declares this origin as the resource identifier and lists faucet authorization servers", () => {
+    // RFC 9728 clients (and the Is It Agent Ready? scanner) require `resource`
+    // to share an origin with the well-known document. Documentation on this
+    // host is public; the listed issuers mint Google ID tokens for the
+    // Aptos Testnet Faucet API on faucet-e2.testnet.aptoslabs.com.
+    expect(metadata.resource, "resource").toBe("https://aptos.dev");
+    expect(new URL(metadata.resource ?? "").origin).toBe("https://aptos.dev");
     expect(metadata.authorization_servers, "authorization_servers").toEqual(
       expect.arrayContaining(["https://securetoken.google.com/aptos-api-gateway-prod"]),
     );
@@ -178,8 +255,50 @@ describe("OAuth Protected Resource Metadata (RFC 9728)", () => {
     expect(metadata.scopes_supported, "scopes_supported").toEqual(
       expect.arrayContaining(["openid"]),
     );
-    expect(metadata.resource_name, "resource_name").toBeTruthy();
+    expect(metadata.resource_name, "resource_name").toBe("Aptos Developer Documentation");
     expect(metadata.resource_documentation, "resource_documentation").toMatch(/^https:\/\//);
+  });
+});
+
+describe("auth.md agent authentication", () => {
+  const body = readText("public/auth.md");
+
+  it("is served from the site root with an H1 that contains auth.md", () => {
+    expect(body).toMatch(/^# auth\.md\b/m);
+  });
+
+  it("points at the origin-level OAuth discovery documents with absolute URLs", () => {
+    expect(body).toContain("https://aptos.dev/.well-known/oauth-protected-resource");
+    expect(body).toContain("https://aptos.dev/.well-known/oauth-authorization-server");
+    expect(body).toMatch(
+      /\[https:\/\/aptos\.dev\/\.well-known\/oauth-protected-resource\]\(https:\/\/aptos\.dev\/\.well-known\/oauth-protected-resource\)/,
+    );
+    expect(body).toMatch(
+      /\[https:\/\/aptos\.dev\/\.well-known\/oauth-authorization-server\]\(https:\/\/aptos\.dev\/\.well-known\/oauth-authorization-server\)/,
+    );
+  });
+
+  it("does not advertise a fake agent-registration endpoint", () => {
+    expect(body.toLowerCase()).toMatch(/does not offer agent registration/);
+    expect(body).not.toMatch(/https:\/\/aptos\.dev\/agent\//);
+    expect(body).not.toMatch(/"register_uri"\s*:/);
+  });
+});
+
+describe("DNS-AID operator documentation", () => {
+  it("documents the Google Cloud DNS HTTPS index record in English and Chinese", () => {
+    // DNS-AID records cannot be published from this repo; the docs must stay
+    // the source of truth for the record operators need to add.
+    const english = readText("src/content/docs/build/ai.mdx");
+    const chinese = readText("src/content/docs/zh/build/ai.mdx");
+    for (const body of [english, chinese]) {
+      expect(body).toContain("_index._agents.aptos.dev");
+      expect(body).toContain('alpn="h2,h3"');
+      expect(body).toContain("DNS-AID");
+      expect(body).toContain("DS");
+      expect(body).toContain("_catalog._agents.aptos.dev");
+      expect(body).toContain("/.well-known/ai-catalog.json");
+    }
   });
 });
 
@@ -223,6 +342,14 @@ describe("OpenID Connect Discovery 1.0 / OAuth Authorization Server Metadata (RF
     expect(authServer.jwks_uri, "oauth-authorization-server jwks_uri").toBe(oidc.jwks_uri);
   });
 
+  it("does not claim Google's authorization server supports agent registration", () => {
+    // These files mirror Firebase/Google OIDC metadata. Adding an agent_auth
+    // register_uri here would send agents to an endpoint that does not exist.
+    // Registration instructions live in public/auth.md instead.
+    expect(oidc).not.toHaveProperty("agent_auth");
+    expect(authServer).not.toHaveProperty("agent_auth");
+  });
+
   it("OIDC issuer matches the faucet resource metadata authorization_servers", () => {
     const protectedResource = readJson<{ authorization_servers?: string[] }>(
       "public/.well-known/oauth-protected-resource",
@@ -255,6 +382,11 @@ describe("robots.txt content signals", () => {
     if (current) groups.push({ userAgent: current.userAgent, body: current.body.join("\n") });
     return groups;
   }
+
+  it("advertises /sitemap.xml and the ARD Agentmap", () => {
+    expect(body).toMatch(/^Sitemap:\s*https:\/\/aptos\.dev\/sitemap\.xml\s*$/m);
+    expect(body).toMatch(/^Agentmap:\s*https:\/\/aptos\.dev\/\.well-known\/ai-catalog\.json\s*$/m);
+  });
 
   it("declares Content-Signal inside every User-agent block", () => {
     // `Content-Signal:` is scoped to the most recently declared `User-agent:`
@@ -304,6 +436,8 @@ describe("Head.astro in-page discovery links", () => {
       { href: "/.well-known/oauth-protected-resource", rel: "describedby" },
       { href: "/.well-known/openid-configuration", rel: "describedby" },
       { href: "/.well-known/oauth-authorization-server", rel: "describedby" },
+      { href: "/auth.md", rel: "describedby" },
+      { href: "/.well-known/ai-catalog.json", rel: "ai-catalog" },
     ];
     for (const { href, rel } of expectedHrefs) {
       expect(hasLinkRel(href, rel), `Head.astro missing <link rel="${rel}" href="${href}">`).toBe(
@@ -324,7 +458,7 @@ describe("Head.astro in-page discovery links", () => {
       { href: "/.well-known/agent-skills/index.json", title: "Aptos Agent Skills index" },
       {
         href: "/.well-known/oauth-protected-resource",
-        title: "Aptos Faucet OAuth Protected Resource Metadata",
+        title: "Aptos OAuth Protected Resource Metadata",
       },
       {
         href: "/.well-known/openid-configuration",
@@ -334,10 +468,18 @@ describe("Head.astro in-page discovery links", () => {
         href: "/.well-known/oauth-authorization-server",
         title: "Aptos Faucet OAuth 2.0 Authorization Server Metadata",
       },
+      {
+        href: "/auth.md",
+        title: "Aptos auth.md agent authentication",
+      },
+      {
+        href: "/.well-known/ai-catalog.json",
+        title: "Aptos AI Catalog",
+      },
     ];
     for (const { href, title } of expectedTitles) {
       const hrefLiteral = href.replace(/[/.]/g, "\\$&");
-      const titleLiteral = title.replace(/[/.\s]/g, "\\$&");
+      const titleLiteral = title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const pattern = new RegExp(
         `<link\\b[^>]*?(?:href="${hrefLiteral}"[^>]*?title="${titleLiteral}"|title="${titleLiteral}"[^>]*?href="${hrefLiteral}")`,
         "s",
@@ -436,9 +578,12 @@ describe("vercel.json Link response header", () => {
     expect(linkHeader).toContain("/.well-known/oauth-protected-resource");
     expect(linkHeader).toContain("/.well-known/openid-configuration");
     expect(linkHeader).toContain("/.well-known/oauth-authorization-server");
+    expect(linkHeader).toContain("/auth.md");
+    expect(linkHeader).toContain("/.well-known/ai-catalog.json");
     expect(linkHeader).toMatch(/rel="api-catalog"/);
     expect(linkHeader).toMatch(/rel="service-desc"/);
     expect(linkHeader).toMatch(/rel="service-doc"/);
+    expect(linkHeader).toMatch(/rel="ai-catalog"/);
   });
 
   it("pins the correct Content-Type on every well-known endpoint", () => {
@@ -449,6 +594,8 @@ describe("vercel.json Link response header", () => {
       ["/.well-known/oauth-protected-resource", /^application\/json/],
       ["/.well-known/openid-configuration", /^application\/json/],
       ["/.well-known/oauth-authorization-server", /^application\/json/],
+      ["/auth.md", /^text\/markdown/],
+      ["/.well-known/ai-catalog.json", /^application\/json/],
     ];
     for (const [source, expected] of pairs) {
       const entry = vercel.headers?.find((item) => item.source === source);
@@ -458,5 +605,39 @@ describe("vercel.json Link response header", () => {
       )?.value;
       expect(contentType, `Content-Type for ${source}`).toMatch(expected);
     }
+  });
+
+  it("allows cross-origin reads of the ARD catalog", () => {
+    const entry = vercel.headers?.find((item) => item.source === "/.well-known/ai-catalog.json");
+    const cors = entry?.headers.find(
+      (header) => header.key.toLowerCase() === "access-control-allow-origin",
+    )?.value;
+    expect(cors, "Access-Control-Allow-Origin for ai-catalog.json").toBe("*");
+  });
+});
+
+describe("vercel.json sitemap.xml rewrite", () => {
+  const vercel = readJson<{
+    rewrites?: { source: string; destination: string }[];
+  }>("vercel.json");
+
+  it("serves /sitemap.xml from the generated urlset when the alias file is absent", () => {
+    const rewrite = vercel.rewrites?.find((entry) => entry.source === "/sitemap.xml");
+    expect(rewrite?.destination).toBe("/sitemap-0.xml");
+  });
+});
+
+describe("sitemap.xml alias wiring", () => {
+  it("registers sitemapXmlAlias immediately after @astrojs/sitemap", () => {
+    const config = readText("astro.config.mjs");
+    const sitemapCall = config.search(/sitemap\(\s*\{/);
+    const aliasCall = config.indexOf("sitemapXmlAlias()");
+    expect(sitemapCall, "sitemap({...}) in astro.config.mjs").toBeGreaterThan(-1);
+    expect(aliasCall, "sitemapXmlAlias() in astro.config.mjs").toBeGreaterThan(sitemapCall);
+  });
+
+  it("advertises the AI Catalog from the WebMCP list-llms-feeds tool", () => {
+    const source = readText("src/scripts/webmcp-register.ts");
+    expect(source).toContain("/.well-known/ai-catalog.json");
   });
 });

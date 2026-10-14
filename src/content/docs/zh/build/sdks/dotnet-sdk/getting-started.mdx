@@ -1,0 +1,130 @@
+---
+title: "快速入门"
+description: "通过安装和设置 Aptos .NET SDK 开始为游戏开发项目使用该 SDK"
+sidebar:
+  label: "快速入门"
+---
+
+import { Aside, CardGrid, LinkCard, Steps } from '@astrojs/starlight/components';
+
+<Aside type="caution" emoji="❗">
+  此 SDK 当前处于 beta 阶段。请在 [aptos-labs/aptos-dotnet-sdk](https://github.com/aptos-labs/aptos-dotnet-sdk) 仓库中创建 issue，报告您遇到的任何问题。
+</Aside>
+
+如果尚未安装 Aptos .NET SDK，请遵循以下任一指南开始使用。
+
+<CardGrid>
+  <LinkCard href="/zh/build/sdks/dotnet-sdk/godot-integration" title="Godot 集成" description="将 Aptos .NET SDK 集成到 Godot 项目。" />
+
+  <LinkCard href="/zh/build/sdks/dotnet-sdk/unity-integration" title="Unity SDK" description="将 Aptos .NET SDK 集成到 Unity 项目。" />
+</CardGrid>
+
+<Steps>
+  1. 设置 AptosClient
+
+     添加 `Aptos` 命名空间并实例化 `AptosClient`，即可设置 Aptos 客户端。可以使用 `Networks` 中的预定义配置，或自行配置。
+
+     ```csharp filename="Program.cs"  {1-1, 7-8}
+     using Aptos;
+
+     class Program
+     {
+         static void Main(string[] args)
+         {
+             var config = new AptosConfig(Aptos.Networks.Mainnet);
+             var client = new AptosClient(config);
+         }
+     }
+     ```
+
+  2. 查询区块链
+
+     设置客户端后，就可以查询区块链。
+
+     ```csharp filename="Program.cs" {10-11}
+     using Aptos;
+
+     class Program
+     {
+         static void Main(string[] args)
+         {
+             var config = new AptosConfig(Aptos.Networks.Mainnet);
+             var client = new AptosClient(config);
+
+             var ledgerInfo = client.Block.GetLedgerInfo();
+             Console.WriteLine(ledgerInfo.BlockHeight);
+         }
+     }
+     ```
+
+  3. 签名并提交交易
+
+     要与区块链交互，需要创建签名人并构建交易。
+
+     ```csharp filename="Program.cs" {10-11,13-21,23-24,26-27}
+     using Aptos;
+
+     class Program
+     {
+         static void Main(string[] args)
+         {
+             var config = new AptosConfig(Aptos.Networks.Mainnet);
+             var client = new AptosClient(config);
+
+             // 1. Create a signer
+             var signer = Account.Generate();
+
+             // 2. Build the transaction
+             var transaction = await client.Transaction.Build(
+                 sender: account,
+                 data: new GenerateEntryFunctionPayloadData(
+                     function: "0x1::aptos_account::transfer_coins",
+                     typeArguments: ["0x1::aptos_coin::AptosCoin"],
+                     functionArguments: [account.Address, "100000"]
+                 )
+             );
+
+             // 3. Sign and submit the transaction
+             var pendingTransaction = client.Transaction.SignAndSubmitTransaction(account, transaction);
+
+             // 4. (Optional) Wait for the transaction to be committed
+             var committedTransaction = await client.Transaction.WaitForTransaction(pendingTransaction);
+         }
+     }
+     ```
+
+  4. 智能合约 view 函数
+
+     调用 view 函数查询智能合约。
+
+     ```csharp filename="Program.cs" {10-17,19-20}
+     using Aptos;
+
+     class Program
+     {
+         static void Main(string[] args)
+         {
+             var config = new AptosConfig(Aptos.Networks.Mainnet);
+             var client = new AptosClient(config);
+
+             // Call the view function by specifying the function name, arguments, and type arguments
+             var values = await client.Contract.View(
+                 new GenerateViewFunctionPayloadData(
+                     function: "0x1::coin::name",
+                     functionArguments: [],
+                     typeArguments: ["0x1::aptos_coin::AptosCoin"]
+                 )
+             );
+
+             // Returns a list of return values: ["Aptos Coin"]
+             Console.WriteLine("APT Name: " + values[0]);
+         }
+     }
+     ```
+</Steps>
+
+## 其他资源
+
+<CardGrid>
+  <LinkCard href="https://aptos-labs.github.io/aptos-dotnet-sdk" title="完整 API 参考" description="Aptos .NET SDK 的完整 API 参考。" target="_blank" />
+</CardGrid>

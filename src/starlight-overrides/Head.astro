@@ -3,10 +3,17 @@ import Default from "@astrojs/starlight/components/Head.astro";
 import { ClientRouter } from "astro:transitions";
 import { Schema } from "astro-seo-schema";
 import { Font } from "astro:assets";
-import globalCssUrl from "../styles/global.css?url";
+import { ALGOLIA_APP_ID, SEARCH_PROVIDER } from "astro:env/client";
 import { SUPPORTED_LANGUAGES } from "~/config/i18n";
 import { getImageUrl } from "~/lib/og-image/getImageUrl";
 import WebMcpRegistration from "~/components/WebMcpRegistration.astro";
+
+// DocSearch queries `<appId>-dsn.algolia.net`; only warm that connection when
+// the page actually ships DocSearch.
+const algoliaSearchHost =
+  SEARCH_PROVIDER === "algolia" && ALGOLIA_APP_ID
+    ? `https://${ALGOLIA_APP_ID.toLowerCase()}-dsn.algolia.net`
+    : null;
 
 const entryData = Astro.locals.starlightRoute.entry.data || Astro.props.entry.data;
 const ogImageUrl = await getImageUrl(new URL("/api/og-image.png", Astro.site), {
@@ -136,16 +143,22 @@ const breadcrumbItems = [
 <link rel="preconnect" href="https://api.testnet.staging.aptoslabs.com" crossorigin="anonymous" />
 <link rel="dns-prefetch" href="https://api.testnet.staging.aptoslabs.com" />
 
-{/* Algolia search - preconnect for faster search initialization */}
-<link rel="preconnect" href="https://algolia.net" crossorigin="anonymous" />
-<link rel="preconnect" href="https://algolianet.com" crossorigin="anonymous" />
+{
+  /* Algolia search - preconnect for faster search initialization. DocSearch
+    talks to per-application hosts, so the bare domains resolve to nothing. */
+}
+{
+  algoliaSearchHost && (
+    <>
+      <link rel="preconnect" href={algoliaSearchHost} crossorigin="anonymous" />
+      <link rel="dns-prefetch" href={algoliaSearchHost} />
+    </>
+  )
+}
 
 {/* Google Tag Manager - preconnect for analytics (loaded via partytown) */}
 <link rel="preconnect" href="https://www.googletagmanager.com" crossorigin="anonymous" />
 <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
-
-{/* Critical CSS with high fetch priority */}
-<link rel="preload" href={globalCssUrl} as="style" fetchpriority="high" />
 
 {/* LLMs.txt discovery: lets any LLM fetching any page find the machine-readable docs */}
 <link rel="llms-txt" href="/llms.txt" />
@@ -179,7 +192,7 @@ const breadcrumbItems = [
   rel="describedby"
   href="/.well-known/oauth-protected-resource"
   type="application/json"
-  title="Aptos Faucet OAuth Protected Resource Metadata"
+  title="Aptos OAuth Protected Resource Metadata"
 />
 <link
   rel="describedby"
@@ -192,6 +205,18 @@ const breadcrumbItems = [
   href="/.well-known/oauth-authorization-server"
   type="application/json"
   title="Aptos Faucet OAuth 2.0 Authorization Server Metadata"
+/>
+<link
+  rel="describedby"
+  href="/auth.md"
+  type="text/markdown"
+  title="Aptos auth.md agent authentication"
+/>
+<link
+  rel="ai-catalog"
+  href="/.well-known/ai-catalog.json"
+  type="application/json"
+  title="Aptos AI Catalog"
 />
 
 {/* WebMCP tool registration (no-op on browsers without navigator.modelContext) */}

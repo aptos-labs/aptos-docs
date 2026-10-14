@@ -19,23 +19,35 @@ import { LinkCard } from '@astrojs/starlight/components';
 npx skills add aptos-labs/aptos-agent-skills
 ```
 
-这会将技能安装到您的项目中，以便 AI 编程助手自动使用它们。
+这会安装技能，以便 AI 编程助手自动使用它们。可以用 `-a` 指定目标代理：
+
+```bash
+npx skills add aptos-labs/aptos-agent-skills -a claude-code
+npx skills add aptos-labs/aptos-agent-skills -a cursor
+npx skills add aptos-labs/aptos-agent-skills -a copilot
+```
+
+按技能选择性安装见上游 [INSTALL.md](https://github.com/aptos-labs/aptos-agent-skills/blob/main/INSTALL.md)。
 
 ### Claude Code 插件
 
-```bash
-claude plugin add aptos-labs/aptos-agent-skills
+在 Claude Code 会话中，将该仓库添加为插件市场：
+
+```text
+/plugin marketplace add aptos-labs/aptos-agent-skills
 ```
 
 ### 手动安装
 
-克隆仓库并将技能复制到项目的 `.claude/skills/` 目录中：
+克隆仓库，并将技能复制到代理的 skills 目录：
 
 ```bash
 git clone https://github.com/aptos-labs/aptos-agent-skills.git
-mkdir -p .claude/skills
-cp -r aptos-agent-skills/skills/* .claude/skills/
+cp -r aptos-agent-skills/skills/* ~/.claude/skills/
+cp -r aptos-agent-skills/patterns/* ~/.claude/patterns/
 ```
+
+把克隆仓库中的 `CLAUDE.md` 加入工作区上下文，以便助手路由到正确的技能。
 
 ## 可用技能
 
@@ -45,34 +57,34 @@ cp -r aptos-agent-skills/skills/* .claude/skills/
 
 | 技能                           | 描述                                          |
 | ---------------------------- | ------------------------------------------- |
-| **write-contracts**          | 按照 Aptos 最佳实践编写 Move 智能合约                   |
-| **generate-tests**           | 为 Move 模块生成全面的单元测试和集成测试                     |
-| **security-audit**           | 审计 Move 合约中的常见漏洞和安全问题                       |
+| **write-contracts**          | 生成安全的 Aptos Move V2 智能合约                    |
+| **generate-tests**           | 生成面向 100% 代码覆盖率的 Move 单元测试                  |
+| **security-audit**           | 在部署前对 Move 智能合约进行安全审计                       |
 | **deploy-contracts**         | 将 Move 模块部署到 Aptos devnet、testnet 或 mainnet |
-| **search-aptos-examples**    | 搜索官方 Aptos 示例合约以获取参考实现                      |
-| **analyze-gas-optimization** | 分析和优化 Move 代码的 gas 效率                       |
-| **modernize-move**           | 将 Move 代码升级为使用最新的 Aptos Move 功能             |
+| **search-aptos-examples**    | 在 aptos-core 中搜索参考实现与模式                     |
+| **analyze-gas-optimization** | 分析并降低 Move 智能合约的 gas 成本                     |
+| **modernize-move**           | 将 Move V1 资源账户迁移到 V2 object 模型              |
 
 ### TypeScript SDK 技能
 
 这些技能帮助 AI 助手正确使用 Aptos TypeScript SDK：
 
-| 技能                        | 描述                            |
-| ------------------------- | ----------------------------- |
-| **use-ts-sdk**            | 使用 Aptos TypeScript SDK 的通用指导 |
-| **ts-sdk-client**         | 配置和使用 Aptos 客户端进行网络交互         |
-| **ts-sdk-account**        | 创建和管理 Aptos 账户和密钥对            |
-| **ts-sdk-address**        | 处理 Aptos 地址和地址格式              |
-| **ts-sdk-transactions**   | 构建、模拟、签名和提交交易                 |
-| **ts-sdk-view-and-query** | 查询链上数据和调用 view 函数             |
-| **ts-sdk-types**          | 正确使用 SDK 中的 TypeScript 类型     |
-| **ts-sdk-wallet-adapter** | 在前端应用中集成钱包连接                  |
+| 技能                        | 描述                                                       |
+| ------------------------- | -------------------------------------------------------- |
+| **use-ts-sdk**            | Aptos TypeScript SDK 前端集成编排器                             |
+| **ts-sdk-client**         | 使用 AptosConfig 配置 Aptos 客户端并选择网络                         |
+| **ts-sdk-account**        | 从私钥或派生路径创建 Aptos 账户和签名器                                  |
+| **ts-sdk-address**        | 解析和派生 Aptos 账户地址（AIP-40）                                 |
+| **ts-sdk-transactions**   | 构建、签名并提交交易，包括赞助交易和多代理交易                                  |
+| **ts-sdk-view-and-query** | 调用 Move view 函数并查询链上 Aptos 数据                            |
+| **ts-sdk-types**          | 将 Move 类型映射到 TypeScript（`u64`、`u128`、`address`、`vector`） |
+| **ts-sdk-wallet-adapter** | 使用 `useWallet` 在 React 应用中集成 Aptos 钱包                    |
 
 ### 项目技能
 
-| 技能                       | 描述                                         |
-| ------------------------ | ------------------------------------------ |
-| **create-aptos-project** | 搭建包含 Move 合约、TypeScript SDK 和前端的新 Aptos 项目 |
+| 技能                       | 描述                                     |
+| ------------------------ | -------------------------------------- |
+| **create-aptos-project** | 使用 `create-aptos-dapp` 搭建新的 Aptos dApp |
 
 ## 推荐工作流
 
@@ -83,13 +95,19 @@ cp -r aptos-agent-skills/skills/* .claude/skills/
 3. **测试** — 使用 `generate-tests` 创建全面的测试覆盖
 4. **审计** — 使用 `security-audit` 检查漏洞
 5. **部署** — 使用 `deploy-contracts` 发布到 devnet 或 testnet
-6. **前端** — 使用 `ts-sdk-wallet-adapter` 和其他 SDK 技能构建 UI
+6. **前端** — 使用 `use-ts-sdk` 和其他 TypeScript SDK 技能构建 UI
 
 ## 社区技能
 
-仓库包含一个 `community-skills/` 目录，任何人都可以贡献额外的技能。要添加您自己的技能：
+仓库包含一个 `community-skills/` 目录。社区技能由贡献者独立维护，未经 Aptos Labs 审核。
 
-1. 按照现有格式创建新的技能文件
-2. 向 [aptos-agent-skills 仓库](https://github.com/aptos-labs/aptos-agent-skills)提交 pull request
+| 技能                     | 作者        | 描述                               |
+| ---------------------- | --------- | -------------------------------- |
+| **smoothsend-gasless** | ivedmohan | 使用 SmoothSend 为 Aptos 交易赞助 gas 费 |
 
-详细的贡献流程请参阅 [CONTRIBUTING.md](https://github.com/aptos-labs/aptos-agent-skills/blob/main/CONTRIBUTING.md)。
+要添加你自己的技能：
+
+1. 按现有格式在 `community-skills/` 下创建新技能
+2. 向 [aptos-agent-skills 仓库](https://github.com/aptos-labs/aptos-agent-skills) 提交 pull request
+
+详细贡献流程见 [CONTRIBUTING.md](https://github.com/aptos-labs/aptos-agent-skills/blob/main/CONTRIBUTING.md)。

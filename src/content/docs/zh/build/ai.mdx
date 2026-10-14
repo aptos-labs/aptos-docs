@@ -1,6 +1,6 @@
 ---
 title: "Aptos 开发的 AI 工具"
-description: "使用 Claude、Cursor 和 GitHub Copilot 等 AI 工具更快地在 Aptos 上构建。访问 Aptos MCP 服务器和 LLMs.txt 文档源。"
+description: "使用 Claude、Cursor、Codex 和 GitHub Copilot 等 AI 工具更快地在 Aptos 上构建。访问 Aptos MCP 服务器和 LLMs.txt 文档源。"
 sidebar:
   label: "AI 工具概览"
 ---
@@ -19,7 +19,13 @@ Aptos 为 AI 驱动的开发工作流提供一流支持。无论您使用的是 
   <LinkCard href="/zh/build/ai/aptos-mcp/claude" title="Claude Code" description="为 Claude Code 配置 Aptos MCP 服务器" />
 
   <LinkCard href="/zh/build/ai/aptos-mcp/cursor" title="Cursor" description="为 Cursor 配置 Aptos MCP 服务器" />
+
+  <LinkCard href="/zh/build/ai/aptos-mcp/codex" title="OpenAI Codex" description="为 Codex 配置 Aptos MCP 服务器" />
 </CardGrid>
+
+任何能够启动本地 stdio 服务器的 MCP 客户端（包括 GitHub Copilot）都可以使用相同的
+`npx -y @aptos-labs/aptos-mcp` 命令。前置要求和 Geomi Bot Key 请参阅
+[Aptos MCP 概览](/zh/build/ai/aptos-mcp)。
 
 ## Aptos Agent Skills
 
@@ -49,7 +55,7 @@ npx skills add aptos-labs/aptos-agent-skills
 
 [`llms.txt`](/llms.txt) 路由还会列出机器可读的 **API** 链接——[`/aptos-spec.json`](/aptos-spec.json)（全节点 REST API 的 OpenAPI 3 JSON）以及 [`/zh/rest-api`](/zh/rest-api)（HTML 参考文档）——并在同一处汇总 **MCP**、Agent Skills、浏览器、GitHub、标准与 Indexer GraphQL 等 `.md` 链接。
 
-<LinkCard href="/zh/llms-txt" title="如何在 AI 工具中使用 LLMs.txt" description="Cursor、GitHub Copilot、Claude.ai、ChatGPT、Windsurf 等工具的使用说明" />
+<LinkCard href="/zh/llms-txt" title="如何在 AI 工具中使用 LLMs.txt" description="Cursor、Claude Code、GitHub Copilot、ChatGPT、Codex、Devin Desktop 等工具的使用说明" />
 
 ## 面向智能体的发现端点
 
@@ -60,12 +66,40 @@ npx skills add aptos-labs/aptos-agent-skills
 | [`/.well-known/api-catalog`](/.well-known/api-catalog)                               | 符合 [RFC 9727](https://www.rfc-editor.org/rfc/rfc9727) 的 linkset，指向 REST API 规范、文档、Indexer GraphQL 以及 LLMs.txt 文档源。                                                                        |
 | [`/.well-known/mcp/server-card.json`](/.well-known/mcp/server-card.json)             | 描述 [`@aptos-labs/aptos-mcp`](https://www.npmjs.com/package/@aptos-labs/aptos-mcp) 的 [MCP Server Card (SEP-2127)](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2127)。 |
 | [`/.well-known/agent-skills/index.json`](/.well-known/agent-skills/index.json)       | 基于 [Agent Skills Discovery](https://github.com/cloudflare/agent-skills-discovery-rfc) 的 [aptos-agent-skills](https://github.com/aptos-labs/aptos-agent-skills) 索引，包含每个技能的 SHA-256 摘要。     |
-| [`/.well-known/oauth-protected-resource`](/.well-known/oauth-protected-resource)     | 面向 Google 登录的 [Aptos 测试网水龙头](/zh/network/faucet) 的 [OAuth 2.0 受保护资源元数据（RFC 9728）](https://www.rfc-editor.org/rfc/rfc9728)，列出资源标识符、授权服务器以及支持的 scopes。                                      |
+| [`/.well-known/oauth-protected-resource`](/.well-known/oauth-protected-resource)     | 面向 `https://aptos.dev` 的 [OAuth 2.0 受保护资源元数据（RFC 9728）](https://www.rfc-editor.org/rfc/rfc9728)，列出资源标识符、[Aptos 测试网水龙头](/zh/network/faucet) 使用的 Firebase + Google 授权服务器以及支持的 scopes。       |
 | [`/.well-known/openid-configuration`](/.well-known/openid-configuration)             | [OpenID Connect Discovery 1.0](https://openid.net/specs/openid-connect-discovery-1_0.html) 文档，描述 [Aptos 测试网水龙头](/zh/network/faucet) 登录所使用的 issuer、授权与令牌端点、JWKS URI 与支持的授权类型。              |
 | [`/.well-known/oauth-authorization-server`](/.well-known/oauth-authorization-server) | 面向偏好纯 OAuth 2.0 端点名称的客户端的 [OAuth 2.0 授权服务器元数据（RFC 8414）](https://www.rfc-editor.org/rfc/rfc8414) 副本，与上面的 OIDC 发现文档内容一致。                                                                   |
-| [`/robots.txt`](/robots.txt)                                                         | 包含 [Content Signals](https://contentsignals.org/)（`ai-train=yes, search=yes, ai-input=yes`），表明 Aptos 文档允许 AI 使用。                                                                          |
+| [`/.well-known/ai-catalog.json`](/.well-known/ai-catalog.json)                       | [ARD](https://agenticresourcediscovery.org/) / [AI Catalog](https://github.com/Agent-Card/ai-catalog) 能力清单，列出 MCP Server Card、Agent Skills 索引、REST OpenAPI 规范以及 RFC 9727 API catalog。     |
+| [`/auth.md`](/auth.md)                                                               | [auth.md](https://workos.com/auth-md) 智能体认证说明。写明 `aptos.dev` 为公开文档（不提供智能体注册），测试网水龙头使用人类 Google OIDC 登录。                                                                                   |
+| [`/robots.txt`](/robots.txt)                                                         | 包含 [Content Signals](https://contentsignals.org/)（`ai-train=yes, search=yes, ai-input=yes`）、指向 AI Catalog 的 `Agentmap:` 指令，以及 `Sitemap: https://aptos.dev/sitemap.xml`。                   |
 
-OAuth / OIDC 发现文档仅适用于 [Aptos 测试网水龙头](/zh/network/faucet)；`aptos.dev` 的其余部分都是公开的、无需鉴权的文档。需要为测试网账户充值的智能体可以调用 `/.well-known/oauth-protected-resource` 获取水龙头的资源标识符以及它在 `Authorization: Bearer …` 头中接受的 OIDC issuer（Firebase + Google）。
+源站级 RFC 9728 文档将资源标识符设为 `https://aptos.dev`，以便要求 `resource` 与本主机一致的客户端能够接受该文档。本主机上的文档无需鉴权。列出的授权服务器（Firebase + Google）签发 [Aptos 测试网水龙头](/zh/network/faucet) 在 `Authorization: Bearer …` 头中接受的令牌；水龙头 API 本身位于 `https://faucet-e2.testnet.aptoslabs.com`。[`/auth.md`](/auth.md) 是对应的说明文档：本站没有智能体注册端点。
+
+### DNS for AI Discovery（DNS-AID）
+
+[DNS-AID](https://datatracker.ietf.org/doc/draft-mozleywilliams-dnsop-dnsaid/) 记录无法从本仓库发布。`aptos.dev` 托管在 Google Cloud DNS 上（`ns-cloud-c1.googledomains.com` 至 `ns-cloud-c4.googledomains.com`）。
+
+组织索引记录已经存在：
+
+```dns
+_index._agents.aptos.dev. 3600 IN HTTPS 1 aptos.dev. alpn="h2,h3" port=443
+```
+
+该记录将智能体指向 `https://aptos.dev`，此处已托管 MCP Server Card、API catalog、AI Catalog 以及其他 well-known 文档。在 Aptos 通过 HTTPS 提供这些协议之前，不要发布 `_a2a._agents` 或 `_mcp._agents`——MCP 服务器是 stdio（`npx @aptos-labs/aptos-mcp`），不是远程 MCP 端点。
+
+该区域已有 `DNSKEY` 与 `RRSIG` 记录，但验证解析器仍返回 `AD=0`，因为 `.dev` 父域没有 `DS` 记录。因此要求 DNSSEC 的智能体扫描器会失败，即使 HTTPS 记录已经发布。运维应在注册商发布 KSK 的 `DS` 记录（或在 Google Cloud DNS 中启用 DNSSEC，使其自动提交 `DS`），然后确认：
+
+```bash
+dig +short HTTPS _index._agents.aptos.dev
+dig +dnssec HTTPS _index._agents.aptos.dev
+dig DS aptos.dev
+```
+
+若还要通过 DNS 宣告 AI Catalog，请添加：
+
+```dns
+_catalog._agents.aptos.dev. 3600 IN TXT "url=https://aptos.dev/.well-known/ai-catalog.json"
+```
 
 ### Markdown 内容协商
 

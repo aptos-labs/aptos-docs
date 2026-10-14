@@ -14,9 +14,6 @@ import { defineConfig, envField, fontProviders } from "astro/config";
 import favicons from "astro-favicons";
 import icon from "astro-icon";
 import mermaid from "astro-mermaid";
-import rehypeKatex from "rehype-katex";
-import rehypeRaw from "rehype-raw";
-import remarkMath from "remark-math";
 import starlightImageZoom from "starlight-image-zoom";
 import starlightLinksValidatorOriginal from "starlight-links-validator";
 import starlightLlmsTxt from "starlight-llms-txt";
@@ -68,16 +65,19 @@ function starlightLinksValidator(options) {
 
 import starlightOpenAPI from "starlight-openapi";
 import { sidebar } from "./astro.sidebar.ts";
-import { cspConfig } from "./src/config/csp";
+import { finalizeVercelOutput } from "./scripts/finalize-vercel-output.mjs";
+import { createCspConfig } from "./src/config/csp";
 import { SITE_TITLES, SUPPORTED_LANGUAGES } from "./src/config/i18n";
+import { markdownProcessor } from "./src/config/markdown";
+import { resolveSearchProvider } from "./src/config/search";
 import onDemandDirective from "./src/integrations/client-on-demand/register.js";
 import { devServerFileWatcher } from "./src/integrations/dev-server-file-watcher";
 import { firebaseIntegration } from "./src/integrations/firebase";
 import { llmsTxtIndex } from "./src/integrations/llms-txt-index";
 import { monacoEditorIntegration } from "./src/integrations/monacoEditor";
 import { ogImagesIntegration } from "./src/integrations/ogImages";
+import { sitemapXmlAlias } from "./src/integrations/sitemap-xml-alias";
 import { ENV } from "./src/lib/env";
-import { remarkClientOnly } from "./src/plugins";
 
 const ALGOLIA_APP_ID = ENV.ALGOLIA_APP_ID;
 const ALGOLIA_SEARCH_API_KEY = ENV.ALGOLIA_SEARCH_API_KEY;
@@ -86,16 +86,68 @@ const ALGOLIA_INDEX_NAME = ENV.ALGOLIA_INDEX_NAME;
 const hasAlgoliaConfig = ALGOLIA_APP_ID && ALGOLIA_SEARCH_API_KEY && ALGOLIA_INDEX_NAME;
 const enableApiReference = true;
 
+// Pick the search provider before Starlight is configured: DocSearch when the
+// Algolia index can actually serve results, Starlight's built-in Pagefind
+// search otherwise. Set SEARCH_PROVIDER=algolia|pagefind to bypass the probe.
+const searchResolution = await resolveSearchProvider({
+  credentials: {
+    appId: ALGOLIA_APP_ID,
+    apiKey: ALGOLIA_SEARCH_API_KEY,
+    indexName: ALGOLIA_INDEX_NAME,
+  },
+  override: ENV.SEARCH_PROVIDER,
+  skipHealthCheck: ENV.SKIP_SEARCH_HEALTH_CHECK === "true",
+});
+const useAlgolia = searchResolution.provider === "algolia";
+
+if (hasAlgoliaConfig && !useAlgolia) {
+  console.warn(
+    `[search] Algolia DocSearch is configured but unusable — ${searchResolution.reason}. ` +
+      "Serving Pagefind instead. Run `pnpm check:search` for details.",
+  );
+} else {
+  console.info(`[search] Using ${searchResolution.provider} — ${searchResolution.reason}.`);
+}
+
+// Exposed to the client so Head.astro and the WebMCP search tool know which
+// search UI is on the page.
+process.env.SEARCH_PROVIDER = searchResolution.provider;
+
 /** @type {(config: import("vite").UserConfig) => boolean} */
 const isClientViteBuild = (config) => !config.build?.ssr;
 /** @type {(config: import("vite").UserConfig) => boolean} */
 const isServerViteBuild = (config) => Boolean(config.build?.ssr);
+
+/**
+ * `@astrojs/vercel` writes `.vercel/output` in its own `astro:build:done`.
+ * User integrations cannot wait for that file. Wrapping the adapter runs
+ * finalize after the file exists, including when Vercel uses the Astro
+ * preset's default `astro build` (which does not run `pnpm build:collapse-csp`).
+ *
+ * @param {import("astro").AstroIntegration} integration
+ * @returns {import("astro").AstroIntegration}
+ */
+function withFinalizedVercelOutput(integration) {
+  const originalDone = integration.hooks?.["astro:build:done"];
+  return {
+    ...integration,
+    hooks: {
+      ...integration.hooks,
+      "astro:build:done": async (context) => {
+        await originalDone?.call(integration, context);
+        finalizeVercelOutput();
+      },
+    },
+  };
+}
 
 // https://astro.build/config
 export default defineConfig({
   build: {
     inlineStylesheets: "never",
   },
+  // Preserve Astro 6's HTML-aware whitespace handling while upgrading to Astro 7.
+  compressHTML: true,
   site:
     ENV.VERCEL_ENV === "production"
       ? "https://aptos.dev"
@@ -107,8 +159,9 @@ export default defineConfig({
     monacoEditorIntegration(),
     // Custom client directive for on-demand loading
     onDemandDirective(),
-    // Mermaid diagram support
-    mermaid(),
+    // Mermaid diagram support. Logging is off because the client script loads on
+    // every page, including those without diagrams.
+    mermaid({ enableLog: false }),
     // Only include devServerFileWatcher in development mode
     ...(process.env.NODE_ENV === "development" || !process.env.VERCEL
       ? [
@@ -206,7 +259,7 @@ export default defineConfig({
               return true;
             }
 
-            // Known `.well-known/` endpoints served from `public/` or via a Vercel
+            // Known static discovery files served from `public/` or via a Vercel
             // redirect. They are not doc routes, so starlight-links-validator can't
             // resolve them. List each one explicitly (rather than excluding the
             // whole `.well-known/` prefix) so a typo in a docs page is still caught.
@@ -218,6 +271,9 @@ export default defineConfig({
               "/.well-known/oauth-protected-resource",
               "/.well-known/openid-configuration",
               "/.well-known/oauth-authorization-server",
+              "/auth.md",
+              "/.well-known/ai-catalog.json",
+              "/aptos-spec.json",
             ];
             if (knownWellKnown.some((path) => link.endsWith(path))) {
               return true;
@@ -237,7 +293,9 @@ export default defineConfig({
         starlightLlmsTxt({
           rawContent: true,
         }),
-        ...(hasAlgoliaConfig
+        // Registering the DocSearch plugin also disables Pagefind, so it is only
+        // added when Algolia is known to work (see `resolveSearchProvider`).
+        ...(useAlgolia
           ? [
               starlightDocSearch({
                 clientOptionsModule: "./src/config/docsearch.ts",
@@ -247,19 +305,14 @@ export default defineConfig({
         // Generate the OpenAPI documentation pages if enabled
         ...(enableApiReference
           ? [
-              starlightOpenAPI(
-                [
-                  {
-                    base: "rest-api",
-                    label: "REST API Reference",
-                    schema: "./public/aptos-spec.json",
-                    sidebarMethodBadges: true,
-                  },
-                ],
+              starlightOpenAPI([
                 {
-                  routeEntrypoint: "./src/components/OpenAPI/Route.astro",
+                  base: "rest-api",
+                  label: "REST API Reference",
+                  schema: "./public/aptos-spec.json",
+                  sidebarMethodBadges: true,
                 },
-              ),
+              ]),
             ]
           : []),
       ],
@@ -280,6 +333,8 @@ export default defineConfig({
         locales: Object.fromEntries(SUPPORTED_LANGUAGES.map(({ code }) => [code, code])),
       },
     }),
+    // After @astrojs/sitemap so astro:build:done can copy sitemap-0.xml → sitemap.xml.
+    sitemapXmlAlias(),
     partytown({
       config: {
         forward: ["dataLayer.push", "gtag"],
@@ -323,25 +378,31 @@ export default defineConfig({
     }),
   ],
   adapter: process.env.VERCEL
-    ? vercel({
-        staticHeaders: {
-          cspMode: "global",
-        },
-        edgeMiddleware: false,
-        imageService: true,
-        imagesConfig: {
-          domains: [],
-          sizes: [320, 640, 1280],
-          formats: ["image/avif", "image/webp"],
-        },
-      })
+    ? withFinalizedVercelOutput(
+        vercel({
+          // The patched adapter collapses Astro CSP into one catch-all route
+          // (`patches/@astrojs__vercel.patch`). Per-path static headers bloat
+          // `.vercel/output/config.json` and have failed preview deploys
+          // (Vercel "Body exceeded 3300kb limit"). The adapter wrap then
+          // copies Monaco `client/` into `static/` and drops leftover
+          // `_functions`/`client` dirs that are not Build Output API entries.
+          staticHeaders: { cspMode: "global" },
+          edgeMiddleware: false,
+          imageService: true,
+          imagesConfig: {
+            domains: [],
+            sizes: [320, 640, 1280],
+            formats: ["image/avif", "image/webp"],
+          },
+        }),
+      )
     : node({
         mode: "standalone",
         staticHeaders: true,
       }),
   vite: {
     plugins: [
-      tailwindcss(),
+      ...tailwindcss(),
       ...codecovVitePlugin({
         enableBundleAnalysis: Boolean(process.env.CODECOV_TOKEN),
         bundleName: "aptos-docs-client",
@@ -385,20 +446,7 @@ export default defineConfig({
     },
   },
   markdown: {
-    gfm: true,
-    remarkPlugins: [
-      remarkMath,
-      [
-        remarkClientOnly,
-        {
-          components: {
-            GraphQLEditor: "react",
-            Faucet: "react",
-          },
-        },
-      ],
-    ],
-    rehypePlugins: [rehypeRaw, rehypeKatex],
+    processor: markdownProcessor,
   },
   prefetch: true,
   image: {
@@ -422,6 +470,14 @@ export default defineConfig({
         access: "public",
         optional: !hasAlgoliaConfig,
       }),
+      // Always set from `searchResolution` above, so this reflects the provider
+      // that actually shipped rather than the requested one.
+      SEARCH_PROVIDER: envField.enum({
+        context: "client",
+        access: "public",
+        values: ["algolia", "pagefind"],
+        default: "pagefind",
+      }),
       GITHUB_TOKEN: envField.string({
         context: "server",
         access: "secret",
@@ -444,7 +500,9 @@ export default defineConfig({
     validateSecrets: true,
   },
   security: {
-    csp: cspConfig,
+    // Stay on Astro 7.2.0. `patches/astro.patch` ports the 7.2.5 behavior:
+    // omit auto hashes when `'unsafe-inline'` is present so browsers honor it.
+    csp: createCspConfig(searchResolution.provider),
   },
   fonts: [
     {

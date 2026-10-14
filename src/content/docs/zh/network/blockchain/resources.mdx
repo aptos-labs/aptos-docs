@@ -1,0 +1,73 @@
+---
+title: "Move 资源"
+description: "了解 Move 资源如何在 Aptos 上存储链上状态、它们与嵌套实例的区别，以及对象和同质化资产如何建立在该模型之上。"
+sidebar:
+  label: "资源"
+---
+
+在 Aptos 上，链上状态组织为**资源**和**模块**，存放在账户（以及[对象](/zh/build/smart-contracts/objects)地址）下。这不同于以太坊：后者每个合约拥有私有存储空间。地址如何工作见[账户](/zh/network/blockchain/accounts)。
+
+## 资源与实例
+
+Move 模块定义 struct。`key` 和 `store` 等能力控制这些 struct 的值可以存放在哪里：
+
+- **资源**是带 `key` 的 struct，位于某个地址的全局存储中。
+- 带 `store` 的**实例**可以放在资源（或另一个 `store` 值）_内部_，但不能单独作为顶层资源。
+
+最初的 Coin 模型很清楚：`CoinStore` 是资源，`Coin` 是内部实例。同质化资产迁移之后，APT 余额放在主同质化存储中（并与遗留 Coin 类型配对）。新代币应使用[同质化资产](/zh/build/smart-contracts/fungible-asset)的主存储。
+
+```move
+/// A holder of a specific coin type and associated event handles.
+/// These are kept in a single resource to ensure locality of data.
+struct CoinStore<phantom CoinType> has key {
+    coin: Coin<CoinType>,
+}
+
+/// Main structure representing a coin/token in an account's custody.
+struct Coin<phantom CoinType> has store {
+    /// Amount of coin this address has.
+    value: u64,
+}
+```
+
+在拥有账户许可的情况下，模块可以把 `Coin` 从 `CoinStore` 取出，移入另一个 `CoinStore` 或自定义资源：
+
+```move
+struct CustomCoinBox<phantom CoinType> has key {
+    coin: Coin<CoinType>,
+}
+```
+
+## 定义资源和对象
+
+每个实例和资源都在某个地址的模块中定义。例如 `0x1234::coin::CoinStore<0x1234::coin::SomeCoin>` 如下：
+
+```move
+module 0x1234::coin {
+    struct CoinStore<phantom CoinType> has key {
+        coin: Coin<CoinType>,
+    }
+
+    struct SomeCoin {}
+}
+```
+
+这里 `0x1234` 是地址，`coin` 是模块，`CoinStore` 可作为资源存储，`SomeCoin` 是 phantom 类型标签。Phantom 类型参数让同一地址上可以存在多种不同的 `CoinStore` 资源。
+
+[对象](/zh/build/smart-contracts/objects)扩展了该模型：不是把许多无关资源塞进用户账户，而是创建一个专用地址，拥有一组代表某个 NFT、金库或应用实体的资源。
+
+## 权限
+
+定义 struct 的模块拥有其内部字段。其他模块可以接收并存储实例，但未经定义模块提供的函数，不能读写私有字段。
+
+所有权要么是“该资源位于该账户下”，要么是定义模块中的逻辑（例如对象的 owner 字段）。
+
+## 查看资源
+
+通过所有者地址和完整类型（`address::module::Struct<TypeArgs>`）查找资源。可在 [Aptos Explorer](https://explorer.aptoslabs.com/) 中查看，或从全节点 REST API 获取（`GET /accounts/{address}/resource/{resource_type}`）。
+
+## 资源的存储方式
+
+定义模块决定数据放在哪里。例如代币的存款事件可以放在接收者账户，也可以放在模块自己的账户。
+
+把按用户划分的数据放在各用户账户（或对象）下通常更利于并行：来自不同地址的交易不会争用同一资源，因此 [Block-STM](/zh/network/blockchain/execution) 可以一起运行它们。热点全局资源（单一共享注册表）会让这些写入串行化。

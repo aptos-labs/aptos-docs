@@ -15,7 +15,7 @@ Encrypted-mempool transactions wrap your Move payload in a ciphertext at build t
 
 ## Prerequisites
 
-Encrypted mempool is currently live on **devnet**, with **testnet** support coming soon and **mainnet** to follow. The network you submit to must support the feature; check the ledger info first:
+Encrypted mempool is currently live on **devnet**, **testnet**, and **mainnet**. To verify that the network has the feature enabled, check the ledger info:
 
 ```typescript
 const ledgerInfo = await aptos.getLedgerInfo();
@@ -24,7 +24,7 @@ const supportsEncrypted = Boolean(ledgerInfo.encryption_key);
 
 If the node doesn't expose `encryption_key`, building with `encrypted: true` throws.
 
-The `senderAuthenticationKey` option is **optional** — the SDK fetches it from chain and caches it for ~1 hour per address. Pass it explicitly to bypass the lookup, which is useful immediately after a key rotation. It accepts an `AuthenticationKey` instance, an `AccountPublicKey` (the SDK derives the auth key automatically), or a raw 32-byte hex string. For accounts that have never rotated their key, the account address bytes are identical to the authentication key bytes, so you can pass the address hex directly.
+The `senderAuthenticationKey` option is **optional** — the SDK fetches it from chain and caches it for ~1 hour per address. Pass it explicitly to bypass the lookup, which is useful immediately after a key rotation. It accepts an `AuthenticationKey` instance or a raw 32-byte hex string / `Uint8Array` — call `publicKey.authKey()` to derive an `AuthenticationKey` from a public key. For accounts that have never rotated their key, the account address bytes are identical to the authentication key bytes, so you can pass the address hex directly.
 
 ## Build, sign, and submit
 
@@ -58,7 +58,7 @@ The `senderAuthenticationKey` option is **optional** — the SDK fetches it from
 </Steps>
 
 <Aside type="note">
-  Encrypted transactions pay a minimum gas-unit price of **200 Octas/gas-unit** (twice the network base minimum). The SDK enforces this floor at build time: prices below it are bumped automatically, and the SDK warns when a caller explicitly set a lower value.
+  Encrypted transactions pay a minimum gas-unit price of **200 Octas/gas-unit** (twice the network base minimum). The SDK enforces this floor at build time: prices below it are bumped automatically, and the SDK warns when a caller explicitly set a lower value. Each encrypted transaction is also charged a flat **375 gas units** for decryption, on top of the gas its payload uses. If you set `maxGasAmount` yourself, include this charge. See [Cost](/build/guides/encrypted-pending-transactions#cost).
 </Aside>
 
 ## Simulating an encrypted transaction
@@ -68,7 +68,7 @@ The `senderAuthenticationKey` option is **optional** — the SDK fetches it from
 If you must simulate to estimate gas, build a **plaintext twin** with the same `data`, simulate that, then build again with `encrypted: true` for submission:
 
 1. `build.simple({ ..., options: { /* no encrypted */ } })` — same function, arguments, gas hints.
-2. `aptos.transaction.simulate.simple({ ... })` — tune `maxGasAmount` / `gasUnitPrice` from the result.
+2. `aptos.transaction.simulate.simple({ ... })` — tune `maxGasAmount` / `gasUnitPrice` from the result. The plaintext twin does not pay the decryption charge, so add at least **375 gas units** to the simulated gas when you set `maxGasAmount`.
 3. `build.simple({ ..., options: { encrypted: true, ...gas from step 2 } })` — submit this build.
 
 ## Multi-agent
@@ -85,8 +85,8 @@ const transaction = await aptos.transaction.build.multiAgent({
   },
   options: {
     encrypted: true,
-    senderAuthenticationKey: sender.publicKey,           // optional
-    secondarySignerAuthenticationKeys: [secondary.publicKey], // optional; entries can be undefined
+    senderAuthenticationKey: sender.publicKey.authKey(),           // optional
+    secondarySignerAuthenticationKeys: [secondary.publicKey.authKey()], // optional; entries can be undefined
   },
 });
 ```
@@ -105,8 +105,8 @@ const transaction = await aptos.transaction.build.simple({
   },
   options: {
     encrypted: true,
-    senderAuthenticationKey: sender.publicKey,   // optional
-    feePayerAuthenticationKey: sponsor.publicKey, // optional
+    senderAuthenticationKey: sender.publicKey.authKey(),   // optional
+    feePayerAuthenticationKey: sponsor.publicKey.authKey(), // optional
   },
 });
 ```
@@ -137,7 +137,7 @@ You can set `claimedEntryFunction` to _intentionally expose_ the entry function 
 ```typescript
 options: {
   encrypted: true,
-  feePayerAuthenticationKey: sponsor.publicKey,
+  feePayerAuthenticationKey: sponsor.publicKey.authKey(),
   claimedEntryFunction: {
     module: "0x1::aptos_account",
     // functionName intentionally omitted

@@ -1,0 +1,52 @@
+---
+title: "如何编写 Move 脚本？"
+description: "了解如何为批量操作、管理任务和复杂交易流程编写 Move 脚本。"
+sidebar:
+  label: "编写脚本"
+---
+
+import { FileTree } from '@astrojs/starlight/components';
+
+Move 脚本可以与 Move 合约一同编写，但强烈建议为其使用单独的 Move 包。这样可以更容易确定哪个字节码文件来自脚本。
+
+## 包布局
+
+该包需要一个 Move.toml 和一个 sources 目录，类似于代码模块。
+
+例如，可以有如下目录布局：
+
+<FileTree>
+  - my\_project/
+    - Move.toml
+    - sources/
+      - my\_script.move
+</FileTree>
+
+## 脚本语法
+
+脚本的编写方式与 Aptos 上的模块完全相同。可以为 Move.toml 文件中的任何依赖项使用 import，并且可以从合约调用所有 public 函数（包括 entry 函数）。但有一些限制：
+
+- 合约中只能有一个函数，它会编译为该名称。
+- 输入参数只能是 `u8`、`u16`、`u32`、`u64`、`u256`、`address`、`bool`、`signer`、`&signer`、`vector<u8>` 之一。不支持其他类型的 vector 或 struct。
+
+以下是一个示例：
+
+```move
+script {
+  use std::signer;
+  use aptos_framework::coin;
+  use aptos_framework::aptos_account;
+
+  fun transfer_half<Coin>(caller: &signer, receiver_address: address) {
+    // Retrieve the balance of the caller
+    let caller_address: address = signer::address_of(caller);
+    let balance: u64 = coin::balance<Coin>(caller_address);
+
+    // Send half to the receiver
+    let half = balance / 2;
+    aptos_account::transfer_coins<Coin>(caller, receiver_address, half);
+  }
+}
+```
+
+有关更具体的详细信息，请参阅[Move Book 的脚本章节](https://aptos-labs.github.io/move-book/modules-and-packages.html)。

@@ -1,0 +1,128 @@
+---
+title: "创建处理器"
+description: "使用 Aptos Indexer SDK 模板和实现模式创建自定义处理器的分步指南"
+sidebar:
+  label: "创建处理器"
+---
+
+本指南将带你配置新处理器所需的基础模板。
+
+## 前置条件
+
+你已经配置好环境，并安装了 Indexer SDK `aptos-indexer-sdk`。
+如未完成，请参阅 [Indexer SDK 安装指南](/zh/build/indexer/indexer-sdk/documentation/setup)。
+
+## 概览
+
+创建并运行一个处理器需要以下几个部分：
+
+1. `IndexerProcessorConfig`
+2. `ProcessorConfig`
+3. 处理器本身。在这里定义处理器的配置、初始化逻辑以及为索引交易而执行的步骤。
+4. `main.rs`：运行处理器的主文件。
+
+下一节会逐一说明这些部分，并提供代码示例。
+
+## 如何定义 `IndexerProcessorConfig`
+
+`IndexerProcessorConfig` 定义了所有将运行的处理器的基础配置。
+其中应包含多个处理器共享的配置，例如数据库配置和 [交易流](/zh/build/indexer/txn-stream)配置。
+
+`ServerArgs` 会解析 `config.yaml` 文件，并引导启动包含运行处理器所需全部通用组件的服务器。
+
+若要设置处理器配置并使其与 `ServerArgs` 协同工作，需要定义一个实现 `RunnableConfig` trait 的 `IndexerProcessorConfig`。
+它还会触发一个可在 `main.rs` 中调用的运行方法。
+
+对于基础场景，可以复制 [`aptos-indexer-processor-example` 仓库中的 `IndexerProcessorConfig`](https://github.com/aptos-labs/aptos-indexer-processor-example/blob/main/aptos-indexer-processor-example/src/config/indexer_processor_config.rs)，再按需要修改。
+
+## 如何定义 `ProcessorConfig`
+
+`ProcessorConfig` 是包含全部单个处理器配置的枚举。
+`IndexerProcessorConfig.run()` 使用它将处理器名称映射到正确的 `ProcessorConfig`。
+
+你可以在 [此处](https://github.com/aptos-labs/aptos-indexer-processor-example/blob/main/aptos-indexer-processor-example/src/config/processor_config.rs)查看 `ProcessorConfig` 的基础示例。
+包含多个处理器和配置的复杂示例见 [`aptos-indexer-processors`](https://github.com/aptos-labs/aptos-indexer-processors-v2/blob/main/processor/src/config/processor_config.rs#L84)。
+
+## 如何创建处理器
+
+配置部分完成后，下一步是创建处理器。
+处理器由一个结构体表示，通常命名为 `{PROCESSOR_NAME}Processor`，例如 `EventsProcessor` 或 `TokenV2Processor`，具体取决于它索引的数据类型。
+
+```rust
+pub struct EventsProcessor {
+    pub config: IndexerProcessorConfig,
+    pub db_pool: ArcDbPool,
+}
+```
+
+处理器的构造函数应按如下方式定义：
+
+```rust
+pub async fn new(config: IndexerProcessorConfig) -> Result<Self> {
+    // Processor setup code here, if needed
+}
+```
+
+它接收前面定义的 `IndexerProcessorConfig`，并执行实例化处理器所需的初始化。
+接下来，处理器需要实现 [`ProcessorTrait`](https://github.com/aptos-labs/aptos-indexer-processor-sdk/blob/a56b641a6aaca60092fcc9bbd98252f3cd703299/aptos-indexer-processors-sdk/sdk/src/traits/processor_trait.rs#L4)。
+
+```rust
+#[async_trait::async_trait]
+impl ProcessorTrait for EventsProcessor {
+    fn name(&self) -> &'static str {
+        self.config.processor_config.name()
+    }
+
+    async fn run_processor(&self) -> Result<()> {
+        // Processor logic here
+    }
+}
+```
+
+`run_processor` 方法是处理器中最重要的方法。
+
+如果使用基于迁移的数据库（如 PostgreSQL），可以在 `run_processor` 中运行迁移。
+这里还用于实现逻辑：确定处理器合适的起始版本、使用 [交易流](/zh/build/indexer/txn-stream)验证链 ID，以及校验处理器配置。
+
+`run_processor` 还会实例化处理器的 `Step`，并指定这些 `Step` 如何通过通道连接在一起。
+
+```rust
+// Instantiate processor steps
+let transaction_stream = TransactionStreamStep::new(TransactionStreamConfig {
+    starting_version: Some(starting_version),
+    ..self.config.transaction_stream_config.clone()
+})
+.await?;
+// ... Instantiate the rest of your processor's steps ...
+
+// Connect processor steps
+let (_, buffer_receiver) = ProcessorBuilder::new_with_inputless_first_step(
+    transaction_stream.into_runnable_step(),
+)
+.connect_to(extractor_step.into_runnable_step(), channel_size)
+.connect_to(storer_step.into_runnable_step(), channel_size)
+.connect_to(version_tracker_step.into_runnable_step(), channel_size)
+.end_and_return_output_receiver(channel_size);
+
+// Read the results from the output of the last step
+loop {
+    match buffer_receiver.recv().await {
+        // Do something with th output
+    }
+}
+```
+
+完整的原始 Aptos 事件索引处理器示例见 [`aptos-indexer-processor-example`](https://github.com/aptos-labs/aptos-indexer-processor-example/blob/main/aptos-indexer-processor-example/src/processors/events/events_processor.rs)。
+作为参考，还可以在 [`aptos-indexer-processors`](https://github.com/aptos-labs/aptos-indexer-processors-v2/tree/main/processor/src/processors)中查看构成 [Indexer API](/zh/build/indexer/indexer-api) 的全部处理器。
+
+## 如何定义 `main.rs`
+
+你可以复制 `aptos-indexer-processor-example` 中的 [`main.rs`](https://github.com/aptos-labs/aptos-indexer-processor-example/blob/main/aptos-indexer-processor-example/src/main.rs) 文件。
+
+以下代码使用了前面定义的 `ServerArgs` 和 `IndexerProcessorConfig`：
+
+```rust
+let args = ServerArgs::parse();
+args.run::<IndexerProcessorConfig>(tokio::runtime::Handle::current())
+    .await
+```

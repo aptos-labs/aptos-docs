@@ -1,0 +1,136 @@
+---
+title: "面向 SDK 钱包构建者的钱包适配器插件"
+description: "为 SDK 钱包创建钱包适配器插件，以便通过 AIP-62 钱包标准集成 dapp"
+sidebar:
+  label: "面向 SDK 钱包构建者"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+钱包适配器插件使 dapp 能够使用你的钱包。采用 AIP-62 Wallet 标准后，dapp 只需更新其 `aptos-wallet-adapter` 版本，便可连接新添加的钱包插件。
+
+为可通过 npm 导入的 SDK 钱包实现钱包插件主要包含三个步骤：
+
+1. 为 SDK 钱包实现钱包适配器插件。
+2. 在 npm 上发布插件。
+3. 更新 `aptos-wallet-adapter` 包，让 dapp 了解你的钱包。
+
+## 1. 实现钱包适配器插件
+
+你可以使用 [`wallet-standard`](https://github.com/aptos-labs/wallet-standard) 仓库的示例，实现与 [AIP-62](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-62.md) 兼容、且可被 dapp 自动识别的钱包适配器插件。
+
+<Aside type="note">
+  有关如何实现钱包适配器插件的示例，请参阅 [Wallet Adapter Demo dapp](https://github.com/aptos-labs/aptos-wallet-adapter/tree/main/apps/nextjs-example)。具体而言，[`standardWallet.ts`](https://github.com/aptos-labs/aptos-wallet-adapter/blob/main/apps/nextjs-example/src/utils/standardWallet.ts) 包含插件实现，而 [`page.tsx`](https://github.com/aptos-labs/aptos-wallet-adapter/blob/main/apps/nextjs-example/src/app/page.tsx) 包含 React 组件。
+</Aside>
+
+<Steps>
+  1. 创建新的 TypeScript 仓库。
+
+  2. 将示例复制到新仓库中。
+
+  3. 按照该示例中的说明，使其使用你的钱包执行 AIP-62 函数。
+
+     <Aside type="note">
+       AIP-62 兼容钱包所需的完整函数列表可在[此处](https://github.com/aptos-labs/wallet-standard/blob/38defe159b8641ff1763c4db61827c78ab448dab/src/detect.ts#L16)查看。
+     </Aside>
+</Steps>
+
+## 通过以下步骤测试变更
+
+<Steps>
+  1. 克隆仓库。
+
+  2. 在示例 dapp 中进入相应目录。
+
+  3. 将其替换为你对 AIP-62 标准的实现。
+
+     1. 需要更新 [`aptos-wallet-adapter/apps/nextjs-example/src/app/page.tsx`](https://github.com/aptos-labs/aptos-wallet-adapter/blob/main/apps/nextjs-example/src/app/page.tsx) 中的导入，使其使用你的钱包而非 `MyWallet`。
+     2. 为便于本地测试，可以保留 `registerWallet` 代码；但 SDK 钱包一旦加入 `aptos-wallet-standard` 核心包，便不再需要该代码。
+
+  4. 按照其中的说明运行 dapp 的本地版本。
+
+  5. 点击“连接钱包”
+
+     应能在连接列表中看到你的钱包。
+
+  6. 连接到你的钱包。
+
+     1. 随后可使用演示 dapp 的功能，验证钱包的其他功能是否按预期工作。
+     2. 这模拟了真实 dapp 与钱包交互的方式。
+</Steps>
+
+## 2. 测试完成后，按照[本指南](https://docs.npmjs.com/creating-and-publishing-scoped-public-packages)为 SDK 钱包代码发布新的 npm 包。（例如 [AptosConnect](https://www.npmjs.com/package/@aptos-connect/wallet-adapter-plugin)）
+
+## 3. 更新 [`wallet-adapter-core`](https://github.com/aptos-labs/aptos-wallet-adapter/tree/main/packages/wallet-adapter-core)，使其了解你的扩展程序
+
+为了让尚未使用你钱包的 dapp 用户也能选择通过你的钱包创建账户，需要在 [`wallet-adapter-core`](https://github.com/aptos-labs/aptos-wallet-adapter/tree/main/packages/wallet-adapter-core) 中添加浏览器扩展的下载链接。
+
+<Steps>
+  1. Fork monorepo。
+
+  2. 在 VSCode 等本地编辑器中打开你的 fork。
+
+  3. 为变更创建新分支。
+
+     ```shellscript filename="Terminal"
+     git checkout -b your-wallet
+     ```
+
+  4. 进入相应目录。
+
+  5. 导入 SDK 钱包 npm 包。
+
+     ```shellscript filename="Terminal"
+     pnpm i @yourpackage
+     ```
+
+  6. 在相应文件中导入钱包。
+
+     以 AptosConnect 为例：
+
+     ```tsx filename="Example.tsx"
+     import { AptosConnectWallet } from "@aptos-connect/wallet-adapter-plugin";
+     ```
+
+  7. 在 getSDKWallets 中添加代码，将钱包实例推入 sdkWallets（位于 sdkWallets.ts）。
+
+     ```tsx filename="Example.tsx"
+     sdkWallets.push(new YourWallet(dappConfig));
+     ```
+
+     <Aside type="caution">
+       有些钱包可能需要自定义逻辑，以确保用户点击使用你的钱包“登录”时连接的是正确的钱包。
+
+       例如，T Wallet 为 mainnet 和 devnet 连接提供不同的钱包插件。
+     </Aside>
+
+  8. 在 type.ts 中更新 AvailableWallets 类型，使其包含钱包名称。
+
+     ```tsx filename="Example.tsx"
+     export type AvailableWallets = "Nightly" | "Petra" | "T wallet" | "Your Wallet's Name";
+     ```
+
+  9. 更新 aptos-wallet-adapter 顶层的内容，将钱包加入 AIP-62 兼容钱包列表。
+
+  10. 提交并推送变更到你的 fork。
+
+      <Aside type="note">
+        将变更推送到 fork 后，[`aptos-wallet-adapter`](https://github.com/aptos-labs/aptos-wallet-adapter) 仓库顶部应会出现绿色按钮，询问你是否要创建拉取请求。
+      </Aside>
+
+  11. 按照说明为仓库创建拉取请求。
+
+      <Aside type="note">
+        变更合并后，更新 `aptos-wallet-adapter` 包版本的 dapp 即可看到你的钱包。
+      </Aside>
+</Steps>
+
+## 资源
+
+- Wallet Adapter Demo App
+  - [在线站点](https://aptos-wallet-adapter-example.vercel.app/)
+  - [源代码](https://github.com/aptos-labs/aptos-wallet-adapter/tree/main/apps/nextjs-example)
+  - 有关 AIP-62 兼容 wallet-adapter 插件的实现示例，请参阅 [`standardWallet.ts`](https://github.com/aptos-labs/aptos-wallet-adapter/blob/main/apps/nextjs-example/src/utils/standardWallet.ts)。
+- [`wallet-standard`](https://github.com/aptos-labs/wallet-standard) 源代码。
+- [`wallet-adapter-core`](https://github.com/aptos-labs/aptos-wallet-adapter/tree/main/packages/wallet-adapter-core) 源代码。
+- [AIP-62 标准](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-62.md)。

@@ -18,13 +18,26 @@ export const LLMS_INDEX_SECTIONS: LlmsSection[] = [
     title: "Start Here",
     ids: [
       "build/get-started",
+      "build/guides",
       "build/get-started/ethereum-cheatsheet",
       "build/guides/first-transaction",
+      "build/guides/payments",
       "build/guides/first-move-module",
       "network/blockchain/accounts",
       "network/blockchain/txns-states",
       "build/sdks",
       "build/cli",
+    ],
+  },
+  {
+    title: "Concepts",
+    ids: [
+      "network/blockchain",
+      "network/blockchain/move",
+      "network/blockchain/execution",
+      "network/blockchain/blocks",
+      "network/blockchain/gas-txn-fee",
+      "network/blockchain/staking",
     ],
   },
   {
@@ -40,6 +53,7 @@ export const LLMS_INDEX_SECTIONS: LlmsSection[] = [
     ids: [
       "build/apis",
       "build/apis/fullnode-rest-api",
+      "build/apis/faucet-api",
       "build/guides/exchanges",
       "build/indexer/indexer-api",
       "build/indexer/indexer-api/indexer-reference",
@@ -48,7 +62,16 @@ export const LLMS_INDEX_SECTIONS: LlmsSection[] = [
   },
   {
     title: "SDKs",
-    ids: ["build/sdks/ts-sdk"],
+    ids: [
+      "build/sdks/ts-sdk",
+      "build/sdks/ts-sdk/quickstart",
+      "build/sdks/python-sdk",
+      "build/sdks/python-sdk/quickstart",
+      "build/sdks/go-sdk",
+      "build/sdks/go-sdk/quickstart",
+      "build/sdks/rust-sdk",
+      "build/sdks/rust-sdk/quickstart",
+    ],
   },
   {
     title: "Advanced Topics",
@@ -62,7 +85,7 @@ export const LLMS_INDEX_SECTIONS: LlmsSection[] = [
   },
   {
     title: "AI Tooling",
-    ids: ["build/ai", "build/ai/aptos-mcp", "llms-txt"],
+    ids: ["build/ai", "build/ai/aptos-mcp", "build/ai/aptos-agent-skills", "llms-txt"],
   },
   {
     title: "Nodes And Operations",
@@ -71,7 +94,16 @@ export const LLMS_INDEX_SECTIONS: LlmsSection[] = [
       "network/nodes/full-node",
       "network/nodes/validator-node",
       "network/releases",
+    ],
+  },
+  {
+    title: "Reference",
+    ids: [
       "network/glossary",
+      "build/smart-contracts/error-codes",
+      "network/blockchain/transaction-payloads",
+      "build/aips",
+      "build/external-resources",
     ],
   },
 ];
@@ -85,11 +117,14 @@ export const LLMS_SMALL_DOC_IDS = [
 export const FULL_PRIORITY_DOC_IDS = [
   "index",
   "build/get-started",
+  "build/guides",
   "build/get-started/ethereum-cheatsheet",
   "build/guides/first-transaction",
+  "build/guides/payments",
   "build/guides/first-move-module",
   "network/blockchain/accounts",
   "network/blockchain/txns-states",
+  "network/blockchain",
   "build/sdks",
   "build/apis",
   "build/guides/exchanges",
@@ -97,8 +132,12 @@ export const FULL_PRIORITY_DOC_IDS = [
   "build/cli",
   "build/smart-contracts",
   "build/ai",
+  "build/ai/aptos-agent-skills",
   "network/nodes",
   "network/glossary",
+  "build/smart-contracts/error-codes",
+  "network/blockchain/transaction-payloads",
+  "build/aips",
   "llms-txt",
 ];
 

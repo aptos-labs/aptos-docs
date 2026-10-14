@@ -1,0 +1,46 @@
+---
+title: "Rust SDK - Binary Canonical Serialization (BCS) Format"
+description: "Learn how to use Binary Canonical Serialization (BCS) format for transaction parameters with the Rust SDK"
+sidebar:
+  label: "BCS Format"
+---
+
+Transaction arguments for the Aptos Rust SDK are encoded with Binary Canonical
+Serialization (BCS). This is the format the Aptos chain recognizes, with specific
+types such as `u64` or `u128` instead of a generic integer.
+
+Helpers such as `EntryFunction::apt_transfer` encode arguments for you. When
+you build a payload manually, serialize each argument with `aptos_bcs`:
+
+```rust filename="example.rs"
+use aptos_sdk::{
+    transaction::{EntryFunction, TransactionPayload},
+    types::MoveModuleId,
+};
+
+let payload = TransactionPayload::EntryFunction(EntryFunction {
+    module: MoveModuleId::from_str_strict("0x1::aptos_account")?,
+    function: "transfer".to_string(),
+    type_args: vec![],
+    args: vec![
+        aptos_bcs::to_bytes(&bob.address())?,
+        aptos_bcs::to_bytes(&1_000u64)?,
+    ],
+});
+let raw_txn = aptos.build_transaction(&alice, payload).await?;
+```
+
+You can also serialize and deserialize values directly:
+
+```rust
+let bytes = aptos_bcs::to_bytes(&value)?;
+let value: MyType = aptos_bcs::from_bytes(&bytes)?;
+```
+
+Move type tags are available in the SDK:
+
+```rust
+use aptos_sdk::types::{MoveStructTag, MoveType, TypeTag};
+```
+
+You can learn more about BCS by exploring the [BCS GitHub repo](https://github.com/aptos-labs/bcs).

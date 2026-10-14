@@ -2,6 +2,7 @@ import type { Auth, GithubAuthProvider, GoogleAuthProvider, User } from "@fireba
 import { atom, onMount } from "nanostores";
 
 import { getFirebaseAuth } from "~/lib/firebase/auth";
+import { formatFirebaseAuthError } from "~/lib/firebase/error";
 import { singletonGetter } from "~/lib/singletonGetter";
 
 export type { User } from "@firebase/auth";
@@ -129,8 +130,8 @@ export class AuthStore {
         this.$isLoading.set(false);
         this.$user.set(currentUser);
       });
-    } catch {
-      this.$error.set("Could not instantiate a connection with firebase");
+    } catch (error: unknown) {
+      this.$error.set(formatFirebaseAuthError(error));
       this.$isLoading.set(false);
     }
   }
@@ -202,7 +203,7 @@ export class AuthStore {
         }
       }
     } catch (e: unknown) {
-      this.$error.set(String(e));
+      this.$error.set(formatFirebaseAuthError(e));
     } finally {
       this.$isLoading.set(false);
     }

@@ -58,7 +58,7 @@ export function moveReferenceLoader(config: GitHubConfig): Loader {
 
     // Initialize services
     const githubFetcher = new GitHubFetcher(config, context);
-    const markdownProcessor = await MarkdownProcessor.create(context.config);
+    const markdownProcessor = await MarkdownProcessor.create();
 
     try {
       // Process each branch

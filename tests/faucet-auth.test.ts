@@ -19,6 +19,7 @@ vi.mock("@firebase/auth", () => ({
 
 import * as FirebaseAuth from "@firebase/auth";
 import { getFirebaseAuth } from "~/lib/firebase/auth";
+import { formatFirebaseAuthError } from "~/lib/firebase/error";
 import { AuthStore } from "~/stores/auth";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
@@ -152,7 +153,9 @@ describe("AuthStore pre-warming (prepareAuth)", () => {
     const store = new AuthStore();
     await (store as unknown as { initAuthListener(): Promise<void> }).initAuthListener();
 
-    expect(store.$error.value).toBe("Could not instantiate a connection with firebase");
+    expect(store.$error.value).toBe(
+      formatFirebaseAuthError(new Error("Could not instantiate a connection with firebase")),
+    );
     expect(store.$isLoading.value).toBe(false);
   });
 });
@@ -307,5 +310,44 @@ describe("CSP frame-src allows first-party + fallback auth domains", () => {
     expect(source).toMatch(/frame-src/);
     expect(source).toContain("'self'");
     expect(source).toContain("aptos-api-gateway-prod.firebaseapp.com");
+  });
+});
+
+describe("formatFirebaseAuthError", () => {
+  it("gives popup-blocked errors actionable retry guidance", () => {
+    expect(formatFirebaseAuthError({ code: "auth/popup-blocked" })).toBe(
+      "Your browser blocked the Google sign-in window. Allow pop-ups for aptos.dev and try again. (auth/popup-blocked)",
+    );
+  });
+
+  it("exposes an unknown Firebase code without leaking its raw message", () => {
+    const message = formatFirebaseAuthError({
+      code: "auth/internal-error",
+      message: "Authentication failed for private@example.com",
+    });
+
+    expect(message).toBe("Google sign-in failed. Try again. (auth/internal-error)");
+    expect(message).not.toContain("private@example.com");
+  });
+
+  it("uses a safe fallback when no Firebase code is available", () => {
+    expect(formatFirebaseAuthError(new Error("secret deployment detail"))).toBe(
+      "Google sign-in is temporarily unavailable. Try again later.",
+    );
+  });
+});
+
+describe("Faucet authentication UI", () => {
+  const source = readFileSync(resolve(ROOT, "src/components/react/Faucet/Faucet.tsx"), "utf8");
+
+  it("keeps sign-in controls available while showing an authentication error", () => {
+    expect(source).not.toMatch(/if\s*\(\s*error\s*\)/);
+    expect(source).toContain('role="alert"');
+  });
+
+  it("does not misdiagnose every authentication failure as missing configuration", () => {
+    expect(source).not.toMatch(
+      /Please make sure the correct environment\s+variables are specified/,
+    );
   });
 });

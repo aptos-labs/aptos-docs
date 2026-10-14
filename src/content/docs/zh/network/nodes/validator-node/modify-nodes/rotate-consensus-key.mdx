@@ -1,0 +1,125 @@
+---
+title: "轮换共识密钥"
+description: "逐步了解如何轮换验证者的共识密钥以增强安全性，包括生成密钥、链上更新和清理流程。"
+sidebar:
+  label: "轮换共识密钥"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+共识密钥轮换是节点运营者用于更改其控制的验证者身份的操作。
+通常在相应私钥（可能）丢失或泄露时执行，或者作为常规安全实践每隔几个月执行一次。
+
+以下是执行共识密钥轮换的分步指南，并附有详细示例。
+
+## 生成新密钥
+
+使用以下 [Aptos CLI](/zh/build/cli) 命令生成新的共识身份。
+本例将身份文件保存到 /new/key/root 目录。
+
+```shellscript filename="Terminal"
+aptos genesis generate-keys --output-dir /new/key/root
+```
+
+## 将新私钥加入节点
+
+按如下说明编辑节点配置 yaml。
+
+```yaml
+# ...
+consensus:
+    # ...
+    safety_rules:
+        # ...
+        initial_safety_rules_config:
+            from_file:
+                # ...
+                identity_blob_path: /old/key/root/validator-identity.yaml
+                overriding_identity_paths:              # new!
+                - /new/key/root/validator-identity.yaml # new!
+```
+
+<Aside type="note">
+  - 字段 identity\_blob\_path 为必填项。
+  - 字段 overriding\_identity\_paths 为可选项，允许为轮换目的指定多个身份。
+  - 节点将选择与链上状态匹配的身份。
+</Aside>
+
+现在重启节点。
+它应加载新密钥，但仍使用旧密钥参与共识。
+
+## 在链上添加新公钥
+
+再次需要 Aptos CLI；此处假设运营者账户已设置为名为 profile1 的 CLI 配置文件。
+
+找到池地址（记为 $POOL\_ADDR）。
+
+在 /new/key/root/public-keys.yaml 中：
+
+- 找到新共识身份的公钥（记为 $NEW\_PUBLIC\_KEY）；
+- 找到新共识身份的持有证明（记为 $PROOF\_OF\_POSSESSION）。
+
+使用 aptos CLI 运行一笔交易，以更新下一 epoch 的链上共识公钥。
+
+```shellscript
+aptos move run \
+    --profile profile1 \
+    --function-id 0x1::stake::rotate_consensus_key \
+    --args \
+        address:$POOL_ADDR \
+        hex:$NEW_PUBLIC_KEY \
+        hex:$PROOF_OF_POSSESSION
+```
+
+以下是完整示例。
+
+```shellscript
+aptos move run \
+    --profile profile1 \
+    --function-id 0x1::stake::rotate_consensus_key \
+    --args \
+        address:0x1eb42885d7d5232269229e56bb80d0959584e14485097ebf9ab619cf4fda5c02 \
+        hex:0xacb7859468ca85cf9935e64ebb2b9b3fa8187de42d541acebaf732365a0131eaa994098f9d0d7e6b8ddea8ef11e16c55 \
+        hex:0x8e27fd9300433191b1123217928a6f5190a6ec344ea8623555712a850029b34f5c4bab68df7568b48bcced408cde5174064284407ee760df5dbf12d1c6090589ea1a692997018aca740e91d2182e5715c7745565fe99361e279ccfcfa10ae1f7
+```
+
+## 等待下一个 epoch
+
+新密钥应在下一个 epoch 更换后生效（每 2 小时发生一次）。
+
+## （高级）清理旧密钥
+
+在安全存储中（通常名为 secure\_storage.json 的文件），共识身份按以下方式组织：
+
+- 字段 consensus 包含默认共识身份。
+  - 通常首次启动节点时创建。
+  - 必须存在。
+- 字段 consensus\_X 包含额外共识身份，其中 X 是其公钥。
+  - 由于曾在节点配置 yaml 的 overriding\_identity\_paths 中添加该身份而创建。
+
+**目前，即使从节点配置 yaml 中删除相应身份，安全存储中的身份也不会自动删除**。
+
+如果需要确保旧密钥被完全移除，则需要手动清理。
+
+以下是 secure\_storage.json 的示例：
+
+```js
+{
+    // ...
+    "consensus": {
+        "data": "GetResponse",
+        "last_update": 1731372563,
+        "value": "0x221f6fbfefa0a40b84c88fbb546a0884977dcc56719a96ed4e5d69b6a4ff58c8"
+    },
+    "consensus_acb7859468ca85cf9935e64ebb2b9b3fa8187de42d541acebaf732365a0131eaa994098f9d0d7e6b8ddea8ef11e16c55": {
+        "data": "GetResponse",
+        "last_update": 1731383387,
+        "value": "0x18d5098b3819d5fb0fc208b8bb0946b263f961f60716fc4d10d4b010fdb89a55"
+    },
+    // ...
+}
+```
+
+要删除私钥 0x18d5...，只需删除键为 consensus\_acb7... 的整个字段。
+
+要删除私钥 0x221f...，请将值 0x221f... 更新为其他值（例如另一个私钥）。

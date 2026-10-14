@@ -16,6 +16,7 @@ sidebar:
 - Aptos 区块链中的 **账户** 是一个容器，可以包含任意数量的 [Move 模块](#move-模块) 和 [Move 资源](#move-资源)。
 - 每个账户的状态由代码和数据组成。
 - 账户通过 [账户地址](#账户地址) 进行标识。
+- 在 [AIP-115](/zh/build/aips/aip-115) 之后，地址无需链上 `0x1::account::Account` 资源即可作为有效账户。缺少该资源时，REST `GET /accounts/{address}` 会返回默认值，而不再返回 404。
 
 详情请参阅 [账户](/zh/network/blockchain/accounts)。
 
@@ -27,10 +28,17 @@ sidebar:
 
 详情请参阅 [账户](/zh/network/blockchain/accounts)。
 
+### Agent Skills
+
+- **Agent Skills** 是可安装的指令包，为编程助手提供 Aptos 相关知识，覆盖 Move 合约、TypeScript SDK 和 dApp 脚手架。
+- 使用 `npx skills add aptos-labs/aptos-agent-skills` 安装。
+
+详情请参阅 [Aptos Agent Skills](/zh/build/ai/aptos-agent-skills)。
+
 ### API
 
-- **应用程序编程接口（API）** 是一组协议和工具，允许用户通过外部应用程序与 Aptos 区块链节点和客户端网络进行交互。Aptos 提供 REST API 来与我们的节点进行通信。
-- 详情请参阅 [API 文档](/zh/build/apis)。
+- **应用程序编程接口（API）** 是一组协议和工具，允许用户通过外部应用程序与 Aptos 区块链节点和客户端网络进行交互。Aptos 节点提供 REST API；Aptos Labs 还托管 Indexer GraphQL API 和 Transaction Stream gRPC API。
+- 详情请参阅 [Aptos APIs](/zh/build/apis)。
 
 ### APT
 
@@ -84,13 +92,13 @@ sidebar:
 
 ### AptosAccount
 
-- **`AptosAccount`** 是一个 Move 资源，包含与账户相关的所有管理数据，如序列号、余额和认证密钥。
-- **`AptosAccount`** 是每个账户都保证包含的唯一资源。
+- **`AptosAccount`** 是早期 Aptos/Diem Move API 对账户管理状态（序列号和认证密钥）的历史名称。
+- 链上资源是 `0x1::account::Account`。在 [AIP-115](/zh/build/aips/aip-115) 之后，该资源仅在需要时创建，并非每个账户都有。
+- 账户余额存放在 CoinStore 或 Fungible Store 资源中，而不在 `Account` 中。
 
 ### AptosAccount 模块
 
-- **AptosAccount 模块** 是一个 Move 模块，包含用于操作特定 `AptosAccount.T` 资源中管理数据的代码。
-- 用于检查或增加序列号、提取或存入货币以及提取 gas 存款的代码都包含在 AptosAccount 模块中。
+- **AptosAccount 模块** 是管理 `0x1::account::Account` 的 Move 模块的历史名称。当前代码和文档请使用 `0x1::account`。
 
 ### Aptos 开发网
 
@@ -100,9 +108,18 @@ sidebar:
 
 ### 区块
 
-- 在 Aptos 上，区块是同时提交的一批 [交易](#交易)。
+- 在 Aptos 上，区块是同时提交的一批 [交易](#交易)。每个区块以 `BlockMetadata` 交易开始，除了[纪元](#纪元)的最后一个区块外，以[区块收尾](#区块收尾)结束。
 - 区块号类似于区块链文献中的"区块高度"。
-- 交易通过账本版本而非区块进行引用。
+- 交易通过账本版本而非区块进行引用。账本状态按交易而非按区块版本化。
+
+详见 [区块](/zh/network/blockchain/blocks)。
+
+### 区块收尾
+
+- **区块收尾** 是结束区块的系统交易（`block_epilogue_transaction`），并携带该区块的 `BlockEndInfo`（gas 与输出限制）。它取代了此前的 `StateCheckpoint` 交易类型。
+- 纪元的最后一个区块没有区块收尾交易。
+
+详见 [AIP-88](/zh/build/aips/aip-88)。
 
 ### BlockSTM
 
@@ -138,6 +155,13 @@ sidebar:
 ### 代码实验室
 
 - **代码实验室和教程** 描述了各种工作流程——例如使用 Aptos CLI 铸造非同质化代币（NFT）——以便用户了解流程的工作原理并在其代码中使用相关功能。如果用户的账户中有必要的资金，他们可以按照在开发网、测试网和主网网络中使用的相同代码实验室和教程步骤进行操作。
+
+### 机密资产
+
+- **机密资产（Confidential Asset，CA）** 将[同质化资产](#同质化资产)封装起来，使转账金额和机密余额保持隐藏（包括对验证者），并使用零知识证明。发送方和接收方地址仍然可见。
+- 入账资金累积在待处理机密余额中，必须[结转](/zh/build/smart-contracts/confidential-asset#余额结转)后才能花费。
+
+详见[机密资产](/zh/build/smart-contracts/confidential-asset)和 [TypeScript SDK 客户端](/zh/build/sdks/ts-sdk/confidential-asset)。CA 在支付流程中的位置见[支付](/zh/build/guides/payments#机密转账)。
 
 ### 共识
 
@@ -176,8 +200,8 @@ sidebar:
 - **加密内存池** 是 AIP-144 定义的协议特性:交易的 **Move 可执行负载** 在交易处于 **待处理** 状态(例如在内存池中以及在节点间传播时)时被加密，随后由验证者在区块确认后立即为执行而解密。
 - 在面向用户的材料中亦称 **加密待处理交易**。
 - 提交客户端使用全节点当前的 **账本 `encryption_key`**(基于 BLS12-381 的每纪元批量门限加密)。Gas 限制、签名、发送者元数据以及在某些情形下的 **声明的入口函数** 仍可能可见——这是 **负载机密性**，而非完整交易的匿名性。
-- 加密提交需支付 **每 gas 单位至少 200 Octas**(为基础最低值的两倍)的 gas 单价以补偿验证者解密成本。**Keyless**、**联邦 Keyless** 和 **账户抽象** 签名者不受支持。
-- 示例:应用在 TypeScript SDK 上使用 `options.encrypted` 调用 `aptos.transaction.build.simple`，使转账参数在提交前不会以明文形式传输。
+- 加密提交需支付 **每 gas 单位至少 200 Octas**(为基础最低值的两倍)的 gas 单价,并为每笔交易额外支付固定的 **375 gas 单位** 解密费用,以补偿验证者解密成本。**Keyless**、**联邦 Keyless** 和 **账户抽象** 签名者不受支持。
+- 示例:应用在 TypeScript SDK 上使用 `options.encrypted` 和 `options.senderAuthenticationKey` 调用 `aptos.transaction.build.simple`，使转账参数在提交前不会以明文形式传输。
 
 更多信息请参见 [加密待处理交易](/zh/build/guides/encrypted-pending-transactions)。
 
@@ -192,9 +216,11 @@ sidebar:
 ### 事件
 
 - **事件** 是执行交易效果的面向用户的表示。
-- 交易可以设计为以列表形式发出任意数量的事件。例如，`Coin<AptosCoin>` 转账会为发送方账户发出 `WithdrawEvent`，为接收方账户发出 `DepositEvent`。
-- 在 Aptos 协议中，事件提供了交易成功执行产生特定效果的证据。`DepositEvent`（在上述示例中）允许接收方确认已收到付款到其账户。
-- 事件持久化在区块链上，用于响应 [客户端](#客户端) 的查询。
+- 模块发出**模块事件**（以 `#[event]` 标记、按类型区分的流）。较旧的 **EventHandle** 流仍存在于部分资源上，但已弃用。
+- 例如，代币转账可以发出提取和存款事件，以便接收方确认付款已到。
+- 事件持久化在区块链上，[客户端](#客户端) 可通过 REST API 或 [Indexer](/zh/build/indexer/indexer-api) 查询。
+
+详见 [事件](/zh/network/blockchain/events)。
 
 ### 执行
 
@@ -212,9 +238,15 @@ sidebar:
 
 ### 水龙头
 
-- **水龙头** 是在开发网上铸造 APT 的服务。对于测试网，请参阅 [铸造页面](/zh/network/faucet)。
+- **水龙头** 是在 Devnet（可编程）和 Testnet（Google 登录 / [铸币页面](/zh/network/faucet)）上铸造 APT 的服务。
 - 开发网和测试网上的 APT 没有现实价值，仅用于开发目的。
 - 要使用水龙头，请参阅 [水龙头 API](/zh/build/apis/faucet-api)。
+
+### 最终性
+
+- **最终性** 是已提交交易不可再被撤销的时间点。Aptos 使用 [BFT](#拜占庭容错bft) 共识，因此交易在提交（commit）后即最终确认。客户端无需等待额外的区块确认。
+
+最终性与出块时间、端到端延迟的关系见[支付](/zh/build/guides/payments)，以及[交易所常见问题](/zh/build/guides/exchanges#交易何时具有终局性)。
 
 ### 全节点
 
@@ -253,6 +285,12 @@ sidebar:
 
 详情请参阅 [Gas 和存储费用](/zh/network/blockchain/gas-txn-fee)。
 
+### Geomi
+
+- **[Geomi](https://geomi.dev/)**（原 Aptos Build）是 Aptos Labs 的开发者门户，提供 API 密钥、托管索引器访问、Gas Station 和无代码索引。
+
+详见 [数据提供商](/zh/build/apis/data-providers)。
+
 ## H
 
 ### 诚实（验证者）
@@ -282,6 +320,13 @@ sidebar:
 - 在基于领导者的协议中，节点必须就领导者达成一致才能取得进展。
 - 领导者由一个以当前 [轮次号](#轮次号) 为输入的函数选择。
 
+### LLMs.txt
+
+- **LLMs.txt** 是面向 AI 工具的机器可读文档索引，指向 Aptos 文档、逐页 Markdown 导出以及相关 API 资源。
+- Aptos 发布 `/llms.txt`（索引）、`/llms-small.txt`（精简语料）和 `/llms-full.txt`（完整语料）。
+
+详情请参阅 [LLMs.txt](/zh/llms-txt)。
+
 ## M
 
 ### 主网
@@ -297,11 +342,19 @@ sidebar:
 
 详情请参阅 [Gas 和存储费用](/zh/network/blockchain/gas-txn-fee)。
 
+### 多代理交易
+
+- **多代理交易** 是由多个账户共同签名的一笔交易。当双方必须先同意、而不是由付款方单方面把资金发给接收方时使用。
+- 常见的支付形态是点对点兑换：两个账户签署同一个入口函数，各自转出资产，两条腿要么都上链，要么都不上链。
+- 不同于多签：多签是对同一个账户的 N-of-M 控制。
+
+详见 [多代理交易](/zh/build/sdks/ts-sdk/building-transactions/multi-agent-transactions) 和[支付](/zh/build/guides/payments#点对点兑换)。
+
 ### 内存池
 
 - **内存池** 是验证者的组件之一。它在内存中保存已提交但尚未达成一致和执行的交易的缓冲区。内存池从其他 [全节点](#全节点) 接收交易。
-- 验证者内存池中的交易从当前节点的 JSON-RPC 服务和其他 Aptos 节点的内存池添加。
-- 当当前验证者是领导者时，其共识组件从其内存池中提取交易，并提议形成区块的交易顺序。然后验证者法定人数对提案进行投票。
+- 验证者内存池中的交易来自全节点的 [REST API 服务](#rest-api-服务) 以及其他 Aptos 节点。
+- 随后 [仲裁存储](#仲裁存储) 以批次在验证者集合内传播这些交易。当当前验证者是领导者时，共识提议对已认证批次排序的区块。验证者法定人数对该提案投票。
 
 ### Merkle 树
 
@@ -316,6 +369,13 @@ sidebar:
 - **[Merkle 累加器](https://www.usenix.org/legacy/event/sec09/tech/full_papers/crosby.pdf)** 是 Aptos 区块链用于存储账本的 _只追加_ Merkle 树。
 - Merkle 累加器可以提供交易包含在链中的证明（"包含证明"）。
 - 它们在文献中也被称为"历史树"。
+
+### 模型上下文协议（MCP）
+
+- **模型上下文协议（MCP）** 是一种开放协议，让 AI 编程工具能够调用外部工具和数据源。
+- Aptos 发布 MCP 服务器（`@aptos-labs/aptos-mcp`），以便助手查询链上数据、调用 Aptos API，并遵循当前的 Move 工作流。
+
+详情请参阅 [Aptos MCP](/zh/build/ai/aptos-mcp)。
 
 ### 模块
 
@@ -370,6 +430,7 @@ sidebar:
 ### Nonce
 
 - **Nonce** 是仅使用一次的数字，是为身份验证协议和加密哈希函数的特定用途生成的随机或半随机数字。
+- 在 Aptos 上，[无序交易](#无序交易) 使用 `u64` nonce 作为重放保护，而不是[序列号](#序列号)。
 
 ## O
 
@@ -381,7 +442,21 @@ sidebar:
 
 - **开源社区** 是用于描述从事开源软件工作的开发人员群体的术语。如果您正在阅读这个术语表，那么您就是 Aptos 项目开发者社区的一部分。
 
+### 无序交易
+
+- **无序交易**（AIP-123）使用 [nonce](#nonce) 而不是[序列号](#序列号) 来防止重放。它们可以按任意顺序执行，过期时间最多 60 秒，并且不需要链上 `Account` 资源。
+- 当应用需要同一发送者按顺序执行时，请使用基于序列号的交易。
+
+详见 [AIP-123](/zh/build/aips/aip-123)。
+
 ## P
+
+### 支付
+
+- Aptos 上的 **支付** 指 APT、稳定币和其他[同质化资产](#同质化资产)（包括[机密](#机密资产)变体）的链上转账。主网出块时间通常为数十毫秒；已提交的交易立即具有[最终性](#最终性)；用户可见的端到端延迟通常为亚秒级。
+- 每种支付都可以[赞助](/zh/build/guides/sponsored-transactions)（由另一账户支付 gas）、[无序](#无序交易)（用 nonce 并行提交），或使用[多代理](#多代理交易)（双方签署同一笔交易）。
+
+延迟、手续费以及各支付类型的 API 见[支付](/zh/build/guides/payments)。
 
 ### 证明
 
@@ -441,6 +516,7 @@ sidebar:
 - 如果账户 A 的当前序列号是 X，则账户 A 上的交易 T 只有在 T 的序列号是 X 时才会执行。
 - 这些交易将保留在内存池中，直到它们成为该账户的下一个序列号（或直到它们过期）。
 - 当交易被应用时，账户的序列号将变为 X+1。账户具有严格递增的序列号。
+- [无序交易](#无序交易) 不使用序列号，而是使用 nonce，并且可以按任意顺序提交。
 
 ### 发送方
 
@@ -464,6 +540,13 @@ sidebar:
 ### 状态根哈希
 
 - **状态根哈希** 是 Aptos 区块链在给定版本的所有键和值状态的 [Merkle 哈希](https://en.wikipedia.org/wiki/Merkle_tree)。
+
+### 无状态账户
+
+- **无状态账户** 是尚未创建链上 `0x1::account::Account` 资源的地址。它仍是有效账户：默认认证密钥等于地址本身，默认序列号为 `0`。
+- 当序列号交易或密钥轮换等功能需要该资源时才会创建。[无序交易](#无序交易) 可以在不创建该资源的情况下发送。
+
+详见 [AIP-115](/zh/build/aips/aip-115)。
 
 ## T
 
@@ -529,6 +612,13 @@ sidebar:
 - 交易版本 0 是第一笔交易（创世交易），交易版本 100 是区块链中的第 101 笔交易。
 
 ## W
+
+### WebMCP
+
+- **WebMCP** 是一项浏览器提案，允许页面在 `navigator.modelContext` 上注册工具。
+- 每个 Aptos 文档页面都会为支持该提案的浏览器注册搜索、导航、Markdown 获取和 LLMs.txt 发现工具。
+
+详情请参阅 [AI 工具概览](/zh/build/ai)。
 
 ### 格式良好的交易
 

@@ -1,6 +1,6 @@
 ---
 title: "AI Tools for Aptos Development"
-description: "Use AI tools like Claude, Cursor, and GitHub Copilot to build on Aptos faster. Access the Aptos MCP server and LLMs.txt documentation feeds."
+description: "Use AI tools like Claude, Cursor, Codex, and GitHub Copilot to build on Aptos faster. Access the Aptos MCP server and LLMs.txt documentation feeds."
 sidebar:
   label: "AI Tools Overview"
 ---
@@ -20,7 +20,13 @@ Aptos APIs, query on-chain data, and generate correct Aptos code — without nee
   <LinkCard href="/build/ai/aptos-mcp/claude" title="Claude Code" description="Set up the Aptos MCP server for Claude Code" />
 
   <LinkCard href="/build/ai/aptos-mcp/cursor" title="Cursor" description="Set up the Aptos MCP server for Cursor" />
+
+  <LinkCard href="/build/ai/aptos-mcp/codex" title="OpenAI Codex" description="Set up the Aptos MCP server for Codex" />
 </CardGrid>
+
+Any MCP client that can launch a local stdio server — including GitHub Copilot — can use the same
+`npx -y @aptos-labs/aptos-mcp` command. See the [Aptos MCP overview](/build/ai/aptos-mcp) for prerequisites
+and the Geomi Bot Key.
 
 ## Aptos Agent Skills
 
@@ -51,23 +57,51 @@ Some clients resolve `/.well-known/llms.txt`; production serves the same index v
 
 The [`llms.txt`](/llms.txt) router also surfaces machine-readable **API** links—[`/aptos-spec.json`](/aptos-spec.json) (OpenAPI 3 JSON for the node REST API) and [`/rest-api`](/rest-api) (HTML reference)—plus **MCP**, Agent Skills, Explorer, GitHub, standards, and Indexer GraphQL `.md` links in one place.
 
-<LinkCard href="/llms-txt" title="How to use LLMs.txt with AI tools" description="Instructions for Cursor, GitHub Copilot, Claude.ai, ChatGPT, Windsurf, and more" />
+<LinkCard href="/llms-txt" title="How to use LLMs.txt with AI tools" description="Instructions for Cursor, Claude Code, GitHub Copilot, ChatGPT, Codex, Devin Desktop, and more" />
 
 ## Agent discovery endpoints
 
 The docs site publishes a handful of standardized discovery documents so coding agents can bootstrap from a single root. Every page also returns a [`Link`](https://www.rfc-editor.org/rfc/rfc8288) response header and matching `<link rel="…">` tags that advertise the same URLs.
 
-| Endpoint                                                                             | Purpose                                                                                                                                                                                                                                                          |
-| ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`/.well-known/api-catalog`](/.well-known/api-catalog)                               | [RFC 9727](https://www.rfc-editor.org/rfc/rfc9727) linkset pointing at the REST API spec, documentation, Indexer GraphQL, and the LLMs.txt feeds.                                                                                                                |
-| [`/.well-known/mcp/server-card.json`](/.well-known/mcp/server-card.json)             | [MCP Server Card (SEP-2127)](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2127) describing the [`@aptos-labs/aptos-mcp`](https://www.npmjs.com/package/@aptos-labs/aptos-mcp) server.                                                       |
-| [`/.well-known/agent-skills/index.json`](/.well-known/agent-skills/index.json)       | [Agent Skills Discovery](https://github.com/cloudflare/agent-skills-discovery-rfc) index for [aptos-agent-skills](https://github.com/aptos-labs/aptos-agent-skills) with per-skill SHA-256 digests.                                                              |
-| [`/.well-known/oauth-protected-resource`](/.well-known/oauth-protected-resource)     | [OAuth 2.0 Protected Resource Metadata (RFC 9728)](https://www.rfc-editor.org/rfc/rfc9728) for the Google-authenticated [Aptos Testnet Faucet](/network/faucet). Lists the resource identifier, authorization servers, and supported scopes.                     |
-| [`/.well-known/openid-configuration`](/.well-known/openid-configuration)             | [OpenID Connect Discovery 1.0](https://openid.net/specs/openid-connect-discovery-1_0.html) document advertising the issuer, authorization/token endpoints, JWKS URI, and supported grant types used by the [Aptos Testnet Faucet](/network/faucet) sign-in flow. |
-| [`/.well-known/oauth-authorization-server`](/.well-known/oauth-authorization-server) | [OAuth 2.0 Authorization Server Metadata (RFC 8414)](https://www.rfc-editor.org/rfc/rfc8414) mirror of the OIDC discovery document for clients that prefer the pure OAuth 2.0 endpoint name.                                                                     |
-| [`/robots.txt`](/robots.txt)                                                         | Includes [Content Signals](https://contentsignals.org/) (`ai-train=yes, search=yes, ai-input=yes`) so agents know Aptos docs are opted in.                                                                                                                       |
+| Endpoint                                                                             | Purpose                                                                                                                                                                                                                                                                   |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`/.well-known/api-catalog`](/.well-known/api-catalog)                               | [RFC 9727](https://www.rfc-editor.org/rfc/rfc9727) linkset pointing at the REST API spec, documentation, Indexer GraphQL, and the LLMs.txt feeds.                                                                                                                         |
+| [`/.well-known/mcp/server-card.json`](/.well-known/mcp/server-card.json)             | [MCP Server Card (SEP-2127)](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2127) describing the [`@aptos-labs/aptos-mcp`](https://www.npmjs.com/package/@aptos-labs/aptos-mcp) server.                                                                |
+| [`/.well-known/agent-skills/index.json`](/.well-known/agent-skills/index.json)       | [Agent Skills Discovery](https://github.com/cloudflare/agent-skills-discovery-rfc) index for [aptos-agent-skills](https://github.com/aptos-labs/aptos-agent-skills) with per-skill SHA-256 digests.                                                                       |
+| [`/.well-known/oauth-protected-resource`](/.well-known/oauth-protected-resource)     | [OAuth 2.0 Protected Resource Metadata (RFC 9728)](https://www.rfc-editor.org/rfc/rfc9728) for `https://aptos.dev`. Lists the resource identifier, the Firebase + Google authorization servers used by the [Aptos Testnet Faucet](/network/faucet), and supported scopes. |
+| [`/.well-known/openid-configuration`](/.well-known/openid-configuration)             | [OpenID Connect Discovery 1.0](https://openid.net/specs/openid-connect-discovery-1_0.html) document advertising the issuer, authorization/token endpoints, JWKS URI, and supported grant types used by the [Aptos Testnet Faucet](/network/faucet) sign-in flow.          |
+| [`/.well-known/oauth-authorization-server`](/.well-known/oauth-authorization-server) | [OAuth 2.0 Authorization Server Metadata (RFC 8414)](https://www.rfc-editor.org/rfc/rfc8414) mirror of the OIDC discovery document for clients that prefer the pure OAuth 2.0 endpoint name.                                                                              |
+| [`/.well-known/ai-catalog.json`](/.well-known/ai-catalog.json)                       | [ARD](https://agenticresourcediscovery.org/) / [AI Catalog](https://github.com/Agent-Card/ai-catalog) capability manifest listing the MCP Server Card, Agent Skills index, REST OpenAPI spec, and RFC 9727 API catalog.                                                   |
+| [`/auth.md`](/auth.md)                                                               | [auth.md](https://workos.com/auth-md) agent authentication instructions. Documents that `aptos.dev` is public (no agent registration) and that the Testnet Faucet uses human Google OIDC.                                                                                 |
+| [`/robots.txt`](/robots.txt)                                                         | Includes [Content Signals](https://contentsignals.org/) (`ai-train=yes, search=yes, ai-input=yes`), an `Agentmap:` pointer to the AI Catalog, and `Sitemap: https://aptos.dev/sitemap.xml`.                                                                               |
 
-The OAuth/OIDC discovery documents apply only to the [Aptos Testnet Faucet](/network/faucet); the rest of `aptos.dev` is unauthenticated public documentation. Agents that need to fund a testnet account can call `/.well-known/oauth-protected-resource` to discover the faucet's resource identifier and the OIDC issuers (Firebase + Google) that mint the bearer tokens it accepts on `Authorization: Bearer …`.
+The origin-level RFC 9728 document identifies `https://aptos.dev` so clients that require the `resource` identifier to match this host will accept it. Documentation on this host is unauthenticated. The listed authorization servers (Firebase + Google) mint the bearer tokens that the [Aptos Testnet Faucet](/network/faucet) accepts on `Authorization: Bearer …`; the faucet API itself lives at `https://faucet-e2.testnet.aptoslabs.com`. [`/auth.md`](/auth.md) is the prose companion: there is no agent-registration endpoint.
+
+### DNS for AI Discovery (DNS-AID)
+
+[DNS-AID](https://datatracker.ietf.org/doc/draft-mozleywilliams-dnsop-dnsaid/) records cannot be published from this repository. The `aptos.dev` zone is hosted on Google Cloud DNS (`ns-cloud-c1.googledomains.com` through `ns-cloud-c4.googledomains.com`).
+
+The organization index already exists:
+
+```dns
+_index._agents.aptos.dev. 3600 IN HTTPS 1 aptos.dev. alpn="h2,h3" port=443
+```
+
+That record points agents at `https://aptos.dev`, where the MCP Server Card, API catalog, AI Catalog, and other well-known documents live. Do not publish `_a2a._agents` or `_mcp._agents` until Aptos hosts those protocols on HTTPS — the MCP server is stdio (`npx @aptos-labs/aptos-mcp`), not a remote MCP endpoint.
+
+The zone has `DNSKEY` and `RRSIG` records, but validating resolvers still return `AD=0` because there is no `DS` record at the `.dev` parent. Agent scanners that require DNSSEC therefore fail even though the HTTPS record is present. Operators should publish the KSK `DS` at the registrar (or enable DNSSEC in Google Cloud DNS so it submits the `DS` automatically), then confirm:
+
+```bash
+dig +short HTTPS _index._agents.aptos.dev
+dig +dnssec HTTPS _index._agents.aptos.dev
+dig DS aptos.dev
+```
+
+To advertise the AI Catalog over DNS as well, add:
+
+```dns
+_catalog._agents.aptos.dev. 3600 IN TXT "url=https://aptos.dev/.well-known/ai-catalog.json"
+```
 
 ### Markdown content negotiation
 

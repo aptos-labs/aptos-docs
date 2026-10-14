@@ -1,0 +1,87 @@
+---
+title: "Keyless 账户"
+description: "使用社交提供商登录，通过 Aptos .NET SDK 创建和管理 Keyless 账户，实现无缝用户身份验证。"
+sidebar:
+  label: "Keyless 账户"
+---
+
+import { Aside, CardGrid, LinkCard, Steps } from '@astrojs/starlight/components';
+
+<Aside type="caution" emoji="❗">
+  此 SDK 目前处于 beta 阶段。请在
+  [aptos-labs/aptos-dotnet-sdk](https://github.com/aptos-labs/aptos-dotnet-sdk)
+  仓库创建 issue，报告遇到的问题。
+</Aside>
+
+Aptos .NET SDK 提供 Keyless 账户实现，可从社交提供商登录派生账户。本指南提供创建账户的代码片段。
+
+## 创建 KeylessAccount
+
+KeylessAccount 用于通过社交提供商登录签署交易并与区块链交互。创建 Keyless 账户时，需要完成几个步骤以获得必要组件。
+
+<Aside type="note" emoji="ℹ️">
+  我们计划编写将 Keyless 集成到 Unity 和 Godot 的端到端指南，目前正在开发中。
+</Aside>
+
+<Steps>
+  1. 创建临时密钥对
+
+     创建 Keyless 账户的第一步是创建临时密钥对。这是用于签署交易的临时密钥；务必将其安全存储在应用中，因为它将用于签署交易。
+
+     ```csharp
+     var ephemeralKeyPair = EphemeralKeyPair.Generate();
+     ```
+
+  2. 获取 OpenID Connect（OIDC）身份令牌
+
+     要取得 `id_token`（OIDC 身份令牌），需要通过社交提供商进行身份验证。授权流程结束时，用户应携带 `id_token` 被重定向回应用。需要将此 `id_token` 安全存储在应用中。**请务必确保 `id_token` 的 nonce 字段与 `EphemeralKeyPair` 中的 `nonce` 字段相匹配。**
+
+     **示例：**
+
+     ```csharp
+     var nonce = ephemeralKeyPair.Nonce;
+     var authorizationUrl = "https://accounts.google.com/o/oauth2/v2/auth&nonce=" + nonce;
+     ```
+
+  3. 派生 Keyless 账户
+
+     用户获得以下组件后，应能派生 Keyless 账户：
+
+     - `id_token`：从授权流程获得。
+     - `EphemeralKeyPair`：在前述步骤中创建。
+
+     **请务必确保 `EphemeralKeyPair` 中的 `nonce` 字段与 `id_token` 中的 `nonce` 字段相匹配，以确保用户能够签署交易。**
+
+     ```csharp
+     var client = new AptosClient(Networks.Mainnet);
+     var keylessAccount = await client.Keyless.DeriveAccount(idToken, ephemeralKeyPair);
+     ```
+
+  4. 签署并提交交易
+
+     派生 Keyless 账户后，可使用 `AptosClient` 签署并提交交易。
+
+     ```csharp
+     // 1. Build the transaction
+     var transaction = await client.Transaction.Build(
+         sender: keylessAccount,
+         data: new GenerateEntryFunctionPayloadData(
+             function: "0x1::aptos_account::transfer_coins",
+             typeArguments: ["0x1::aptos_coin::AptosCoin"],
+             functionArguments: [account.Address, "100000"]
+         )
+     );
+
+     // 2. Sign and submit the transaction
+     var submittedTransaction = await client.Transaction.SignAndSubmitTransaction(keylessAccount, transaction);
+
+     // 3. (Optional) Wait for the transaction to be committed
+     var committedTransaction = await client.Transaction.WaitForTransaction(submittedTransaction.Hash);
+     ```
+</Steps>
+
+## 其他资源
+
+<CardGrid>
+  <LinkCard href="https://aptos-labs.github.io/aptos-dotnet-sdk/docs/Aptos.KeylessAccount.html" title="KeylessAccount 参考" description="KeylessAccount 类的完整 API 参考。" target="_blank" />
+</CardGrid>

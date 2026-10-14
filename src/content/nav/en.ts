@@ -27,9 +27,11 @@ const labels = {
   "build.group.sdks.dotnet-sdk.queries": "Queries",
   "build.group.sdks.dotnet-sdk.transactions": "Transactions",
   "build.group.sdks.python-sdk": "Python SDK",
+  "build.group.sdks.python-sdk.building-transactions": "Building Transactions",
   "build.group.sdks.unity-sdk": "Unity SDK",
   "build.group.sdks.cpp-sdk": "C++ SDK",
   "build.group.sdks.rust-sdk": "Rust SDK",
+  "build.group.sdks.rust-sdk.building-transactions": "Building Transactions",
   "build.group.sdks.wallet-adapter": "Wallet Adapter",
   "build.group.sdks.community-sdks": "Community SDKs",
   "build.group.sdks.react-hooks": "React Hooks",
@@ -118,9 +120,10 @@ const labels = {
   "network.group.stakingGovernance": "Staking & Governance",
   "network.group.executionTransactions": "Execution & Transactions",
 
-  // Reference Sub-Groups (Only has generated API and glossary for now)
+  // Reference Sub-Groups
   "reference.group.indexerApi": "Indexer API",
   "reference.group.restApi": "REST API",
+  "reference.group.move": "Move Framework",
 
   // AI Sub-Groups
   "ai.group.aptos-mcp": "Aptos MCP",

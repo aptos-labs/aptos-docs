@@ -1,0 +1,90 @@
+---
+title: "解析交易"
+description: "使用处理器步骤通过事件过滤和数据转换解析并提取 Aptos 区块链交易数据。"
+sidebar:
+  label: "解析交易"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+{/* <IndexerBetaNotice /> */}
+
+{/* <!--
+  Things to add:
+  - We should have tabs for each language that mentions helper functions for extracting the thing you want. For example, if the user is trying to extract the entry function arguments, there should be a function like `get_entry_function_arguments` and we show how to use it in each language and where it comes from in the SDK.
+  --> */}
+
+从根本上说，Indexer 处理器就是消费交易流并将处理后的数据写入存储的组件。下面深入了解交易是什么，以及可以从交易中提取哪些信息。
+
+## 什么是交易？
+
+交易是 Aptos 区块链上的执行单元。如果交易中的程序执行成功（例如，从 Move 模块中的入口函数开始执行），产生的状态变更将应用到账本。有关交易生命周期的更多信息，请参阅[此页面](/zh/network/blockchain/blockchain-deep-dive#交易的生命周期)。
+
+Aptos 有四种交易：
+
+- 创世交易
+- 区块元数据交易
+- 状态检查点交易
+- 用户交易
+
+前三种属于系统内部，对大多数处理器并不相关；本指南不讨论它们。
+
+一般而言，大多数用户交易源于用户调用链上已部署 Move 模块中的入口函数，例如 `0x1::coin::transfer`。其他情况则源于 [Move 脚本](/zh/build/smart-contracts/scripts)。可在[此处](/zh/network/blockchain/txns-states#交易载荷类型)了解不同交易类型。
+
+处理器处理的用户交易包含多种信息。概括而言，它包括：
+
+- 已提交的载荷。
+- 函数/脚本执行后对账本产生的变更。
+
+以下各节将展开说明。
+
+## 交易中的重要内容
+
+### 载荷
+
+载荷是用户希望执行 Move 函数时提交到区块链的内容。载荷的一些关键信息包括：
+
+- 发送方地址。
+- 所执行函数的地址、模块名和函数名。
+- 函数参数。
+
+载荷中还有其他可能有价值的信息，可在[此页面](/zh/network/blockchain/txns-states#交易内容)了解。
+
+### 事件
+
+事件在交易执行期间发出。每个 Move 模块都可定义自己的事件，并决定在函数执行时何时发出事件。
+
+例如，在 Move 中可能有以下代码：
+
+```move filename="member_invited_event.move"
+struct MemberInvitedEvent has store, drop {
+    member: address,
+}
+
+public entry fun invite_member(member: address) {
+    event::emit_event(
+        &mut member_invited_events,
+        MemberInvitedEvent { member },
+    );
+}
+```
+
+如果调用 `invite_member`，就能在交易中找到 `MemberInvitedEvent`。
+
+<Aside type="note">
+  为什么要发出事件？
+
+  这是个好问题！某些情况下，直接解析写集似乎不必发出事件。然而，有时很难从交易中的不同“位置”取得所需的全部数据；有时甚至根本无法取得，例如希望索引未包含在写集中的数据时。此时，事件是将希望索引的一切内容方便地捆绑在一起的方式。
+</Aside>
+
+### 写集
+
+交易执行时，不会立刻直接影响链上状态。相反，它会输出一组将应用到账本的变更，称为写集。所有验证者就执行结果达成一致后，写集才会应用到账本。
+
+写集展示交易发生后链上数据的最终状态，是链上存储数据的事实来源。写集变更有多种类型：
+
+- 写入模块/删除模块。
+- 写入资源/删除资源。
+- 写入表项/删除表项。
+
+{/* <!-- Add more information about writesets, ideally once have the helper functions. --> */}

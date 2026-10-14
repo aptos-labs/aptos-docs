@@ -1,0 +1,65 @@
+---
+title: "Setting up Aptos MCP with Codex"
+description: "Step-by-step guide to configure and use Aptos MCP with OpenAI Codex"
+sidebar:
+  label: "Codex"
+---
+
+1. Install [OpenAI Codex](https://github.com/openai/codex).
+
+```bash
+npm install -g @openai/codex
+```
+
+On macOS you can also run `brew install codex`.
+
+2. Obtain your `APTOS_BOT_KEY` from [Geomi](https://geomi.dev/) (**Bot Keys** in the account menu). See [Aptos MCP](/build/ai/aptos-mcp) for the full steps.
+
+3. Navigate to your project:
+
+```bash
+cd your-awesome-project
+```
+
+4. Add the Aptos MCP server:
+
+```bash
+codex mcp add aptos-mcp --env APTOS_BOT_KEY=<your_bot_key> -- npx -y @aptos-labs/aptos-mcp
+```
+
+Replace `<your_bot_key>` with the key from step 2. You can pass additional `--env NAME=VALUE` pairs if needed.
+
+5. Confirm the server is registered:
+
+```bash
+codex mcp list
+```
+
+You should see `aptos-mcp` in the list.
+
+6. Start Codex:
+
+```bash
+codex
+```
+
+7. Run `/mcp` inside Codex and confirm `aptos-mcp` is listed.
+
+8. Prompt the agent with `what aptos mcp version are you using?` to verify the connection. It should report the currently published `@aptos-labs/aptos-mcp` version from the [MCP Server Card](/.well-known/mcp/server-card.json).
+
+## Alternative: TOML configuration
+
+If the CLI command fails, edit `~/.codex/config.toml` (in the IDE: gear icon → **MCP settings** → **Open config.toml**) and add:
+
+```toml
+# ~/.codex/config.toml
+
+[mcp_servers.aptos-mcp]
+command = "npx"
+args = ["-y", "@aptos-labs/aptos-mcp"]
+
+[mcp_servers.aptos-mcp.env]
+APTOS_BOT_KEY = "<your_bot_key>"
+```
+
+Save the file and restart Codex. Do not commit the Bot Key.

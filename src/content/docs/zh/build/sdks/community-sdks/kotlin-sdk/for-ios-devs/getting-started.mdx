@@ -1,0 +1,154 @@
+---
+title: "iOS 开发者使用 Kaptos 入门"
+description: "开始使用用于 iOS 开发的 AptosKit：一个与 Aptos 区块链交互的 Swift SDK"
+sidebar:
+  label: "入门"
+---
+
+import { Steps } from '@astrojs/starlight/components';
+
+本指南将带您完成 **AptosKit** 的设置，并获取 Aptos 区块链上的数据。
+
+<Steps>
+  1. 安装 SDK
+
+     **AptosKit** 以 Swift 包形式提供。要将其添加到项目，请在 `Package.swift` 文件中添加以下内容：
+
+     ```swift filename="Package.swift"
+     dependencies: [
+       .package(url: "https://github.com/mcxross/swift-aptos.git", .upToNextMajor(from: <version>))
+     ]
+     ```
+
+  2. 导入 SDK
+
+     在 Swift 文件中导入 SDK：
+
+     ```swift filename="Main.swift"
+     import AptosKit
+     ```
+
+  3. 创建 ClientConfig 对象
+
+     此对象用于配置客户端行为。您可以设置 `maxRetries`、`requestTimeout` 和 `retryOnServerErrors` 属性。
+
+     ```swift filename="Main.swift"
+     let config = ClientConfig(
+         followRedirects: true,
+         agent: "AptosClient",
+         likeAgent: nil,
+         requestTimeout: 5000,
+         retryOnServerErrors: 3,
+         maxRetries: 5,
+         cache: false,
+         proxy: nil
+     )
+     ```
+
+  4. 创建 AptosSettings 对象
+
+     此对象用于配置 Aptos 网络连接。您可以设置 `network`、`fullnode` 和 `faucet` 属性。
+
+     ```swift filename="Main.swift"
+     let aptosSettings = AptosSettings(
+         network: .devnet,
+         fullNode: nil,
+         faucet: nil,
+         indexer: nil,
+         client: nil,
+         clientConfig: config,
+         fullNodeConfig: nil,
+         indexerConfig: nil,
+         faucetConfig: nil
+     )
+     ```
+
+  5. 创建 AptosConfig 对象
+
+     ```swift filename="Main.swift"
+     let aptosConfig = AptosConfig(settings: aptosSettings)
+     ```
+
+  6. 创建 Aptos 对象
+
+     此对象用于与 Aptos 区块链交互，是所有链上交互的入口点。
+
+     ```swift filename="Main.swift"
+     let aptos = Aptos(config: aptosConfig, graceFull: false)
+     ```
+
+  7. 获取链 ID
+
+     ```swift filename="Main.swift"
+     let chainId = try await aptos.getChainId()
+     ```
+
+     恭喜！您已经成功设置 **AptosKit** SDK，并从 Aptos 区块链获取了链 ID。
+</Steps>
+
+## 完整示例
+
+```swift filename="Main.swift"
+
+import SwiftUI
+import AptosKit
+
+struct ContentView: View {
+@State private var chainId: String? = nil
+
+var body: some View {
+  VStack {
+    if let chainId = chainId {
+      Text("Chain ID: \(chainId)")
+    } else {
+      Text("Fetching Chain ID...")
+    }
+  }
+.padding()
+    .onAppear {
+    fetchChainId()
+  }
+}
+
+private func fetchChainId() {
+  DispatchQueue.main.async {
+    Task {
+      do {
+
+        let clientConfig = ClientConfig(
+            followRedirects: true,
+            agent: "AptosClient",
+            likeAgent: nil,
+            requestTimeout: 5000,
+            retryOnServerErrors: 3,
+            maxRetries: 5,
+            cache: false,
+            proxy: nil
+        )
+
+        let aptosSettings = AptosSettings(
+            network: .devnet,
+            fullNode: nil,
+            faucet: nil,
+            indexer: nil,
+            client: nil,
+            clientConfig: clientConfig,
+            fullNodeConfig: nil,
+            indexerConfig: nil,
+            faucetConfig: nil
+        )
+
+        let aptosConfig = AptosConfig(settings: aptosSettings)
+        let aptos = Aptos(config: aptosConfig, graceFull: false)
+
+        let chainId = try await aptos.getChainId()
+        self.chainId = chainId.expect(message: "Failed...")?.stringValue ?? "null"
+      } catch {
+        print("Failed to get chain ID: \(error)")
+        self.chainId = "Error"
+        }
+      }
+    }
+  }
+}
+```

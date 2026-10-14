@@ -1,0 +1,49 @@
+---
+title: "Python SDK：二进制规范序列化（BCS）格式"
+description: "了解如何使用 Python SDK 以二进制规范序列化（BCS）格式编码交易参数"
+sidebar:
+  label: "BCS 格式"
+---
+
+Aptos Python SDK 的交易参数使用二进制规范序列化（BCS）编码。这是 Aptos 链识别的格式，使用 `u64` 或 `u128` 等具体类型，而不是泛型整数。
+
+使用匹配的序列化器将每个参数包装为 `TransactionArgument`：
+
+```python filename="example.py"
+from aptos_sdk.v2.bcs import Serializer
+from aptos_sdk.v2.transactions import EntryFunction, TransactionArgument, TransactionPayload
+from aptos_sdk.v2.types import StructTag, TypeTag
+
+payload = EntryFunction.natural(
+    "0x1::aptos_account",
+    "transfer_coins",
+    [TypeTag(StructTag.from_str("0x1::aptos_coin::AptosCoin"))],
+    [
+        TransactionArgument(bob.address, Serializer.struct),
+        TransactionArgument(1_000, Serializer.u64),
+    ],
+)
+raw_txn = await aptos.transaction.build(
+    sender=alice.address,
+    payload=TransactionPayload(payload),
+)
+```
+
+常用序列化方法包括 `Serializer.struct`、`Serializer.u8`、`Serializer.u16`、`Serializer.u32`、`Serializer.u64`、`Serializer.u128`、`Serializer.u256`、`Serializer.bool`、`Serializer.str` 和 `Serializer.to_bytes`。也支持有符号整数（`i8` 到 `i256`）。
+
+也可以直接序列化值：
+
+```python
+from aptos_sdk.v2.bcs import Serializer, Deserializer
+
+ser = Serializer()
+ser.u64(1_000)
+ser.bool(True)
+data = ser.output()
+
+deser = Deserializer(data)
+assert deser.u64() == 1_000
+assert deser.bool() is True
+```
+
+可通过 [BCS GitHub 仓库](https://github.com/aptos-labs/bcs) 了解更多 BCS 信息。

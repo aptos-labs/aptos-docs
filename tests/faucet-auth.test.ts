@@ -137,7 +137,7 @@ describe("AuthStore pre-warming (prepareAuth)", () => {
     expect(store.$isLoading.value).toBe(false);
   });
 
-  it("ignores getRedirectResult errors and still subscribes to auth state", async () => {
+  it("surfaces redirect-return failures but still subscribes to auth state", async () => {
     setupPrepareMocks();
     mockedGetRedirectResult.mockRejectedValue(new Error("no redirect"));
     const store = new AuthStore();
@@ -145,7 +145,21 @@ describe("AuthStore pre-warming (prepareAuth)", () => {
 
     expect(mockedOnAuthStateChanged).toHaveBeenCalledTimes(1);
     expect(store.$isLoading.value).toBe(false);
-    expect(store.$error.value).toBeNull();
+    // A rejection means a real redirect sign-in failed (null means none
+    // pending), so the user gets guidance instead of a silent loop.
+    expect(store.$error.value).toBe("Google sign-in is temporarily unavailable. Try again later.");
+  });
+
+  it("explains partitioned-storage redirect failures with Safari guidance", async () => {
+    setupPrepareMocks();
+    mockedGetRedirectResult.mockRejectedValue({ code: "auth/missing-initial-state" });
+    const store = new AuthStore();
+    await (store as unknown as { initAuthListener(): Promise<void> }).initAuthListener();
+
+    expect(mockedOnAuthStateChanged).toHaveBeenCalledTimes(1);
+    expect(store.$isLoading.value).toBe(false);
+    expect(store.$error.value).toContain("auth/missing-initial-state");
+    expect(store.$error.value).toContain("Private Browsing");
   });
 
   it("surfaces a connection error when preparation fails", async () => {
@@ -334,6 +348,13 @@ describe("formatFirebaseAuthError", () => {
     expect(formatFirebaseAuthError(new Error("secret deployment detail"))).toBe(
       "Google sign-in is temporarily unavailable. Try again later.",
     );
+  });
+
+  it("gives partitioned-storage redirect failures Safari-specific guidance", () => {
+    const message = formatFirebaseAuthError({ code: "auth/missing-initial-state" });
+
+    expect(message).toContain("auth/missing-initial-state");
+    expect(message).toContain("Private Browsing");
   });
 });
 

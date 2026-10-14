@@ -123,8 +123,12 @@ export class AuthStore {
         if (redirectResult?.user) {
           this.$user.set(redirectResult.user);
         }
-      } catch {
-        // Non-fatal: onAuthStateChanged below will still sync auth state.
+      } catch (error: unknown) {
+        // Surface redirect-return failures (e.g. auth/missing-initial-state
+        // when sessionStorage is partitioned or cleared): getRedirectResult
+        // resolves null when no redirect is pending, so a rejection always
+        // means a real sign-in failed and the user needs guidance, not silence.
+        this.$error.set(formatFirebaseAuthError(error));
       }
       firebaseAuth.onAuthStateChanged(auth, (currentUser) => {
         this.$isLoading.set(false);

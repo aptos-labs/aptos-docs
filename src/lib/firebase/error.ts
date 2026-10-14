@@ -28,6 +28,8 @@ export function formatFirebaseAuthError(error: unknown): string {
       return "Could not connect to Google sign-in. Check your connection and try again. (auth/network-request-failed)";
     case "auth/unauthorized-domain":
       return "Google sign-in is not configured for this domain. (auth/unauthorized-domain)";
+    case "auth/missing-initial-state":
+      return "Google sign-in couldn't finish because your browser cleared or blocked the site data it needs. In Safari, turn off Private Browsing, allow site data for aptos.dev, and try again. (auth/missing-initial-state)";
     default:
       return code
         ? `Google sign-in failed. Try again. (${code})`

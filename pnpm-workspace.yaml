@@ -25,7 +25,7 @@ overrides:
   dompurify: 3.4.16
   'yauzl@^3': 3.4.0
   'yaml@^2': 2.8.3
-  'smol-toml@^1': 1.7.1
+  'smol-toml@^1': 1.9.1
   'defu@^6': 6.1.7
   devalue: 5.9.4
   protobufjs: 7.6.5
@@ -45,17 +45,27 @@ overrides:
   'js-yaml@^3': 3.15.2
   'js-yaml@^4': 4.3.2
   fast-uri: 3.1.8
-  shell-quote: 1.10.0
+  shell-quote: 1.12.0
   'linkify-it@^5': 5.0.2
   ts-deepmerge: 8.0.0
-  sharp: 0.35.4
+  sharp: 0.35.5
   '@iconify/tools': 5.0.12
   'nanoid@^3': 3.3.18
   'nanoid@^4||^5': 5.1.16
   browserslist: 4.28.9
   'fflate@^0.4': 0.4.9
   'fflate@^0.7': 0.7.5
-  'postcss-selector-parser@^6': 6.1.4
+  # CVE GHSA-rj75-hqrm-r3gf: postcss-selector-parser before 7.1.6 has
+  # quadratic selector parsing. 6.x has no patched release.
+  'postcss-selector-parser@<7.1.6': 7.1.6
+  # GHSA-68fv-2mgg-jv7q: source-map-js before 1.2.2.
+  'source-map-js@<1.2.2': 1.2.2
+  # GHSA-g2v6-rqmx-r4w6: @vue/server-renderer before 3.5.42 (via @vercel/analytics).
+  # 3.5.44 is inside the 48-hour age gate, so pin the newest matured 3.5 release.
+  vue: 3.5.43
+  '@vue/server-renderer': 3.5.43
+  # GHSA-238p-pmpm-9mq7: katex before 0.18.2, including mermaid's nested copy.
+  katex: 0.19.0
   # CVE-2026-93748 (GHSA-ch52-4w7c-c8xp): http-cache-semantics through 4.2.0
   # can disclose cross-user cached responses via max-stale handling. 4.3.0 is
   # outside the advisory's vulnerable range and clears the audit finding.
@@ -75,14 +85,6 @@ overrides:
 # Reference: https://pnpm.io/settings#minimumreleaseage
 # Aikido Safe Chain: https://github.com/AikidoSec/safe-chain
 minimumReleaseAge: 2880
-
-# Scoped exemption so the CVE-2026-93748 fix (http-cache-semantics@4.3.0,
-# published 2026-10-04T02:56:05Z) can land before it clears the 48-hour gate
-# above. Version-scoped: any newer http-cache-semantics release still goes
-# through the normal age check. Safe to remove after 2026-10-06T02:56:05Z,
-# once 4.3.0 itself has matured past the gate.
-minimumReleaseAgeExclude:
-  - http-cache-semantics@4.3.0
 
 # When `pnpm add <pkg>` records a new dependency, write the exact installed
 # version (e.g. "1.2.3") instead of a fuzzy range (e.g. "^1.2.3" or "~1.2.3").

@@ -1,0 +1,147 @@
+---
+title: "加密交易 (Encrypted Transactions)"
+description: "在 Kaptos 中构建和提交批量加密交易，以防止 MEV 和抢先交易。"
+sidebar:
+  label: "加密交易"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+加密交易可以有效保护用户交易免受最大可提取价值（MEV）攻击、三明治攻击和抢先交易的影响。通过在将可执行 Move 负载提交到内存池（Mempool）之前进行加密，交易细节将被隐藏，直到交易被打包进区块并由验证者解密执行（AIP-144）。
+
+Kaptos 通过可选的 `kaptos-encrypted-transactions` 构件提供对加密交易的完整支持。
+
+## 安装
+
+在您的 Gradle 构建文件中，将加密交易依赖项与核心 `kaptos` 库一同添加：
+
+```kotlin
+// Multiplatform
+commonMain.dependencies {
+    implementation("xyz.mcxross.kaptos:kaptos:<version>")
+    implementation("xyz.mcxross.kaptos:kaptos-encrypted-transactions:<version>")
+}
+
+// JVM / Android
+dependencies {
+    implementation("xyz.mcxross.kaptos:kaptos:<version>")
+    implementation("xyz.mcxross.kaptos:kaptos-encrypted-transactions:<version>")
+}
+```
+
+## 前置条件与限制
+
+在使用加密交易前，请注意以下网络与签名者限制：
+
+- **网络支持**：连接的全节点必须在其账本元数据中公布有效的加密密钥。如果当前网络不支持加密交易，调用将返回 `AptosError.UnsupportedFeature`。
+- **签名者支持**：必须使用有资金的标准签名者（例如 `Ed25519Account`）。加密交易不支持 Keyless 账户。
+- **不可模拟**：加密交易无法使用 `aptos.transactions.simulate` 进行模拟，因为负载在进入内存池之前已被加密，链下节点无法提前评估执行。
+- **Gas 单价底线**：加密交易要求的最低 gas 单价为 200 octas。
+
+## 快速示例
+
+在现有的 `Aptos` 客户端实例上调用 `encryptedTransactions()` 获取加密交易服务：
+
+```kotlin
+aptos(AptosConfig(network = Network.TESTNET)) {
+  val sender = ed25519Account("ed25519-priv-0x...")
+  val recipient = AccountAddress.fromString("0x123...")
+
+  val encrypted = encryptedTransactions()
+
+  // 使用简写语法构建负载
+  val payload = TransactionPayload.entryFunctionOf(
+    "0x1::aptos_account::transfer",
+    recipient,
+    1_000_000UL,
+  )
+
+  // 一体化完成加密、签名、提交并等待确认
+  val committed = encrypted.submitAndWait(
+    sender = sender,
+    payload = payload,
+  ).getOrNull()!!
+
+  println("已提交加密交易: ${committed.hash}")
+}
+```
+
+## 独立加密与签名
+
+当签名与提交分开进行时（例如在客户端-服务器架构或硬件签名流程中），可以使用 `encrypted.encrypt(...)`：
+
+```kotlin
+// 1. 构建未签名交易
+val unsignedTx = aptos.transactions.build(
+  sender = sender.accountAddress,
+  payload = payload,
+).getOrNull()!!
+
+// 2. 加密交易负载
+val encryptedTx = encrypted.encrypt(unsignedTx).getOrNull()!!
+
+// 3. 签署加密交易
+val auth = aptos.transactions.sign(signer = sender, transaction = encryptedTx).getOrNull()!!
+
+// 4. 提交签署好的加密交易
+val pending = aptos.transactions.submit(
+  transaction = encryptedTx,
+  senderAuthenticator = auth,
+).getOrNull()!!
+
+// 5. 等待链上确认
+val committed = aptos.transactions.waitForTransaction(pending)
+```
+
+## 多代理与付费者交易
+
+对于多代理、付费者（赞助）或无序交易，使用 `aptos.transactions` 构建 `UnsignedTransaction`，然后传递给 `encrypted.signAndSubmit`：
+
+```kotlin
+// 构建赞助交易
+val unsignedTx = aptos.transactions.buildFeePayer(
+  sender = alice.accountAddress,
+  payload = payload,
+  feePayer = sponsor.accountAddress,
+).getOrNull()!!
+
+// 加密、使用所有必需的签名者签名并提交
+val pending = encrypted.signAndSubmit(
+  transaction = unsignedTx,
+  sender = alice,
+  feePayer = sponsor,
+).getOrNull()!!
+
+val committed = aptos.transactions.waitForTransaction(pending)
+```
+
+## 高级配置与缓存管理
+
+### 显式身份验证密钥与声明函数
+
+`EncryptedTransactionOptions` 允许您覆盖签名者的身份验证密钥（避免额外的链上查询），并为索引器指定声明的 entry function：
+
+```kotlin
+val options = EncryptedTransactionOptions(
+  senderAuthenticationKey = FixedBytes32.fromHex("0x..."),
+  claimedEntryFunction = ClaimedEntryFunction.parse("0x1::aptos_account::transfer"),
+)
+
+val committed = encrypted.submitAndWait(
+  sender = sender,
+  payload = payload,
+  options = options,
+)
+```
+
+### 缓存管理
+
+加密交易服务会缓存账本加密密钥和账户身份验证密钥以提升性能。若账户轮换了身份验证密钥，请调用 `encrypted.clearCache()` 清除缓存密钥：
+
+```kotlin
+encrypted.clearCache()
+```
+
+<Aside type="tip">
+  在 Kaptos 仓库中查看完整的 [加密交易示例代码](https://github.com/mcxross/kaptos/blob/main/sample/jvmApp/src/main/kotlin/xyz/mcxross/kaptos/sample/EncryptedTransaction.kt)。
+</Aside>

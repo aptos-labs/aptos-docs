@@ -1,103 +1,111 @@
 ---
 title: "Kotlin SDK 快速入门"
-description: "使用最新精简 API 设置 Kaptos、读取链上数据并发送第一笔交易"
+description: "开始使用 Kaptos 在 Aptos 上进行开发。"
 sidebar:
   label: "快速入门"
 ---
 
 import { Aside, Steps } from '@astrojs/starlight/components';
 
-本快速入门将使用当前 Kaptos API，带您从配置依赖开始完成一笔已确认的交易。
+本指南将带您完成 Kaptos 的安装配置，并在 Aptos 网络上执行您的第一笔交易。
 
 <Steps>
-  1. 安装 SDK
+  1. **安装 SDK**
 
-     Kaptos 会将多平台和平台专用构件发布到 Maven Central。
+     将 Kaptos 依赖项添加到您的项目中。
 
-     #### 多平台
+     **Multiplatform:**
 
      ```kotlin
-     kotlin {
-       sourceSets {
-         commonMain.dependencies {
-           implementation("xyz.mcxross.kaptos:kaptos:<version>")
+     sourceSets {
+         val commonMain by getting {
+             dependencies {
+                 implementation("xyz.mcxross.kaptos:kaptos:<version>")
+             }
          }
-       }
      }
      ```
 
-     #### JVM（示例）
+     **JVM:**
 
      ```kotlin
      dependencies {
-       implementation("xyz.mcxross.kaptos:kaptos-jvm:<version>")
+         implementation("xyz.mcxross.kaptos:kaptos:<version>")
      }
      ```
 
-  2. 配置客户端
+  2. **配置客户端**
+
+     使用所需的网络配置初始化 `Aptos` 客户端。
 
      ```kotlin
-     val aptos = Aptos(
-       AptosConfig(
-         settings = AptosSettings(
-           network = Network.DEVNET,
-           clientConfig = ClientConfig(maxRetries = 10),
-         )
-       )
-     )
+     val aptos = Aptos(AptosConfig(network = Network.DEVNET))
      ```
 
-     <Aside type="note" emoji="ℹ️">
-       Kaptos 是 Kotlin 多平台 SDK。部分 HTTP 客户端选项会因目标平台略有差异，但 API 用法保持一致。
+     <Aside type="note">
+       得益于 Kotlin Multiplatform，无论您开发的是 Android、iOS、JVM 还是 JS 平台，Kaptos API 的工作方式都完全相同。
      </Aside>
 
-  3. 读取链上数据
+  3. **读取链上数据**
+
+     通过客户端上可用的各种命名空间服务来访问链上状态。
 
      ```kotlin
-     val ledgerInfo = aptos.getLedgerInfo().expect("Failed to fetch ledger info")
-     println("Ledger version: ${ledgerInfo.ledgerVersion}")
-
-     val chainId = aptos.getChainId().expect("Failed to fetch chain id")
-     println("Chain id: $chainId")
+     when (val result = aptos.ledger.info()) {
+       is AptosResult.Success -> println("Ledger version: ${result.value.version}")
+       is AptosResult.Failure -> println("Error: ${result.error.message}")
+     }
      ```
 
-  4. 创建并充值账户
+  4. **创建账户并充值**
+
+     生成新账户，并使用 `faucet` 服务为其充值。
 
      ```kotlin
      val alice = Account.generate()
      val bob = Account.generate()
-
-     aptos.fundAccount(accountAddress = alice.accountAddress, amount = 100_000_000L).expect("Failed to fund Alice")
-     aptos.fundAccount(accountAddress = bob.accountAddress, amount = 100_000_000L).expect("Failed to fund Bob")
+     aptos.faucet.fund(alice.accountAddress, 100_000_000UL)
+     aptos.faucet.fund(bob.accountAddress, 100_000_000UL)
      ```
 
-     有关单密钥和多密钥账户模式，请参阅[账户](/zh/build/sdks/community-sdks/kotlin-sdk/account)。
+  5. **构建并发送交易**
 
-  5. 构建并发送交易
-
-     精简交易构建器使用 `typeArgs(...)` 和 `args(...)`。
+     使用简写参数构建 entry function 负载，并通过显式流程执行交易：
 
      ```kotlin
-     val pendingTxn =
-       aptos
-         .execute(signer = alice) {
-           function = "0x1::coin::transfer"
-           typeArgs("0x1::aptos_coin::AptosCoin")
-           args(bob.accountAddress, 1_000_000UL)
-         }
-         .expect("Failed to build/sign/submit transaction")
+     // 使用简写语法构建负载
+     val payload = TransactionPayload.entryFunctionOf(
+       function = "0x1::coin::transfer",
+       typeArguments = listOf("0x1::aptos_coin::AptosCoin"),
+       bob.accountAddress,
+       1_000_000UL,
+     )
+
+     // 显式流程：构建、签名、提交并等待
+     val txn = aptos.transactions.build(sender = alice.accountAddress, payload = payload).getOrNull()!!
+     val auth = aptos.transactions.sign(signer = alice, transaction = txn).getOrNull()!!
+     val pending = aptos.transactions.submit(transaction = txn, senderAuthenticator = auth).getOrNull()!!
+     val confirmed = aptos.transactions.waitForTransaction(pending)
      ```
 
-  6. 等待确认
+     <Aside type="tip">
+       对于日常交易，您也可以使用一体化便捷方法将这些步骤合并为一次调用：
+
+       ```kotlin
+       val confirmed = aptos.transactions.submitAndWait(signer = alice, payload = payload)
+       ```
+     </Aside>
+
+  6. **检查结果**
+
+     所有操作都会返回一个 `AptosResult`，以便更清晰地处理成功或失败的情况。
 
      ```kotlin
-     val executedTxn =
-       aptos
-         .waitForTransaction(HexInput.fromString(pendingTxn.hash))
-         .expect("Transaction did not execute successfully")
-
-     println("Executed transaction version: ${executedTxn.version}")
+     when (confirmed) {
+       is AptosResult.Success -> println("Transaction version: ${confirmed.value}")
+       is AptosResult.Failure -> println("Failed: ${confirmed.error.message}")
+     }
      ```
 </Steps>
 
-需要更精细的控制（单独构建、签名和提交，付费者流程或模拟）？请参阅[构建交易](/zh/build/sdks/community-sdks/kotlin-sdk/building-transactions)。
+如需对交易执行进行更精细的控制，包括自定义手续费支付方 (fee payers) 或多代理 (multi-agent) 交易，请参阅 [构建交易](/zh/build/sdks/community-sdks/kotlin-sdk/building-transactions)。

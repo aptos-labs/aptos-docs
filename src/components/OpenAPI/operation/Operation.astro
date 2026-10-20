@@ -1,17 +1,21 @@
 ---
-import type { PathItemOperation } from "starlight-openapi/libs/operation";
-import type { Schema } from "starlight-openapi/libs/schema";
+import Callbacks from "starlight-openapi/components/callback/Callbacks.astro";
+import Deprecated from "starlight-openapi/components/Deprecated.astro";
+import ExternalDocs from "starlight-openapi/components/ExternalDocs.astro";
+import Md from "starlight-openapi/components/Md.astro";
+import OperationDescription from "starlight-openapi/components/operation/OperationDescription.astro";
+import Parameters from "starlight-openapi/components/parameter/Parameters.astro";
+import RequestBody from "starlight-openapi/components/RequestBody.astro";
+import Responses from "starlight-openapi/components/response/Responses.astro";
+import Security from "starlight-openapi/components/security/Security.astro";
+import { getOperationURLs, type PathItemOperation } from "starlight-openapi/libs/operation";
+import { getParametersByLocation } from "starlight-openapi/libs/parameter";
+import type { Schema } from "starlight-openapi/libs/schemas/schema";
 import type { OpenAPIV3 } from "openapi-types";
-import Deprecated from "../Deprecated.astro";
-import ExternalDocs from "../ExternalDocs.astro";
-import Md from "../Md.astro";
-import Parameters from "../parameter/Parameters.astro";
-import RequestBody from "../RequestBody.astro";
-import Responses from "../response/Responses.astro";
-import Security from "../security/Security.astro";
-import OperationExamples from "./OperationExamples/OperationExamples.astro";
-import OperationDescription from "./OperationDescription.astro";
+
 import { ensureNonNullable } from "~/lib/ensureNonNullable";
+
+import OperationExamples from "./OperationExamples/OperationExamples.astro";
 
 interface Props {
   operation: PathItemOperation;
@@ -19,12 +23,17 @@ interface Props {
 }
 
 const { operation: pathItemOperation, schema } = Astro.props;
-const document = schema.document as OpenAPIV3.Document;
 const { operation } = pathItemOperation;
+const document = schema.document as OpenAPIV3.Document;
+const urls = getOperationURLs(schema.document, pathItemOperation);
+const parameters = getParametersByLocation(
+  operation.parameters,
+  pathItemOperation.pathItem.parameters,
+);
 ---
 
 <Deprecated deprecated={operation.deprecated} />
-<OperationDescription operation={pathItemOperation} {schema} />
+<OperationDescription method={pathItemOperation.method} path={pathItemOperation.path} {urls} />
 <OperationExamples
   baseUrl="https://api.mainnet.aptoslabs.com"
   prefix={document.servers?.[0]?.url ?? ""}
@@ -34,6 +43,7 @@ const { operation } = pathItemOperation;
 <Md text={operation.description} />
 <ExternalDocs docs={operation.externalDocs} />
 <Security {operation} {schema} />
-<Parameters operation={pathItemOperation} />
+<Parameters {parameters} />
 <RequestBody {operation} {schema} />
+<Callbacks {operation} {schema} />
 <Responses {operation} responses={operation.responses} {schema} />

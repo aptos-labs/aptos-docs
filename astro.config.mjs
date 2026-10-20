@@ -305,14 +305,19 @@ export default defineConfig({
         // Generate the OpenAPI documentation pages if enabled
         ...(enableApiReference
           ? [
-              starlightOpenAPI([
+              starlightOpenAPI(
+                [
+                  {
+                    base: "rest-api",
+                    label: "REST API Reference",
+                    schema: "./public/aptos-spec.json",
+                    sidebarMethodBadges: true,
+                  },
+                ],
                 {
-                  base: "rest-api",
-                  label: "REST API Reference",
-                  schema: "./public/aptos-spec.json",
-                  sidebarMethodBadges: true,
+                  routeEntrypoint: "./src/components/OpenAPI/Route.astro",
                 },
-              ]),
+              ),
             ]
           : []),
       ],
@@ -342,7 +347,7 @@ export default defineConfig({
     }),
     react({
       experimentalReactChildren: true,
-      include: ["**/GraphQLEditor.tsx"],
+      include: ["**/GraphQLEditor.tsx", "**/OperationExamplesIsland.tsx"],
     }),
     favicons({
       name: "Aptos Docs",

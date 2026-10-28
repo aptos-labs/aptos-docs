@@ -228,36 +228,6 @@ export const sidebar = [
               }),
             ],
           }),
-          group("build.group.sdks.dotnet-sdk", {
-            collapsed: true,
-            badge: { text: "DEPRECATED", variant: "danger" },
-            items: [
-              "build/sdks/dotnet-sdk",
-              "build/sdks/dotnet-sdk/dotnet-examples",
-              "build/sdks/dotnet-sdk/getting-started",
-              "build/sdks/dotnet-sdk/godot-integration",
-              "build/sdks/dotnet-sdk/unity-integration",
-              group("build.group.sdks.dotnet-sdk.accounts", {
-                collapsed: true,
-                items: [
-                  "build/sdks/dotnet-sdk/accounts/ed25519",
-                  "build/sdks/dotnet-sdk/accounts/keyless",
-                  "build/sdks/dotnet-sdk/accounts/multikey",
-                ],
-              }),
-              group("build.group.sdks.dotnet-sdk.queries", {
-                collapsed: true,
-                items: ["build/sdks/dotnet-sdk/queries/view"],
-              }),
-              group("build.group.sdks.dotnet-sdk.transactions", {
-                collapsed: true,
-                items: [
-                  "build/sdks/dotnet-sdk/transactions/basic-transactions",
-                  "build/sdks/dotnet-sdk/transactions/sponsored-transactions",
-                ],
-              }),
-            ],
-          }),
           group("build.group.sdks.python-sdk", {
             collapsed: true,
             items: [
@@ -280,18 +250,6 @@ export const sidebar = [
               }),
             ],
           }),
-          {
-            label: "Unity SDK",
-            translations: { zh: "Unity SDK" },
-            link: "build/sdks/unity-sdk",
-            badge: { text: "DEPRECATED", variant: "danger" },
-          },
-          {
-            label: "C++ SDK",
-            translations: { zh: "C++ SDK" },
-            link: "build/sdks/cpp-sdk",
-            badge: { text: "DEPRECATED", variant: "danger" },
-          },
           group("build.group.sdks.rust-sdk", {
             collapsed: true,
             items: [
@@ -388,6 +346,48 @@ export const sidebar = [
               },
             ],
           }),
+          group("build.group.sdks.dotnet-sdk", {
+            collapsed: true,
+            badge: { text: "DEPRECATED", variant: "danger" },
+            items: [
+              "build/sdks/dotnet-sdk",
+              "build/sdks/dotnet-sdk/dotnet-examples",
+              "build/sdks/dotnet-sdk/getting-started",
+              "build/sdks/dotnet-sdk/godot-integration",
+              "build/sdks/dotnet-sdk/unity-integration",
+              group("build.group.sdks.dotnet-sdk.accounts", {
+                collapsed: true,
+                items: [
+                  "build/sdks/dotnet-sdk/accounts/ed25519",
+                  "build/sdks/dotnet-sdk/accounts/keyless",
+                  "build/sdks/dotnet-sdk/accounts/multikey",
+                ],
+              }),
+              group("build.group.sdks.dotnet-sdk.queries", {
+                collapsed: true,
+                items: ["build/sdks/dotnet-sdk/queries/view"],
+              }),
+              group("build.group.sdks.dotnet-sdk.transactions", {
+                collapsed: true,
+                items: [
+                  "build/sdks/dotnet-sdk/transactions/basic-transactions",
+                  "build/sdks/dotnet-sdk/transactions/sponsored-transactions",
+                ],
+              }),
+            ],
+          }),
+          {
+            label: "Unity SDK",
+            translations: { zh: "Unity SDK" },
+            link: "build/sdks/unity-sdk",
+            badge: { text: "DEPRECATED", variant: "danger" },
+          },
+          {
+            label: "C++ SDK",
+            translations: { zh: "C++ SDK" },
+            link: "build/sdks/cpp-sdk",
+            badge: { text: "DEPRECATED", variant: "danger" },
+          },
         ],
       }),
 

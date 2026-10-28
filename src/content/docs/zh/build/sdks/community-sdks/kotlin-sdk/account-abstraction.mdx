@@ -1,0 +1,272 @@
+---
+title: "账户抽象与 Solana 可派生账户"
+description: "在 Kaptos 中使用 Move 模块实现自定义交易认证逻辑，并在 Aptos 上使用跨链 Solana 账户。"
+sidebar:
+  label: "账户抽象"
+---
+
+import { Aside, Steps, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+Aptos 上的账户抽象 (Account Abstraction, AA) 允许账户利用 Move 智能合约定义可编程的验证逻辑，从而突破单密钥 Ed25519 或 Secp256k1 等原生密码学签名方案的限制。
+
+Kaptos 提供了全面的账户抽象支持：
+
+- **原生账户抽象 ([AIP-61](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-61.md))**：管理链上可调度身份验证器 (dispatchable authenticators) 并验证自定义 Move 认证函数。
+- **可派生账户抽象 ([AIP-113](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-113.md))**：无需预先在链上注册，即可根据抽象公钥身份在链下确定性派生 Aptos 账户地址。
+- **Solana 可派生账户**：原生支持通过 Aptos Framework (`0x1::solana_derivable_account`) 验证的“使用 Solana 登录 (Sign-In with Solana, SIWS)”跨链认证。
+
+***
+
+## 核心概念
+
+### 认证函数 (Authentication Functions)
+
+认证函数是链上的 Move 函数，负责验证授权数据并在认证成功后返回已认证的 `signer`：
+
+```move
+public fun authenticate(account: signer, auth_data: AbstractionAuthData): signer;
+```
+
+在 Kaptos 中，认证函数通过 `AuthenticationFunction` 类型表示：
+
+```kotlin
+val authFunction = AuthenticationFunction.parse("0x1::solana_derivable_account::authenticate")
+```
+
+### 抽象认证数据 (Abstraction Authentication Data)
+
+当交易由抽象账户签名时，Kaptos 会将交易签名消息与域加盐进行哈希（`sha3_256("APTOS::AASigningData" + bcs(message))`），并将签名打包封装进 `AccountAuthenticator.Abstraction`。Move 虚拟机将在执行时验证该摘要与实际交易是否完全一致。
+
+***
+
+## 管理账户抽象 (`client.abstraction`)
+
+`AccountAbstractionService`（通过 `aptos.abstraction` 访问）用于为已有账户查询和管理链上认证函数。
+
+### 查询账户抽象状态
+
+查询指定账户是否已启用认证函数：
+
+```kotlin
+val status = aptos.abstraction.status(alice.accountAddress).orThrow()
+
+println("是否已启用账户抽象: ${status.isEnabled}")
+for (fn in status.authenticationFunctions) {
+  println("活跃认证函数: $fn")
+}
+```
+
+您还可以检查某个特定的认证函数是否处于激活状态：
+
+```kotlin
+val isCustomActive = aptos.abstraction.isEnabled(
+  accountAddress = alice.accountAddress,
+  authenticationFunction = AuthenticationFunction.parse("0x123::custom_auth::authenticate"),
+).orThrow()
+```
+
+### 启用与禁用身份验证器
+
+构建交易以添加或移除认证函数：
+
+```kotlin
+// 构建启用认证函数的交易
+val enableTxn = aptos.abstraction.buildEnable(
+  accountAddress = alice.accountAddress,
+  authenticationFunction = authFunction,
+).orThrow()
+
+val committed = aptos.transactions.signAndSubmit(
+  signer = alice,
+  transaction = enableTxn,
+).orThrow()
+aptos.transactions.waitForTransaction(committed.hash).orThrow()
+
+// 构建禁用指定认证函数的交易
+val disableTxn = aptos.abstraction.buildDisable(
+  accountAddress = alice.accountAddress,
+  authenticationFunction = authFunction,
+).orThrow()
+
+// 或者彻底移除可调度身份验证器
+val disableAllTxn = aptos.abstraction.buildDisable(
+  accountAddress = alice.accountAddress,
+).orThrow()
+```
+
+***
+
+## 自定义抽象账户 (`AbstractedAccount`)
+
+`AbstractedAccount` 实现了 `TransactionSigner`，并将签名生成过程委托给应用程序提供的 `AbstractionSigner` 回调。
+
+```kotlin
+val abstractedAccount = AbstractedAccount(
+  accountAddress = alice.accountAddress,
+  authenticationFunction = AuthenticationFunction.parse("0x123::custom_auth::authenticate"),
+  signer = AbstractionSigner { digest ->
+    // 使用您的自定义签名器或硬件设备对 32 字节摘要进行签名
+    val rawSignature: ByteArray = customSigner.sign(digest)
+    AptosResult.Success(rawSignature)
+  },
+)
+
+// 直接使用该抽象签名器提交交易
+val result = aptos.transactions.submitAndWait(
+  signer = abstractedAccount,
+  function = "0x1::aptos_account::transfer",
+  arguments = listOf(bob.accountAddress, 1_000_000),
+).orThrow()
+```
+
+***
+
+## 可派生账户抽象 (`DerivableAbstractedAccount`)
+
+不同于原生账户抽象需要在已有账户上发起链上交易来注册认证函数，**可派生账户抽象 (Derivable Account Abstraction, DAA)** 可以在链下确定性地计算出账户地址：
+
+```text
+address = sha3_256(bcs(authentication_function) + bcs(identity) + 0x05)
+```
+
+这允许次级认证方案（如外部链密钥对）无需提前支付 Gas 费用，即可派生出独立且唯一的 Aptos 地址。
+
+```kotlin
+val derivable = DerivableAbstractedAccount(
+  authenticationFunction = AuthenticationFunction.parse("0x123::custom_daa::authenticate"),
+  abstractPublicKey = identityBytes,
+  signer = AbstractionSigner { digest -> customSigner.sign(digest) },
+)
+
+println("派生的 Aptos 地址: ${derivable.accountAddress}")
+```
+
+<Aside type="note">
+  由于可派生账户地址是在链下计算的，在充值之前它并不在链上存在。在执行交易或预扣 Gas 费用之前，必须先为该派生地址充值。
+</Aside>
+
+***
+
+## Solana 可派生账户 (Solana Derivable Accounts)
+
+Aptos 通过框架模块 `0x1::solana_derivable_account::authenticate` 原生支持 Solana 账户。用户可以使用其 Solana Ed25519 密钥签署标准的 **Sign-In with Solana (SIWS)** 消息，Aptos 随后在链上验证该签名。
+
+Kaptos 通过 `SolanaDerivableAccount` 为 Solana 可派生账户提供了一等支持。
+
+### 创建 Solana 可派生账户
+
+#### 从本地 Ed25519 签名者创建
+
+适用于自动化服务、测试脚本或后端签名服务：
+
+```kotlin
+val localSigner = sampleSigner() // Ed25519Account
+
+val solanaAccount = SolanaDerivableAccount.fromEd25519(
+  signer = localSigner,
+  domain = "kaptos.example",
+)
+
+println("Aptos 地址: ${solanaAccount.accountAddress}")
+println("Solana Base58 公钥: ${solanaAccount.base58PublicKey}")
+println("域名: ${solanaAccount.domain}")
+```
+
+#### 从 Solana 钱包适配器创建 (`SolanaMessageSigner`)
+
+适用于集成了移动端或 Web 端 Solana 钱包（如 Phantom、Solflare）的应用：
+
+```kotlin
+val solanaAccount = SolanaDerivableAccount(
+  publicKey = solanaWallet.publicKeyBytes, // 32 字节 Ed25519 公钥
+  domain = "myapp.com",
+  signer = SolanaMessageSigner { siwsMessageBytes ->
+    // 钱包对原始 UTF-8 SIWS 消息字节进行签名
+    try {
+      val signature = solanaWallet.signMessage(siwsMessageBytes)
+      AptosResult.Success(signature) // 64 字节 Ed25519 签名
+    } catch (e: Exception) {
+      AptosResult.Failure(AptosError.Crypto("用户拒绝签名", e))
+    }
+  },
+)
+```
+
+### 工作原理：SIWS 认证机制
+
+当调用 `solanaAccount.signTransaction(transaction)` 时，Kaptos 会构建标准的 SIWS 文本消息：
+
+```text
+myapp.com wants you to sign in with your Solana account:
+G56zT1K6AQab7FzwHdQ8hiHXusR14Rmddw6Vz5MFbbmV
+
+Please confirm you explicitly initiated this request from myapp.com. You are approving to execute transaction 0x1::aptos_account::transfer on Aptos blockchain (mainnet).
+
+Nonce: 0x9509edc861070b2848d8161c9453159139f867745dc87d32864a71e796c7d279
+```
+
+钱包对该可读提示进行签名。Kaptos 将生成的 64 字节 Ed25519 签名与公钥身份打包封装为 `AccountAuthenticator.Abstraction` 载荷提交至 Aptos。
+
+***
+
+## 完整实战：使用 Solana 账户进行交易
+
+以下是为派生的 Solana 账户充值并在 Aptos 上执行转账的完整端到端流程：
+
+<Steps>
+  1. **派生 Solana 账户**
+
+     ```kotlin
+     val abstracted = SolanaDerivableAccount.fromEd25519(
+       signer = fundingAccount,
+       domain = "kaptos.example",
+     )
+     ```
+
+  2. **为派生地址充值**
+
+     新派生的账户必须拥有链上余额以支付 Gas 费用：
+
+     ```kotlin
+     aptos.transactions
+       .submitAndWait(
+         signer = fundingAccount,
+         function = "0x1::aptos_account::transfer",
+         arguments = listOf(abstracted.accountAddress, 20_000_000),
+       )
+       .orThrow()
+     ```
+
+  3. **提交入口函数交易**
+
+     使用标准的 Kaptos 交易辅助工具从 Solana 可派生账户发起交易：
+
+     ```kotlin
+     val committed = aptos.transactions
+       .submitAndWait(
+         signer = abstracted,
+         function = "0x1::aptos_account::transfer",
+         arguments = listOf(recipientAddress, 1_000_000),
+         transactionOptions = TransactionOptions(maxGasAmount = 50_000uL),
+       )
+       .orThrow()
+
+     println("已提交交易 ${committed.hash}，发送方地址：${abstracted.accountAddress}")
+     ```
+</Steps>
+
+<Aside type="caution">
+  **仅支持入口函数 (Entry Functions)**：Solana 可派生账户目前仅支持入口函数交易，因为链上的 SIWS 验证器会在消息中嵌入并校验准确的入口函数名称。脚本交易 (Script transactions) 无法由 `SolanaDerivableAccount` 进行签名。
+</Aside>
+
+***
+
+## 后续步骤 (Next Steps)
+
+<CardGrid>
+  <LinkCard title="管理账户" href="/zh/build/sdks/community-sdks/kotlin-sdk/account" description="了解原生 Ed25519、SingleKey、MultiKey 与 AIP-80 账户格式。" />
+
+  <LinkCard title="构建交易" href="/zh/build/sdks/community-sdks/kotlin-sdk/building-transactions" description="了解 Kaptos 中的单步与分阶段交易提交流水线。" />
+
+  <LinkCard title="赞助交易" href="/zh/build/sdks/community-sdks/kotlin-sdk/sponsored-transactions" description="由费用赞助者代付 Gas，使可派生账户无需预先充值。" />
+</CardGrid>

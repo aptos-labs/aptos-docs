@@ -1,7 +1,7 @@
 diff --git a/dist/index.d.ts b/dist/index.d.ts
 --- a/dist/index.d.ts
 +++ b/dist/index.d.ts
-@@ -60,7 +60,14 @@
+@@ -41,7 +41,14 @@
       * Here the list of the headers that are added:
       * - The CSP header of the static pages is added when CSP support is enabled.
       */
@@ -20,81 +20,71 @@ diff --git a/dist/index.d.ts b/dist/index.d.ts
 diff --git a/dist/index.js b/dist/index.js
 --- a/dist/index.js
 +++ b/dist/index.js
-@@ -56,7 +56,7 @@
-       buildOutput,
-       middlewareMode,
-       preserveBuildServerDir: true,
--      staticHeaders
-+      staticHeaders: staticHeaders === true || typeof staticHeaders === "object"
-     },
-     supportedAstroFeatures: {
-       hybridOutput: "stable",
-@@ -409,8 +409,18 @@
-           if (!normalized.routes) {
-             normalized.routes = [];
-           }
--          if (staticHeaders) {
--            const routesWithConfigHeaders = createRoutesWithStaticHeaders(_routeToHeaders, _config);
-+          const _staticHeadersEnabled =
-+            staticHeaders === true || typeof staticHeaders === "object";
-+          const _cspMode =
-+            typeof staticHeaders === "object" && staticHeaders?.cspMode
-+              ? staticHeaders.cspMode
-+              : "per-route";
-+          if (_staticHeadersEnabled) {
-+            const routesWithConfigHeaders = createRoutesWithStaticHeaders(
-+              _routeToHeaders,
-+              _config,
-+              _cspMode
-+            );
-             const fileSystemRouteIndex = normalized.routes.findIndex(
-               (r) => "handle" in r && r.handle === "filesystem"
-             );
-@@ -559,21 +569,35 @@
-   }
-   return "nodejs24.x";
+@@ -50,7 +50,7 @@
+ 			buildOutput,
+ 			middlewareMode,
+ 			preserveBuildServerDir: true,
+-			staticHeaders
++			staticHeaders: staticHeaders === true || typeof staticHeaders === "object"
+ 		},
+ 		supportedAstroFeatures: {
+ 			hybridOutput: "stable",
+@@ -366,8 +366,10 @@
+ 					if (!normalized.routes) {
+ 						normalized.routes = [];
+ 					}
+-					if (staticHeaders) {
+-						const routesWithConfigHeaders = createRoutesWithStaticHeaders(_routeToHeaders, _config);
++					const _staticHeadersEnabled = staticHeaders === true || typeof staticHeaders === "object";
++					const _cspMode = typeof staticHeaders === "object" && staticHeaders?.cspMode ? staticHeaders.cspMode : "per-route";
++					if (_staticHeadersEnabled) {
++						const routesWithConfigHeaders = createRoutesWithStaticHeaders(_routeToHeaders, _config, _cspMode);
+ 						const fileSystemRouteIndex = normalized.routes.findIndex((r) => "handle" in r && r.handle === "filesystem");
+ 						normalized.routes.splice(fileSystemRouteIndex, 0, ...routesWithConfigHeaders);
+ 					}
+@@ -492,19 +494,35 @@
+ 	}
+ 	return "nodejs24.x";
  }
 -function createRoutesWithStaticHeaders(staticHeaders, config) {
 +function createRoutesWithStaticHeaders(staticHeaders, config, cspMode = "per-route") {
-   const vercelHeaders = [];
--  for (const [pathname, { headers }] of staticHeaders.entries()) {
--    if (config.security.csp) {
--      const csp = headers.get("Content-Security-Policy");
--      if (csp) {
--        const _headers = {
--          "content-security-policy": csp
--        };
--        vercelHeaders.push({
--          src: pathname,
--          headers: _headers
--        });
-+  if (!config?.security?.csp) return vercelHeaders;
-+  if (cspMode === "global") {
-+    let csp;
-+    for (const { headers } of staticHeaders.values()) {
-+      const v = headers.get("Content-Security-Policy");
-+      if (v) {
-+        csp = v;
-+        break;
-       }
-     }
-+    if (csp) {
-+      vercelHeaders.push({
-+        src: "^/(.*)$",
-+        headers: { "content-security-policy": csp },
-+        continue: true
-+      });
-+    }
-+    return vercelHeaders;
-+  }
-+  for (const [pathname, { headers }] of staticHeaders.entries()) {
-+    const csp = headers.get("Content-Security-Policy");
-+    if (csp) {
-+      vercelHeaders.push({
-+        src: pathname,
-+        headers: { "content-security-policy": csp }
-+      });
-+    }
-   }
-   return vercelHeaders;
+ 	const vercelHeaders = [];
+-	for (const [pathname, { headers }] of staticHeaders.entries()) {
+-		if (config.security.csp) {
+-			const csp = headers.get("Content-Security-Policy");
+-			if (csp) {
+-				const _headers = { "content-security-policy": csp };
+-				vercelHeaders.push({
+-					src: pathname,
+-					headers: _headers
+-				});
++	if (!config?.security?.csp) return vercelHeaders;
++	if (cspMode === "global") {
++		let csp;
++		for (const { headers } of staticHeaders.values()) {
++			const v = headers.get("Content-Security-Policy");
++			if (v) {
++				csp = v;
++				break;
+ 			}
+ 		}
++		if (csp) {
++			vercelHeaders.push({
++				src: "^/(.*)$",
++				headers: { "content-security-policy": csp },
++				continue: true
++			});
++		}
++		return vercelHeaders;
++	}
++	for (const [pathname, { headers }] of staticHeaders.entries()) {
++		const csp = headers.get("Content-Security-Policy");
++		if (csp) {
++			vercelHeaders.push({
++				src: pathname,
++				headers: { "content-security-policy": csp }
++			});
++		}
+ 	}
+ 	return vercelHeaders;
  }

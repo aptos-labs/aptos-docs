@@ -237,7 +237,7 @@ describe("OAuth Protected Resource Metadata (RFC 9728)", () => {
     // RFC 9728 clients (and the Is It Agent Ready? scanner) require `resource`
     // to share an origin with the well-known document. Documentation on this
     // host is public; the listed issuers mint Google ID tokens for the
-    // Aptos Testnet Faucet API on faucet.testnet.aptoslabs.com.
+    // Aptos Testnet Faucet API on faucet-e2.testnet.aptoslabs.com.
     expect(metadata.resource, "resource").toBe("https://aptos.dev");
     expect(new URL(metadata.resource ?? "").origin).toBe("https://aptos.dev");
     expect(metadata.authorization_servers, "authorization_servers").toEqual(

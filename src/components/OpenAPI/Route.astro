@@ -1,15 +1,17 @@
 ---
 import StarlightPage from "@astrojs/starlight/components/StarlightPage.astro";
 import FallbackContentNotice from "@astrojs/starlight/components/FallbackContentNotice.astro";
-import { dereference } from "@readme/openapi-parser";
+import OverviewOperationTag from "starlight-openapi/components/overview/OverviewOperationTag.astro";
+import OverviewSchema from "starlight-openapi/components/overview/OverviewSchema.astro";
+import { ensureSchemaDereference } from "starlight-openapi/libs/dereference";
+import {
+  getSchemaStaticPaths,
+  type StarlightOpenAPIRouteProps,
+} from "starlight-openapi/libs/route";
+import { getPageProps } from "starlight-openapi/libs/starlight";
 import type { InferGetStaticPropsType } from "astro";
 
-import { getSchemaStaticPaths } from "starlight-openapi/libs/route";
-import { getPageProps } from "starlight-openapi/libs/starlight";
-
 import Operation from "./operation/Operation.astro";
-import OperationTag from "./OperationTag.astro";
-import Overview from "./Overview.astro";
 import OperationScalarModal from "./operation/OperationExamples/OperationScalarModal.astro";
 
 export const prerender = true;
@@ -18,36 +20,37 @@ export function getStaticPaths() {
   return getSchemaStaticPaths();
 }
 
-type Props = InferGetStaticPropsType<typeof getStaticPaths>;
+type Props = InferGetStaticPropsType<typeof getStaticPaths> & StarlightOpenAPIRouteProps;
 
-const { schema, type } = Astro.props;
+const props = Astro.props as Props;
+const { schema, type } = props;
 
-schema.document = await dereference(schema.document);
+await ensureSchemaDereference(schema);
 
-const isOverview = type === "overview";
-const isOperationTag = type === "operation-tag";
+const isSchemaOverview = type === "schema-overview";
+const isOperationTagOverview = type === "operation-tag-overview";
 
-const title = isOverview || isOperationTag ? "Overview" : Astro.props.operation.title;
+const title = isSchemaOverview || isOperationTagOverview ? "Overview" : props.operation.title;
 ---
 
 <StarlightPage
   {...getPageProps(
     title,
     schema,
-    isOverview || isOperationTag ? undefined : Astro.props.operation,
-    isOperationTag ? Astro.props.tag : undefined,
+    isSchemaOverview || isOperationTagOverview ? undefined : props.operation,
+    isOperationTagOverview ? props.tag : undefined,
   )}
 >
   {Astro.currentLocale !== "en" && <FallbackContentNotice />}
   {
-    isOverview ? (
-      <Overview {schema} />
-    ) : isOperationTag ? (
-      <OperationTag tag={Astro.props.tag} />
+    isSchemaOverview ? (
+      <OverviewSchema {schema} />
+    ) : isOperationTagOverview ? (
+      <OverviewOperationTag {schema} tag={props.tag} />
     ) : (
-      <Operation {schema} operation={Astro.props.operation} />
+      <Operation {schema} operation={props.operation} />
     )
   }
 </StarlightPage>
-<!-- We render it here, because StarlightPage component creates stacking context which breaks modal styles -->
+<!-- StarlightPage creates a stacking context that breaks modal styles -->
 <OperationScalarModal />

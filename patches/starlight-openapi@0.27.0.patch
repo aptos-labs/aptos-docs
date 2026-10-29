@@ -1,0 +1,168 @@
+diff --git a/index.ts b/index.ts
+index 5392f353f6c7fa71683fe0742680f845d7b6ecf2..a4aedb7ad6ca04e5c7ce5d408b482c775875f928 100644
+--- a/index.ts
++++ b/index.ts
+@@ -9,7 +9,14 @@ import { getSidebarGroupPlaceholder, getSidebarGroupsPlaceholder } from './libs/
+ 
+ export const openAPISidebarGroups = getSidebarGroupsPlaceholder()
+ 
+-export default function starlightOpenAPIPlugin(userConfig: StarlightOpenAPIUserConfig): StarlightPlugin {
++type StarlightOpenAPIOptions = {
++  routeEntrypoint?: string
++}
++
++export default function starlightOpenAPIPlugin(
++  userConfig: StarlightOpenAPIUserConfig,
++  options?: StarlightOpenAPIOptions,
++): StarlightPlugin {
+   return {
+     name: 'starlight-openapi-plugin',
+     hooks: {
+@@ -32,7 +39,7 @@ export default function starlightOpenAPIPlugin(userConfig: StarlightOpenAPIUserC
+         )
+ 
+         addRouteMiddleware({ entrypoint: 'starlight-openapi/middleware', order: 'post' })
+-        addIntegration(starlightOpenAPIIntegration(starlightConfig, schemas))
++        addIntegration(starlightOpenAPIIntegration(starlightConfig, schemas, options?.routeEntrypoint))
+ 
+         const updatedConfig: Parameters<typeof updateConfig>[0] = {
+           customCss: [...(starlightConfig.customCss ?? []), 'starlight-openapi/styles'],
+diff --git a/libs/integration.ts b/libs/integration.ts
+index b9ccee4049fa283977954226cc0269266a3acafc..5342c5de7ef7cc7002f4b399d672efa1b0c62b0e 100644
+--- a/libs/integration.ts
++++ b/libs/integration.ts
+@@ -8,7 +8,9 @@ import { vitePluginStarlightOpenAPI } from './vite'
+ export function starlightOpenAPIIntegration(
+   starlightConfig: Pick<StarlightUserConfig, 'pagination' | 'prerender'>,
+   schemas: Schema[],
++  routeEntrypoint?: string,
+ ): AstroIntegration {
++  const staticEntrypoint = routeEntrypoint ?? 'starlight-openapi/routes/static'
+   const starlightOpenAPI: AstroIntegration = {
+     name: 'starlight-openapi',
+     hooks: {
+@@ -17,7 +19,7 @@ export function starlightOpenAPIIntegration(
+ 
+         if (prerender) {
+           injectRoute({
+-            entrypoint: 'starlight-openapi/routes/static',
++            entrypoint: staticEntrypoint,
+             pattern: `[...openAPISlug]`,
+             prerender: true,
+           })
+diff --git a/libs/route.ts b/libs/route.ts
+index 5392f353f6c7fa71683fe0742680f845d7b6ecf2..e2b26edac12892b68f9aaaacb9f48dd5115be9e3 100644
+--- a/libs/route.ts
++++ b/libs/route.ts
+@@ -1,4 +1,5 @@
+ import schemas from 'virtual:starlight-openapi/schemas'
++import config from 'virtual:starlight/user-config'
+ 
+ import {
+   getOperationsByTag,
+@@ -10,19 +11,60 @@ import {
+ import { getSchemaBasePath, getSlugFromPathname, slug, stripLeadingAndTrailingSlashes } from './path'
+ import type { Schema } from './schemas/schema'
+ 
+-const routes = Object.values(schemas).flatMap((schema): StarlightOpenAPIRoute[] => [
+-  {
+-    params: {
+-      openAPISlug: stripLeadingAndTrailingSlashes(getSchemaBasePath(schema.config)),
++function buildBaseRoutes(): StarlightOpenAPIRoute[] {
++  return Object.values(schemas).flatMap((schema): StarlightOpenAPIRoute[] => [
++    {
++      params: {
++        openAPISlug: stripLeadingAndTrailingSlashes(getSchemaBasePath(schema.config)),
++      },
++      props: {
++        schema,
++        type: 'schema-overview',
++      },
+     },
+-    props: {
+-      schema,
+-      type: 'schema-overview',
+-    },
+-  },
+-  ...getPathItemRoutes(schema),
+-  ...getWebhooksRoutes(schema),
+-])
++    ...getPathItemRoutes(schema),
++    ...getWebhooksRoutes(schema),
++  ])
++}
++
++/**
++ * Mirror Starlight's fallback locale routes so `/zh/rest-api/...` serves English OpenAPI
++ * content with FallbackContentNotice (see custom Route.astro).
++ */
++function withLocaleFallbackRoutes(routes: StarlightOpenAPIRoute[]): StarlightOpenAPIRoute[] {
++  if (!config.isMultilingual) {
++    return routes
++  }
++
++  const allRoutes = [...routes]
++  const routesCopy = [...routes]
++
++  for (const key in config.locales) {
++    if (key === config.defaultLocale.locale) continue
++    const localeConfig = config.locales[key]
++    if (!localeConfig) continue
++    const locale = key === 'root' ? undefined : key
++    if (!locale) continue
++
++    for (const route of routesCopy) {
++      allRoutes.push({
++        ...route,
++        params: {
++          ...route.params,
++          openAPISlug: `${locale}/${route.params.openAPISlug}`,
++        },
++        props: {
++          ...route.props,
++          isFallback: true,
++        },
++      })
++    }
++  }
++
++  return allRoutes
++}
++
++const routes = withLocaleFallbackRoutes(buildBaseRoutes())
+ 
+ const routesBySlug = new Map(routes.map((route) => [route.params.openAPISlug, route]))
+ 
+@@ -106,16 +148,19 @@ interface StarlightOpenAPIRoute {
+ interface StarlightOpenAPIRouteSchemaOverviewProps {
+   schema: Schema
+   type: 'schema-overview'
++  isFallback?: true
+ }
+ 
+ interface StarlightOpenAPIRouteOperationTagOverviewProps {
+   schema: Schema
+   tag: OperationTag
+   type: 'operation-tag-overview'
++  isFallback?: true
+ }
+ 
+ interface StarlightOpenAPIRouteOperationProps {
+   operation: PathItemOperation
+   schema: Schema
+   type: 'operation'
++  isFallback?: true
+ }
+diff --git a/package.json b/package.json
+index 7e95fe86546d8d2745cd348c07056ae1cf92f22d..026ae5d52265fb684aa7fa2eb83ec013fde8373d 100644
+--- a/package.json
++++ b/package.json
+@@ -7,6 +7,8 @@
+   "type": "module",
+   "exports": {
+     ".": "./index.ts",
++    "./libs/*": "./libs/*.ts",
++    "./components/*": "./components/*",
+     "./middleware": "./middleware.ts",
+     "./routes/static": "./routes/static/index.astro",
+     "./routes/ssr": "./routes/ssr/index.astro",

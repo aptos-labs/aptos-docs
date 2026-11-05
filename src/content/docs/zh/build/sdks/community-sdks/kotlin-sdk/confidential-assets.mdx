@@ -1,0 +1,192 @@
+---
+title: "机密资产 (Confidential Assets)"
+description: "使用 Kaptos 管理隐私保护余额、生成零知识证明转账、存款与提款。"
+sidebar:
+  label: "机密资产"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+机密资产在 Aptos 上提供了隐私保护余额与隐匿价值转移。通过结合零知识证明（Zero-Knowledge Proofs）与非对称加密技术，账户余额和转账金额在链上保持加密状态，同时仍能进行完全验证并满足审计合规要求。
+
+`kaptos-confidential-assets` 构件为核心 SDK 提供了对 `0x1::confidential_asset` 标准的全面支持。
+
+## 安装
+
+在您的 Gradle 构建文件中，将机密资产依赖项与核心 `kaptos` 库一同添加：
+
+```kotlin
+// Multiplatform
+commonMain.dependencies {
+    implementation("xyz.mcxross.kaptos:kaptos:<version>")
+    implementation("xyz.mcxross.kaptos:kaptos-confidential-assets:<version>")
+}
+
+// JVM / Android
+dependencies {
+    implementation("xyz.mcxross.kaptos:kaptos:<version>")
+    implementation("xyz.mcxross.kaptos:kaptos-confidential-assets:<version>")
+}
+```
+
+## 密钥管理与生命周期
+
+机密资产解密密钥与交易签名密钥是分离的：
+
+- **交易签名者 (Transaction Signer)**：用于对链上交易进行签名并支付 gas 费用（例如 `Ed25519Account`）。
+- **解密密钥 (`ConfidentialDecryptionKey`)**：用于解密余额金额并生成零知识转账证明的 32 字节私钥。
+
+应用程序负责安全地持久化解密密钥。SDK 提供了内存安全包装器，在关闭时会自动清零敏感密钥内存：
+
+```kotlin
+aptos(AptosConfig(network = Network.TESTNET)) {
+  val signer = ed25519Account("ed25519-priv-0x...")
+  val assets = confidentialAssets()
+
+  // 导入现有的 32 字节私钥并在当前作用域中管理其生命周期
+  val key = own(ConfidentialDecryptionKey.fromBytes(storedDecryptionKeyBytes))
+
+  // 或生成一个新的受管理一次性密钥用于测试或注册
+  val generatedKey = confidentialDecryptionKey()
+}
+```
+
+## 核心操作流程
+
+### 1. 注册机密余额
+
+账户在接收机密资金或持有特定资产的加密余额之前，必须先在链上注册其公钥加密密钥：
+
+```kotlin
+val token = AccountAddress.fromString("0x...") // 同质化资产元数据地址
+
+val committed = assets.registerBalance(
+  signer = signer,
+  token = token,
+  key = key,
+).getOrNull()!!
+
+println("已注册机密余额: ${committed.hash}")
+```
+
+### 2. 查询加密余额
+
+查询并解密机密余额。返回的 `ConfidentialBalance` 对象同时包含立即可用的金额与待结转的待处理金额：
+
+```kotlin
+val balance = assets.getBalance(
+  account = signer.accountAddress,
+  token = token,
+  key = key,
+).getOrNull()!!
+
+println("可用余额: ${balance.availableAmount}")
+println("待处理余额: ${balance.pendingAmount}")
+```
+
+### 3. 存款（公开资产转为机密资产）
+
+将公开同质化资产资金转移到机密余额中：
+
+```kotlin
+val committed = assets.deposit(
+  signer = signer,
+  token = token,
+  amount = 1_000_000UL,
+).getOrNull()!!
+```
+
+### 4. 结转待处理余额 (Rollover)
+
+收到的机密转账会进入 `pendingAmount`。若要使其可用于转账或提款，需要进行结转操作：
+
+```kotlin
+val committed = assets.rolloverPendingBalance(
+  signer = signer,
+  token = token,
+).getOrNull()!!
+```
+
+### 5. 机密转账
+
+生成转账证明，并将加密资金发送给已注册机密余额的接收方：
+
+```kotlin
+val recipient = AccountAddress.fromString("0x456...")
+
+val committed = assets.transfer(
+  signer = signer,
+  recipient = recipient,
+  token = token,
+  key = key,
+  amount = 500_000UL,
+).getOrNull()!!
+
+println("已转账: ${committed.hash}")
+```
+
+### 6. 提款（机密资产转为公开资产）
+
+将资金从机密余额中移回公开同质化资产账户：
+
+```kotlin
+val committed = assets.withdraw(
+  signer = signer,
+  token = token,
+  key = key,
+  amount = 500_000UL,
+  recipient = signer.accountAddress, // 可选：默认为发送方
+).getOrNull()!!
+```
+
+## 未签名构建器与付费者支持
+
+每个变更方法都有对应的 `build...` 方法，返回一个 `UnsignedTransaction`。这允许您集成外部费用付费者（赞助交易）或进行离线签名：
+
+```kotlin
+// 构建带有付费者的未签名转账交易
+val unsignedTx = assets.buildTransfer(
+  sender = signer.accountAddress,
+  recipient = recipient,
+  token = token,
+  key = key,
+  amount = 500_000UL,
+  options = ConfidentialTransactionOptions(feePayer = sponsor),
+).getOrNull()!!
+
+// 发送方和赞助者分别签名
+val senderAuth = aptos.transactions.sign(signer, unsignedTx).getOrNull()!!
+val feePayerAuth = aptos.transactions.sign(sponsor, unsignedTx).getOrNull()!!
+
+// 提交
+val pending = aptos.transactions.submit(
+  transaction = unsignedTx,
+  senderAuthenticator = senderAuth,
+  feePayerAuthenticator = feePayerAuth,
+).getOrNull()!!
+
+val committed = aptos.transactions.waitForTransaction(pending)
+```
+
+## 状态与活动查询
+
+您可以检查注册状态、紧急暂停状态以及分页的活动日志：
+
+```kotlin
+// 检查注册及转入暂停状态
+val status = assets.getStatus(signer.accountAddress, token).getOrNull()!!
+println("是否已注册: ${status.isRegistered}")
+
+// 查询分页的机密资产活动记录
+val page = assets.getActivities(
+  query = ConfidentialActivityQuery(account = signer.accountAddress),
+).getOrNull()!!
+
+page.data.forEach { activity ->
+  println("${activity.activityType} 出现在版本 ${activity.transactionVersion}")
+}
+```
+
+<Aside type="tip">
+  在 Kaptos 仓库中查看完整的 [机密资产示例代码](https://github.com/mcxross/kaptos/blob/main/sample/jvmApp/src/main/kotlin/xyz/mcxross/kaptos/sample/ConfidentialAssetTransaction.kt)。
+</Aside>

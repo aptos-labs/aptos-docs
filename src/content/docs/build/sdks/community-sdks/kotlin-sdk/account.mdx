@@ -1,110 +1,102 @@
 ---
 title: "Creating and Managing Accounts"
-description: "Create and manage legacy, SingleKey, and MultiKey accounts with the Kaptos Kotlin SDK"
+description: "Explore account types in Kaptos and learn how to create and manage them."
 sidebar:
-  label: "Accounts"
+  label: "Managing Accounts"
 ---
 
-Kaptos supports three account patterns you should know when building production apps:
+import { Aside } from '@astrojs/starlight/components';
 
-- **Legacy Ed25519 account** (`Ed25519Account` / `Account.generate()` default)
-- **SingleKey account** (`SingleKeyAccount`) using unified auth keys
-- **MultiKey account** (`MultiKeyAccount`) for threshold-style signing
+Kaptos supports multiple account types to handle various authentication schemes on the Aptos network. This page covers how to create and manage:
 
-## Legacy account (Ed25519)
+- Legacy Ed25519 (`Ed25519Account` / `Account.generate()`)
+- SingleKey (`SingleKeyAccount`) with unified auth
+- MultiKey (`MultiKeyAccount`) for threshold signing
+- SDK-managed accounts via `Aptos` factory methods
+- Custom authentication schemes via [Account Abstraction](/build/sdks/community-sdks/kotlin-sdk/account-abstraction)
 
-The default `Account.generate()` path creates a legacy Ed25519 account.
+## Legacy Account (Ed25519)
+
+The legacy account type represents an account using the Ed25519 authentication scheme.
 
 ```kotlin
 val legacy = Account.generate()
 
-val explicitLegacy = Account.generate(
-  scheme = SigningSchemeInput.Ed25519,
-  legacy = true,
-)
+val fromPrivateKey = Account.fromPrivateKey(Ed25519PrivateKey("0x..."))
 ```
 
-You can also derive a legacy account from an existing Ed25519 private key:
+## SingleKey Account (Ed25519 or Secp256k1)
 
-```kotlin
-val legacyFromPrivateKey =
-  Account.fromPrivateKey(
-    privateKey = Ed25519PrivateKey("0x...")
-  )
-```
-
-## SingleKey account (Ed25519 or Secp256k1)
-
-Use `SingleKeyAccount` when you want unified authentication and key agility.
+The unified `SingleKeyAccount` supports either Ed25519 or Secp256k1 signing schemes.
 
 ```kotlin
 val ed25519Single = SingleKeyAccount.generate(scheme = SigningSchemeInput.Ed25519)
 val secp256k1Single = SingleKeyAccount.generate(scheme = SigningSchemeInput.Secp256k1)
-```
 
-You can also request a single-key account via `Account.generate(...)`:
-
-```kotlin
-val singleViaAccount = Account.generate(
-  scheme = SigningSchemeInput.Ed25519,
-  legacy = false,
+val fromKey = SingleKeyAccount(
+  privateKey = Ed25519PrivateKey("0x...")
 )
 ```
 
-To derive from existing private keys:
+## MultiKey Account (Threshold Signing)
 
-```kotlin
-val ed25519SingleFromPrivateKey =
-  SingleKeyAccount(
-    privateKey = Ed25519PrivateKey("0x...")
-  )
-
-val secp256k1SingleFromPrivateKey =
-  SingleKeyAccount(
-    privateKey = Secp256k1PrivateKey(HexInput.fromString("0x..."))
-  )
-```
-
-## MultiKey account (threshold signing)
-
-`MultiKeyAccount` lets you define a threshold signing identity from multiple public keys.
+A `MultiKeyAccount` allows you to require multiple signatures from a defined set of public keys (threshold signing) to authenticate transactions.
 
 ```kotlin
 val signerA = SingleKeyAccount.generate(scheme = SigningSchemeInput.Ed25519)
 val signerB = SingleKeyAccount.generate(scheme = SigningSchemeInput.Secp256k1)
 val signerC = SingleKeyAccount.generate(scheme = SigningSchemeInput.Ed25519)
 
-val multiKeyAccount =
-  MultiKeyAccount.fromPublicKeysAndSigners(
-    publicKeys = listOf(signerA.publicKey, signerB.publicKey, signerC.publicKey),
-    signaturesRequired = 2,
-    signers = listOf(signerA, signerC),
-  )
+val multiKeyAccount = MultiKeyAccount.fromPublicKeysAndSigners(
+  publicKeys = listOf(signerA.publicKey, signerB.publicKey, signerC.publicKey),
+  signaturesRequired = 2,
+  signers = listOf(signerA, signerC),
+)
 ```
 
-In the current API, `signers.size` must match `signaturesRequired`.
+## SDK-Managed Accounts
 
-Because `MultiKeyAccount` extends `Account`, it can sign transactions like other account types:
+When using the `Aptos` client, you can use factory methods that automatically manage the lifecycle of private keys, ensuring they are securely handled and closed automatically.
 
 ```kotlin
-val txn =
-  aptos.buildSimpleTransaction(sender = multiKeyAccount.accountAddress) {
-    function = "0x1::coin::transfer"
-    typeArgs("0x1::aptos_coin::AptosCoin")
-    args(Account.generate().accountAddress, 1_000_000UL)
-  }
-
-val pending = aptos.signAndSubmitTransaction(signer = multiKeyAccount, transaction = txn).expect("Failed to submit transaction")
+aptos(AptosConfig(network = Network.DEVNET)) {
+  val alice = account()  // Ed25519 by default
+  val bob = singleKeyAccount(SigningSchemeInput.Secp256k1)
+  // Private keys are cleared automatically when this block exits
+}
 ```
 
-## On-chain account creation
-
-Generating an account only creates local credentials. The address is not usable on-chain until funded/created.
+You can also instantiate accounts from parsed or unparsed AIP-80 formatted keys:
 
 ```kotlin
-aptos
-  .fundAccount(accountAddress = legacy.accountAddress, amount = 100_000_000L)
-  .expect("Failed to fund account")
+// From an AIP-80 string
+val fromString = aptos.ed25519Account("ed25519-priv-0x...")
+
+// From a parsed AIP-80 key
+val fromParsed = aptos.account(Aip80PrivateKey.parse("ed25519-priv-0x..."))
 ```
 
-On testnet, you can also mint using the [faucet page](/network/faucet).
+### AIP-80 Private Key Format
+
+AIP-80 defines a standard format for representing private keys as strings using a prefix (`ed25519-priv-`, `secp256k1-priv-`) followed by the hex-encoded key. This makes keys more portable across different languages and ecosystems while preserving their type.
+
+## Account Discovery
+
+You can discover accounts on-chain by their public key or derive owned accounts from a signer.
+
+```kotlin
+val accounts = aptos.accounts.findByPublicKey(publicKey)
+val ownedAccounts = aptos.accounts.deriveOwned(signer)
+```
+
+## On-chain Account Creation
+
+Generating an account locally only creates the credentials. To use the account on-chain, it must be created by funding it.
+
+```kotlin
+aptos.faucet.fund(alice.accountAddress, 100_000_000UL)
+```
+
+## Account Abstraction
+
+For custom verification logic through Move modules or deriving Aptos accounts from external wallets (such as Solana wallets with Sign-In with Solana), refer to the [Account Abstraction guide](/build/sdks/community-sdks/kotlin-sdk/account-abstraction).

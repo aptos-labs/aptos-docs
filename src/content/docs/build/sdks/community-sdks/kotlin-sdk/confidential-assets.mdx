@@ -1,0 +1,192 @@
+---
+title: "Confidential Assets"
+description: "Manage privacy-preserving balances, proof-backed transfers, deposits, and withdrawals with Kaptos."
+sidebar:
+  label: "Confidential Assets"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Confidential Assets provide privacy-preserving balances and shielded value transfers on Aptos. By utilizing zero-knowledge proofs and asymmetric encryption, account balances and transfer amounts remain encrypted on-chain while still enabling full validation and auditable compliance.
+
+The `kaptos-confidential-assets` artifact extends the core SDK with complete support for the `0x1::confidential_asset` standard.
+
+## Installation
+
+Add the confidential assets dependency alongside core `kaptos` in your Gradle build file:
+
+```kotlin
+// Multiplatform
+commonMain.dependencies {
+    implementation("xyz.mcxross.kaptos:kaptos:<version>")
+    implementation("xyz.mcxross.kaptos:kaptos-confidential-assets:<version>")
+}
+
+// JVM / Android
+dependencies {
+    implementation("xyz.mcxross.kaptos:kaptos:<version>")
+    implementation("xyz.mcxross.kaptos:kaptos-confidential-assets:<version>")
+}
+```
+
+## Key Management and Lifecycle
+
+Confidential asset decryption keys are separate from transaction signing keys:
+
+- **Transaction Signer**: Signs on-chain transactions and pays gas fees (e.g. an `Ed25519Account`).
+- **Decryption Key (`ConfidentialDecryptionKey`)**: A 32-byte private key used to decrypt balance amounts and generate zero-knowledge transfer proofs.
+
+Applications are responsible for securely persisting decryption keys. The SDK provides memory-safe wrappers that zero out sensitive key memory when closed:
+
+```kotlin
+aptos(AptosConfig(network = Network.TESTNET)) {
+  val signer = ed25519Account("ed25519-priv-0x...")
+  val assets = confidentialAssets()
+
+  // Import an existing 32-byte key and manage its lifecycle in the current scope
+  val key = own(ConfidentialDecryptionKey.fromBytes(storedDecryptionKeyBytes))
+
+  // Or generate a new managed disposable key for registration
+  val generatedKey = confidentialDecryptionKey()
+}
+```
+
+## Core Workflows
+
+### 1. Register a Confidential Balance
+
+Before an account can receive confidential funds or hold an encrypted balance for an asset, it must register its public encryption key on-chain:
+
+```kotlin
+val token = AccountAddress.fromString("0x...") // Fungible asset metadata address
+
+val committed = assets.registerBalance(
+  signer = signer,
+  token = token,
+  key = key,
+).getOrNull()!!
+
+println("Registered confidential balance: ${committed.hash}")
+```
+
+### 2. Check Encrypted Balances
+
+Query and decrypt the confidential balance. The returned `ConfidentialBalance` object contains both the immediately spendable amount and pending incoming transfers:
+
+```kotlin
+val balance = assets.getBalance(
+  account = signer.accountAddress,
+  token = token,
+  key = key,
+).getOrNull()!!
+
+println("Available: ${balance.availableAmount}")
+println("Pending: ${balance.pendingAmount}")
+```
+
+### 3. Deposit (Public to Confidential)
+
+Move public fungible asset funds into the confidential balance:
+
+```kotlin
+val committed = assets.deposit(
+  signer = signer,
+  token = token,
+  amount = 1_000_000UL,
+).getOrNull()!!
+```
+
+### 4. Rollover Pending Balance
+
+Incoming confidential transfers land in a `pendingAmount` bucket. To make them available for transfers or withdrawals, roll them over:
+
+```kotlin
+val committed = assets.rolloverPendingBalance(
+  signer = signer,
+  token = token,
+).getOrNull()!!
+```
+
+### 5. Confidential Transfer
+
+Generate a transfer proof and send encrypted funds to a recipient who has registered a confidential balance:
+
+```kotlin
+val recipient = AccountAddress.fromString("0x456...")
+
+val committed = assets.transfer(
+  signer = signer,
+  recipient = recipient,
+  token = token,
+  key = key,
+  amount = 500_000UL,
+).getOrNull()!!
+
+println("Transferred: ${committed.hash}")
+```
+
+### 6. Withdraw (Confidential to Public)
+
+Move funds out of the confidential balance back into a public fungible asset account:
+
+```kotlin
+val committed = assets.withdraw(
+  signer = signer,
+  token = token,
+  key = key,
+  amount = 500_000UL,
+  recipient = signer.accountAddress, // optional: defaults to sender
+).getOrNull()!!
+```
+
+## Unsigned Builders and Fee Payers
+
+Each mutation method has a corresponding `build...` method that returns an `UnsignedTransaction`. This allows you to integrate external fee payers (sponsored transactions) or sign transactions offline:
+
+```kotlin
+// Build an unsigned transfer transaction with a sponsor
+val unsignedTx = assets.buildTransfer(
+  sender = signer.accountAddress,
+  recipient = recipient,
+  token = token,
+  key = key,
+  amount = 500_000UL,
+  options = ConfidentialTransactionOptions(feePayer = sponsor),
+).getOrNull()!!
+
+// Alice and sponsor sign
+val senderAuth = aptos.transactions.sign(signer, unsignedTx).getOrNull()!!
+val feePayerAuth = aptos.transactions.sign(sponsor, unsignedTx).getOrNull()!!
+
+// Submit
+val pending = aptos.transactions.submit(
+  transaction = unsignedTx,
+  senderAuthenticator = senderAuth,
+  feePayerAuthenticator = feePayerAuth,
+).getOrNull()!!
+
+val committed = aptos.transactions.waitForTransaction(pending)
+```
+
+## Status and Activity Queries
+
+You can inspect the registration status, emergency pause status, and paginated activity logs:
+
+```kotlin
+// Check registration and incoming-transfer pause status
+val status = assets.getStatus(signer.accountAddress, token).getOrNull()!!
+println("Is registered: ${status.isRegistered}")
+
+// Query paginated confidential asset activities
+val page = assets.getActivities(
+  query = ConfidentialActivityQuery(account = signer.accountAddress),
+).getOrNull()!!
+
+page.data.forEach { activity ->
+  println("${activity.activityType} at version ${activity.transactionVersion}")
+}
+```
+
+<Aside type="tip">
+  Explore runnable code in the [Confidential Asset Sample](https://github.com/mcxross/kaptos/blob/main/sample/jvmApp/src/main/kotlin/xyz/mcxross/kaptos/sample/ConfidentialAssetTransaction.kt) in the Kaptos repository.
+</Aside>

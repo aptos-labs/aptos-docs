@@ -1,103 +1,111 @@
 ---
 title: "Kotlin SDK Quickstart"
-description: "Set up Kaptos, read on-chain data, and send your first transaction using the latest lean API"
+description: "Get started building on Aptos with Kaptos."
 sidebar:
   label: "Quickstart"
 ---
 
 import { Aside, Steps } from '@astrojs/starlight/components';
 
-This quickstart gets you from dependency setup to a confirmed transaction using the current Kaptos API shape.
+This guide will walk you through setting up Kaptos and performing your first transaction on the Aptos network.
 
 <Steps>
-  1. Install the SDK
+  1. **Install the SDK**
 
-     Kaptos publishes multiplatform and platform-specific artifacts to Maven Central.
+     Add the Kaptos dependency to your project.
 
-     #### Multiplatform
+     **Multiplatform:**
 
      ```kotlin
-     kotlin {
-       sourceSets {
-         commonMain.dependencies {
-           implementation("xyz.mcxross.kaptos:kaptos:<version>")
+     sourceSets {
+         val commonMain by getting {
+             dependencies {
+                 implementation("xyz.mcxross.kaptos:kaptos:<version>")
+             }
          }
-       }
      }
      ```
 
-     #### JVM (example)
+     **JVM:**
 
      ```kotlin
      dependencies {
-       implementation("xyz.mcxross.kaptos:kaptos-jvm:<version>")
+         implementation("xyz.mcxross.kaptos:kaptos:<version>")
      }
      ```
 
-  2. Configure the client
+  2. **Configure the client**
+
+     Initialize the `Aptos` client with your desired network configuration.
 
      ```kotlin
-     val aptos = Aptos(
-       AptosConfig(
-         settings = AptosSettings(
-           network = Network.DEVNET,
-           clientConfig = ClientConfig(maxRetries = 10),
-         )
-       )
-     )
+     val aptos = Aptos(AptosConfig(network = Network.DEVNET))
      ```
 
-     <Aside type="note" emoji="ℹ️">
-       Kaptos is Kotlin Multiplatform. Some HTTP client options differ slightly by target, but API usage stays consistent.
+     <Aside type="note">
+       Kaptos APIs work identically across all platforms thanks to Kotlin Multiplatform, whether you're targeting Android, iOS, JVM, or JS.
      </Aside>
 
-  3. Read chain data
+  3. **Read chain data**
+
+     Access chain state through the various namespaced services available on the client.
 
      ```kotlin
-     val ledgerInfo = aptos.getLedgerInfo().expect("Failed to fetch ledger info")
-     println("Ledger version: ${ledgerInfo.ledgerVersion}")
-
-     val chainId = aptos.getChainId().expect("Failed to fetch chain id")
-     println("Chain id: $chainId")
+     when (val result = aptos.ledger.info()) {
+       is AptosResult.Success -> println("Ledger version: ${result.value.version}")
+       is AptosResult.Failure -> println("Error: ${result.error.message}")
+     }
      ```
 
-  4. Create and fund accounts
+  4. **Create and fund accounts**
+
+     Generate new accounts and fund them using the `faucet` service.
 
      ```kotlin
      val alice = Account.generate()
      val bob = Account.generate()
-
-     aptos.fundAccount(accountAddress = alice.accountAddress, amount = 100_000_000L).expect("Failed to fund Alice")
-     aptos.fundAccount(accountAddress = bob.accountAddress, amount = 100_000_000L).expect("Failed to fund Bob")
+     aptos.faucet.fund(alice.accountAddress, 100_000_000UL)
+     aptos.faucet.fund(bob.accountAddress, 100_000_000UL)
      ```
 
-     For single-key and multi-key account patterns, see [Accounts](/build/sdks/community-sdks/kotlin-sdk/account).
+  5. **Build and send a transaction**
 
-  5. Build and send a transaction
-
-     The lean transaction builder uses `typeArgs(...)` and `args(...)`.
+     Build an entry function payload using shorthand arguments and execute the transaction through the explicit pipeline:
 
      ```kotlin
-     val pendingTxn =
-       aptos
-         .execute(signer = alice) {
-           function = "0x1::coin::transfer"
-           typeArgs("0x1::aptos_coin::AptosCoin")
-           args(bob.accountAddress, 1_000_000UL)
-         }
-         .expect("Failed to build/sign/submit transaction")
+     // Build the payload using the concise shorthand
+     val payload = TransactionPayload.entryFunctionOf(
+       function = "0x1::coin::transfer",
+       typeArguments = listOf("0x1::aptos_coin::AptosCoin"),
+       bob.accountAddress,
+       1_000_000UL,
+     )
+
+     // Explicit pipeline: build, sign, submit, and wait
+     val txn = aptos.transactions.build(sender = alice.accountAddress, payload = payload).getOrNull()!!
+     val auth = aptos.transactions.sign(signer = alice, transaction = txn).getOrNull()!!
+     val pending = aptos.transactions.submit(transaction = txn, senderAuthenticator = auth).getOrNull()!!
+     val confirmed = aptos.transactions.waitForTransaction(pending)
      ```
 
-  6. Wait for confirmation
+     <Aside type="tip">
+       For routine transactions, you can also combine these steps using the all-in-one convenience method:
+
+       ```kotlin
+       val confirmed = aptos.transactions.submitAndWait(signer = alice, payload = payload)
+       ```
+     </Aside>
+
+  6. **Check the result**
+
+     All operations return an `AptosResult`, allowing for clean success/failure handling.
 
      ```kotlin
-     val executedTxn =
-       aptos
-         .waitForTransaction(HexInput.fromString(pendingTxn.hash))
-         .expect("Transaction did not execute successfully")
-
-     println("Executed transaction version: ${executedTxn.version}")
+     when (confirmed) {
+       is AptosResult.Success -> println("Transaction version: ${confirmed.value}")
+       is AptosResult.Failure -> println("Failed: ${confirmed.error.message}")
+     }
      ```
 </Steps>
 
-Need finer control (separate build/sign/submit, fee-payer flow, simulation)? See [Building Transactions](/build/sdks/community-sdks/kotlin-sdk/building-transactions).
+For finer control over transaction execution, including custom fee payers or multi-agent transactions, see [Building Transactions](/build/sdks/community-sdks/kotlin-sdk/building-transactions).

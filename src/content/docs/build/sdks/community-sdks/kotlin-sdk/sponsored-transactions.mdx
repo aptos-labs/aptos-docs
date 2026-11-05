@@ -1,82 +1,74 @@
 ---
 title: "Sponsored Transactions (Fee Payer)"
-description: "Implement sponsored transactions with Kaptos where one account pays gas fees for another account's transactions"
+description: "How to execute sponsored transactions using a fee payer in the Kotlin SDK"
 sidebar:
   label: "Sponsored Transactions"
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-The Kotlin SDK provides support for sponsored transactions also known as fee
-payer transactions.
+Sponsored transactions allow one account (the fee payer) to pay the gas fees for a transaction submitted by another account (the sender). This is useful for improving user onboarding by abstracting away gas costs.
 
-The standard flow for sending a sponsored transaction is as follows:
+## Flow
 
-1. Determine upon **operation** by creating a **Transaction**
-2. The **sender signs** the transaction
-3. The **fee payer** signs the transaction
-4. **Submit** the transaction
+To execute a sponsored transaction, you must build the payload, sign it with both the sender and the fee payer, and then submit it.
 
-## Determine Upon Operation
+1. **Build with fee payer:** Use `buildFeePayer` instead of the standard `build` method.
+2. **Sender signs:** The sender authenticates the transaction contents.
+3. **Fee payer signs:** The fee payer signs to authorize paying the gas.
+4. **Submit:** Provide both authenticators to `submit`.
 
-As seen in previous sections, you can build a transaction using `buildSimpleTransaction` with the lean transaction builder. For sponsored transactions, specify `withFeePayer = true`.
-
-```kotlin
-val txn =
-  aptos.buildSimpleTransaction(
-    sender = alice.accountAddress,
-    withFeePayer = true,
-  ) {
-    function = "0x1::coin::transfer"
-    typeArgs("0x1::aptos_coin::AptosCoin")
-    args(bob.accountAddress, 1_000_000UL)
-  }
-```
-
-## Sign the Transaction
-
-Once built, the sender signs the transaction using `sign`.
+All methods return an `AptosResult<T>`, which you can handle with a `when` expression or extension functions.
 
 ```kotlin
-val aliceAuthenticator =
-  aptos.sign(signer = alice, transaction = txn)
+// Build the payload using the concise shorthand
+val payload = TransactionPayload.entryFunctionOf(
+  "0x1::aptos_account::transfer",
+  bob.accountAddress,
+  1_000_000UL,
+)
+
+// 1. Build the transaction with the fee payer specified
+val txn = aptos.transactions.buildFeePayer(
+  sender = alice.accountAddress,
+  payload = payload,
+  feePayer = sponsor.accountAddress,
+).getOrNull()!!
+
+// 2. Sender signs
+val senderAuth = aptos.transactions.sign(signer = alice, transaction = txn).getOrNull()!!
+
+// 3. Fee payer signs
+val feePayerAuth = aptos.transactions.sign(signer = sponsor, transaction = txn).getOrNull()!!
+
+// 4. Submit with both authenticators
+val pending = aptos.transactions.submit(
+  transaction = txn,
+  senderAuthenticator = senderAuth,
+  feePayerAuthenticator = feePayerAuth,
+).getOrNull()!!
+
+// 5. Wait for confirmation
+val confirmed = aptos.transactions.waitForTransaction(pending)
 ```
 
-## Sign the Transaction as Fee Payer
-
-The fee payer signs using `signAsFeePayer`.
-
-```kotlin
-val feePayerAuthenticator =
-  aptos.signAsFeePayer(feePayer = sponsor, transaction = txn)
-```
-
-## Submit the Transaction
-
-Submit the transaction with both authenticators.
-
-```kotlin
-val pendingTxn =
-  aptos
-    .submitTransaction.simple(
-      transaction = txn,
-      senderAuthenticator = aliceAuthenticator,
-      feePayerAuthenticator = feePayerAuthenticator,
-    )
-    .expect("Failed to submit transaction")
-```
-
-<Aside type="note" emoji="ℹ️">
-  You can combine fee payer signing and submission using `signAndSubmitAsFeePayer`.
+<Aside>
+  If you are using an external fee payer service (like a Gas Station) where you don't have the sponsor's private key, you can build a request for the external service:
 
   ```kotlin
-  val pendingTxn =
-    aptos
-      .signAndSubmitAsFeePayer(
-        feePayer = sponsor,
-        senderAuthenticator = aliceAuthenticator,
-        transaction = txn,
-      )
-      .expect("Failed to sign and submit as fee payer")
+  // Build with a zero-address placeholder (no feePayer specified)
+  val txn = aptos.transactions.buildFeePayer(
+    sender = alice.accountAddress,
+    payload = payload,
+  ).getOrNull()!!
+
+  // Sender signs the transaction
+  val senderAuth = aptos.transactions.sign(signer = alice, transaction = txn).getOrNull()!!
+
+  // Create a request for an external Gas Station
+  val request = aptos.transactions.externalFeePayerRequest(
+    transaction = txn,
+    senderAuthenticator = senderAuth,
+  ).getOrNull()!!
   ```
 </Aside>

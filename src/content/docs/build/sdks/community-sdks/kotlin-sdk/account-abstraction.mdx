@@ -1,0 +1,272 @@
+---
+title: "Account Abstraction & Solana Derivable Accounts"
+description: "Implement custom transaction authentication via Move modules and use cross-chain Solana accounts on Aptos with Kaptos."
+sidebar:
+  label: "Account Abstraction"
+---
+
+import { Aside, Steps, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+Account Abstraction (AA) on Aptos allows accounts to define programmable verification logic using Move smart contracts, extending authentication beyond native cryptographic schemes like single-key Ed25519 or Secp256k1.
+
+Kaptos provides complete support for:
+
+- **Vanilla Account Abstraction ([AIP-61](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-61.md))**: Manage on-chain dispatchable authenticators and verify custom Move authentication functions.
+- **Derivable Account Abstraction ([AIP-113](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-113.md))**: Deterministically derive Aptos account addresses off-chain from abstract public identities without prior on-chain registration.
+- **Solana Derivable Accounts**: Native cross-chain authentication using Sign-In with Solana (SIWS) verified by the Aptos Framework (`0x1::solana_derivable_account`).
+
+***
+
+## Core Concepts
+
+### Authentication Functions
+
+An authentication function is an on-chain Move function responsible for verifying authorization data and returning an authenticated `signer`:
+
+```move
+public fun authenticate(account: signer, auth_data: AbstractionAuthData): signer;
+```
+
+In Kaptos, authentication functions are represented by `AuthenticationFunction`:
+
+```kotlin
+val authFunction = AuthenticationFunction.parse("0x1::solana_derivable_account::authenticate")
+```
+
+### Abstraction Authentication Data
+
+When a transaction is signed by an abstracted account, Kaptos hashes the transaction signing message with a domain salt (`sha3_256("APTOS::AASigningData" + bcs(message))`) and packages the signature into an `AccountAuthenticator.Abstraction`. Move verifies that this digest matches the transaction executed by the VM.
+
+***
+
+## Managing Account Abstraction (`client.abstraction`)
+
+The `AccountAbstractionService` (available via `aptos.abstraction`) enables querying and managing on-chain authentication functions for existing accounts.
+
+### Checking Abstraction Status
+
+Query whether an account has active authentication functions enabled:
+
+```kotlin
+val status = aptos.abstraction.status(alice.accountAddress).orThrow()
+
+println("Is AA enabled: ${status.isEnabled}")
+for (fn in status.authenticationFunctions) {
+  println("Active function: $fn")
+}
+```
+
+You can also test for a specific authentication function:
+
+```kotlin
+val isCustomActive = aptos.abstraction.isEnabled(
+  accountAddress = alice.accountAddress,
+  authenticationFunction = AuthenticationFunction.parse("0x123::custom_auth::authenticate"),
+).orThrow()
+```
+
+### Enabling and Disabling Authenticators
+
+Build transactions to add or remove authentication functions:
+
+```kotlin
+// Build transaction to enable an authentication function
+val enableTxn = aptos.abstraction.buildEnable(
+  accountAddress = alice.accountAddress,
+  authenticationFunction = authFunction,
+).orThrow()
+
+val committed = aptos.transactions.signAndSubmit(
+  signer = alice,
+  transaction = enableTxn,
+).orThrow()
+aptos.transactions.waitForTransaction(committed.hash).orThrow()
+
+// Build transaction to disable a specific function
+val disableTxn = aptos.abstraction.buildDisable(
+  accountAddress = alice.accountAddress,
+  authenticationFunction = authFunction,
+).orThrow()
+
+// Or remove the dispatchable authenticator entirely
+val disableAllTxn = aptos.abstraction.buildDisable(
+  accountAddress = alice.accountAddress,
+).orThrow()
+```
+
+***
+
+## Custom Abstracted Accounts (`AbstractedAccount`)
+
+`AbstractedAccount` implements `TransactionSigner` and delegates signature production to an application-provided `AbstractionSigner` callback.
+
+```kotlin
+val abstractedAccount = AbstractedAccount(
+  accountAddress = alice.accountAddress,
+  authenticationFunction = AuthenticationFunction.parse("0x123::custom_auth::authenticate"),
+  signer = AbstractionSigner { digest ->
+    // Sign the 32-byte digest with your custom signer or hardware device
+    val rawSignature: ByteArray = customSigner.sign(digest)
+    AptosResult.Success(rawSignature)
+  },
+)
+
+// Submit transactions directly using the abstracted signer
+val result = aptos.transactions.submitAndWait(
+  signer = abstractedAccount,
+  function = "0x1::aptos_account::transfer",
+  arguments = listOf(bob.accountAddress, 1_000_000),
+).orThrow()
+```
+
+***
+
+## Derivable Account Abstraction (`DerivableAbstractedAccount`)
+
+Unlike vanilla AA, which requires an on-chain transaction to register an authentication function onto an existing account, **Derivable Account Abstraction (DAA)** computes the account address deterministically off-chain:
+
+```text
+address = sha3_256(bcs(authentication_function) + bcs(identity) + 0x05)
+```
+
+This allows secondary authentication schemes (such as external chain keypairs) to derive a unique, isolated Aptos address without paying gas upfront.
+
+```kotlin
+val derivable = DerivableAbstractedAccount(
+  authenticationFunction = AuthenticationFunction.parse("0x123::custom_daa::authenticate"),
+  abstractPublicKey = identityBytes,
+  signer = AbstractionSigner { digest -> customSigner.sign(digest) },
+)
+
+println("Derived Aptos Address: ${derivable.accountAddress}")
+```
+
+<Aside type="note">
+  Because a derivable account address is computed off-chain, it does not exist on-chain until it is funded. You must fund the derived address before it can reserve transaction fees and execute transactions.
+</Aside>
+
+***
+
+## Solana Derivable Accounts
+
+Aptos natively supports Solana accounts via the framework module `0x1::solana_derivable_account::authenticate`. Users sign standard **Sign-In with Solana (SIWS)** messages using their Solana Ed25519 keys, and Aptos validates the signature on-chain.
+
+Kaptos provides first-class support for Solana derivable accounts via `SolanaDerivableAccount`.
+
+### Creating a Solana Derivable Account
+
+#### From a Local Ed25519 Signer
+
+For automated services, testing, or backend signers:
+
+```kotlin
+val localSigner = sampleSigner() // Ed25519Account
+
+val solanaAccount = SolanaDerivableAccount.fromEd25519(
+  signer = localSigner,
+  domain = "kaptos.example",
+)
+
+println("Aptos Address: ${solanaAccount.accountAddress}")
+println("Solana Base58 Public Key: ${solanaAccount.base58PublicKey}")
+println("Domain: ${solanaAccount.domain}")
+```
+
+#### From a Solana Wallet Adapter (`SolanaMessageSigner`)
+
+For applications integrating with mobile or web Solana wallets (e.g., Phantom, Solflare):
+
+```kotlin
+val solanaAccount = SolanaDerivableAccount(
+  publicKey = solanaWallet.publicKeyBytes, // 32-byte Ed25519 public key
+  domain = "myapp.com",
+  signer = SolanaMessageSigner { siwsMessageBytes ->
+    // The wallet signs the raw UTF-8 SIWS message bytes
+    try {
+      val signature = solanaWallet.signMessage(siwsMessageBytes)
+      AptosResult.Success(signature) // 64-byte Ed25519 signature
+    } catch (e: Exception) {
+      AptosResult.Failure(AptosError.Crypto("User rejected signing", e))
+    }
+  },
+)
+```
+
+### Under the Hood: SIWS Authentication
+
+When `solanaAccount.signTransaction(transaction)` is invoked, Kaptos constructs the standard SIWS message:
+
+```text
+myapp.com wants you to sign in with your Solana account:
+G56zT1K6AQab7FzwHdQ8hiHXusR14Rmddw6Vz5MFbbmV
+
+Please confirm you explicitly initiated this request from myapp.com. You are approving to execute transaction 0x1::aptos_account::transfer on Aptos blockchain (mainnet).
+
+Nonce: 0x9509edc861070b2848d8161c9453159139f867745dc87d32864a71e796c7d279
+```
+
+The wallet signs this human-readable prompt. Kaptos packages the resulting 64-byte Ed25519 signature and the public key identity into an `AccountAuthenticator.Abstraction` payload for Aptos.
+
+***
+
+## Step-by-Step Walkthrough: Transacting with a Solana Account
+
+Here is the complete end-to-end flow to fund a derived Solana account and execute a transfer on Aptos:
+
+<Steps>
+  1. **Derive the Solana Account**
+
+     ```kotlin
+     val abstracted = SolanaDerivableAccount.fromEd25519(
+       signer = fundingAccount,
+       domain = "kaptos.example",
+     )
+     ```
+
+  2. **Fund the Derived Address**
+
+     Newly derived accounts must have an on-chain balance to pay for gas:
+
+     ```kotlin
+     aptos.transactions
+       .submitAndWait(
+         signer = fundingAccount,
+         function = "0x1::aptos_account::transfer",
+         arguments = listOf(abstracted.accountAddress, 20_000_000),
+       )
+       .orThrow()
+     ```
+
+  3. **Submit an Entry-Function Transaction**
+
+     Execute transactions from the Solana derivable account using standard Kaptos transaction helpers:
+
+     ```kotlin
+     val committed = aptos.transactions
+       .submitAndWait(
+         signer = abstracted,
+         function = "0x1::aptos_account::transfer",
+         arguments = listOf(recipientAddress, 1_000_000),
+         transactionOptions = TransactionOptions(maxGasAmount = 50_000uL),
+       )
+       .orThrow()
+
+     println("Committed transaction ${committed.hash} from ${abstracted.accountAddress}")
+     ```
+</Steps>
+
+<Aside type="caution">
+  **Entry-Function Transactions Only**: Solana derivable accounts currently support entry-function transactions only because the on-chain SIWS verifier embeds and checks the exact entry function name in the message. Script transactions cannot be signed by `SolanaDerivableAccount`.
+</Aside>
+
+***
+
+## Next Steps
+
+<CardGrid>
+  <LinkCard title="Managing Accounts" href="/build/sdks/community-sdks/kotlin-sdk/account" description="Explore native Ed25519, SingleKey, MultiKey, and AIP-80 account formats." />
+
+  <LinkCard title="Building Transactions" href="/build/sdks/community-sdks/kotlin-sdk/building-transactions" description="Learn about single-step and staged transaction pipelines in Kaptos." />
+
+  <LinkCard title="Sponsored Transactions" href="/build/sdks/community-sdks/kotlin-sdk/sponsored-transactions" description="Sponsor gas fees so derivable accounts do not need pre-funding." />
+</CardGrid>

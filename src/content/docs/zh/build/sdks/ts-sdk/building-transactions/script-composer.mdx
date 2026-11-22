@@ -1,70 +1,92 @@
 ---
 title: "使用 Dynamic Script Composer 调用 Move 链式交易"
+description: "使用独立的 @aptos-labs/script-composer-sdk 包构建可动态调用多个 Move 函数的复杂交易负载"
+sidebar:
+  label: "Script Composer"
 ---
 
 import { Aside } from '@astrojs/starlight/components';
+import PackageTabs from '@components/PackageTabs.astro';
 
-<Aside type="tip">
-  很高兴的宣布，现在我们已经有一个独立包用于 Script Composer 功能，目前可以在如下仓库中找到对应仓库
-
-  [https://github.com/aptos-labs/script-composer-sdk](https://github.com/aptos-labs/script-composer-sdk)
-
-  当然！你可以用 npm 包的方式来使用它！请安装这个包
-
-  [https://www.npmjs.com/package/@aptos-labs/script-composer-sdk](https://www.npmjs.com/package/@aptos-labs/script-composer-sdk)
-</Aside>
-
-<Aside type="caution">
-  如果你仍然在继续使用 1.39.0 的 ts sdk 版本中的 Script Composer 可以尽快切换到独立包版本:
-  [https://www.npmjs.com/package/@aptos-labs/ts-sdk/v/1.39.0](https://www.npmjs.com/package/@aptos-labs/ts-sdk/v/1.39.0)
+<Aside type="note">
+  Script Composer **不**属于 `@aptos-labs/ts-sdk`。它已从 TypeScript SDK 中移除，
+  这样不使用它的应用就不再需要打包其 WASM 二进制文件（见
+  [aptos-labs/aptos-ts-sdk#688](https://github.com/aptos-labs/aptos-ts-sdk/issues/688)）。
+  它现在作为独立的
+  [`@aptos-labs/script-composer-sdk`](https://www.npmjs.com/package/@aptos-labs/script-composer-sdk)
+  包发布，并在
+  [aptos-labs/script-composer-sdk](https://github.com/aptos-labs/script-composer-sdk)
+  仓库中开发。如果你之前通过较旧的 `ts-sdk` 版本使用 Script Composer（最后包含于 `1.39.0`），
+  请安装独立包并按下文更新导入方式——Composer API 本身没有变化。
 </Aside>
 
 ## 概述
 
-在基础 API 中,您只能为单个交易指定一个入口函数调用.而高级构建者可能希望在一个交易中调用多个 **public** Move 函数.现在通过交易构建器中提供的全新 `scriptComposer` API 即可实现这一功能.
+在基础 API 中,您只能为单个交易指定一个入口函数调用.而高级构建者可能希望在一个交易中调用多个 **public** Move 函数.Script Composer 可以实现这一点:你可以使用 `addBatchedCalls` 描述一系列调用,将一个调用的返回值传递给下一个调用,SDK 会将它们编译成单个脚本交易.
+
+## 安装
+
+将独立包与其 `@aptos-labs/ts-sdk` 和 WASM（`@aptos-labs/script-composer-pack`）对等依赖一起安装:
+
+<PackageTabs type="add" pkg="@aptos-labs/script-composer-sdk @aptos-labs/script-composer-pack @aptos-labs/ts-sdk" pkgManagers={['npm', 'yarn', 'pnpm']} />
+
+浏览器应用还需要在导入 SDK 之前安装 `buffer` 包并设置全局 `Buffer` polyfill:
+
+```typescript
+import { Buffer } from "buffer";
+
+(window as typeof window & { Buffer: typeof Buffer }).Buffer = Buffer;
+```
 
 ## 基本用法
 
-以下是调用该 API 的示例:
+从 `@aptos-labs/script-composer-sdk`（而不是 `@aptos-labs/ts-sdk`）导入 `BuildScriptComposerTransaction` 和 `CallArgument`:
+
+```typescript filename="example.ts"
+import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
+import {
+  BuildScriptComposerTransaction,
+  CallArgument,
+} from "@aptos-labs/script-composer-sdk";
+
+const aptosConfig = new AptosConfig({ network: Network.TESTNET });
+// 这里需要填写 sender 的地址
+const sender = "0x1";
+
+const tx = await BuildScriptComposerTransaction({
+  sender,
+  // 组合交易需要读取链上状态（模块 ABI 和字节码），因此需要传递目标网络的 AptosConfig
+  aptosConfig,
+  builder: async (composer) => {
+    // 开始取出一些 Coin
+    const coin = await composer.addBatchedCalls({
+      function: "0x1::coin::withdraw",
+      functionArguments: [CallArgument.newSigner(0), 1],
+      typeArguments: ["0x1::aptos_coin::AptosCoin"],
+    });
+
+    // 将 coin 值传递给 0x1::coin::coin_to_fungible_asset 将代币
+    // 转换为可替代资产。coin[0] 表示您添加的第一个调用的第一个返回值
+    const fungibleAsset = await composer.addBatchedCalls({
+      function: "0x1::coin::coin_to_fungible_asset",
+      functionArguments: [coin[0]],
+      typeArguments: ["0x1::aptos_coin::AptosCoin"],
+    });
+
+    // 存入从第二个调用转换得到的 fungibleAsset
+    await composer.addBatchedCalls({
+      function: "0x1::primary_fungible_store::deposit",
+      functionArguments: [sender, fungibleAsset[0]],
+      typeArguments: [],
+    });
+    return composer;
+  },
+});
+```
 
 > 请注意当前实例仅为参考如何使用 Script Composer 组合交易的过程中接收 public 函数的返回值，并传递给下一个函数
 
-```typescript filename="example.ts"
-const tx = await BuildScriptComposerTransaction({
-    // 这里需要填写 sender 的地址
-    sender: singleSignerED25519SenderAccount.accountAddress,
-    builder: async (composer) => {
-        // 开始取出一些 Coin 
-        const coin = await composer.addBatchedCalls({
-            function: "0x1::coin::withdraw",
-            functionArguments: [CallArgument.newSigner(0), 1],
-            typeArguments: ["0x1::aptos_coin::AptosCoin"],
-        });
-
-        // 将 coin 值传递给 0x1::coin::coin_to_fungible_asset 将代币
-        // 转换为可替代资产
-        const fungibleAsset = await composer.addBatchedCalls({
-            function: "0x1::coin::coin_to_fungible_asset",
-            // coin[0] 表示您添加的第一个调用的第一个返回值
-            functionArguments: [coin[0]],
-            typeArguments: ["0x1::aptos_coin::AptosCoin"],
-        });
-
-        // 存入从第二个调用转换得到的 fungibleAsset
-        await composer.addBatchedCalls({
-            function: "0x1::primary_fungible_store::deposit",
-            // 这里需要填写 sender 的地址
-            functionArguments: [singleSignerED25519SenderAccount.accountAddress, fungibleAsset[0]],
-            typeArguments: [],
-        });
-        return composer
-    },
-    // 这里需要传递 Aptos Config ，因为组合交易需要读取链上状态
-    aptosConfig: new AptosConfig({
-        network: Network.TESTNET,
-    }),
-});
-```
+对于需要次级签名者（secondary signers）和/或费用支付者（fee payer）的交易，请改用同一包中的 `BuildScriptComposerMultiAgentTransaction`。对于仅有单个签名者的赞助交易，可以向 `BuildScriptComposerTransaction` 传递 `withFeePayer: true`。
 
 ## 交易处理
 
@@ -73,36 +95,30 @@ const tx = await BuildScriptComposerTransaction({
 我们用 模拟交易接口展示如何使用
 
 ```typescript filename="example.ts"
+const aptos = new Aptos(aptosConfig);
 
-...
+const [simulateResult] = await aptos.transaction.simulate.simple({
+  transaction: tx,
+});
 
-    const aptos = new Aptos(new AptosConfig({
-        network: Network.TESTNET,
-    }));
-
-    const simulate_result = await aptos.transaction.simulate.simple({
-        transaction: tx,
-    })
-    
-    console.log('simulate_result: ', simulate_result)
-...
-
+console.log("simulate_result: ", simulateResult);
 ```
 
 ## 示例
 
-如果你需要一些实际的案例，我们也为您准备了三种常见环境的使用案例：
+如果你需要一些实际的案例，我们也为您准备了常见环境的使用案例：
 
 在案例中，你将看到一个组合交易并模拟交易的返回值（模拟交易使用 0x1 地址作为 sender ，虽然默认状态下可以模拟成功，
 但如果你想要真正使用这个功能发起模拟交易请替换成你帐户地址，并设置好对应的网络）
 
 1. nodejs: [https://github.com/aptos-labs/script-composer-sdk/tree/main/examples/nodejs](https://github.com/aptos-labs/script-composer-sdk/tree/main/examples/nodejs)
-2. nextjs: [https://github.com/aptos-labs/script-composer-sdk/tree/main/examples/nextjs-project](https://github.com/aptos-labs/script-composer-sdk/tree/main/examples/nextjs-project)
-3. react: [https://github.com/aptos-labs/script-composer-sdk/tree/main/examples/react-project](https://github.com/aptos-labs/script-composer-sdk/tree/main/examples/react-project)
+2. multi-agent nodejs: [https://github.com/aptos-labs/script-composer-sdk/tree/main/examples/multi-agent-nodejs](https://github.com/aptos-labs/script-composer-sdk/tree/main/examples/multi-agent-nodejs)
+3. nextjs: [https://github.com/aptos-labs/script-composer-sdk/tree/main/examples/nextjs-project](https://github.com/aptos-labs/script-composer-sdk/tree/main/examples/nextjs-project)
+4. react: [https://github.com/aptos-labs/script-composer-sdk/tree/main/examples/react-project](https://github.com/aptos-labs/script-composer-sdk/tree/main/examples/react-project)
 
 ## 技术原理
 
-在底层,SDK 会调用 WASM 二进制文件将一系列 Move 调用编译为 `CompiledScript`.这将确保在构建过程中仍然遵循 Move 的类型和能力安全性.对于 SDK 用户而言,这意味着:
+在底层,SDK 会调用 WASM 二进制文件（由 `@aptos-labs/script-composer-pack` 提供）将一系列 Move 调用编译为 `CompiledScript`.这将确保在构建过程中仍然遵循 Move 的类型和能力安全性.对于 SDK 用户而言,这意味着:
 
 1. 能力安全性:
    a. 如果返回值不具备 Drop 能力,则该返回值需要被后续调用消费

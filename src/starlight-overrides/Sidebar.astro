@@ -123,58 +123,50 @@ Object.entries(labels).forEach(([key, val]) => {
   <SidebarAutoScroll />
   <TabbedContent class="tabbed-sidebar">
     <Fragment slot="tab-list">
-      {
-        sidebarGroups.map(({ label, entries }, index) => {
-          // Try to find the key by looking at the translations object
-          let sidebarKey = "";
+      {sidebarGroups.map(({ label, entries }, index) => {
+        // Try to find the key by looking at the translations object
+        let sidebarKey = "";
 
-          // First try to look up the key directly from English labels
-          if (label in labelToKey) {
-            sidebarKey = labelToKey[label] as string;
+        // First try to look up the key directly from English labels
+        if (label in labelToKey) {
+          sidebarKey = labelToKey[label] as string;
+        }
+
+        // If that fails, try to find the key by index in the sidebar groups
+        // This assumes the sidebar groups are in the same order as the keys in sidebarGroupIcons
+        if (!sidebarKey) {
+          // Get the keys of sidebarGroupIcons in order
+          const iconKeys = Object.keys(sidebarGroupIcons);
+          // Use the index to get the corresponding key
+          if (index < iconKeys.length) {
+            sidebarKey = iconKeys[index] as string;
           }
+        }
 
-          // If that fails, try to find the key by index in the sidebar groups
-          // This assumes the sidebar groups are in the same order as the keys in sidebarGroupIcons
-          if (!sidebarKey) {
-            // Get the keys of sidebarGroupIcons in order
-            const iconKeys = Object.keys(sidebarGroupIcons);
-            // Use the index to get the corresponding key
-            if (index < iconKeys.length) {
-              sidebarKey = iconKeys[index] as string;
-            }
-          }
+        // If all else fails, fall back to a simple transformation of the label
+        if (!sidebarKey) {
+          sidebarKey = label.toLowerCase().replace(/\s+/g, "");
+        }
 
-          // If all else fails, fall back to a simple transformation of the label
-          if (!sidebarKey) {
-            sidebarKey = label.toLowerCase().replace(/\s+/g, "");
-          }
+        // Look up the icon from the mapping, or use a default
+        const iconName = sidebarGroupIcons[sidebarKey] || "ph:rocket-launch";
 
-          // Look up the icon from the mapping, or use a default
-          const iconName = sidebarGroupIcons[sidebarKey] || "ph:rocket-launch";
-
-          return (
-            <TabListItem
-              id={makeId(label)}
-              initial={entries && isCurrent(entries)}
-              class="tab-item"
-            >
-              <Icon size="24" class="icon" name={iconName} /> {label}
-            </TabListItem>
-          );
-        })
-      }
+        return (
+          <TabListItem id={makeId(label)} initial={entries && isCurrent(entries)} class="tab-item">
+            <Icon size="24" class="icon" name={iconName} /> {label}
+          </TabListItem>
+        );
+      })}
     </Fragment>
-    {
-      sidebarGroups.map(({ label, entries }) => (
-        <TabPanel id={makeId(label)} initial={entries && isCurrent(entries)}>
-          {/* The entries are compatible with what SidebarSublist expects */}
-          {entries && (
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            <SidebarSublist sublist={entries as any} />
-          )}
-        </TabPanel>
-      ))
-    }
+    {sidebarGroups.map(({ label, entries }) => (
+      <TabPanel id={makeId(label)} initial={entries && isCurrent(entries)}>
+        {/* The entries are compatible with what SidebarSublist expects */}
+        {entries && (
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          <SidebarSublist sublist={entries as any} />
+        )}
+      </TabPanel>
+    ))}
   </TabbedContent>
 </SidebarPersister>
 

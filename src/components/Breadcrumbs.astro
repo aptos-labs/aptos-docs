@@ -227,104 +227,102 @@ const navAriaLabel = getTranslation(t, "breadcrumb.label", "Breadcrumb");
 const breadcrumbsId = `breadcrumbs-${Math.random().toString(36).substring(2, 9)}`;
 ---
 
-{
-  breadcrumbs.length > 1 && (
-    <astro-breadcrumbs
-      data-main-class="breadcrumbs-nav"
-      data-id={breadcrumbsId}
-      data-truncated={truncated ? "true" : null}
+{breadcrumbs.length > 1 && (
+  <astro-breadcrumbs
+    data-main-class="breadcrumbs-nav"
+    data-id={breadcrumbsId}
+    data-truncated={truncated ? "true" : null}
+  >
+    <nav
+      aria-label={navAriaLabel ?? "Breadcrumb"}
+      dir={textDirection}
+      class="breadcrumbs-nav"
+      id={breadcrumbsId}
     >
-      <nav
-        aria-label={navAriaLabel ?? "Breadcrumb"}
-        dir={textDirection}
-        class="breadcrumbs-nav"
-        id={breadcrumbsId}
-      >
-        <ol class="breadcrumb-list">
-          {breadcrumbs.map((crumb, index) => {
-            const isFirst = index === 0;
-            const isLast = index === breadcrumbs.length - 1;
-            const isMiddle = !isFirst && !isLast;
+      <ol class="breadcrumb-list">
+        {breadcrumbs.map((crumb, index) => {
+          const isFirst = index === 0;
+          const isLast = index === breadcrumbs.length - 1;
+          const isMiddle = !isFirst && !isLast;
 
-            // Show ellipsis after the first item when truncated
-            const showEllipsis = truncated && index === 1 && breadcrumbs.length > 2;
+          // Show ellipsis after the first item when truncated
+          const showEllipsis = truncated && index === 1 && breadcrumbs.length > 2;
 
-            return (
-              <>
-                {/* Show ellipsis button between first and second items when truncated */}
-                {showEllipsis && (
-                  <li class="breadcrumb-item has-ellipsis">
-                    <span class="separator" set:html={finalSeparator} />
-                    <button type="button" class="ellipsis-button" aria-label={ellipsisAriaLabel}>
-                      <span class="ellipsis-text">...</span>
-                    </button>
-                  </li>
-                )}
-
-                <li
-                  class:list={[
-                    "breadcrumb-item",
-                    {
-                      "first-crumb": isFirst,
-                      "last-crumb": isLast,
-                      "middle-crumb": isMiddle,
-                    },
-                  ]}
-                >
-                  {/* Render the breadcrumb content */}
-                  {(() => {
-                    // Determine the content (icon or label)
-                    const content =
-                      isFirst && finalHomeIcon ? (
-                        <span class="home-icon-wrapper" set:html={finalHomeIcon} />
-                      ) : (
-                        crumb.label
-                      );
-
-                    // Render the appropriate element based on state
-                    if (crumb.isCurrent) {
-                      return (
-                        <span aria-current="page" class="crumb-text">
-                          {content}
-                        </span>
-                      );
-                    } else if (
-                      hasValidLandingPage(
-                        crumb.href,
-                        validLandingPaths,
-                        dynamicPrefixes,
-                        disableIntermediatePaths,
-                      )
-                    ) {
-                      return (
-                        <a href={crumb.href} class="crumb-text">
-                          {content}
-                        </a>
-                      );
-                    } else {
-                      return <span class="non-link-breadcrumb crumb-text">{content}</span>;
-                    }
-                  })()}
-
-                  {/* Always add separator after each item except the last one */}
-                  {!isLast && (
-                    <span
-                      class:list={[
-                        "separator",
-                        { "hide-on-mobile": isFirst && truncated && breadcrumbs.length > 2 },
-                      ]}
-                      set:html={finalSeparator}
-                    />
-                  )}
+          return (
+            <>
+              {/* Show ellipsis button between first and second items when truncated */}
+              {showEllipsis && (
+                <li class="breadcrumb-item has-ellipsis">
+                  <span class="separator" set:html={finalSeparator} />
+                  <button type="button" class="ellipsis-button" aria-label={ellipsisAriaLabel}>
+                    <span class="ellipsis-text">...</span>
+                  </button>
                 </li>
-              </>
-            );
-          })}
-        </ol>
-      </nav>
-    </astro-breadcrumbs>
-  )
-}
+              )}
+
+              <li
+                class:list={[
+                  "breadcrumb-item",
+                  {
+                    "first-crumb": isFirst,
+                    "last-crumb": isLast,
+                    "middle-crumb": isMiddle,
+                  },
+                ]}
+              >
+                {/* Render the breadcrumb content */}
+                {(() => {
+                  // Determine the content (icon or label)
+                  const content =
+                    isFirst && finalHomeIcon ? (
+                      <span class="home-icon-wrapper" set:html={finalHomeIcon} />
+                    ) : (
+                      crumb.label
+                    );
+
+                  // Render the appropriate element based on state
+                  if (crumb.isCurrent) {
+                    return (
+                      <span aria-current="page" class="crumb-text">
+                        {content}
+                      </span>
+                    );
+                  } else if (
+                    hasValidLandingPage(
+                      crumb.href,
+                      validLandingPaths,
+                      dynamicPrefixes,
+                      disableIntermediatePaths,
+                    )
+                  ) {
+                    return (
+                      <a href={crumb.href} class="crumb-text">
+                        {content}
+                      </a>
+                    );
+                  } else {
+                    return <span class="non-link-breadcrumb crumb-text">{content}</span>;
+                  }
+                })()}
+
+                {/* Always add separator after each item except the last one */}
+                {!isLast && (
+                  <span
+                    class:list={[
+                      "separator",
+                      { "hide-on-mobile": isFirst && truncated && breadcrumbs.length > 2 },
+                    ]}
+                    set:html={finalSeparator}
+                  />
+                )}
+              </li>
+            </>
+          );
+        })}
+      </ol>
+    </nav>
+  </astro-breadcrumbs>
+)}
 
 <style>
   .breadcrumbs-nav {

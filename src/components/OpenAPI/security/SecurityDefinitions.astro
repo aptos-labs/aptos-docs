@@ -18,40 +18,38 @@ interface Props {
 const { definitions } = Astro.props;
 ---
 
-{
-  definitions && (
-    <>
-      <h2 id="authentication">Authentication</h2>
-      {Object.entries(definitions).map(([name, scheme]) => (
-        <Section title={name}>
-          <Md text={scheme.description} />
-          <Text label="Security scheme type" tag>
-            {scheme.type}
+{definitions && (
+  <>
+    <h2 id="authentication">Authentication</h2>
+    {Object.entries(definitions).map(([name, scheme]) => (
+      <Section title={name}>
+        <Md text={scheme.description} />
+        <Text label="Security scheme type" tag>
+          {scheme.type}
+        </Text>
+        {"bearerFormat" in scheme && (
+          <Text label="Bearer format" tag>
+            {scheme.bearerFormat}
           </Text>
-          {"bearerFormat" in scheme && (
-            <Text label="Bearer format" tag>
-              {scheme.bearerFormat}
-            </Text>
-          )}
-          {"openIdConnectUrl" in scheme && (
-            <Text label="OpenID Connect URL">
-              <a href={scheme.openIdConnectUrl}>{scheme.openIdConnectUrl}</a>
-            </Text>
-          )}
-          {scheme.type === "apiKey" && (
-            <Text label={`${capitalize(scheme.in)} parameter name`} tag>
-              {scheme.name}
-            </Text>
-          )}
-          {isOpenAPIV2OAuth2SecurityScheme(scheme) ? (
-            <SecurityOAuth2Flow flow={scheme} type={scheme.flow} />
-          ) : isOpenAPIV3OAuth2SecurityScheme(scheme) ? (
-            Object.entries(scheme.flows).map(([type, flow]) => (
-              <SecurityOAuth2Flow {flow} type={type} />
-            ))
-          ) : null}
-        </Section>
-      ))}
-    </>
-  )
-}
+        )}
+        {"openIdConnectUrl" in scheme && (
+          <Text label="OpenID Connect URL">
+            <a href={scheme.openIdConnectUrl}>{scheme.openIdConnectUrl}</a>
+          </Text>
+        )}
+        {scheme.type === "apiKey" && (
+          <Text label={`${capitalize(scheme.in)} parameter name`} tag>
+            {scheme.name}
+          </Text>
+        )}
+        {isOpenAPIV2OAuth2SecurityScheme(scheme) ? (
+          <SecurityOAuth2Flow flow={scheme} type={scheme.flow} />
+        ) : isOpenAPIV3OAuth2SecurityScheme(scheme) ? (
+          Object.entries(scheme.flows).map(([type, flow]) => (
+            <SecurityOAuth2Flow {flow} type={type} />
+          ))
+        ) : null}
+      </Section>
+    ))}
+  </>
+)}

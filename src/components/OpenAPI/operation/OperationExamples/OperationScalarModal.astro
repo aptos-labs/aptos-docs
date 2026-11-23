@@ -22,7 +22,8 @@ import "@scalar/api-client/style.css";
 </style>
 
 <script>
-  import { createApiClientModal } from "@scalar/api-client/layouts/Modal";
+  import { createApiClientModal } from "@scalar/api-client/modal";
+  import { createWorkspaceStore } from "@scalar/workspace-store/client";
   import type { ScalarModalOpenEvent } from "./types";
   import { observeThemeChange } from "~/lib/theme";
 
@@ -53,7 +54,7 @@ import "@scalar/api-client/style.css";
   });
 
   // ClientRouter replaces <body>; this module runs once, so the host node is recreated per navigation.
-  let modalClient: ReturnType<typeof createApiClientModal>["client"] | null = null;
+  let modalClient: ReturnType<typeof createApiClientModal> | null = null;
   let specLoaded = false;
   let specLoadAttempts = 0;
   const MAX_SPEC_LOAD_ATTEMPTS = 3;
@@ -93,19 +94,8 @@ import "@scalar/api-client/style.css";
       throw new Error("Scalar modal host is not on this page.");
     }
 
-    if (!modalClient) {
-      const { client } = createApiClientModal({
-        el: host,
-        configuration: {
-          servers,
-          showSidebar: false,
-          hideClientButton: true,
-        },
-      });
-      modalClient = client;
-    }
-
-    // The new sync API doesn't load the spec automatically, we need to call updateConfig
+    // Scalar 3 requires a workspace store holding the OpenAPI document;
+    // the modal no longer loads a spec from a configuration URL itself.
     if (!specLoaded) {
       // Prevent repeated failures - allow retry up to MAX_SPEC_LOAD_ATTEMPTS
       if (specLoadAttempts >= MAX_SPEC_LOAD_ATTEMPTS) {
@@ -114,11 +104,21 @@ import "@scalar/api-client/style.css";
 
       try {
         specLoadAttempts++;
-        await modalClient.updateConfig({
+        const workspaceStore = createWorkspaceStore();
+        const added = await workspaceStore.addDocument({
+          name: "default",
           url: "/aptos-spec.json",
-          servers,
-          showSidebar: false,
-          hideClientButton: true,
+        });
+        if (!added) {
+          throw new Error("Scalar workspace store rejected the API spec.");
+        }
+        modalClient = createApiClientModal({
+          el: host,
+          workspaceStore,
+          options: {
+            servers,
+            hideClientButton: true,
+          },
         });
         specLoaded = true;
         specLoadAttempts = 0; // Reset on success
@@ -127,6 +127,7 @@ import "@scalar/api-client/style.css";
           `Failed to load Scalar API spec (attempt ${specLoadAttempts}/${MAX_SPEC_LOAD_ATTEMPTS}):`,
           error,
         );
+        modalClient = null;
         specLoaded = false;
         throw error;
       }

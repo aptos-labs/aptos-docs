@@ -23,17 +23,14 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/prepare-runner
       - run: cp .env.example .env
+      # The `secrets` context is not allowed in step `if:` conditionals, so a
+      # conditional pair of build steps fails workflow startup. Always pass
+      # the token through `env` instead: an empty value disables Codecov
+      # bundle analysis exactly like an unset variable (see astro.config.mjs).
       - name: Build (captures log for link check)
-        if: ${{ secrets.CODECOV_TOKEN != '' }}
         shell: bash
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-        run: |
-          set -o pipefail
-          pnpm build 2>&1 | tee build.log
-      - name: Build (captures log for link check)
-        if: ${{ secrets.CODECOV_TOKEN == '' }}
-        shell: bash
         run: |
           set -o pipefail
           pnpm build 2>&1 | tee build.log

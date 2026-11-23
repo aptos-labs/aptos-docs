@@ -21,36 +21,34 @@ interface Props {
 const { nested, schemaObject, parents = [] } = Astro.props;
 ---
 
-{
-  schemaObject.allOf &&
-    schemaObject.allOf.map((allOfSchemaObject) => {
-      if (!isSchemaObject(allOfSchemaObject)) return null;
-      const schemaObjects = getSchemaObjects(allOfSchemaObject);
-      if (schemaObjects !== undefined) {
-        return (
-          <SchemaObjects
-            parents={[...parents, schemaObject]}
-            discriminator={schemaObject.discriminator}
-            {nested}
-            {schemaObjects}
-          />
-        );
-      } else if (isSchemaObjectObject(schemaObject)) {
-        return (
-          <SchemaObjectObjectProperties
-            parents={[...parents, schemaObject]}
-            properties={getProperties(allOfSchemaObject)}
-            required={allOfSchemaObject.required}
-          />
-        );
-      }
+{schemaObject.allOf &&
+  schemaObject.allOf.map((allOfSchemaObject) => {
+    if (!isSchemaObject(allOfSchemaObject)) return null;
+    const schemaObjects = getSchemaObjects(allOfSchemaObject);
+    if (schemaObjects !== undefined) {
       return (
-        <Items
-          items={allOfSchemaObject}
-          negated={allOfSchemaObject.not !== undefined}
-          nullable={getNullable(allOfSchemaObject)}
+        <SchemaObjects
           parents={[...parents, schemaObject]}
+          discriminator={schemaObject.discriminator}
+          {nested}
+          {schemaObjects}
         />
       );
-    })
-}
+    } else if (isSchemaObjectObject(schemaObject)) {
+      return (
+        <SchemaObjectObjectProperties
+          parents={[...parents, schemaObject]}
+          properties={getProperties(allOfSchemaObject)}
+          required={allOfSchemaObject.required}
+        />
+      );
+    }
+    return (
+      <Items
+        items={allOfSchemaObject}
+        negated={allOfSchemaObject.not !== undefined}
+        nullable={getNullable(allOfSchemaObject)}
+        parents={[...parents, schemaObject]}
+      />
+    );
+  })}

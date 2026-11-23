@@ -1,6 +1,6 @@
 // src/components/GraphQLEditor.tsx
 
-import { createGraphiQLFetcher } from "@graphiql/toolkit";
+import { createTransport } from "@graphiql/toolkit";
 import { GraphiQL } from "graphiql";
 import { useEffect, useState } from "react";
 // import type { Storage } from "@graphiql/toolkit";
@@ -8,7 +8,7 @@ import GraphQLLogo from "./GraphQLLogo";
 import "graphiql/style.css";
 import "./styles.css";
 
-// Import Monaco environment setup - required for GraphiQL 5
+// Import Monaco environment setup - required for GraphiQL 6
 import "../../../lib/monaco-environment";
 
 type Network = "mainnet" | "testnet" | "devnet";
@@ -80,14 +80,14 @@ export const GraphQLEditor: React.FC<GraphQLEditorProps> = ({
   // Build the current endpoint URL for the selected network (or fixed endpoint)
   const currentUrl = getNetworkUrl(network, endpoint);
 
-  // GraphiQL 5 fetcher helper
-  const fetcher = createGraphiQLFetcher({
+  // GraphiQL 6 transport (replaces the deprecated createGraphiQLFetcher)
+  const transport = createTransport({
     url: currentUrl,
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",
     },
-    // credentials: 'include', // set if your endpoint needs cookies
+    method: "POST",
   });
 
   // Future custom Namespace config for localStorage (avoid conflicts for multiple instances)
@@ -201,7 +201,7 @@ export const GraphQLEditor: React.FC<GraphQLEditorProps> = ({
 
         <GraphiQL
           key={`${theme}-${currentUrl}`}
-          fetcher={fetcher}
+          transport={transport}
           initialQuery={query}
           initialVariables={isEmptyVariables(variables) ? undefined : variables}
           isHeadersEditorEnabled={false}
@@ -212,10 +212,9 @@ export const GraphQLEditor: React.FC<GraphQLEditorProps> = ({
           referencePlugin={null}
           plugins={[]}
           defaultTabs={[]}
-        >
-          {/* Hide default GraphiQL logo */}
-          <GraphiQL.Logo>{null}</GraphiQL.Logo>
-        </GraphiQL>
+          // Hide the default GraphiQL brand (GraphiQL 6 removed GraphiQL.Logo)
+          brand={null}
+        />
       </div>
     </div>
   );

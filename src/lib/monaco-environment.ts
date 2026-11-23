@@ -1,4 +1,4 @@
-// Astro-compatible Monaco Environment configuration for GraphiQL v5
+// Astro-compatible Monaco Environment configuration for GraphiQL v6
 // This compensates for Astro not running Vite's transformIndexHtml hook
 
 // Monaco Editor type definitions

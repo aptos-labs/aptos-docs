@@ -1,42 +1,73 @@
 ---
-title: "Handle SDK Data Fetch Responses"
-description: "Handle retrieved on-chain data and network information using the Kaptos client with idiomatic Result-based error handling"
+title: "Handle SDK Responses"
+description: "Handle errors and response outcomes predictably using AptosResult in Kaptos."
 sidebar:
   label: "Response Handling"
 ---
 
-All data-fetching and most other operations in the SDK return a `Result`, which models either a success (`Ok`) or a failure (`Err`). This design ensures you handle both outcomes explicitly, making your code more predictable and safer by default.
+All operations return `AptosResult<T>`, which models either `Success` or `Failure`. This ensures explicit error handling.
 
-You can work with the result in several ways:
-
-### Using `when` Expression
-
-This is the most explicit and idiomatic way to handle both cases:
+### Using `when` expression
 
 ```kotlin
-val result = aptos.getLedgerInfo()
-
-when(result) {
-  is Result.Ok -> {
-    println("Ledger Info: ${result.value}")
-  }
-  is Result.Err -> {
-    println("Failed to fetch ledger info: ${result.error.message}")
-  }
+when (val result = aptos.ledger.info()) {
+  is AptosResult.Success -> println("Ledger version: ${result.value.version}")
+  is AptosResult.Failure -> println("Error: ${result.error.message}")
 }
 ```
 
-### Using Convenience Functions
+### Extension functions
 
-The `Result` class includes helper methods for more concise handling:
-
-- `unwrap()`: Returns the value if successful, or throws if it’s an error.
-- `unwrapErr()`: Returns the error if failed, or throws if it’s successful.
-- `expect("message")`: Like `unwrap()`, but includes a custom error message.
-- `expectErr("message")`: Like `unwrapErr()`, with a custom error message.
+- `.map { }` - transform success value
+- `.flatMap { }` - chain another AptosResult operation
+- `.fold(onSuccess = {}, onFailure = {})` - reduce to a single result type
+- `.getOrNull()` - returns value or null
+- `.getOrElse { fallback }` - returns value or derives fallback from error
+- `.onSuccess { }` - side effect on success, returns result unchanged
+- `.onFailure { }` - side effect on failure, returns result unchanged
+- `.isSuccess` / `.isFailure` - boolean checks
 
 ```kotlin
-val data = result.expect("Failed to fetch account balance")
+val version = aptos.ledger.info()
+  .map { it.version }
+  .getOrElse { 0UL }
 ```
 
-Use these when you’re confident about the outcome, or in testing/debug scenarios where failure should immediately surface.
+```kotlin
+aptos.faucet.fund(alice.accountAddress, 100_000_000UL)
+  .onSuccess { println("Funded successfully") }
+  .onFailure { println("Funding failed: ${it.message}") }
+```
+
+```kotlin
+val balance = aptos.accounts.getBalance(address, asset)
+  .fold(
+    onSuccess = { "Balance: $it" },
+    onFailure = { "Error: ${it.message}" },
+  )
+```
+
+### Error categories (AptosError)
+
+`AptosError` is a sealed interface with several variants:
+
+- `AptosError.Transport` - network/HTTP errors
+- `AptosError.Api` - REST API errors (includes `errorCode`, optional `vmErrorCode`)
+- `AptosError.Indexer` - GraphQL/indexer errors
+- `AptosError.Validation` - client-side validation failures
+- `AptosError.Serialization` - BCS/JSON encoding errors
+- `AptosError.Crypto` - key generation or signing errors
+- `AptosError.Timeout` - request or wait timeouts
+- `AptosError.Cancelled` - operation cancelled
+- `AptosError.UnsupportedFeature` - feature not available
+
+```kotlin
+when (val result = aptos.transactions.submitAndWait(signer, payload)) {
+  is AptosResult.Success -> println("Confirmed")
+  is AptosResult.Failure -> when (result.error) {
+    is AptosError.Api -> println("API error: ${result.error.errorCode}")
+    is AptosError.Timeout -> println("Timed out")
+    else -> println("Other: ${result.error.message}")
+  }
+}
+```

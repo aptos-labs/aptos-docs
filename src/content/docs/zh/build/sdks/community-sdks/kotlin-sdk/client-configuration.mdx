@@ -1,83 +1,94 @@
 ---
 title: "客户端配置"
-description: "使用共享和平台专用选项配置 Kaptos 客户端，以自定义不同平台上的行为"
+description: "在 Kotlin SDK 中配置 Aptos 客户端"
 sidebar:
   label: "客户端配置"
 ---
 
-尽管 **Kaptos** 在所有支持的平台上都提供与 Aptos 交互的**一致接口**，它也为不同客户端提供共享和平台专用的配置选项。
+`AptosConfig` 类是 Aptos Kotlin SDK 的单一配置入口点。在创建 `Aptos` 客户端实例时，您需要向其传递一个 `AptosConfig` 对象。
 
-借助这些配置选项，您可以按需自定义客户端行为。创建 `ClientConfig` 对象，并在创建 `Aptos` 客户端时将其传入 `AptosSettings` 对象即可设置这些选项：
+## 基础配置
 
 ```kotlin
-val clientConfig = ClientConfig(followRedirects = false, retryOnServerErrors = 3)
-val client = Aptos(AptosConfig(AptosSettings(clientConfig = clientConfig)))
+val aptos = Aptos(AptosConfig(network = Network.DEVNET))
 ```
 
-本页将介绍各平台可用的配置选项。
+## AptosConfig 字段
 
-### 共享配置
+`AptosConfig` 数据类包含以下字段：
 
-`followRedirects` — 决定客户端是否跟随重定向的布尔值。默认值为 `true`。
+- `network: Network` - 要连接的 Aptos 网络：`MAINNET`、`TESTNET`、`DEVNET`、`LOCAL` 或 `CUSTOM`（默认：`DEVNET`）。
+- `endpoints: AptosEndpoints` - 覆盖默认的 `fullNode`、`indexer` 和 `faucet` URLs。
+- `commonHeaders: Map<String, String>` - 应用于所有请求的 HTTP 标头。
+- `fullNode: AptosEndpointConfig` - 全节点的每个端点标头和身份验证配置。
+- `indexer: AptosEndpointConfig` - 索引器的每个端点配置。
+- `faucet: AptosEndpointConfig` - 水龙头的每个端点配置。
+- `requestTimeoutMillis: Long` - 请求超时时间，以毫秒为单位（默认：`10,000`）。
+- `indexerWaitTimeoutMillis: Long` - 索引器等待超时时间，以毫秒为单位（默认：`10,000`）。
+- `archivalFallback: Boolean` - 请求失败时是否回退到归档节点（默认：`true`）。
+- `namesContractAddress: AccountAddress?` - 自定义的 Aptos 命名服务 (ANS) 合约地址。
+- `transactionDefaults: TransactionDefaults` - 交易的默认 `maxGasAmount` 和 `expirationSecondsFromNow`。
+- `transport: AptosTransport?` - 注入自定义的 HTTP 传输实现。
+- `abiCachePolicy: AbiCachePolicy` - 用于构建 payload 的 Move ABI 缓存策略。
 
-`retryOnServerErrors` — 发生服务器错误时重试请求的次数。默认值为 `—1`，即不重试。
+## 自定义端点
 
-`requestTimeout` — 请求超时时间，单位为毫秒。默认值为 `10_000`。
+要使用自定义网络或特定的端点，请使用 `Network.CUSTOM` 并在 `endpoints` 中提供 URLs：
 
-`maxRetries` — 请求最多重试的次数。默认值为 `-1`，即不重试。
+```kotlin
+val aptos = Aptos(AptosConfig(
+  network = Network.CUSTOM,
+  endpoints = AptosEndpoints(
+    fullNode = "https://my-node.example.com/v1",
+    indexer = "https://my-indexer.example.com/v1/graphql",
+  ),
+))
+```
 
-`agent` — 指定连接所用用户代理的 `String`。默认为 `Kaptos/{PLATFORM}`。
+## 每端点身份验证
 
-`likeAgent` — 指定连接所用用户代理的 `UserAgent` 枚举值。
+您可以为各个端点提供特定的标头，例如授权令牌：
 
-`proxy` — 指定连接所用代理服务器的 `String`。
+```kotlin
+val aptos = Aptos(AptosConfig(
+  network = Network.MAINNET,
+  fullNode = AptosEndpointConfig(
+    headers = mapOf("Authorization" to "Bearer my-token"),
+  ),
+))
+```
 
-`cache` — 决定是否缓存响应的布尔值。默认值为 `false`。
+## 交易默认值
 
-### JVM 配置
+为该客户端构建的所有交易设置默认的 Gas 和过期时间设置：
 
-`pipelining` — 决定客户端是否使用流水线的布尔值。默认值为 `false`。
+```kotlin
+val aptos = Aptos(AptosConfig(
+  transactionDefaults = TransactionDefaults(
+    maxGasAmount = 5_000_000UL,
+    expirationSecondsFromNow = 30UL,
+  ),
+))
+```
 
-`pipelineMaxSize` — 流水线中的最大请求数。默认值为 `20`。
+## 托管生命周期
 
-`maxConnectionsPerRoute` — 每个路由的最大连接数。默认值为 `100`。
+`Aptos` 类实现了 `AutoCloseable` 以清理资源，如 HTTP 客户端和任何 SDK 托管的账户。SDK 提供了一个 `aptos { }` 块用于托管作用域：
 
-`maxConnectionsCount` — 最大连接数。默认值为 `100`。
+```kotlin
+aptos(AptosConfig(network = Network.DEVNET)) {
+  // client and SDK-owned accounts close automatically after this block
+}
 
-`connectTimeoutMillis` — 与服务器建立连接的超时时间，单位为毫秒。默认值为 `10_000`。
+// Or manual lifecycle:
+val client = Aptos(AptosConfig(network = Network.DEVNET))
+try {
+  // use client
+} finally {
+  client.close()
+}
+```
 
-`keepAliveTime` — 保持连接存活的时间，单位为毫秒。默认值为 `5_000`。
+## 注入传输层
 
-`connectAttempts` — 尝试连接服务器的次数。默认值为 `5`。
-
-`connectTimeout` — 与服务器建立连接的超时时间，单位为毫秒。默认值为 `10_000`。
-
-### Android 配置
-
-`followSslRedirects` — 决定客户端是否跟随 SSL 重定向的布尔值。默认值为 `true`。
-
-`connectTimeoutMillis` — 与服务器建立连接的超时时间，单位为毫秒。默认值为 `10_000`。
-
-`readTimeoutMillis` — 从服务器读取数据的超时时间，单位为毫秒。默认值为 `10_000`。
-
-`writeTimeoutMillis` — 向服务器写入数据的超时时间，单位为毫秒。默认值为 `10_000`。
-
-`maxRetries` — 请求最多重试的次数。默认值为 `-1`，即不重试。
-
-`connectTimeout` — 与服务器建立连接的超时时间，单位为毫秒。默认值为 `10_000`。
-
-### Apple（iOS、macOS）配置
-
-Apple 平台目前没有任何平台专用配置选项。
-
-### Web 配置
-
-Web 平台目前没有任何平台专用配置选项。
-
-### Linux 配置
-
-`connectTimeout` — 与服务器建立连接的超时时间，单位为毫秒。默认值为 `10_000`。
-
-### Windows 配置
-
-`connectTimeout` — 与服务器建立连接的超时时间，单位为毫秒。默认值为 `10_000`。
+如果您想要管理自己的 HTTP 客户端或使用不同的传输层，您可以通过 `AptosConfig` 注入一个 `AptosTransport` 实现。请注意，如果您注入了一个由调用者拥有的传输层，当 `Aptos` 实例关闭时，SDK 不会自动关闭它。

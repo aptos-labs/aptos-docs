@@ -39,6 +39,8 @@ export default navDictionary({
   "build.group.sdks.community-sdks": "社区 SDK",
   "build.group.sdks.react-hooks": "React Hooks",
   "build.group.sdks.community-sdks.kotlin-sdk": "Kotlin SDK",
+  "build.group.sdks.community-sdks.kotlin-sdk.accounts": "账户",
+  "build.group.sdks.community-sdks.kotlin-sdk.transactions": "交易",
   "build.group.sdks.community-sdks.swift-sdk": "Swift SDK",
   "build.group.sdks.community-sdks.unity-opendive-sdk": "Unity OpenDive SDK",
   "build.group.sdks.community-sdks.kotlin-sdk.fetch-data": "数据获取",
